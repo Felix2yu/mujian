@@ -2,22 +2,22 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
 
-  let allShows = [];
-  let loading = true;
+  let allShows = $state([]);
+  let loading = $state(true);
 
-  let selectedYear = 'all';
-  let selectedMonth = 'all';
+  let selectedYear = $state('all');
+  let selectedMonth = $state('all');
 
-  let years = [];
+  let years = $state([]);
 
-  let categoryStats = {};
-  let monthlyStats = {};
-  let venueStats = {};
-  let ratingStats = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  let statusStats = { normal: 0, cancelled: 0, pending_tickets: 0, no_show: 0 };
-  let totalCost = 0;
-  let avgDuration = 0;
-  let totalCount = 0;
+  let categoryStats = $state({});
+  let monthlyStats = $state({});
+  let venueStats = $state({});
+  let ratingStats = $state({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+  let statusStats = $state({ normal: 0, cancelled: 0, pending_tickets: 0, no_show: 0 });
+  let totalCost = $state(0);
+  let avgDuration = $state(0);
+  let totalCount = $state(0);
 
   onMount(async () => {
     try {
