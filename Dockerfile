@@ -1,18 +1,19 @@
-# Build backend (cached unless Go files change)
-FROM golang:1.26-alpine AS backend
-WORKDIR /app
-COPY backend/go.mod backend/go.sum ./
-RUN GOPROXY=https://goproxy.cn,direct go mod download
-COPY backend/ .
-RUN CGO_ENABLED=0 GOPROXY=https://goproxy.cn,direct go build -o /mujian .
-
-# Build frontend
+# Build frontend (cached unless frontend files change)
 FROM node:24-alpine AS frontend
 WORKDIR /app
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ .
 RUN npm run build
+
+# Build backend (cached unless Go files change, frontend dist is now available)
+FROM golang:1.26-alpine AS backend
+WORKDIR /app
+COPY backend/go.mod backend/go.sum ./
+RUN GOPROXY=https://goproxy.cn,direct go mod download
+COPY backend/ .
+COPY --from=frontend /app/dist ./dist
+RUN CGO_ENABLED=0 GOPROXY=https://goproxy.cn,direct go build -o /mujian .
 
 # Final image
 FROM alpine:3.19
