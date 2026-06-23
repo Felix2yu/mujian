@@ -199,8 +199,9 @@ func (db *DB) GetAutocomplete(field string) ([]string, error) {
 		return nil, fmt.Errorf("invalid field: %s", field)
 	}
 
+	quoted := "`" + field + "`"
 	rows, err := db.conn.Query(
-		"SELECT DISTINCT "+field+" FROM shows WHERE "+field+" != '' ORDER BY "+field,
+		"SELECT DISTINCT " + quoted + " FROM shows WHERE " + quoted + " != '' ORDER BY " + quoted,
 	)
 	if err != nil {
 		return nil, err
