@@ -287,7 +287,7 @@ func (db *DB) CreateShow(req models.ShowRequest) (*models.Show, error) {
 
 	status := req.Status
 	if status == "" {
-		status = "planned"
+		status = "normal"
 	}
 
 	result, err := db.conn.Exec(`
@@ -482,9 +482,10 @@ func (db *DB) GetCalendarEvents(year, month int) ([]models.CalendarEvent, error)
 	}
 
 	colors := map[string]string{
-		"planned":   "#4A90D9",
-		"watched":   "#27AE60",
-		"cancelled": "#E74C3C",
+		"normal":         "#27AE60",
+		"cancelled":      "#E74C3C",
+		"pending_tickets": "#F39C12",
+		"no_show":        "#95A5A6",
 	}
 
 	events := make([]models.CalendarEvent, len(shows))
@@ -524,7 +525,7 @@ func (db *DB) GetUpcomingShows(limit int) ([]models.Show, error) {
 		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
 		FROM shows s
 		LEFT JOIN categories c ON s.category_id = c.id
-		WHERE s.date >= datetime('now') AND s.status = 'planned'
+		WHERE s.date >= datetime('now') AND s.status IN ('normal', 'pending_tickets')
 		ORDER BY s.date ASC
 		LIMIT ?
 	`, limit)
@@ -543,7 +544,7 @@ func (db *DB) GetRecentShows(limit int) ([]models.Show, error) {
 		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
 		FROM shows s
 		LEFT JOIN categories c ON s.category_id = c.id
-		WHERE s.status = 'watched'
+		WHERE s.status = 'normal'
 		ORDER BY s.date DESC
 		LIMIT ?
 	`, limit)

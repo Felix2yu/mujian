@@ -120,7 +120,7 @@
   }
 
   function getStatusLabel(status) {
-    const labels = { planned: '计划中', watched: '已观看', cancelled: '已取消' };
+    const labels = { normal: '正常', cancelled: '已取消', pending_tickets: '代开票', no_show: '未赴约' };
     return labels[status] || status;
   }
 
@@ -137,9 +137,10 @@
 
   function getEventColor(event) {
     const colors = {
-      planned: '#4A90D9',
-      watched: '#27AE60',
-      cancelled: '#E74C3C'
+      normal: '#27AE60',
+      cancelled: '#E74C3C',
+      pending_tickets: '#F39C12',
+      no_show: '#95A5A6'
     };
     return event.color || colors[event.status] || '#999';
   }
@@ -210,9 +211,10 @@
   </div>
 
   <div class="calendar-legend">
-    <span class="legend-item"><span class="legend-dot" style="background: #4A90D9"></span>计划中</span>
-    <span class="legend-item"><span class="legend-dot" style="background: #27AE60"></span>已观看</span>
+    <span class="legend-item"><span class="legend-dot" style="background: #27AE60"></span>正常</span>
     <span class="legend-item"><span class="legend-dot" style="background: #E74C3C"></span>已取消</span>
+    <span class="legend-item"><span class="legend-dot" style="background: #F39C12"></span>代开票</span>
+    <span class="legend-item"><span class="legend-dot" style="background: #95A5A6"></span>未赴约</span>
   </div>
 </div>
 

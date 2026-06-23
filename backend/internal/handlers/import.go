@@ -174,15 +174,17 @@ func (h *Handler) parseRowToShow(row []string, colMap map[string]int) models.Sho
 
 	if s := get("status"); s != "" {
 		switch strings.ToLower(s) {
-		case "已观看", "watched", "看过":
-			show.Status = "watched"
 		case "已取消", "cancelled", "取消":
 			show.Status = "cancelled"
+		case "代开票", "pending_tickets", "待开票":
+			show.Status = "pending_tickets"
+		case "未赴约", "no_show", "未到场":
+			show.Status = "no_show"
 		default:
-			show.Status = "planned"
+			show.Status = "normal"
 		}
 	} else {
-		show.Status = "planned"
+		show.Status = "normal"
 	}
 
 	if c := get("category"); c != "" {
@@ -235,7 +237,7 @@ func (h *Handler) getImportTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	example := []string{
-		"茶馆", "国家大剧院", "2026-07-15 19:30", "180", "计划中", "话剧",
+		"茶馆", "国家大剧院", "2026-07-15 19:30", "180", "正常", "话剧",
 		"北京人艺", "于是之, 郑榕", "小明", "5", "3排15座",
 		"280", "50", "茶馆第一幕\n茶馆第二幕", "非常精彩", "",
 	}
@@ -273,9 +275,10 @@ func (h *Handler) exportShows(w http.ResponseWriter, r *http.Request) {
 	}
 
 	statusMap := map[string]string{
-		"planned":   "计划中",
-		"watched":   "已观看",
-		"cancelled": "已取消",
+		"normal":         "正常",
+		"cancelled":      "已取消",
+		"pending_tickets": "代开票",
+		"no_show":        "未赴约",
 	}
 
 	for rowIdx, show := range shows {

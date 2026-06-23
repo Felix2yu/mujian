@@ -8,7 +8,7 @@
   const dispatch = createEventDispatcher();
 
   let form = {
-    name: '', venue: '', date: '', duration: 120, status: 'planned',
+    name: '', venue: '', date: '', duration: 120, status: 'normal',
     category_id: null, poster_url: '', setlist: '', cast: '',
     company: '', friends: '', rating: null, seat: '',
     notes: '', review: '', ticket_cost: null, other_cost: null
@@ -38,7 +38,7 @@
       form = {
         name: show.name || '', venue: show.venue || '',
         date: show.date ? formatDateTimeLocal(show.date) : '',
-        duration: show.duration || 120, status: show.status || 'planned',
+        duration: show.duration || 120, status: show.status || 'normal',
         category_id: show.category_id || null, poster_url: show.poster_url || '',
         setlist: show.setlist || '', cast: show.cast || '',
         company: show.company || '', friends: show.friends || '',
@@ -131,9 +131,10 @@
       <div class="form-group">
         <label for="status">状态</label>
         <select id="status" bind:value={form.status}>
-          <option value="planned">计划中</option>
-          <option value="watched">已观看</option>
+          <option value="normal">正常</option>
           <option value="cancelled">已取消</option>
+          <option value="pending_tickets">代开票</option>
+          <option value="no_show">未赴约</option>
         </select>
       </div>
       <div class="form-group">

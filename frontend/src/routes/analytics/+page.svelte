@@ -14,7 +14,7 @@
   let monthlyStats = {};
   let venueStats = {};
   let ratingStats = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  let statusStats = { planned: 0, watched: 0, cancelled: 0 };
+  let statusStats = { normal: 0, cancelled: 0, pending_tickets: 0, no_show: 0 };
   let totalCost = 0;
   let avgDuration = 0;
   let totalCount = 0;
@@ -55,7 +55,7 @@
     monthlyStats = {};
     venueStats = {};
     ratingStats = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    statusStats = { planned: 0, watched: 0, cancelled: 0 };
+    statusStats = { normal: 0, cancelled: 0, pending_tickets: 0, no_show: 0 };
     totalCost = 0;
     let totalDuration = 0;
     let durationCount = 0;
@@ -173,23 +173,13 @@
         <div class="status-bars">
           <div class="status-bar">
             <div class="status-label">
-              <span class="status-dot" style="background: #4A90D9"></span>
-              计划中
-            </div>
-            <div class="bar-track">
-              <div class="bar-fill" style="width: {getBarWidth(statusStats.planned, totalCount)}%; background: #4A90D9"></div>
-            </div>
-            <span class="bar-value">{statusStats.planned}</span>
-          </div>
-          <div class="status-bar">
-            <div class="status-label">
               <span class="status-dot" style="background: #27AE60"></span>
-              已观看
+              正常
             </div>
             <div class="bar-track">
-              <div class="bar-fill" style="width: {getBarWidth(statusStats.watched, totalCount)}%; background: #27AE60"></div>
+              <div class="bar-fill" style="width: {getBarWidth(statusStats.normal, totalCount)}%; background: #27AE60"></div>
             </div>
-            <span class="bar-value">{statusStats.watched}</span>
+            <span class="bar-value">{statusStats.normal}</span>
           </div>
           <div class="status-bar">
             <div class="status-label">
@@ -200,6 +190,26 @@
               <div class="bar-fill" style="width: {getBarWidth(statusStats.cancelled, totalCount)}%; background: #E74C3C"></div>
             </div>
             <span class="bar-value">{statusStats.cancelled}</span>
+          </div>
+          <div class="status-bar">
+            <div class="status-label">
+              <span class="status-dot" style="background: #F39C12"></span>
+              代开票
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" style="width: {getBarWidth(statusStats.pending_tickets, totalCount)}%; background: #F39C12"></div>
+            </div>
+            <span class="bar-value">{statusStats.pending_tickets}</span>
+          </div>
+          <div class="status-bar">
+            <div class="status-label">
+              <span class="status-dot" style="background: #95A5A6"></span>
+              未赴约
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" style="width: {getBarWidth(statusStats.no_show, totalCount)}%; background: #95A5A6"></div>
+            </div>
+            <span class="bar-value">{statusStats.no_show}</span>
           </div>
         </div>
       </div>

@@ -40,11 +40,11 @@
   }
 
   function statusLabel(status) {
-    return { planned: '计划中', watched: '已观看', cancelled: '已取消' }[status] || status;
+    return { normal: '正常', cancelled: '已取消', pending_tickets: '代开票', no_show: '未赴约' }[status] || status;
   }
 
   function statusColor(status) {
-    return { planned: '#4A90D9', watched: '#27AE60', cancelled: '#E74C3C' }[status] || '#999';
+    return { normal: '#27AE60', cancelled: '#E74C3C', pending_tickets: '#F39C12', no_show: '#95A5A6' }[status] || '#999';
   }
 
   function formatCost(val) {

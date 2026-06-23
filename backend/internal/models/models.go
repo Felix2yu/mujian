@@ -5,9 +5,10 @@ import "time"
 type ShowStatus string
 
 const (
-	StatusPlanned   ShowStatus = "planned"
-	StatusWatched   ShowStatus = "watched"
-	StatusCancelled ShowStatus = "cancelled"
+	StatusNormal         ShowStatus = "normal"
+	StatusCancelled      ShowStatus = "cancelled"
+	StatusPendingTickets ShowStatus = "pending_tickets"
+	StatusNoShow         ShowStatus = "no_show"
 )
 
 type Show struct {

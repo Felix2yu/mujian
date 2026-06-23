@@ -5,7 +5,7 @@
 
   let shows = [];
   let loading = true;
-  let activeTab = 'planned';
+  let activeTab = 'normal';
   let categoryFilter = '';
   let ratingFilter = '';
   let searchQuery = '';
@@ -26,7 +26,7 @@
   $: hasActiveFilters = searchQuery || categoryFilter || ratingFilter;
 
   $: filteredShows = shows.filter(s => {
-    if (activeTab === 'planned' && s.status !== 'planned') return false;
+    if (activeTab === 'normal' && s.status !== 'normal' && s.status !== 'pending_tickets') return false;
     if (categoryFilter && s.category_name !== categoryFilter) return false;
     if (ratingFilter) {
       const r = parseInt(ratingFilter);
@@ -144,10 +144,10 @@
   </div>
 
   <div class="tabs">
-    <button class="tab" class:active={activeTab === 'planned'} on:click={() => { activeTab = 'planned'; clearFilters(); }}>
+    <button class="tab" class:active={activeTab === 'normal'} on:click={() => { activeTab = 'normal'; clearFilters(); }}>
       待看列表
-      {#if shows.filter(s => s.status === 'planned').length > 0}
-        <span class="tab-count">{shows.filter(s => s.status === 'planned').length}</span>
+      {#if shows.filter(s => s.status === 'normal' || s.status === 'pending_tickets').length > 0}
+        <span class="tab-count">{shows.filter(s => s.status === 'normal' || s.status === 'pending_tickets').length}</span>
       {/if}
     </button>
     <button class="tab" class:active={activeTab === 'all'} on:click={() => { activeTab = 'all'; clearFilters(); }}>
@@ -231,9 +231,10 @@
           <label>状态</label>
           <select bind:value={batchStatus}>
             <option value="">不修改</option>
-            <option value="planned">计划中</option>
-            <option value="watched">已观看</option>
+            <option value="normal">正常</option>
             <option value="cancelled">已取消</option>
+            <option value="pending_tickets">代开票</option>
+            <option value="no_show">未赴约</option>
           </select>
         </div>
         <button class="btn-apply" on:click={applyBatchUpdate} disabled={batchSaving}>
@@ -247,7 +248,7 @@
     <div class="loading"><div class="spinner"></div><span>加载中...</span></div>
   {:else if filteredShows.length === 0}
     <div class="empty">
-      <p>{activeTab === 'planned' ? '暂无待看演出' : '暂无演出记录'}</p>
+      <p>{activeTab === 'normal' ? '暂无待看演出' : '暂无演出记录'}</p>
       <a href="/shows/new">添加第一场演出</a>
     </div>
   {:else}
