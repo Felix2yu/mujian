@@ -143,8 +143,8 @@
     }
   }
 
-  $: canUseLocal = settings.allow_local_storage;
-  $: isS3 = settings.storage_type === 's3';
+  let canUseLocal = $derived(settings.allow_local_storage);
+  let isS3 = $derived(settings.storage_type === 's3');
 </script>
 
 <div class="settings-page">

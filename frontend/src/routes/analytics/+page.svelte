@@ -36,19 +36,19 @@
     }
   });
 
-  $: filteredShows = allShows.filter(s => {
+  let filteredShows = $derived(allShows.filter(s => {
     if (selectedYear !== 'all' && !s.date.startsWith(selectedYear)) return false;
     if (selectedMonth !== 'all') {
       const m = s.date.substring(5, 7);
       if (m !== selectedMonth) return false;
     }
     return true;
-  });
+  }));
 
-  $: {
+  $effect(() => {
     filteredShows;
     analyzeData();
-  }
+  });
 
   function analyzeData() {
     categoryStats = {};
