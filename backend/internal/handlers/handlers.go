@@ -546,14 +546,16 @@ func (h *Handler) backupRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.db.Import(&data); err != nil {
+	importResult, err := h.db.Import(&data)
+	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
 
 	jsonResp(w, 200, map[string]interface{}{
-		"message":  "restore completed",
-		"categories": len(data.Categories),
-		"shows":      len(data.Shows),
+		"message":    "restore completed",
+		"categories": importResult.Categories,
+		"shows":      importResult.Shows,
+		"skipped":    importResult.Skipped,
 	})
 }

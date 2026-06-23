@@ -48,12 +48,20 @@ func (db *DB) ExportToFile(path string) error {
 	return os.WriteFile(path, b, 0644)
 }
 
-func (db *DB) Import(data *BackupData) error {
+type ImportResult struct {
+	Categories int
+	Shows      int
+	Skipped    int
+}
+
+func (db *DB) Import(data *BackupData) (*ImportResult, error) {
 	tx, err := db.conn.Begin()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback()
+
+	result := &ImportResult{}
 
 	// build category id mapping (old id -> new id)
 	catMap := make(map[int64]int64)
@@ -67,26 +75,25 @@ func (db *DB) Import(data *BackupData) error {
 			continue
 		}
 
-		result, err := tx.Exec(
+		execResult, err := tx.Exec(
 			"INSERT INTO categories (name, color, sort_order) VALUES (?, ?, ?)",
 			cat.Name, cat.Color, cat.SortOrder,
 		)
 		if err != nil {
-			return fmt.Errorf("import category %s: %w", cat.Name, err)
+			return nil, fmt.Errorf("import category %s: %w", cat.Name, err)
 		}
-		newID, _ := result.LastInsertId()
+		newID, _ := execResult.LastInsertId()
 		catMap[cat.ID] = newID
+		result.Categories++
 	}
 
-	imported := 0
-	skipped := 0
 	for _, show := range data.Shows {
 		// deduplicate by name + date (use date-only format for matching)
 		dateOnly := show.Date.Format("2006-01-02")
 		var existingID int64
 		err := tx.QueryRow("SELECT id FROM shows WHERE name = ? AND date LIKE ?", show.Name, dateOnly+"%").Scan(&existingID)
 		if err == nil {
-			skipped++
+			result.Skipped++
 			continue
 		}
 
@@ -109,25 +116,23 @@ func (db *DB) Import(data *BackupData) error {
 			show.CreatedAt, show.UpdatedAt,
 		)
 		if err != nil {
-			return fmt.Errorf("import show %s: %w", show.Name, err)
+			return nil, fmt.Errorf("import show %s: %w", show.Name, err)
 		}
-		imported++
+		result.Shows++
 	}
 
-	_ = imported
-	_ = skipped
-	return tx.Commit()
+	return result, tx.Commit()
 }
 
-func (db *DB) ImportFromFile(path string) error {
+func (db *DB) ImportFromFile(path string) (*ImportResult, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var data BackupData
 	if err := json.Unmarshal(b, &data); err != nil {
-		return fmt.Errorf("invalid backup file: %w", err)
+		return nil, fmt.Errorf("invalid backup file: %w", err)
 	}
 
 	return db.Import(&data)

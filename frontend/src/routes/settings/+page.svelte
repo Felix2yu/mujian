@@ -259,7 +259,7 @@
         {#if restoring}
           <span class="restore-status">恢复中...</span>
         {:else if restoreResult}
-          <span class="restore-status success">已恢复 {restoreResult.categories} 个分类、{restoreResult.shows} 场演出</span>
+          <span class="restore-status success">已恢复 {restoreResult.categories} 个分类、{restoreResult.shows} 场演出{#if restoreResult.skipped > 0}（跳过 {restoreResult.skipped} 场重复）{/if}</span>
         {/if}
       </div>
     </div>
