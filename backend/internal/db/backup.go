@@ -81,9 +81,10 @@ func (db *DB) Import(data *BackupData) error {
 	imported := 0
 	skipped := 0
 	for _, show := range data.Shows {
-		// deduplicate by name + date
+		// deduplicate by name + date (use date string format)
+		dateStr := show.Date.Format("2006-01-02 15:04:05")
 		var existingID int64
-		err := tx.QueryRow("SELECT id FROM shows WHERE name = ? AND date = ?", show.Name, show.Date).Scan(&existingID)
+		err := tx.QueryRow("SELECT id FROM shows WHERE name = ? AND date = ?", show.Name, dateStr).Scan(&existingID)
 		if err == nil {
 			skipped++
 			continue

@@ -278,8 +278,9 @@ func (db *DB) CreateShow(req models.ShowRequest) (*models.Show, error) {
 	}
 
 	// check for duplicate by name + date
+	dateStr := date.Format("2006-01-02 15:04:05")
 	var existingID int64
-	err = db.conn.QueryRow("SELECT id FROM shows WHERE name = ? AND date = ?", req.Name, date).Scan(&existingID)
+	err = db.conn.QueryRow("SELECT id FROM shows WHERE name = ? AND date = ?", req.Name, dateStr).Scan(&existingID)
 	if err == nil {
 		return db.GetShow(existingID)
 	}
