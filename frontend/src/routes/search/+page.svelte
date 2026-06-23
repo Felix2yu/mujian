@@ -76,7 +76,10 @@
   </div>
 
   {#if loading}
-    <div class="loading">搜索中...</div>
+    <div class="loading">
+      <div class="spinner"></div>
+      <span>搜索中...</span>
+    </div>
   {:else if searched && shows.length === 0}
     <div class="empty">
       <p>未找到匹配的演出</p>
@@ -109,6 +112,12 @@
   .search-hint { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; color: #999; margin-bottom: 32px; }
   .search-hint span:not(:first-child) { padding: 2px 8px; background: #f0f0f0; border-radius: 4px; }
   .loading, .empty, .placeholder { text-align: center; padding: 60px 20px; color: #666; }
+  .loading { display: flex; align-items: center; justify-content: center; gap: 12px; }
+  .spinner {
+    width: 24px; height: 24px; border: 3px solid #ddd; border-top-color: #4A90D9;
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .empty-hint { font-size: 13px; color: #999; margin-top: 8px; }
   .placeholder p { color: #999; }
   .results-info { margin-bottom: 16px; font-size: 14px; color: #666; }
