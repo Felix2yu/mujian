@@ -63,13 +63,14 @@ type ShowRequest struct {
 }
 
 type CalendarEvent struct {
-	ID       int64  `json:"id"`
-	Name     string `json:"name"`
-	Venue    string `json:"venue"`
-	Date     string `json:"date"`
-	Duration int    `json:"duration"`
-	Status   string `json:"status"`
-	Color    string `json:"color"`
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Venue     string `json:"venue"`
+	Date      string `json:"date"`
+	Duration  int    `json:"duration"`
+	Status    string `json:"status"`
+	Color     string `json:"color"`
+	PosterURL string `json:"poster_url"`
 }
 
 type Stats struct {

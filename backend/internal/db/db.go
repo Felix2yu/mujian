@@ -483,13 +483,14 @@ func (db *DB) GetCalendarEvents(year, month int) ([]models.CalendarEvent, error)
 	for i, s := range shows {
 		color := colors[string(s.Status)]
 		events[i] = models.CalendarEvent{
-			ID:       s.ID,
-			Name:     s.Name,
-			Venue:    s.Venue,
-			Date:     s.Date.Format("2006-01-02"),
-			Duration: s.Duration,
-			Status:   string(s.Status),
-			Color:    color,
+			ID:        s.ID,
+			Name:      s.Name,
+			Venue:     s.Venue,
+			Date:      s.Date.Format("2006-01-02"),
+			Duration:  s.Duration,
+			Status:    string(s.Status),
+			Color:     color,
+			PosterURL: s.PosterURL,
 		}
 	}
 	return events, nil

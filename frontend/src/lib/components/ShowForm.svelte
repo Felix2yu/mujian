@@ -111,9 +111,20 @@
         <label for="date">演出时间 *</label>
         <input type="datetime-local" id="date" bind:value={form.date} required />
       </div>
-      <div class="form-group">
+      <div class="form-group form-group-short">
         <label for="duration">时长(分钟)</label>
         <input type="number" id="duration" bind:value={form.duration} min="0" />
+      </div>
+      <div class="form-group form-group-rating">
+        <label>评分</label>
+        <div class="star-rating">
+          {#each [1,2,3,4,5] as val}
+            <button type="button" class="star-btn" class:active={form.rating >= val} on:click={() => setRating(val)}>
+              {form.rating >= val ? '★' : '☆'}
+            </button>
+          {/each}
+          {#if form.rating}<span class="rating-text">{form.rating}/5</span>{/if}
+        </div>
       </div>
     </div>
     <div class="form-row">
@@ -131,17 +142,6 @@
           <option value={null}>无分类</option>
           {#each categories as cat}<option value={cat.id}>{cat.name}</option>{/each}
         </select>
-      </div>
-      <div class="form-group">
-        <label>评分</label>
-        <div class="star-rating">
-          {#each [1,2,3,4,5] as val}
-            <button type="button" class="star-btn" class:active={form.rating >= val} on:click={() => setRating(val)}>
-              {form.rating >= val ? '★' : '☆'}
-            </button>
-          {/each}
-          {#if form.rating}<span class="rating-text">{form.rating}/5</span>{/if}
-        </div>
       </div>
     </div>
     <div class="form-group">
@@ -236,12 +236,17 @@
   .form-section h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333; }
   .form-row { display: flex; gap: 16px; margin-bottom: 12px; }
   .form-group { flex: 1; margin-bottom: 12px; }
+  .form-group-short { flex: 0 0 120px; }
+  .form-group-rating { flex: 0 0 auto; }
   .form-row .form-group { margin-bottom: 0; }
   label { display: block; font-size: 13px; font-weight: 500; color: #666; margin-bottom: 6px; }
   input, select, textarea { width: 100%; }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type="number"] { -moz-appearance: textfield; }
   textarea { resize: vertical; }
-  .star-rating { display: flex; align-items: center; gap: 2px; padding-top: 4px; }
-  .star-btn { font-size: 24px; color: #ddd; cursor: pointer; padding: 0 2px; transition: color 0.15s, transform 0.15s; background: none; border: none; }
+  .star-rating { display: flex; align-items: center; gap: 2px; padding: 8px 0; }
+  .star-btn { font-size: 20px; color: #ddd; cursor: pointer; padding: 0 2px; transition: color 0.15s, transform 0.15s; background: none; border: none; line-height: 1; }
   .star-btn:hover { transform: scale(1.2); }
   .star-btn.active { color: #f39c12; }
   .rating-text { margin-left: 8px; font-size: 13px; color: #999; }

@@ -4,8 +4,19 @@
   import Calendar from '$lib/components/Calendar.svelte';
   import ShowCard from '$lib/components/ShowCard.svelte';
 
-  let currentYear = new Date().getFullYear();
-  let currentMonth = new Date().getMonth() + 1;
+  const stored = (() => {
+    try {
+      const v = localStorage.getItem('calendarMonth');
+      if (v) {
+        const [y, m] = JSON.parse(v);
+        if (y && m >= 1 && m <= 12) return { year: y, month: m };
+      }
+    } catch {}
+    return null;
+  })();
+
+  let currentYear = stored ? stored.year : new Date().getFullYear();
+  let currentMonth = stored ? stored.month : new Date().getMonth() + 1;
   let events = [];
   let upcoming = [];
   let recent = [];
@@ -35,6 +46,7 @@
   function handleMonthChange(year, month) {
     currentYear = year;
     currentMonth = month;
+    localStorage.setItem('calendarMonth', JSON.stringify([year, month]));
     api.getCalendar(year, month).then(e => events = e);
   }
 </script>
@@ -63,7 +75,7 @@
 
   <div class="main-content">
     <div class="calendar-section">
-      <Calendar {events} on:monthChange={(e) => handleMonthChange(e.detail.year, e.detail.month)} />
+      <Calendar {events} initialYear={currentYear} initialMonth={currentMonth} on:monthChange={(e) => handleMonthChange(e.detail.year, e.detail.month)} />
     </div>
 
     <div class="sidebar">

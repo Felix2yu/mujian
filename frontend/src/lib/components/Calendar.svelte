@@ -2,29 +2,38 @@
   import { createEventDispatcher } from 'svelte';
 
   export let events = [];
+  export let initialYear = new Date().getFullYear();
+  export let initialMonth = new Date().getMonth() + 1;
 
   const dispatch = createEventDispatcher();
 
   let today = new Date();
-  let year = today.getFullYear();
-  let month = today.getMonth() + 1;
+  let year = initialYear;
+  let month = initialMonth;
 
-  $: firstDay = new Date(year, month - 1, 1).getDay();
+  let popupEvents = [];
+  let popupPos = { x: 0, y: 0, align: 'center' };
+  const POPUP_W = 260;
+  const POPUP_GAP = 8;
+
+  $: firstDay = (new Date(year, month - 1, 1).getDay() + 6) % 7;
   $: daysInMonth = new Date(year, month, 0).getDate();
-  $: calendarDays = buildCalendarDays();
-
-  function buildCalendarDays() {
+  $: calendarDays = (() => {
+    const safeEvents = Array.isArray(events) ? events : [];
     const days = [];
     for (let i = 0; i < firstDay; i++) {
       days.push({ day: null, events: [] });
     }
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const dayEvents = events.filter(e => e.date === dateStr);
+      const dayEvents = safeEvents.filter(e => e.date === dateStr);
       days.push({ day: d, events: dayEvents, isToday: isToday(d) });
     }
+    while (days.length < 42) {
+      days.push({ day: null, events: [] });
+    }
     return days;
-  }
+  })();
 
   function isToday(d) {
     return year === today.getFullYear() && month === today.getMonth() + 1 && d === today.getDate();
@@ -48,7 +57,56 @@
     dispatch('monthChange', { year, month });
   }
 
-  const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+  function showPopup(events, e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const top = rect.top;
+    const vw = window.innerWidth;
+
+    let align = 'center';
+    let x = cx;
+    if (x - POPUP_W / 2 < 8) {
+      x = POPUP_W / 2 + 8;
+      align = 'left';
+    } else if (x + POPUP_W / 2 > vw - 8) {
+      x = vw - POPUP_W / 2 - 8;
+      align = 'right';
+    }
+
+    let y = top;
+    let below = false;
+    if (top < 380) {
+      y = rect.bottom + POPUP_GAP;
+      below = true;
+    } else {
+      y = top - POPUP_GAP;
+    }
+
+    popupPos = { x, y, align, below };
+    popupEvents = events;
+  }
+
+  function closePopup() {
+    popupEvents = [];
+  }
+
+  function getStatusLabel(status) {
+    const labels = { planned: '计划中', watched: '已观看', cancelled: '已取消' };
+    return labels[status] || status;
+  }
+
+  function formatDuration(mins) {
+    if (!mins) return '';
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (h > 0 && m > 0) return `${h}小时${m}分钟`;
+    if (h > 0) return `${h}小时`;
+    return `${m}分钟`;
+  }
+
+  const weekDays = ['一', '二', '三', '四', '五', '六', '日'];
 
   function getEventColor(event) {
     const colors = {
@@ -59,6 +117,8 @@
     return event.color || colors[event.status] || '#999';
   }
 </script>
+
+<svelte:window on:click={closePopup} />
 
 <div class="calendar">
   <div class="calendar-header">
@@ -81,13 +141,33 @@
         {#if cell.day}
           <span class="day-number">{cell.day}</span>
           <div class="day-events">
-            {#each cell.events.slice(0, 3) as event}
-              <a href="/shows/{event.id}" class="event-dot" style="background: {getEventColor(event)}" title={event.name}>
-                <span class="event-text">{event.name}</span>
-              </a>
-            {/each}
-            {#if cell.events.length > 3}
-              <span class="more">+{cell.events.length - 3}</span>
+            {#if cell.events.length > 0}
+              {@const first = cell.events[0]}
+              {@const posterEvents = cell.events.filter(ev => ev.poster_url)}
+              {@const textEvents = cell.events.filter(ev => !ev.poster_url)}
+
+              {#if posterEvents.length > 0}
+                <div class="poster-grid" class:grid-1={posterEvents.length === 1} class:grid-2={posterEvents.length === 2} class:grid-3={posterEvents.length >= 3}>
+                  {#each posterEvents.slice(0, 3) as ev}
+                    <button class="poster-cell" on:click={(e) => showPopup(cell.events, e)}>
+                      <img src={ev.poster_url} alt={ev.name} />
+                      <span class="poster-cell-status" style="background: {getEventColor(ev)}"></span>
+                    </button>
+                  {/each}
+                  {#if posterEvents.length > 3}
+                    <button class="poster-cell poster-cell-more" on:click={(e) => showPopup(cell.events, e)}>
+                      <span class="poster-more-num">+{posterEvents.length - 3}</span>
+                    </button>
+                  {/if}
+                </div>
+              {:else}
+                <button class="event-text-btn" on:click={(e) => showPopup(cell.events, e)} style="background: {getEventColor(first)}">
+                  <span class="event-text">{first.name}</span>
+                  {#if cell.events.length > 1}
+                    <span class="text-count">{cell.events.length}</span>
+                  {/if}
+                </button>
+              {/if}
             {/if}
           </div>
         {/if}
@@ -101,6 +181,52 @@
     <span class="legend-item"><span class="legend-dot" style="background: #E74C3C"></span>已取消</span>
   </div>
 </div>
+
+{#if popupEvents.length > 0}
+  <div class="popup-overlay" on:click={closePopup}></div>
+  <div class="popup popup-{popupPos.align}" class:popup-below={popupPos.below} style="left: {popupPos.x}px; top: {popupPos.y}px">
+    {#if popupEvents.length === 1}
+      {@const ev = popupEvents[0]}
+      {#if ev.poster_url}
+        <div class="popup-poster">
+          <img src={ev.poster_url} alt={ev.name} />
+        </div>
+      {/if}
+      <div class="popup-content">
+        <a href="/shows/{ev.id}" class="popup-name">{ev.name}</a>
+        {#if ev.venue}
+          <div class="popup-venue">{ev.venue}</div>
+        {/if}
+        <div class="popup-meta">
+          <span class="popup-status" style="color: {getEventColor(ev)}">{getStatusLabel(ev.status)}</span>
+          {#if ev.duration}
+            <span class="popup-duration">{formatDuration(ev.duration)}</span>
+          {/if}
+        </div>
+        <a href="/shows/{ev.id}" class="popup-link">查看详情 →</a>
+      </div>
+    {:else}
+      <div class="popup-list">
+        {#each popupEvents as ev}
+          <a href="/shows/{ev.id}" class="popup-item">
+            {#if ev.poster_url}
+              <div class="popup-item-poster">
+                <img src={ev.poster_url} alt={ev.name} />
+              </div>
+            {/if}
+            <div class="popup-item-info">
+              <span class="popup-item-name">{ev.name}</span>
+              {#if ev.venue}
+                <span class="popup-item-venue">{ev.venue}</span>
+              {/if}
+              <span class="popup-item-status" style="color: {getEventColor(ev)}">{getStatusLabel(ev.status)}</span>
+            </div>
+          </a>
+        {/each}
+      </div>
+    {/if}
+  </div>
+{/if}
 
 <style>
   .calendar {
@@ -177,6 +303,7 @@
     padding: 4px;
     background: #fff;
     transition: background 0.2s;
+    overflow: hidden;
   }
 
   .day-cell:not(.empty):hover {
@@ -217,8 +344,94 @@
     margin-top: 2px;
   }
 
-  .event-dot {
+  .poster-grid {
+    display: grid;
+    gap: 2px;
+    width: 100%;
+  }
+
+  .poster-grid.grid-1 {
+    grid-template-columns: 1fr;
+  }
+
+  .poster-grid.grid-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .poster-grid.grid-3 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .poster-cell {
+    position: relative;
+    border-radius: 3px;
+    overflow: hidden;
+    border: none;
+    padding: 0;
+    background: #f0f0f0;
+    cursor: pointer;
+    aspect-ratio: 2/3;
+  }
+
+  .poster-grid.grid-2 .poster-cell {
+    aspect-ratio: auto;
+    height: 100%;
+  }
+
+  .poster-grid.grid-3 .poster-cell:first-child {
+    grid-row: 1 / 3;
+    aspect-ratio: auto;
+    height: 100%;
+  }
+
+  .poster-grid.grid-3 .poster-cell:nth-child(2),
+  .poster-grid.grid-3 .poster-cell:nth-child(3),
+  .poster-grid.grid-3 .poster-cell:nth-child(4) {
+    aspect-ratio: auto;
+    height: 100%;
+  }
+
+  .poster-cell img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
     display: block;
+  }
+
+  .poster-cell:hover {
+    z-index: 1;
+  }
+
+  .poster-grid.grid-1 .poster-cell:hover {
+    transform: scale(1.02);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+
+  .poster-cell-status {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+  }
+
+  .poster-cell-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.5);
+  }
+
+  .poster-more-num {
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .event-text-btn {
+    display: block;
+    width: 100%;
     padding: 2px 6px;
     border-radius: 4px;
     color: #fff;
@@ -227,10 +440,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     cursor: pointer;
+    text-align: left;
     transition: opacity 0.2s;
+    border: none;
   }
 
-  .event-dot:hover {
+  .event-text-btn:hover {
     opacity: 0.85;
   }
 
@@ -267,6 +482,170 @@
     border-radius: 50%;
   }
 
+  .popup-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+  }
+
+  .popup {
+    position: fixed;
+    z-index: 1000;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    width: 260px;
+    overflow: hidden;
+  }
+
+  .popup-center {
+    transform: translateX(-50%) translateY(-100%);
+  }
+
+  .popup-left {
+    transform: translateX(0) translateY(-100%);
+  }
+
+  .popup-right {
+    transform: translateX(-100%) translateY(-100%);
+  }
+
+  .popup-below.popup-center {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .popup-below.popup-left {
+    transform: translateX(0) translateY(0);
+  }
+
+  .popup-below.popup-right {
+    transform: translateX(-100%) translateY(0);
+  }
+
+  .popup-poster {
+    width: 100%;
+    aspect-ratio: 2/3;
+    overflow: hidden;
+  }
+
+  .popup-poster img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .popup-content {
+    padding: 12px 14px;
+  }
+
+  .popup-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #333;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .popup-name:hover {
+    color: #4A90D9;
+  }
+
+  .popup-venue {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 6px;
+  }
+
+  .popup-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .popup-status {
+    font-weight: 500;
+  }
+
+  .popup-duration {
+    color: #999;
+  }
+
+  .popup-link {
+    display: inline-block;
+    font-size: 13px;
+    color: #4A90D9;
+    font-weight: 500;
+  }
+
+  .popup-list {
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .popup-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0f0f0;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+
+  .popup-item:last-child {
+    border-bottom: none;
+  }
+
+  .popup-item:hover {
+    background: #f8f8f8;
+  }
+
+  .popup-item-poster {
+    width: 40px;
+    height: 56px;
+    border-radius: 4px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #f0f0f0;
+  }
+
+  .popup-item-poster img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .popup-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .popup-item-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .popup-item-venue {
+    font-size: 12px;
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .popup-item-status {
+    font-size: 11px;
+    font-weight: 500;
+  }
+
   @media (max-width: 768px) {
     .calendar-header {
       flex-wrap: wrap;
@@ -286,9 +665,8 @@
       font-size: 11px;
     }
 
-    .event-dot {
-      font-size: 9px;
-      padding: 1px 4px;
+    .poster-more-num {
+      font-size: 10px;
     }
 
     .calendar-legend {
@@ -302,15 +680,16 @@
       min-height: 48px;
     }
 
-    .event-text {
-      display: none;
+    .poster-grid.grid-1 .poster-cell {
+      aspect-ratio: 1;
     }
 
-    .event-dot {
-      width: 6px;
-      height: 6px;
-      padding: 0;
-      border-radius: 50%;
+    .poster-more-num {
+      font-size: 9px;
+    }
+
+    .popup {
+      width: 220px;
     }
   }
 </style>
