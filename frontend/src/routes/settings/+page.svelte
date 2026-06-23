@@ -65,7 +65,8 @@
   }
 
   async function deleteCategory(id) {
-    if (!confirm('确定删除该分类吗？')) return;
+    const cat = categories.find(c => c.id === id);
+    if (cat && cat.show_count > 0 && !confirm(`该分类下有 ${cat.show_count} 场演出，确定删除吗？`)) return;
     try {
       await api.deleteCategory(id);
       categories = categories.filter(c => c.id !== id);

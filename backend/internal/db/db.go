@@ -227,7 +227,13 @@ func (db *DB) DeleteShow(id int64) error {
 }
 
 func (db *DB) ListCategories() ([]models.Category, error) {
-	rows, err := db.conn.Query("SELECT id, name, color FROM categories ORDER BY name")
+	rows, err := db.conn.Query(`
+		SELECT c.id, c.name, c.color, COUNT(s.id) as show_count
+		FROM categories c
+		LEFT JOIN shows s ON s.category_id = c.id
+		GROUP BY c.id
+		ORDER BY c.name
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +242,7 @@ func (db *DB) ListCategories() ([]models.Category, error) {
 	var cats []models.Category
 	for rows.Next() {
 		var c models.Category
-		if err := rows.Scan(&c.ID, &c.Name, &c.Color); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Color, &c.ShowCount); err != nil {
 			return nil, err
 		}
 		cats = append(cats, c)

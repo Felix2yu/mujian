@@ -35,9 +35,10 @@ type Show struct {
 }
 
 type Category struct {
-	ID    int64  `json:"id"`
-	Name  string `json:"name"`
-	Color string `json:"color"`
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Color     string `json:"color"`
+	ShowCount int    `json:"show_count"`
 }
 
 type ShowRequest struct {
