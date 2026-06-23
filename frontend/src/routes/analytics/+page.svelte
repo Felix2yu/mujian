@@ -194,7 +194,7 @@
           <div class="status-bar">
             <div class="status-label">
               <span class="status-dot" style="background: #F39C12"></span>
-              代开票
+              待开票
             </div>
             <div class="bar-track">
               <div class="bar-fill" style="width: {getBarWidth(statusStats.pending_tickets, totalCount)}%; background: #F39C12"></div>

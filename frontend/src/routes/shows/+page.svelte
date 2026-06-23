@@ -233,7 +233,7 @@
             <option value="">不修改</option>
             <option value="normal">正常</option>
             <option value="cancelled">已取消</option>
-            <option value="pending_tickets">代开票</option>
+            <option value="pending_tickets">待开票</option>
             <option value="no_show">未赴约</option>
           </select>
         </div>

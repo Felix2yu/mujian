@@ -10,7 +10,7 @@
   }
 
   function statusLabel(status) {
-    return { normal: '正常', cancelled: '已取消', pending_tickets: '代开票', no_show: '未赴约' }[status] || status;
+    return { normal: '正常', cancelled: '已取消', pending_tickets: '待开票', no_show: '未赴约' }[status] || status;
   }
 
   function statusColor(status) {

@@ -176,7 +176,7 @@ func (h *Handler) parseRowToShow(row []string, colMap map[string]int) models.Sho
 		switch strings.ToLower(s) {
 		case "已取消", "cancelled", "取消":
 			show.Status = "cancelled"
-		case "代开票", "pending_tickets", "待开票":
+		case "待开票", "pending_tickets", "代开票":
 			show.Status = "pending_tickets"
 		case "未赴约", "no_show", "未到场":
 			show.Status = "no_show"
@@ -277,7 +277,7 @@ func (h *Handler) exportShows(w http.ResponseWriter, r *http.Request) {
 	statusMap := map[string]string{
 		"normal":         "正常",
 		"cancelled":      "已取消",
-		"pending_tickets": "代开票",
+		"pending_tickets": "待开票",
 		"no_show":        "未赴约",
 	}
 

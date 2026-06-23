@@ -80,7 +80,7 @@
             <li>场地 / venue</li>
             <li>日期 / date（支持多种格式）</li>
             <li>时长 / duration（分钟）</li>
-            <li>状态 / status（正常/已取消/代开票/未赴约）</li>
+            <li>状态 / status（正常/已取消/待开票/未赴约）</li>
             <li>分类 / category（名称或ID）</li>
             <li>剧团 / company</li>
             <li>阵容 / cast</li>
