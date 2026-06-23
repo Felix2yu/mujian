@@ -391,7 +391,7 @@
   :global(.dark .card),
   :global(.dark .s3-form) {
     background: var(--bg-card);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    border: 1px solid var(--border);
   }
 
   :global(.dark .tabs),

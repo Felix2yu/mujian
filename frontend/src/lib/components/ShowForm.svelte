@@ -229,7 +229,7 @@
 </form>
 
 <style>
-  .show-form { background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .show-form { background: var(--bg-card); border-radius: 12px; padding: 24px; }
   .error { background: #fee; color: #c00; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; }
   .form-section { margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #eee; }
   .form-section:last-of-type { border-bottom: none; }

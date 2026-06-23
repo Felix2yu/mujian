@@ -115,9 +115,9 @@
     display: flex;
     gap: 32px;
     padding: 20px 24px;
-    background: #fff;
+    background: var(--bg-card);
     border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: 1px solid var(--border);
   }
 
   .stat-item {
@@ -145,9 +145,9 @@
   }
 
   .calendar-section {
-    background: #fff;
+    background: var(--bg-card);
     border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: 1px solid var(--border);
     padding: 24px;
   }
 
@@ -158,9 +158,9 @@
   }
 
   .sidebar-section {
-    background: #fff;
+    background: var(--bg-card);
     border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: 1px solid var(--border);
     padding: 20px;
   }
 
@@ -218,29 +218,29 @@
   }
 
   :global(.dark) .stats-bar {
-    background: #2a2a2a;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    background: var(--bg-card);
+    border-color: var(--border);
   }
 
   :global(.dark) .stat-label {
-    color: #999;
+    color: var(--text-muted);
   }
 
   :global(.dark) .sidebar-section {
-    background: #2a2a2a;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    background: var(--bg-card);
+    border-color: var(--border);
   }
 
   :global(.dark) .sidebar-section h3 {
-    color: #e0e0e0;
+    color: var(--text-primary);
   }
 
   :global(.dark) .empty {
-    color: #666;
+    color: var(--text-muted);
   }
 
   :global(.dark) .calendar-section {
-    background: #2a2a2a;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    background: var(--bg-card);
+    border-color: var(--border);
   }
 </style>

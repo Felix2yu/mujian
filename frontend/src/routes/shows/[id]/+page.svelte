@@ -198,7 +198,7 @@
   .show-detail { max-width: 800px; margin: 0 auto; }
   .loading, .error { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
   .error { color: var(--danger-text); background: var(--danger-bg); border-radius: 8px; }
-  .poster { margin-bottom: 24px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+  .poster { margin-bottom: 24px; border-radius: 12px; overflow: hidden; }
   .poster img { width: 100%; display: block; }
   .detail-card { background: var(--bg-card); border-radius: 12px; padding: 32px; border: 1px solid var(--border); }
   .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }

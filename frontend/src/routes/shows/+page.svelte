@@ -290,7 +290,7 @@
 
   .tabs { display: flex; gap: 4px; background: #f0f0f0; border-radius: 10px; padding: 4px; }
   .tab { flex: 1; padding: 10px 20px; border-radius: 8px; font-size: 15px; font-weight: 500; color: #666; display: flex; align-items: center; justify-content: center; gap: 8px; }
-  .tab.active { background: #fff; color: #333; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .tab.active { background: var(--bg-card); color: var(--text-primary); }
   .tab-count { font-size: 12px; background: #e0e0e0; padding: 1px 7px; border-radius: 10px; }
   .tab.active .tab-count { background: #4A90D9; color: #fff; }
 
@@ -306,7 +306,7 @@
   .clear-btn:hover { background: #fdd; }
   .result-count { font-size: 13px; color: #999; }
 
-  .batch-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); flex-wrap: wrap; }
+  .batch-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; flex-wrap: wrap; }
   .batch-count { font-weight: 500; color: #4A90D9; }
   .batch-action { padding: 6px 14px; border-radius: 6px; font-size: 13px; background: #f0f0f0; }
   .batch-action:hover:not(:disabled) { background: #e0e0e0; }
@@ -314,7 +314,7 @@
   .batch-action.danger:hover { background: #fdd; }
   .batch-action:disabled { opacity: 0.6; }
 
-  .batch-panel { padding: 20px; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .batch-panel { padding: 20px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; }
   .batch-panel h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
   .batch-form { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
   .batch-form .form-group { min-width: 140px; }
@@ -341,9 +341,9 @@
   .show-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; opacity: 0; transition: opacity 0.2s; z-index: 10; }
   .show-item:hover .show-actions { opacity: 1; }
   .edit-btn, .delete-btn { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 500; backdrop-filter: blur(4px); }
-  .edit-btn { background: rgba(255,255,255,0.9); color: #555; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+  .edit-btn { background: rgba(255,255,255,0.9); color: #555; }
   .edit-btn:hover { background: #fff; color: #333; }
-  .delete-btn { background: rgba(254,238,238,0.9); color: #c00; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+  .delete-btn { background: rgba(254,238,238,0.9); color: #c00; }
   .delete-btn:hover { background: #fee; }
 
   @media (max-width: 768px) {
@@ -399,7 +399,6 @@
 
   :global(.dark) .show-card:hover {
     border-color: #444;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
   }
 
   :global(.dark) .card-title {

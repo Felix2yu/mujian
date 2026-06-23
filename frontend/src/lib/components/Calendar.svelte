@@ -538,7 +538,7 @@
     z-index: 1000;
     background: var(--bg-card);
     border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    border: 1px solid var(--border);
     width: 260px;
     overflow: hidden;
   }
