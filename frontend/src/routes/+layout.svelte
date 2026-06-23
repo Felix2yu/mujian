@@ -68,7 +68,7 @@
     </div>
     <div class="nav-links">
       <a href="/" class:active={currentPath === '/'}>日历</a>
-      <a href="/shows" class:active={currentPath.startsWith('/shows') && !currentPath.includes('/import') && !currentPath.includes('/new')}>演出列表</a>
+      <a href="/shows" class:active={currentPath.startsWith('/shows') && !currentPath.includes('/import') && !currentPath.includes('/new')}>演出</a>
       <a href="/analytics" class:active={currentPath === '/analytics'}>数据分析</a>
       <a href="/shows/new" class:active={currentPath === '/shows/new'}>添加演出</a>
     </div>

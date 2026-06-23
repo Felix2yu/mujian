@@ -331,7 +331,7 @@
   .empty { text-align: center; padding: 60px 20px; color: #666; }
   .empty a { display: inline-block; margin-top: 12px; color: #4A90D9; font-weight: 500; }
 
-  .shows-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .shows-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
   .select-all { padding: 12px 16px; background: var(--bg-card); border-radius: 8px; grid-column: 1 / -1; }
   .select-all label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-secondary); cursor: pointer; }
   .select-all input[type="checkbox"] { width: 18px; height: 18px; }
