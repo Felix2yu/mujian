@@ -508,6 +508,88 @@
     color: #999;
   }
 
+  :global(.dark .nav-links a:hover) {
+    background: #333;
+  }
+
+  :global(.dark .nav-search input) {
+    background: #333;
+    color: #e0e0e0;
+  }
+
+  :global(.dark .nav-search input:focus) {
+    background: #2a2a2a;
+  }
+
+  :global(.dark .search-results) {
+    background: #2a2a2a;
+    border-color: #333;
+  }
+
+  :global(.dark .search-item) {
+    border-bottom-color: #333;
+    color: #e0e0e0;
+  }
+
+  :global(.dark .search-item:hover) {
+    background: #333;
+  }
+
+  :global(.dark .search-item .search-venue) {
+    color: #999;
+  }
+
+  :global(.dark .search-more) {
+    border-top-color: #333;
+    color: #4A90D9;
+  }
+
+  :global(.dark .search-more:hover) {
+    background: #333;
+  }
+
+  :global(.dark .nav-settings:hover) {
+    background: #333;
+  }
+
+  :global(.dark .nav-settings.active) {
+    background: #4A90D9;
+    color: #fff;
+  }
+
+  :global(.dark .day-cell.empty) {
+    background: #1a1a1a;
+  }
+
+  :global(.dark .day-cell:not(.empty):hover) {
+    background: #2a2a2a;
+  }
+
+  :global(.dark .poster-cell) {
+    background: #333;
+  }
+
+  :global(.dark .popup-item:hover) {
+    background: #333;
+  }
+
+  :global(.dark .popup-item) {
+    border-bottom-color: #333;
+  }
+
+  :global(.dark .popup-list) {
+    border-top: 1px solid #333;
+  }
+
+  :global(.dark .show-card) {
+    background: #2a2a2a;
+    border-color: #333;
+  }
+
+  :global(.dark .show-card:hover) {
+    border-color: #444;
+  }
+
   :global(.dark) :global(.tabs),
   :global(.dark .tabs) {
     background: #1e1e1e;

@@ -781,7 +781,15 @@
     background: rgba(0,0,0,0.7);
   }
 
+  :global(.dark) .poster-cell {
+    background: #333;
+  }
+
   :global(.dark) .legend-item {
     color: #999;
+  }
+
+  :global(.dark) .calendar-grid {
+    background: #333;
   }
 </style>
