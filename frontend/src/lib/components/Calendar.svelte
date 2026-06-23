@@ -1,4 +1,6 @@
 <script>
+  import { onMount, onDestroy } from 'svelte';
+
   let { events = [], initialYear = new Date().getFullYear(), initialMonth = new Date().getMonth() + 1, onmonthchange } = $props();
 
   let today = new Date();
@@ -113,14 +115,18 @@
     popupEvents = [];
   }
 
-  $effect(() => {
-    function handleClick(e) {
-      if (popupEvents.length > 0 && !e.target.closest('.popup') && !e.target.closest('.poster-cell') && !e.target.closest('.event-text-btn')) {
-        closePopup();
-      }
+  function handleClick(e) {
+    if (popupEvents.length > 0 && !e.target.closest('.popup') && !e.target.closest('.poster-cell') && !e.target.closest('.event-text-btn')) {
+      closePopup();
     }
+  }
+
+  onMount(() => {
     window.addEventListener('click', handleClick);
-    return () => window.removeEventListener('click', handleClick);
+  });
+
+  onDestroy(() => {
+    window.removeEventListener('click', handleClick);
   });
 
   function getStatusLabel(status) {
