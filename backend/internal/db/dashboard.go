@@ -163,7 +163,7 @@ func (db *DB) GetDashboardStats() (*DashboardStats, error) {
 		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
 		FROM shows s
 		LEFT JOIN categories c ON s.category_id = c.id
-		WHERE s.status = 'watched'
+		WHERE s.status = 'normal'
 		ORDER BY s.date DESC
 		LIMIT 5
 	`)
