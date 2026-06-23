@@ -2,9 +2,13 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
 
-  let stats = null;
-  let shows = [];
+  let allShows = [];
   let loading = true;
+
+  let selectedYear = 'all';
+  let selectedMonth = 'all';
+
+  let years = [];
 
   let categoryStats = {};
   let monthlyStats = {};
@@ -13,15 +17,17 @@
   let statusStats = { planned: 0, watched: 0, cancelled: 0 };
   let totalCost = 0;
   let avgDuration = 0;
+  let totalCount = 0;
 
   onMount(async () => {
     try {
-      const [statsRes, showsRes] = await Promise.all([
-        api.getStats(),
-        api.listAllShows()
-      ]);
-      stats = statsRes;
-      shows = showsRes;
+      allShows = await api.listAllShows();
+      const yearSet = new Set();
+      allShows.forEach(s => {
+        const y = s.date.substring(0, 4);
+        yearSet.add(y);
+      });
+      years = [...yearSet].sort().reverse();
       analyzeData();
     } catch (e) {
       console.error('Failed to load data:', e);
@@ -29,6 +35,20 @@
       loading = false;
     }
   });
+
+  $: filteredShows = allShows.filter(s => {
+    if (selectedYear !== 'all' && !s.date.startsWith(selectedYear)) return false;
+    if (selectedMonth !== 'all') {
+      const m = s.date.substring(5, 7);
+      if (m !== selectedMonth) return false;
+    }
+    return true;
+  });
+
+  $: {
+    filteredShows;
+    analyzeData();
+  }
 
   function analyzeData() {
     categoryStats = {};
@@ -39,8 +59,9 @@
     totalCost = 0;
     let totalDuration = 0;
     let durationCount = 0;
+    totalCount = filteredShows.length;
 
-    shows.forEach(show => {
+    filteredShows.forEach(show => {
       const cat = show.category_name || '未分类';
       categoryStats[cat] = (categoryStats[cat] || 0) + 1;
 
@@ -85,30 +106,55 @@
     return `${m}m`;
   }
 
+  const months = [
+    { value: 'all', label: '全部' },
+    { value: '01', label: '1月' }, { value: '02', label: '2月' },
+    { value: '03', label: '3月' }, { value: '04', label: '4月' },
+    { value: '05', label: '5月' }, { value: '06', label: '6月' },
+    { value: '07', label: '7月' }, { value: '08', label: '8月' },
+    { value: '09', label: '9月' }, { value: '10', label: '10月' },
+    { value: '11', label: '11月' }, { value: '12', label: '12月' }
+  ];
+
   const catColors = ['#4A90D9', '#27AE60', '#E74C3C', '#9B59B6', '#E67E22', '#1ABC9C', '#34495E', '#F39C12'];
 </script>
 
 <div class="analytics-page">
-  <h1>数据分析</h1>
+  <div class="page-header">
+    <h1>数据分析</h1>
+    <div class="filters">
+      <select bind:value={selectedYear}>
+        <option value="all">全部年份</option>
+        {#each years as y}
+          <option value={y}>{y}年</option>
+        {/each}
+      </select>
+      <select bind:value={selectedMonth}>
+        {#each months as m}
+          <option value={m.value}>{m.label}</option>
+        {/each}
+      </select>
+    </div>
+  </div>
 
   {#if loading}
     <div class="loading"><div class="spinner"></div>加载中...</div>
-  {:else if stats}
+  {:else}
     <div class="stats-grid">
       <div class="stat-card">
-        <span class="stat-value">{stats.total_shows}</span>
+        <span class="stat-value">{totalCount}</span>
         <span class="stat-label">总演出</span>
       </div>
       <div class="stat-card">
-        <span class="stat-value">{stats.total_hours.toFixed(0)}</span>
-        <span class="stat-label">总时长(小时)</span>
+        <span class="stat-value">{formatDuration(avgDuration * totalCount)}</span>
+        <span class="stat-label">总时长</span>
       </div>
       <div class="stat-card">
-        <span class="stat-value">{stats.total_venues}</span>
+        <span class="stat-value">{Object.keys(venueStats).length}</span>
         <span class="stat-label">场馆数</span>
       </div>
       <div class="stat-card">
-        <span class="stat-value">{stats.avg_rating > 0 ? stats.avg_rating.toFixed(1) : '-'}</span>
+        <span class="stat-value">{totalCount > 0 ? (filteredShows.filter(s => s.rating).reduce((a, s) => a + s.rating, 0) / filteredShows.filter(s => s.rating).length || 0).toFixed(1) : '-'}</span>
         <span class="stat-label">平均评分</span>
       </div>
       <div class="stat-card">
@@ -131,7 +177,7 @@
               计划中
             </div>
             <div class="bar-track">
-              <div class="bar-fill" style="width: {getBarWidth(statusStats.planned, stats.total_shows)}%; background: #4A90D9"></div>
+              <div class="bar-fill" style="width: {getBarWidth(statusStats.planned, totalCount)}%; background: #4A90D9"></div>
             </div>
             <span class="bar-value">{statusStats.planned}</span>
           </div>
@@ -141,7 +187,7 @@
               已观看
             </div>
             <div class="bar-track">
-              <div class="bar-fill" style="width: {getBarWidth(statusStats.watched, stats.total_shows)}%; background: #27AE60"></div>
+              <div class="bar-fill" style="width: {getBarWidth(statusStats.watched, totalCount)}%; background: #27AE60"></div>
             </div>
             <span class="bar-value">{statusStats.watched}</span>
           </div>
@@ -151,7 +197,7 @@
               已取消
             </div>
             <div class="bar-track">
-              <div class="bar-fill" style="width: {getBarWidth(statusStats.cancelled, stats.total_shows)}%; background: #E74C3C"></div>
+              <div class="bar-fill" style="width: {getBarWidth(statusStats.cancelled, totalCount)}%; background: #E74C3C"></div>
             </div>
             <span class="bar-value">{statusStats.cancelled}</span>
           </div>
@@ -224,10 +270,30 @@
     margin: 0 auto;
   }
 
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
   h1 {
     font-size: 24px;
     font-weight: 700;
-    margin-bottom: 24px;
+  }
+
+  .filters {
+    display: flex;
+    gap: 8px;
+  }
+
+  .filters select {
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    min-width: 100px;
   }
 
   .loading {
@@ -442,6 +508,11 @@
     .venue-list {
       grid-template-columns: 1fr;
     }
+
+    .page-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
   }
 
   @media (max-width: 480px) {
@@ -456,6 +527,14 @@
     .status-label, .star-label, .cat-label {
       width: 60px;
       font-size: 12px;
+    }
+
+    .filters {
+      width: 100%;
+    }
+
+    .filters select {
+      flex: 1;
     }
   }
 </style>
