@@ -91,6 +91,10 @@ func (db *DB) migrate() error {
 	// add sort_order column if missing (upgrade from older version)
 	db.conn.Exec("ALTER TABLE categories ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
 
+	// migrate old status values to new ones
+	db.conn.Exec("UPDATE shows SET status = 'normal' WHERE status = 'planned'")
+	db.conn.Exec("UPDATE shows SET status = 'normal' WHERE status = 'watched'")
+
 	// seed default categories
 	var count int
 	db.conn.QueryRow("SELECT COUNT(*) FROM categories").Scan(&count)
