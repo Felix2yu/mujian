@@ -2,14 +2,16 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
   import ShowCard from '$lib/components/ShowCard.svelte';
-  import Chart from 'chart.js/auto';
 
+  let Chart;
   let data = null;
   let loading = true;
   let monthChart, categoryChart, venueChart, costChart;
 
   onMount(async () => {
     try {
+      const chartModule = await import('chart.js/auto');
+      Chart = chartModule.default;
       data = await api.getDashboard();
       await tick();
       drawCharts();
@@ -25,7 +27,7 @@
   }
 
   function drawCharts() {
-    if (!data) return;
+    if (!data || !Chart) return;
     drawMonthChart();
     drawCategoryChart();
     drawVenueChart();
@@ -65,7 +67,7 @@
     const canvas = document.getElementById('categoryChart');
     if (!canvas || !data.by_category?.length) return;
     const ctx = canvas.getContext('2d');
-    const isMobile = window.innerWidth <= 768;
+    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
 
     if (categoryChart) categoryChart.destroy();
     categoryChart = new Chart(ctx, {
