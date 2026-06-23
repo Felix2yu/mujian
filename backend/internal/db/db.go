@@ -219,6 +219,33 @@ func (db *DB) GetAutocomplete(field string) ([]string, error) {
 	return values, nil
 }
 
+func (db *DB) GetShowsByField(field, value string) ([]models.Show, error) {
+	validFields := map[string]bool{
+		"company": true, "cast": true, "friends": true,
+		"venue": true, "setlist": true,
+	}
+	if !validFields[field] {
+		return nil, fmt.Errorf("invalid field: %s", field)
+	}
+
+	quoted := "`" + field + "`"
+	rows, err := db.conn.Query(`
+		SELECT s.id, s.name, s.venue, s.date, s.duration, s.status, s.category_id,
+		       s.poster_url, s.setlist, s.cast, s.company, s.friends, s.rating,
+		       s.seat, s.notes, s.review, s.ticket_cost, s.other_cost,
+		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
+		FROM shows s
+		LEFT JOIN categories c ON s.category_id = c.id
+		WHERE `+quoted+` LIKE ?
+		ORDER BY s.date DESC
+	`, "%"+value+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanShows(rows)
+}
+
 func (db *DB) GetShow(id int64) (*models.Show, error) {
 	var s models.Show
 	err := db.conn.QueryRow(`

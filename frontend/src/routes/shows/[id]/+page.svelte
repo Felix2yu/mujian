@@ -40,18 +40,15 @@
   }
 
   function statusLabel(status) {
-    const labels = { planned: '计划中', watched: '已观看', cancelled: '已取消' };
-    return labels[status] || status;
+    return { planned: '计划中', watched: '已观看', cancelled: '已取消' }[status] || status;
   }
 
   function statusColor(status) {
-    const colors = { planned: '#4A90D9', watched: '#27AE60', cancelled: '#E74C3C' };
-    return colors[status] || '#999';
+    return { planned: '#4A90D9', watched: '#27AE60', cancelled: '#E74C3C' }[status] || '#999';
   }
 
   function formatCost(val) {
-    if (val == null) return '-';
-    return `¥${val.toFixed(2)}`;
+    return val == null ? '-' : `¥${val.toFixed(2)}`;
   }
 
   async function deleteShow() {
@@ -86,13 +83,11 @@
           <div class="meta-row">
             <span class="status" style="background: {statusColor(show.status)}">{statusLabel(show.status)}</span>
             {#if show.category_name}
-              <span class="category">{show.category_name}</span>
+              <a href="/search?q={encodeURIComponent(show.category_name)}" class="category">{show.category_name}</a>
             {/if}
             {#if show.rating}
               <span class="rating">
-                {#each Array(5) as _, i}
-                  <span class:filled={i < show.rating}>★</span>
-                {/each}
+                {#each Array(5) as _, i}<span class:filled={i < show.rating}>★</span>{/each}
               </span>
             {/if}
           </div>
@@ -112,7 +107,7 @@
         {#if show.venue}
           <div class="info-item">
             <span class="info-label">场地</span>
-            <span class="info-value">{show.venue}</span>
+            <a href="/search?field=venue&q={encodeURIComponent(show.venue)}" class="info-value linkable">{show.venue}</a>
           </div>
         {/if}
 
@@ -133,14 +128,20 @@
         {#if show.company}
           <div class="info-item">
             <span class="info-label">剧团</span>
-            <span class="info-value">{show.company}</span>
+            <a href="/search?field=company&q={encodeURIComponent(show.company)}" class="info-value linkable">{show.company}</a>
           </div>
         {/if}
 
         {#if show.cast}
           <div class="info-item">
             <span class="info-label">阵容</span>
-            <span class="info-value">{show.cast}</span>
+            <div class="cast-list">
+              {#each show.cast.split(/[,，]/) as actor}
+                {#if actor.trim()}
+                  <a href="/search?field=cast&q={encodeURIComponent(actor.trim())}" class="linkable">{actor.trim()}</a>
+                {/if}
+              {/each}
+            </div>
           </div>
         {/if}
 
@@ -166,7 +167,13 @@
       {#if show.setlist}
         <div class="section">
           <h3>剧目</h3>
-          <div class="text-content">{show.setlist}</div>
+          <div class="text-content">
+            {#each show.setlist.split('\n') as item}
+              {#if item.trim()}
+                <a href="/search?field=setlist&q={encodeURIComponent(item.trim())}" class="linkable">{item.trim()}</a><br/>
+              {/if}
+            {/each}
+          </div>
         </div>
       {/if}
 
@@ -188,202 +195,47 @@
 </div>
 
 <style>
-  .show-detail {
-    max-width: 800px;
-    margin: 0 auto;
-  }
-
-  .loading, .error {
-    text-align: center;
-    padding: 60px 20px;
-    color: #666;
-  }
-
-  .error {
-    color: #c00;
-    background: #fee;
-    border-radius: 8px;
-  }
-
-  .poster {
-    margin-bottom: 24px;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-  }
-
-  .poster img {
-    width: 100%;
-    display: block;
-  }
-
-  .detail-card {
-    background: #fff;
-    border-radius: 12px;
-    padding: 32px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  }
-
-  .detail-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 24px;
-  }
-
-  .header-info h1 {
-    font-size: 28px;
-    font-weight: 700;
-    margin-bottom: 12px;
-  }
-
-  .meta-row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-
-  .status {
-    font-size: 12px;
-    padding: 4px 12px;
-    border-radius: 12px;
-    color: #fff;
-    font-weight: 500;
-  }
-
-  .category {
-    font-size: 12px;
-    padding: 4px 12px;
-    border-radius: 12px;
-    background: #f0f0f0;
-    color: #666;
-  }
-
-  .rating {
-    font-size: 16px;
-    color: #ddd;
-  }
-
-  .rating .filled {
-    color: #f39c12;
-  }
-
-  .header-actions {
-    display: flex;
-    gap: 8px;
-  }
-
-  .edit-btn, .delete-btn {
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 14px;
-  }
-
-  .edit-btn {
-    background: #f0f0f0;
-    color: #333;
-  }
-
-  .edit-btn:hover {
-    background: #e0e0e0;
-  }
-
-  .delete-btn {
-    background: #fee;
-    color: #c00;
-  }
-
-  .delete-btn:hover {
-    background: #fdd;
-  }
-
-  .info-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-    margin-bottom: 24px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid #eee;
-  }
-
-  .info-item {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .info-label {
-    font-size: 12px;
-    color: #999;
-    text-transform: uppercase;
-  }
-
-  .info-value {
-    font-size: 15px;
-    color: #333;
-  }
-
-  .section {
-    margin-bottom: 24px;
-  }
-
-  .section h3 {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 12px;
-    color: #333;
-  }
-
-  .text-content {
-    font-size: 15px;
-    line-height: 1.8;
-    color: #555;
-    white-space: pre-wrap;
-  }
-
+  .show-detail { max-width: 800px; margin: 0 auto; }
+  .loading, .error { text-align: center; padding: 60px 20px; color: #666; }
+  .error { color: #c00; background: #fee; border-radius: 8px; }
+  .poster { margin-bottom: 24px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+  .poster img { width: 100%; display: block; }
+  .detail-card { background: #fff; border-radius: 12px; padding: 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+  .header-info h1 { font-size: 28px; font-weight: 700; margin-bottom: 12px; }
+  .meta-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .status { font-size: 12px; padding: 4px 12px; border-radius: 12px; color: #fff; font-weight: 500; }
+  .category { font-size: 12px; padding: 4px 12px; border-radius: 12px; background: #f0f0f0; color: #666; text-decoration: none; }
+  .category:hover { background: #e0e0e0; }
+  .rating { font-size: 16px; color: #ddd; }
+  .rating .filled { color: #f39c12; }
+  .header-actions { display: flex; gap: 8px; }
+  .edit-btn, .delete-btn { padding: 8px 16px; border-radius: 8px; font-size: 14px; }
+  .edit-btn { background: #f0f0f0; color: #333; }
+  .edit-btn:hover { background: #e0e0e0; }
+  .delete-btn { background: #fee; color: #c00; }
+  .delete-btn:hover { background: #fdd; }
+  .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #eee; }
+  .info-item { display: flex; flex-direction: column; gap: 4px; }
+  .info-label { font-size: 12px; color: #999; }
+  .info-value { font-size: 15px; color: #333; }
+  .linkable { color: #4A90D9; text-decoration: none; }
+  .linkable:hover { text-decoration: underline; }
+  .cast-list { display: flex; flex-wrap: wrap; gap: 6px; font-size: 15px; }
+  .section { margin-bottom: 24px; }
+  .section h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #333; }
+  .text-content { font-size: 15px; line-height: 1.8; color: #555; white-space: pre-wrap; }
   @media (max-width: 768px) {
-    .show-detail {
-      padding: 0;
-    }
-
-    .detail-card {
-      padding: 20px 16px;
-    }
-
-    .detail-header {
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .header-info h1 {
-      font-size: 22px;
-    }
-
-    .header-actions {
-      width: 100%;
-      display: flex;
-      gap: 8px;
-    }
-
-    .header-actions .edit-btn,
-    .header-actions .delete-btn {
-      flex: 1;
-      text-align: center;
-    }
-
-    .info-grid {
-      grid-template-columns: 1fr;
-      gap: 12px;
-    }
+    .show-detail { padding: 0; }
+    .detail-card { padding: 20px 16px; }
+    .detail-header { flex-direction: column; gap: 16px; }
+    .header-info h1 { font-size: 22px; }
+    .header-actions { width: 100%; display: flex; gap: 8px; }
+    .header-actions .edit-btn, .header-actions .delete-btn { flex: 1; text-align: center; }
+    .info-grid { grid-template-columns: 1fr; gap: 12px; }
   }
-
   @media (max-width: 480px) {
-    .detail-card {
-      padding: 16px 12px;
-    }
-
-    .header-info h1 {
-      font-size: 20px;
-    }
+    .detail-card { padding: 16px 12px; }
+    .header-info h1 { font-size: 20px; }
   }
 </style>

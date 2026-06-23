@@ -57,6 +57,7 @@ func (h *Handler) Routes() chi.Router {
 	})
 
 	r.Get("/autocomplete/{field}", h.getAutocomplete)
+	r.Get("/field/{field}/{value}", h.getByField)
 
 	r.Route("/settings", func(r chi.Router) {
 		r.Get("/", h.getSettings)
@@ -458,6 +459,20 @@ func (h *Handler) getAutocomplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResp(w, 200, values)
+}
+
+func (h *Handler) getByField(w http.ResponseWriter, r *http.Request) {
+	field := chi.URLParam(r, "field")
+	value := chi.URLParam(r, "value")
+	shows, err := h.db.GetShowsByField(field, value)
+	if err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	if shows == nil {
+		shows = []models.Show{}
+	}
+	jsonResp(w, 200, shows)
 }
 
 func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {

@@ -49,6 +49,7 @@ export const api = {
   updateCategorySort: (ids) => request('/api/categories/sort', { method: 'PATCH', body: JSON.stringify({ ids }) }),
 
   getAutocomplete: (field) => request(`/api/autocomplete/${field}`),
+  getByField: (field, value) => request(`/api/field/${field}/${encodeURIComponent(value)}`),
 
   getSettings: () => request('/api/settings'),
   updateSettings: (data) => request('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
