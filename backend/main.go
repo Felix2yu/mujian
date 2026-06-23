@@ -4,10 +4,11 @@ import (
 	"embed"
 	"io/fs"
 	"log"
+	"mujian/internal/config"
 	"mujian/internal/db"
 	"mujian/internal/handlers"
+	"mujian/internal/storage"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -19,31 +20,28 @@ import (
 var frontend embed.FS
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+	cfg := config.Load()
 
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "./data/mujian.db"
-	}
-
-	database, err := db.New(dbPath)
+	database, err := db.New(cfg.DBPath)
 	if err != nil {
 		log.Fatalf("failed to init db: %v", err)
 	}
 	defer database.Close()
+
+	cfg.LoadFromFile(filepath.Join(filepath.Dir(cfg.DBPath), "settings.json"))
+
+	st := storage.New(cfg)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
 
-	h := handlers.New(database)
+	h := handlers.New(database, cfg, st)
 	r.Mount("/api", h.Routes())
 
-	// serve frontend
+	r.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.UploadDir))))
+
 	sub, err := fs.Sub(frontend, "dist")
 	if err != nil {
 		log.Fatalf("failed to get frontend dist: %w", err)
@@ -56,10 +54,8 @@ func main() {
 			path = "index.html"
 		}
 
-		// try to open the file
 		f, err := sub.Open(path)
 		if err != nil {
-			// fallback to index.html for SPA routing
 			r.URL.Path = "/"
 			fileServer.ServeHTTP(w, r)
 			return
@@ -68,14 +64,9 @@ func main() {
 		fileServer.ServeHTTP(w, r)
 	})
 
-	addr := "0.0.0.0:" + port
+	addr := "0.0.0.0:" + cfg.Port
 	log.Printf("mujian server starting on %s", addr)
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
-}
-
-func init() {
-	dir := filepath.Dir("./data/mujian.db")
-	os.MkdirAll(dir, 0755)
 }

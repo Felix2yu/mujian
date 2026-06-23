@@ -9,6 +9,7 @@ services:
       - TZ=Asia/Shanghai
       - PUID=1000
       - PGID=1000
+      - ALLOW_LOCAL_STORAGE=true
     restart: unless-stopped
 
 volumes:

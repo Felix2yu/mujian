@@ -2,10 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"mujian/internal/config"
 	"mujian/internal/db"
 	"mujian/internal/ics"
 	"mujian/internal/models"
+	"mujian/internal/storage"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -13,11 +16,13 @@ import (
 )
 
 type Handler struct {
-	db *db.DB
+	db      *db.DB
+	cfg     *config.Config
+	storage storage.Storage
 }
 
-func New(db *db.DB) *Handler {
-	return &Handler{db: db}
+func New(db *db.DB, cfg *config.Config, st storage.Storage) *Handler {
+	return &Handler{db: db, cfg: cfg, storage: st}
 }
 
 func (h *Handler) Routes() chi.Router {
@@ -44,6 +49,13 @@ func (h *Handler) Routes() chi.Router {
 		r.Put("/{id}", h.updateCategory)
 		r.Delete("/{id}", h.deleteCategory)
 	})
+
+	r.Route("/settings", func(r chi.Router) {
+		r.Get("/", h.getSettings)
+		r.Put("/", h.updateSettings)
+	})
+
+	r.Post("/upload", h.uploadFile)
 
 	return r
 }
@@ -141,6 +153,11 @@ func (h *Handler) deleteShow(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		jsonErr(w, 400, "invalid id")
 		return
+	}
+
+	show, _ := h.db.GetShow(id)
+	if show != nil && show.PosterURL != "" {
+		h.storage.Delete(show.PosterURL)
 	}
 
 	if err := h.db.DeleteShow(id); err != nil {
@@ -311,4 +328,45 @@ func (h *Handler) getRecent(w http.ResponseWriter, r *http.Request) {
 		shows = []models.Show{}
 	}
 	jsonResp(w, 200, shows)
+}
+
+func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
+	jsonResp(w, 200, h.cfg.GetSettingsResponse())
+}
+
+func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
+	var req config.SettingsUpdate
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+
+	h.cfg.Update(&req)
+	h.cfg.SaveToFile(filepath.Join(h.cfg.DBPath, "..", "settings.json"))
+
+	jsonResp(w, 200, h.cfg.GetSettingsResponse())
+}
+
+func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {
+	if !h.cfg.AllowLocalStorage && h.cfg.StorageType != "s3" {
+		jsonErr(w, 403, "local storage is disabled")
+		return
+	}
+
+	r.ParseMultipartForm(32 << 20)
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		jsonErr(w, 400, "no file provided")
+		return
+	}
+	defer file.Close()
+
+	filename := filepath.Base(header.Filename)
+	url, err := h.storage.Save(header, filename)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+
+	jsonResp(w, 200, map[string]string{"url": url})
 }

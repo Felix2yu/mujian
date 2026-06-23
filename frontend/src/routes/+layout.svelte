@@ -1,6 +1,7 @@
 <script>
   import { page } from '$app/stores';
   import { api } from '$lib/api';
+  import { theme } from '$lib/stores';
   import { onMount } from 'svelte';
 
   let stats = null;
@@ -10,9 +11,13 @@
 
   onMount(async () => {
     try {
-      stats = await api.getStats();
+      const [statsRes, settingsRes] = await Promise.all([api.getStats(), api.getSettings()]);
+      stats = statsRes;
+      if (settingsRes.theme) {
+        theme.set(settingsRes.theme);
+      }
     } catch (e) {
-      console.error('Failed to load stats:', e);
+      console.error('Failed to load data:', e);
     }
   });
 
@@ -68,12 +73,15 @@
         </div>
       {/if}
     </div>
-    {#if stats}
-      <div class="nav-stats">
-        <span>{stats.total_shows} 场演出</span>
-        <span>{stats.total_hours.toFixed(0)} 小时</span>
-      </div>
-    {/if}
+    <div class="nav-right">
+      {#if stats}
+        <div class="nav-stats">
+          <span>{stats.total_shows} 场演出</span>
+          <span>{stats.total_hours.toFixed(0)} 小时</span>
+        </div>
+      {/if}
+      <a href="/settings" class="nav-settings" class:active={currentPath === '/settings'}>⚙</a>
+    </div>
   </nav>
 
   <main>
@@ -93,6 +101,13 @@
     background: #f5f5f5;
     color: #333;
     line-height: 1.6;
+    transition: background 0.3s, color 0.3s;
+  }
+
+  :global(.dark body),
+  :global(body.dark) {
+    background: #1a1a1a;
+    color: #e0e0e0;
   }
 
   :global(a) {
@@ -112,6 +127,13 @@
     border: 1px solid #ddd;
     border-radius: 6px;
     padding: 8px 12px;
+    transition: border-color 0.2s, background 0.2s, color 0.2s;
+  }
+
+  :global(.dark input, .dark select, .dark textarea) {
+    background: #2a2a2a;
+    border-color: #444;
+    color: #e0e0e0;
   }
 
   :global(input:focus, select:focus, textarea:focus) {
@@ -134,6 +156,12 @@
     position: sticky;
     top: 0;
     z-index: 100;
+    transition: background 0.3s;
+  }
+
+  :global(.dark) .navbar {
+    background: #222;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   }
 
   .nav-brand a {
@@ -157,6 +185,10 @@
     background: #f0f0f0;
   }
 
+  :global(.dark) .nav-links a:hover {
+    background: #333;
+  }
+
   .nav-links a.active {
     background: #4A90D9;
     color: #fff;
@@ -174,9 +206,17 @@
     border: none;
   }
 
+  :global(.dark) .nav-search input {
+    background: #333;
+  }
+
   .nav-search input:focus {
     background: #fff;
     box-shadow: 0 0 0 2px #4A90D9;
+  }
+
+  :global(.dark) .nav-search input:focus {
+    background: #2a2a2a;
   }
 
   .search-results {
@@ -193,11 +233,19 @@
     z-index: 200;
   }
 
+  :global(.dark) .search-results {
+    background: #2a2a2a;
+  }
+
   .search-item {
     display: flex;
     flex-direction: column;
     padding: 12px 16px;
     border-bottom: 1px solid #eee;
+  }
+
+  :global(.dark) .search-item {
+    border-bottom-color: #444;
   }
 
   .search-item:last-child {
@@ -206,6 +254,10 @@
 
   .search-item:hover {
     background: #f5f5f5;
+  }
+
+  :global(.dark) .search-item:hover {
+    background: #333;
   }
 
   .search-name {
@@ -217,17 +269,61 @@
     color: #666;
   }
 
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-left: auto;
+  }
+
   .nav-stats {
     display: flex;
     gap: 16px;
     font-size: 13px;
     color: #666;
-    margin-left: auto;
+  }
+
+  .nav-settings {
+    font-size: 20px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background 0.2s;
+  }
+
+  .nav-settings:hover {
+    background: #f0f0f0;
+  }
+
+  :global(.dark) .nav-settings:hover {
+    background: #333;
+  }
+
+  .nav-settings.active {
+    background: #4A90D9;
+    color: #fff;
   }
 
   main {
     max-width: 1200px;
     margin: 0 auto;
     padding: 24px;
+  }
+
+  :global(.dark main) {
+    background: transparent;
+  }
+
+  :global(.dark .section),
+  :global(.dark .detail-card),
+  :global(.dark .show-form),
+  :global(.dark .calendar-section),
+  :global(.dark .sidebar-section),
+  :global(.dark .stats-bar) {
+    background: #2a2a2a;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   }
 </style>
