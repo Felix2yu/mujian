@@ -4,11 +4,11 @@
   import { api } from '$lib/api';
   import ShowCard from '$lib/components/ShowCard.svelte';
 
-  let query = '';
-  let field = '';
-  let shows = [];
-  let loading = false;
-  let searched = false;
+  let query = $state('');
+  let field = $state('');
+  let shows = $state([]);
+  let loading = $state(false);
+  let searched = $state(false);
 
   onMount(() => {
     const q = $page.url.searchParams.get('q');

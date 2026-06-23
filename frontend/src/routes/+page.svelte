@@ -15,12 +15,12 @@
     return null;
   })();
 
-  let currentYear = stored ? stored.year : new Date().getFullYear();
-  let currentMonth = stored ? stored.month : new Date().getMonth() + 1;
-  let events = [];
-  let upcoming = [];
-  let recent = [];
-  let stats = null;
+  let currentYear = $state(stored ? stored.year : new Date().getFullYear());
+  let currentMonth = $state(stored ? stored.month : new Date().getMonth() + 1);
+  let events = $state([]);
+  let upcoming = $state([]);
+  let recent = $state([]);
+  let stats = $state(null);
 
   onMount(async () => {
     await loadData();

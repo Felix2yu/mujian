@@ -3,25 +3,18 @@
   import { api } from '$lib/api';
   import { theme } from '$lib/stores';
 
-  let settings = {
+  let settings = $state({
     theme: 'auto',
-    storage_type: 'local',
     allow_local_storage: true,
-    s3_endpoint: '',
-    s3_bucket: '',
-    s3_region: 'us-east-1',
-    s3_access_key: '',
-    s3_secret_key: '',
-    s3_public_url: ''
-  };
-
-  let categories = [];
-  let saving = false;
-  let message = '';
-  let newCatName = '';
-  let dragIndex = null;
-  let restoring = false;
-  let restoreResult = null;
+    storage_type: 'local'
+  });
+  let categories = $state([]);
+  let saving = $state(false);
+  let message = $state('');
+  let newCatName = $state('');
+  let dragIndex = $state(null);
+  let restoring = $state(false);
+  let restoreResult = $state(null);
 
   onMount(async () => {
     const [s, c] = await Promise.all([api.getSettings(), api.listCategories()]);

@@ -2,11 +2,11 @@
   import { goto } from '$app/navigation';
   import { api } from '$lib/api';
 
-  let file = null;
-  let importing = false;
-  let result = null;
-  let error = '';
-  let dragover = false;
+  let file = $state(null);
+  let importing = $state(false);
+  let result = $state(null);
+  let error = $state('');
+  let dragover = $state(false);
 
   function handleFileSelect(e) {
     file = e.target.files[0];
