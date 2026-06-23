@@ -31,6 +31,7 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
+  // API requests: network-first with cache fallback
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request)
@@ -46,6 +47,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Navigation (HTML document) requests: network-first
+  // This prevents stale cached index.html from breaking SvelteKit's client-side routing
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request).then(response => {
+        if (response.ok && request.method === 'GET') {
+          const clone = response.clone();
+          caches.open(STATIC_CACHE).then(cache => cache.put(request, clone));
+        }
+        return response;
+      }).catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Static assets (JS, CSS, images, etc.): cache-first
   event.respondWith(
     caches.match(request)
       .then(cached => {
