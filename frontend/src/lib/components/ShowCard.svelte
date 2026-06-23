@@ -26,22 +26,44 @@
         {#if show.category_name}
           <span class="category">{show.category_name}</span>
         {/if}
+        {#if show.rating}
+          <span class="rating-badge">
+            {#each Array(5) as _, i}
+              <span class="star-mini" class:filled={i < show.rating}>★</span>
+            {/each}
+          </span>
+        {/if}
       </div>
 
       <h3 class="card-title">{show.name}</h3>
 
-      <div class="card-info">
-        <span class="date">📅 {formatDateTime(show.date)}</span>
-        {#if show.venue}<span class="venue">📍 {show.venue}</span>{/if}
-        {#if show.company}<span class="company">🎭 {show.company}</span>{/if}
-        {#if show.cast}<span class="cast">👤 {show.cast.replace(/[,，]/g, ' ')}</span>{/if}
+      <div class="card-meta">
+        <span class="meta-item">
+          <span class="meta-icon">📅</span>
+          <span>{formatDateTime(show.date)}</span>
+        </span>
+        {#if show.venue}
+          <span class="meta-item">
+            <span class="meta-icon">📍</span>
+            <span class="venue-text">{show.venue}</span>
+          </span>
+        {/if}
       </div>
 
-      {#if show.rating}
-        <div class="rating">
-          {#each Array(5) as _, i}
-            <span class="star" class:filled={i < show.rating}>★</span>
-          {/each}
+      {#if !compact}
+        <div class="card-extra">
+          {#if show.company}
+            <span class="extra-item">
+              <span class="extra-icon">🎭</span>
+              <span>{show.company}</span>
+            </span>
+          {/if}
+          {#if show.cast}
+            <span class="extra-item">
+              <span class="extra-icon">👤</span>
+              <span class="cast-text">{show.cast.replace(/[,，]/g, ' ')}</span>
+            </span>
+          {/if}
         </div>
       {/if}
     </div>
@@ -49,6 +71,7 @@
     {#if show.poster_url && !compact}
       <div class="card-poster">
         <img src={show.poster_url} alt={show.name} />
+        <span class="poster-overlay" style="background: {statusColor(show.status)}20"></span>
       </div>
     {/if}
   </div>
@@ -57,30 +80,183 @@
 <style>
   .show-card {
     display: block;
-    padding: 16px;
+    padding: 14px 16px;
     background: #fff;
-    border-radius: 8px;
+    border-radius: 10px;
     border: 1px solid #eee;
-    transition: box-shadow 0.2s, border-color 0.2s;
+    transition: all 0.2s ease;
     margin-bottom: 8px;
+    text-decoration: none;
+    color: inherit;
   }
-  .show-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-color: #ddd; }
-  .show-card.compact { padding: 12px; margin-bottom: 8px; }
-  .show-card.compact:last-child { margin-bottom: 0; }
-  .card-body { display: flex; gap: 16px; }
-  .card-content { flex: 1; min-width: 0; }
-  .card-poster { max-width: 120px; flex-shrink: 0; border-radius: 6px; overflow: hidden; align-self: center; }
-  .card-poster img { width: 100%; display: block; border-radius: 6px; }
-  .card-header { display: flex; gap: 8px; margin-bottom: 8px; }
-  .status { font-size: 11px; padding: 2px 8px; border-radius: 10px; color: #fff; font-weight: 500; }
-  .category { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #f0f0f0; color: #666; }
-  .card-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #333; }
-  .compact .card-title { font-size: 14px; margin-bottom: 4px; }
-  .card-info { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: #666; }
-  .card-info span { white-space: nowrap; }
-  .rating { margin-top: 6px; }
-  .star { color: #ddd; font-size: 14px; }
-  .star.filled { color: #f39c12; }
+
+  .show-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    border-color: #ddd;
+    transform: translateY(-1px);
+  }
+
+  .show-card:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+
+  .show-card.compact {
+    padding: 10px 12px;
+    margin-bottom: 6px;
+  }
+
+  .show-card.compact:last-child {
+    margin-bottom: 0;
+  }
+
+  .card-body {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+
+  .card-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .card-poster {
+    width: 80px;
+    height: 107px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    background: #f0f0f0;
+  }
+
+  .card-poster img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .poster-overlay {
+    position: absolute;
+    inset: 0;
+    opacity: 0.1;
+    pointer-events: none;
+  }
+
+  .card-header {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .status {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    color: #fff;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+
+  .category {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #f5f5f5;
+    color: #666;
+  }
+
+  .rating-badge {
+    display: flex;
+    gap: 1px;
+    margin-left: auto;
+  }
+
+  .star-mini {
+    font-size: 12px;
+    color: #ddd;
+    line-height: 1;
+  }
+
+  .star-mini.filled {
+    color: #f39c12;
+  }
+
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #222;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .compact .card-title {
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+
+  .card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    font-size: 12px;
+    color: #888;
+  }
+
+  .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+  }
+
+  .meta-icon {
+    font-size: 11px;
+  }
+
+  .venue-text {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .card-extra {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    font-size: 12px;
+    color: #999;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #f5f5f5;
+  }
+
+  .extra-item {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+  }
+
+  .extra-icon {
+    font-size: 11px;
+  }
+
+  .cast-text {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   :global(.dark) .show-card {
     background: #2a2a2a;
@@ -89,6 +265,7 @@
 
   :global(.dark) .show-card:hover {
     border-color: #444;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
   }
 
   :global(.dark) .category {
@@ -100,11 +277,66 @@
     color: #e0e0e0;
   }
 
-  :global(.dark) .card-info {
-    color: #999;
+  :global(.dark) .card-meta {
+    color: #888;
   }
 
-  :global(.dark) .star {
+  :global(.dark) .card-extra {
+    color: #777;
+    border-top-color: #333;
+  }
+
+  :global(.dark) .star-mini {
     color: #555;
+  }
+
+  :global(.dark) .card-poster {
+    background: #333;
+  }
+
+  @media (max-width: 768px) {
+    .card-poster {
+      width: 70px;
+      height: 93px;
+    }
+
+    .card-meta {
+      gap: 3px 10px;
+    }
+
+    .venue-text {
+      max-width: 100px;
+    }
+
+    .card-extra {
+      gap: 3px 10px;
+    }
+
+    .cast-text {
+      max-width: 120px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .show-card {
+      padding: 12px;
+    }
+
+    .card-poster {
+      width: 60px;
+      height: 80px;
+    }
+
+    .card-title {
+      font-size: 14px;
+    }
+
+    .card-meta {
+      font-size: 11px;
+    }
+
+    .card-extra {
+      display: none;
+    }
   }
 </style>
