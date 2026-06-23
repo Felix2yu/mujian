@@ -46,11 +46,11 @@
   }));
 
   $effect(() => {
-    filteredShows;
-    analyzeData();
+    const shows = filteredShows;
+    analyzeData(shows);
   });
 
-  function analyzeData() {
+  function analyzeData(shows) {
     categoryStats = {};
     monthlyStats = {};
     venueStats = {};
@@ -59,9 +59,9 @@
     totalCost = 0;
     let totalDuration = 0;
     let durationCount = 0;
-    totalCount = filteredShows.length;
+    totalCount = shows.length;
 
-    filteredShows.forEach(show => {
+    shows.forEach(show => {
       const cat = show.category_name || '未分类';
       categoryStats[cat] = (categoryStats[cat] || 0) + 1;
 
