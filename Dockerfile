@@ -17,10 +17,13 @@ RUN CGO_ENABLED=0 GOPROXY=https://goproxy.cn,direct go build -o /mujian .
 
 # Final image
 FROM alpine:3.19
-RUN apk add --no-cache ca-certificates tzdata
-ENV TZ=Asia/Shanghai
+RUN apk add --no-cache ca-certificates tzdata su-exec \
+    && addgroup -g 100 mujian \
+    && adduser -u 1000 -G mujian -h /app -s /sbin/nologin -D mujian \
+    && mkdir -p /app/data \
+    && chown -R mujian:mujian /app
+ENV TZ=Asia/Shanghai PUID=1000 PGID=100
 WORKDIR /app
-COPY --from=backend /mujian .
-RUN mkdir -p /app/data
+COPY --from=backend --chown=mujian:mujian /mujian .
 EXPOSE 8080
-CMD ["./mujian"]
+CMD ["sh", "-c", "su-exec ${PUID}:${PGID} ./mujian"]

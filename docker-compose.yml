@@ -1,13 +1,14 @@
 services:
   mujian:
-    build: .
+    image: ghcr.io/felix2yu/mujian:latest
     ports:
       - "8080:8080"
     volumes:
       - mujian-data:/app/data
     environment:
-      - PORT=8080
       - TZ=Asia/Shanghai
+      - PUID=1000
+      - PGID=100
     restart: unless-stopped
 
 volumes:

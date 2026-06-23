@@ -12,7 +12,6 @@ build:
 	cd backend && CGO_ENABLED=0 go build -o mujian .
 
 docker:
-	docker compose build
 	docker compose up -d
 
 clean:
