@@ -1,7 +1,6 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
-  import ShowCard from '$lib/components/ShowCard.svelte';
 
   let Chart;
   let data = null;
@@ -28,10 +27,10 @@
 
   function drawCharts() {
     if (!data || !Chart) return;
-    drawMonthChart();
-    drawCategoryChart();
-    drawVenueChart();
-    drawCostChart();
+    try { drawMonthChart(); } catch (e) { console.warn('Month chart error:', e); }
+    try { drawCategoryChart(); } catch (e) { console.warn('Category chart error:', e); }
+    try { drawVenueChart(); } catch (e) { console.warn('Venue chart error:', e); }
+    try { drawCostChart(); } catch (e) { console.warn('Cost chart error:', e); }
   }
 
   function drawMonthChart() {

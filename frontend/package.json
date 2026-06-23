@@ -15,7 +15,6 @@
     "vite": "^5.0.0"
   },
   "dependencies": {
-    "chart.js": "^4.4.0",
-    "svelte-spa-router": "^4.0.1"
+    "chart.js": "^4.4.0"
   }
 }
