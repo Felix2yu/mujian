@@ -48,6 +48,8 @@ export const api = {
   deleteCategory: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
   updateCategorySort: (ids) => request('/api/categories/sort', { method: 'PATCH', body: JSON.stringify({ ids }) }),
 
+  getAutocomplete: (field) => request(`/api/autocomplete/${field}`),
+
   getSettings: () => request('/api/settings'),
   updateSettings: (data) => request('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
 

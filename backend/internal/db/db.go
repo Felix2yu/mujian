@@ -191,6 +191,33 @@ func (db *DB) ListAllShows() ([]models.Show, error) {
 	return scanShows(rows)
 }
 
+func (db *DB) GetAutocomplete(field string) ([]string, error) {
+	validFields := map[string]bool{
+		"company": true, "cast": true, "friends": true, "venue": true, "seat": true,
+	}
+	if !validFields[field] {
+		return nil, fmt.Errorf("invalid field: %s", field)
+	}
+
+	rows, err := db.conn.Query(
+		"SELECT DISTINCT "+field+" FROM shows WHERE "+field+" != '' ORDER BY "+field,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var values []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+		values = append(values, v)
+	}
+	return values, nil
+}
+
 func (db *DB) GetShow(id int64) (*models.Show, error) {
 	var s models.Show
 	err := db.conn.QueryRow(`

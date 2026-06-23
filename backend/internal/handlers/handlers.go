@@ -56,6 +56,8 @@ func (h *Handler) Routes() chi.Router {
 		r.Patch("/sort", h.updateCategorySort)
 	})
 
+	r.Get("/autocomplete/{field}", h.getAutocomplete)
+
 	r.Route("/settings", func(r chi.Router) {
 		r.Get("/", h.getSettings)
 		r.Put("/", h.updateSettings)
@@ -446,6 +448,16 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	h.cfg.SaveToFile(filepath.Join(h.cfg.DBPath, "..", "settings.json"))
 
 	jsonResp(w, 200, h.cfg.GetSettingsResponse())
+}
+
+func (h *Handler) getAutocomplete(w http.ResponseWriter, r *http.Request) {
+	field := chi.URLParam(r, "field")
+	values, err := h.db.GetAutocomplete(field)
+	if err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	jsonResp(w, 200, values)
 }
 
 func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {

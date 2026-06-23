@@ -7,53 +7,43 @@
   const dispatch = createEventDispatcher();
 
   let form = {
-    name: '',
-    venue: '',
-    date: '',
-    duration: 120,
-    status: 'planned',
-    category_id: null,
-    poster_url: '',
-    setlist: '',
-    cast: '',
-    company: '',
-    friends: '',
-    rating: null,
-    seat: '',
-    notes: '',
-    review: '',
-    ticket_cost: null,
-    other_cost: null
+    name: '', venue: '', date: '', duration: 120, status: 'planned',
+    category_id: null, poster_url: '', setlist: '', cast: '',
+    company: '', friends: '', rating: null, seat: '',
+    notes: '', review: '', ticket_cost: null, other_cost: null
   };
 
   let categories = [];
-  let saving = false;
-  let error = '';
-  let posterFile = null;
-  let posterPreview = '';
-  let dragover = false;
+  let saving = false, error = '';
+  let posterFile = null, posterPreview = '', dragover = false;
+
+  let companyList = [], castList = [], friendsList = [], venueList = [];
 
   onMount(async () => {
-    categories = await api.listCategories();
+    const [cats, comp, cast, fr, ven] = await Promise.all([
+      api.listCategories(),
+      api.getAutocomplete('company'),
+      api.getAutocomplete('cast'),
+      api.getAutocomplete('friends'),
+      api.getAutocomplete('venue')
+    ]);
+    categories = cats || [];
+    companyList = comp || [];
+    castList = cast || [];
+    friendsList = fr || [];
+    venueList = ven || [];
+
     if (show) {
       form = {
-        name: show.name || '',
-        venue: show.venue || '',
+        name: show.name || '', venue: show.venue || '',
         date: show.date ? formatDateTimeLocal(show.date) : '',
-        duration: show.duration || 120,
-        status: show.status || 'planned',
-        category_id: show.category_id || null,
-        poster_url: show.poster_url || '',
-        setlist: show.setlist || '',
-        cast: show.cast || '',
-        company: show.company || '',
-        friends: show.friends || '',
-        rating: show.rating,
-        seat: show.seat || '',
-        notes: show.notes || '',
-        review: show.review || '',
-        ticket_cost: show.ticket_cost,
-        other_cost: show.other_cost
+        duration: show.duration || 120, status: show.status || 'planned',
+        category_id: show.category_id || null, poster_url: show.poster_url || '',
+        setlist: show.setlist || '', cast: show.cast || '',
+        company: show.company || '', friends: show.friends || '',
+        rating: show.rating, seat: show.seat || '',
+        notes: show.notes || '', review: show.review || '',
+        ticket_cost: show.ticket_cost, other_cost: show.other_cost
       };
       if (show.poster_url) posterPreview = show.poster_url;
     } else {
@@ -63,34 +53,13 @@
 
   function formatDateTimeLocal(iso) {
     const d = new Date(iso);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const h = String(d.getHours()).padStart(2, '0');
-    const min = String(d.getMinutes()).padStart(2, '0');
-    return `${y}-${m}-${day}T${h}:${min}`;
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   }
 
-  function handleFileSelect(e) {
-    const file = e.target.files[0];
-    if (file) processFile(file);
-  }
-
-  function handleDrop(e) {
-    e.preventDefault();
-    dragover = false;
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) processFile(file);
-  }
-
-  function handleDragOver(e) {
-    e.preventDefault();
-    dragover = true;
-  }
-
-  function handleDragLeave() {
-    dragover = false;
-  }
+  function handleFileSelect(e) { if (e.target.files[0]) processFile(e.target.files[0]); }
+  function handleDrop(e) { e.preventDefault(); dragover = false; const f = e.dataTransfer.files[0]; if (f && f.type.startsWith('image/')) processFile(f); }
+  function handleDragOver(e) { e.preventDefault(); dragover = true; }
+  function handleDragLeave() { dragover = false; }
 
   function processFile(file) {
     posterFile = file;
@@ -99,51 +68,30 @@
     reader.readAsDataURL(file);
   }
 
-  function setRating(val) {
-    form.rating = form.rating === val ? null : val;
-  }
+  function setRating(val) { form.rating = form.rating === val ? null : val; }
 
   async function handleSubmit() {
-    if (!form.name.trim()) {
-      error = '请输入演出名称';
-      return;
-    }
-    if (!form.date) {
-      error = '请选择演出时间';
-      return;
-    }
-
-    saving = true;
-    error = '';
-
+    if (!form.name.trim()) { error = '请输入演出名称'; return; }
+    if (!form.date) { error = '请选择演出时间'; return; }
+    saving = true; error = '';
     try {
       if (posterFile) {
         const res = await api.uploadFile(posterFile);
         form.poster_url = res.url;
       }
-
-      if (show) {
-        await api.updateShow(show.id, form);
-      } else {
-        await api.createShow(form);
-      }
+      if (show) { await api.updateShow(show.id, form); }
+      else { await api.createShow(form); }
       dispatch('saved');
-    } catch (e) {
-      error = e.message;
-    } finally {
-      saving = false;
-    }
+    } catch (e) { error = e.message; }
+    finally { saving = false; }
   }
 </script>
 
 <form on:submit|preventDefault={handleSubmit} class="show-form">
-  {#if error}
-    <div class="error">{error}</div>
-  {/if}
+  {#if error}<div class="error">{error}</div>{/if}
 
   <div class="form-section">
     <h3>基本信息</h3>
-
     <div class="form-row">
       <div class="form-group">
         <label for="name">演出名称 *</label>
@@ -151,10 +99,12 @@
       </div>
       <div class="form-group">
         <label for="venue">场地</label>
-        <input type="text" id="venue" bind:value={form.venue} placeholder="如：国家大剧院" />
+        <input type="text" id="venue" bind:value={form.venue} list="venue-list" placeholder="如：国家大剧院" />
+        <datalist id="venue-list">
+          {#each venueList as v}<option value={v} />{/each}
+        </datalist>
       </div>
     </div>
-
     <div class="form-row">
       <div class="form-group">
         <label for="date">演出时间 *</label>
@@ -165,7 +115,6 @@
         <input type="number" id="duration" bind:value={form.duration} min="0" />
       </div>
     </div>
-
     <div class="form-row">
       <div class="form-group">
         <label for="status">状态</label>
@@ -179,9 +128,7 @@
         <label for="category">分类</label>
         <select id="category" bind:value={form.category_id}>
           <option value={null}>无分类</option>
-          {#each categories as cat}
-            <option value={cat.id}>{cat.name}</option>
-          {/each}
+          {#each categories as cat}<option value={cat.id}>{cat.name}</option>{/each}
         </select>
       </div>
       <div class="form-group">
@@ -192,22 +139,19 @@
               {form.rating >= val ? '★' : '☆'}
             </button>
           {/each}
-          {#if form.rating}
-            <span class="rating-text">{form.rating}/5</span>
-          {/if}
+          {#if form.rating}<span class="rating-text">{form.rating}/5</span>{/if}
         </div>
       </div>
+    </div>
+    <div class="form-group">
+      <label for="notes">备注</label>
+      <textarea id="notes" bind:value={form.notes} rows="2" placeholder="其他备注信息"></textarea>
     </div>
   </div>
 
   <div class="form-section">
     <h3>海报</h3>
-    <div class="poster-upload"
-      class:dragover
-      on:drop={handleDrop}
-      on:dragover={handleDragOver}
-      on:dragleave={handleDragLeave}
-    >
+    <div class="poster-upload" class:dragover on:drop={handleDrop} on:dragover={handleDragOver} on:dragleave={handleDragLeave}>
       {#if posterPreview}
         <img src={posterPreview} alt="海报预览" class="poster-preview" />
         <button type="button" class="btn-remove-poster" on:click={() => { posterFile = null; posterPreview = ''; form.poster_url = ''; }}>移除</button>
@@ -215,10 +159,7 @@
         <div class="poster-placeholder">
           <span class="poster-icon">🖼</span>
           <p>拖拽图片到此处，或</p>
-          <label class="btn-select-poster">
-            选择图片
-            <input type="file" accept="image/*" on:change={handleFileSelect} hidden />
-          </label>
+          <label class="btn-select-poster">选择图片<input type="file" accept="image/*" on:change={handleFileSelect} hidden /></label>
           <span class="poster-hint">支持 JPG、PNG、WebP</span>
         </div>
       {/if}
@@ -233,17 +174,20 @@
     <div class="form-row">
       <div class="form-group">
         <label for="company">剧团</label>
-        <input type="text" id="company" bind:value={form.company} placeholder="如：北京人艺" />
+        <input type="text" id="company" bind:value={form.company} list="company-list" placeholder="如：北京人艺" />
+        <datalist id="company-list">{#each companyList as c}<option value={c} />{/each}</datalist>
       </div>
       <div class="form-group">
         <label for="cast">阵容</label>
-        <input type="text" id="cast" bind:value={form.cast} placeholder="如：于是之, 郑榕" />
+        <input type="text" id="cast" bind:value={form.cast} list="cast-list" placeholder="如：于是之, 郑榕" />
+        <datalist id="cast-list">{#each castList as c}<option value={c} />{/each}</datalist>
       </div>
     </div>
     <div class="form-row">
       <div class="form-group">
         <label for="friends">同行好友</label>
-        <input type="text" id="friends" bind:value={form.friends} placeholder="如：小明, 小红" />
+        <input type="text" id="friends" bind:value={form.friends} list="friends-list" placeholder="如：小明, 小红" />
+        <datalist id="friends-list">{#each friendsList as f}<option value={f} />{/each}</datalist>
       </div>
       <div class="form-group">
         <label for="seat">座位</label>
@@ -276,10 +220,6 @@
       <label for="review">剧评</label>
       <textarea id="review" bind:value={form.review} rows="4" placeholder="写下你的感受..."></textarea>
     </div>
-    <div class="form-group">
-      <label for="notes">备注</label>
-      <textarea id="notes" bind:value={form.notes} rows="2" placeholder="其他备注信息"></textarea>
-    </div>
   </div>
 
   <div class="form-actions">
@@ -302,13 +242,11 @@
   label { display: block; font-size: 13px; font-weight: 500; color: #666; margin-bottom: 6px; }
   input, select, textarea { width: 100%; }
   textarea { resize: vertical; }
-
   .star-rating { display: flex; align-items: center; gap: 2px; padding-top: 4px; }
   .star-btn { font-size: 24px; color: #ddd; cursor: pointer; padding: 0 2px; transition: color 0.15s, transform 0.15s; background: none; border: none; }
   .star-btn:hover { transform: scale(1.2); }
   .star-btn.active { color: #f39c12; }
   .rating-text { margin-left: 8px; font-size: 13px; color: #999; }
-
   .poster-upload { border: 2px dashed #ddd; border-radius: 8px; padding: 24px; text-align: center; transition: border-color 0.2s, background 0.2s; cursor: pointer; }
   .poster-upload.dragover { border-color: #4A90D9; background: #f0f7ff; }
   .poster-preview { max-width: 200px; max-height: 200px; border-radius: 8px; object-fit: cover; }
@@ -319,14 +257,12 @@
   .btn-select-poster { display: inline-block; padding: 6px 16px; background: #4A90D9; color: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; }
   .btn-select-poster:hover { background: #3a7bc8; }
   .poster-hint { font-size: 11px; color: #999; }
-
   .form-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
   .btn-cancel { padding: 10px 24px; border-radius: 8px; background: #f0f0f0; color: #666; font-weight: 500; transition: background 0.2s; }
   .btn-cancel:hover { background: #e0e0e0; }
   .btn-submit { padding: 10px 32px; border-radius: 8px; background: #4A90D9; color: #fff; font-weight: 500; transition: background 0.2s; }
   .btn-submit:hover:not(:disabled) { background: #3a7bc8; }
   .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
-
   @media (max-width: 768px) {
     .show-form { padding: 16px; }
     .form-row { flex-direction: column; gap: 0; }
