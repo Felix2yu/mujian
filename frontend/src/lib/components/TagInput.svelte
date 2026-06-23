@@ -1,16 +1,10 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
+  let { value = $bindable(''), placeholder = '', suggestions = [], onchange } = $props();
 
-  export let value = '';
-  export let placeholder = '';
-  export let suggestions = [];
-
-  const dispatch = createEventDispatcher();
-
-  let inputValue = '';
+  let inputValue = $state('');
   let inputEl;
 
-  $: tags = value ? value.split(/[,，]/).map(s => s.trim()).filter(Boolean) : [];
+  let tags = $derived(value ? value.split(/[,，]/).map(s => s.trim()).filter(Boolean) : []);
 
   function addTag() {
     const v = inputValue.trim();
@@ -21,13 +15,13 @@
     const newTags = [...tags, v];
     value = newTags.join(', ');
     inputValue = '';
-    dispatch('change', value);
+    onchange?.(value);
   }
 
   function removeTag(index) {
     const newTags = tags.filter((_, i) => i !== index);
     value = newTags.join(', ');
-    dispatch('change', value);
+    onchange?.(value);
   }
 
   function handleKeydown(e) {
@@ -43,29 +37,31 @@
     if (!tags.includes(s)) {
       const newTags = [...tags, s];
       value = newTags.join(', ');
-      dispatch('change', value);
+      onchange?.(value);
     }
     inputValue = '';
     inputEl?.focus();
   }
 
-  $: filteredSuggestions = inputValue.length > 0
+  let filteredSuggestions = $derived(inputValue.length > 0
     ? suggestions.filter(s => s.toLowerCase().includes(inputValue.toLowerCase()) && !tags.includes(s))
-    : [];
+    : []);
 </script>
 
 <div class="tag-input-wrapper">
-  <div class="tag-input" on:click={() => inputEl?.focus()}>
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="tag-input" onclick={() => inputEl?.focus()}>
     {#each tags as tag, i}
       <span class="tag">
         <span class="tag-text">{tag}</span>
-        <button type="button" class="tag-remove" on:click|stopPropagation={() => removeTag(i)}>×</button>
+        <button type="button" class="tag-remove" onclick={(e) => { e.stopPropagation(); removeTag(i); }}>×</button>
       </span>
     {/each}
     <input
       bind:this={inputEl}
       bind:value={inputValue}
-      on:keydown={handleKeydown}
+      onkeydown={handleKeydown}
       placeholder={tags.length === 0 ? placeholder : ''}
       class="tag-field"
     />
@@ -73,7 +69,7 @@
   {#if filteredSuggestions.length > 0}
     <div class="suggestions">
       {#each filteredSuggestions.slice(0, 8) as s}
-        <button type="button" class="suggestion-item" on:click={() => selectSuggestion(s)}>
+        <button type="button" class="suggestion-item" onclick={() => selectSuggestion(s)}>
           {s}
         </button>
       {/each}

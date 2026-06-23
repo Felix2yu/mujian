@@ -75,7 +75,7 @@
 
   <div class="main-content">
     <div class="calendar-section">
-      <Calendar {events} initialYear={currentYear} initialMonth={currentMonth} on:monthChange={(e) => handleMonthChange(e.detail.year, e.detail.month)} />
+      <Calendar {events} initialYear={currentYear} initialMonth={currentMonth} onmonthchange={(e) => handleMonthChange(e.year, e.month)} />
     </div>
 
     <div class="sidebar">

@@ -1,6 +1,5 @@
 <script>
-  export let show;
-  export let compact = false;
+  let { show, compact = false } = $props();
 
   function formatDateTime(dateStr) {
     const d = new Date(dateStr);

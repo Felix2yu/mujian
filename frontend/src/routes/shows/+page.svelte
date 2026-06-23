@@ -3,29 +3,29 @@
   import { api } from '$lib/api';
   import ShowCard from '$lib/components/ShowCard.svelte';
 
-  let shows = [];
-  let loading = true;
-  let activeTab = 'normal';
-  let categoryFilter = '';
-  let ratingFilter = '';
-  let searchQuery = '';
-  let sortBy = 'date_asc';
-  let selectedIds = new Set();
-  let batchMode = false;
-  let showBatchPanel = false;
-  let categories = [];
-  let batchCategory = '';
-  let batchRating = '';
-  let batchStatus = '';
-  let batchSaving = false;
-  let filtersExpanded = false;
-  let isMobile = false;
+  let shows = $state([]);
+  let loading = $state(true);
+  let activeTab = $state('normal');
+  let categoryFilter = $state('');
+  let ratingFilter = $state('');
+  let searchQuery = $state('');
+  let sortBy = $state('date_asc');
+  let selectedIds = $state(new Set());
+  let batchMode = $state(false);
+  let showBatchPanel = $state(false);
+  let categories = $state([]);
+  let batchCategory = $state('');
+  let batchRating = $state('');
+  let batchStatus = $state('');
+  let batchSaving = $state(false);
+  let filtersExpanded = $state(false);
+  let isMobile = $state(false);
 
   function checkMobile() { isMobile = window.innerWidth <= 768; }
 
-  $: hasActiveFilters = searchQuery || categoryFilter || ratingFilter;
+  let hasActiveFilters = $derived(searchQuery || categoryFilter || ratingFilter);
 
-  $: filteredShows = shows.filter(s => {
+  let filteredShows = $derived(shows.filter(s => {
     if (activeTab === 'normal' && s.status !== 'normal' && s.status !== 'pending_tickets') return false;
     if (categoryFilter && s.category_name !== categoryFilter) return false;
     if (ratingFilter) {
@@ -48,9 +48,9 @@
       case 'rating_asc': return (a.rating || 0) - (b.rating || 0);
       default: return 0;
     }
-  });
+  }));
 
-  $: allSelected = filteredShows.length > 0 && filteredShows.every(s => selectedIds.has(s.id));
+  let allSelected = $derived(filteredShows.length > 0 && filteredShows.every(s => selectedIds.has(s.id)));
 
   onMount(async () => {
     checkMobile();
@@ -100,64 +100,122 @@
     if (batchRating !== '') data.rating = parseInt(batchRating) || null;
     if (batchStatus !== '') data.status = batchStatus;
     if (Object.keys(data).length === 0) return;
-
     batchSaving = true;
     try {
       await api.batchUpdate([...selectedIds], data);
-      selectedIds.clear(); selectedIds = selectedIds;
-      showBatchPanel = false;
+      selectedIds.clear(); selectedIds = selectedIds; showBatchPanel = false;
       batchCategory = ''; batchRating = ''; batchStatus = '';
-      const allShows = await api.listAllShows();
-      shows = allShows;
-    } catch (e) { alert('批量更新失败: ' + e.message); }
-    finally { batchSaving = false; }
+      shows = await api.listAllShows();
+    } catch (e) {
+      alert('批量更新失败: ' + e.message);
+    } finally {
+      batchSaving = false;
+    }
   }
 
   async function applyBatchDelete() {
-    if (selectedIds.size === 0) return;
-    if (!confirm(`确定删除选中的 ${selectedIds.size} 场演出吗？`)) return;
+    if (selectedIds.size === 0 || !confirm(`确定删除选中的 ${selectedIds.size} 场演出吗？`)) return;
     batchSaving = true;
     try {
       await api.batchDelete([...selectedIds]);
-      selectedIds.clear(); selectedIds = selectedIds;
-      showBatchPanel = false;
-      const allShows = await api.listAllShows();
-      shows = allShows;
-    } catch (e) { alert('批量删除失败: ' + e.message); }
-    finally { batchSaving = false; }
+      selectedIds.clear(); selectedIds = selectedIds; showBatchPanel = false;
+      shows = await api.listAllShows();
+    } catch (e) {
+      alert('批量删除失败: ' + e.message);
+    } finally {
+      batchSaving = false;
+    }
+  }
+
+  async function deleteShow(id) {
+    if (!confirm('确定删除？')) return;
+    try {
+      await api.deleteShow(id);
+      shows = shows.filter(s => s.id !== id);
+    } catch (e) {
+      alert('删除失败: ' + e.message);
+    }
   }
 </script>
 
 <div class="shows-page">
   <div class="page-header">
     <div class="header-left">
-      <h1>演出列表</h1>
+      <h1>演出</h1>
     </div>
     <div class="header-right">
-      <button class="batch-btn" class:active={batchMode} on:click={toggleBatchMode}>
+      <button class="batch-btn" class:active={batchMode} onclick={toggleBatchMode}>
         {batchMode ? '退出' : '批量'}
       </button>
       <a href="/shows/import" class="action-btn" title="导入">📥</a>
       <a href={api.getExportUrl()} class="action-btn" download title="导出">📤</a>
-      <a href="/shows/new" class="add-btn">+ 添加演出</a>
+      <a href="/shows/new" class="add-btn">+ 添加</a>
     </div>
   </div>
 
   <div class="tabs">
-    <button class="tab" class:active={activeTab === 'normal'} on:click={() => { activeTab = 'normal'; clearFilters(); }}>
+    <button class="tab" class:active={activeTab === 'normal'} onclick={() => { activeTab = 'normal'; clearFilters(); }}>
       待看列表
       {#if shows.filter(s => s.status === 'normal' || s.status === 'pending_tickets').length > 0}
         <span class="tab-count">{shows.filter(s => s.status === 'normal' || s.status === 'pending_tickets').length}</span>
       {/if}
     </button>
-    <button class="tab" class:active={activeTab === 'all'} on:click={() => { activeTab = 'all'; clearFilters(); }}>
+    <button class="tab" class:active={activeTab === 'all'} onclick={() => { activeTab = 'all'; clearFilters(); }}>
       全部列表
       <span class="tab-count">{shows.length}</span>
     </button>
   </div>
 
+  {#if batchMode}
+    <div class="batch-bar">
+      <span>已选 <strong>{selectedIds.size}</strong> 场</span>
+      <button class="batch-action" onclick={applyBatchUpdate} disabled={batchSaving || selectedIds.size === 0}>批量更新</button>
+      <button class="batch-action danger" onclick={applyBatchDelete} disabled={batchSaving || selectedIds.size === 0}>批量删除</button>
+    </div>
+
+    {#if showBatchPanel}
+      <div class="batch-panel">
+        <h3>批量更新</h3>
+        <div class="batch-form">
+          <div class="form-group">
+            <label for="batch-cat">分类</label>
+            <select id="batch-cat" bind:value={batchCategory}>
+              <option value="">不修改</option>
+              {#each categories as cat}<option value={cat.id}>{cat.name}</option>{/each}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="batch-rating">评分</label>
+            <select id="batch-rating" bind:value={batchRating}>
+              <option value="">不修改</option>
+              <option value="5">★★★★★ 5</option>
+              <option value="4">★★★★ 4</option>
+              <option value="3">★★★ 3</option>
+              <option value="2">★★ 2</option>
+              <option value="1">★ 1</option>
+              <option value="0">清除评分</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="batch-status">状态</label>
+            <select id="batch-status" bind:value={batchStatus}>
+              <option value="">不修改</option>
+              <option value="normal">正常</option>
+              <option value="cancelled">已取消</option>
+              <option value="pending_tickets">待开票</option>
+              <option value="no_show">未赴约</option>
+            </select>
+          </div>
+          <button class="btn-apply" onclick={applyBatchUpdate} disabled={batchSaving}>
+            {batchSaving ? '保存中...' : '应用'}
+          </button>
+        </div>
+      </div>
+    {/if}
+  {/if}
+
   <div class="toolbar">
-    <button class="filter-toggle" on:click={() => filtersExpanded = !filtersExpanded}>
+    <button class="filter-toggle" onclick={() => filtersExpanded = !filtersExpanded}>
       🔍 筛选 {#if hasActiveFilters}<span class="filter-badge"></span>{/if}
     </button>
 
@@ -180,72 +238,20 @@
           <option value="0">无评分</option>
         </select>
         <select bind:value={sortBy}>
-          <option value="date_asc">日期 ↑</option>
-          <option value="date_desc">日期 ↓</option>
+          <option value="date_asc">时间 ↑</option>
+          <option value="date_desc">时间 ↓</option>
           <option value="name">名称</option>
           <option value="rating_desc">评分 ↓</option>
           <option value="rating_asc">评分 ↑</option>
         </select>
-        {#if hasActiveFilters}
-          <button class="clear-btn" on:click={clearFilters}>清除</button>
-        {/if}
       </div>
     </div>
 
-    <span class="result-count">{filteredShows.length}/{shows.length}</span>
+    <span class="result-count">{filteredShows.length} / {shows.length}</span>
   </div>
 
-  {#if batchMode && selectedIds.size > 0}
-    <div class="batch-bar">
-      <span class="batch-count">已选 {selectedIds.size} 场</span>
-      <button class="batch-action" on:click={() => showBatchPanel = !showBatchPanel}>批量修改</button>
-      <button class="batch-action danger" on:click={applyBatchDelete} disabled={batchSaving}>批量删除</button>
-      <button class="batch-action" on:click={() => { selectedIds.clear(); selectedIds = selectedIds; }}>取消选择</button>
-    </div>
-  {/if}
-
-  {#if showBatchPanel}
-    <div class="batch-panel">
-      <h3>批量修改</h3>
-      <div class="batch-form">
-        <div class="form-group">
-          <label>分类</label>
-          <select bind:value={batchCategory}>
-            <option value="">不修改</option>
-            {#each categories as cat}<option value={cat.id}>{cat.name}</option>{/each}
-          </select>
-        </div>
-        <div class="form-group">
-          <label>评分</label>
-          <select bind:value={batchRating}>
-            <option value="">不修改</option>
-            <option value="5">★★★★★ 5</option>
-            <option value="4">★★★★ 4</option>
-            <option value="3">★★★ 3</option>
-            <option value="2">★★ 2</option>
-            <option value="1">★ 1</option>
-            <option value="0">清除评分</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>状态</label>
-          <select bind:value={batchStatus}>
-            <option value="">不修改</option>
-            <option value="normal">正常</option>
-            <option value="cancelled">已取消</option>
-            <option value="pending_tickets">待开票</option>
-            <option value="no_show">未赴约</option>
-          </select>
-        </div>
-        <button class="btn-apply" on:click={applyBatchUpdate} disabled={batchSaving}>
-          {batchSaving ? '保存中...' : '应用'}
-        </button>
-      </div>
-    </div>
-  {/if}
-
   {#if loading}
-    <div class="loading"><div class="spinner"></div><span>加载中...</span></div>
+    <div class="loading"><div class="spinner"></div>加载中...</div>
   {:else if filteredShows.length === 0}
     <div class="empty">
       <p>{activeTab === 'normal' ? '暂无待看演出' : '暂无演出记录'}</p>
@@ -253,23 +259,15 @@
     </div>
   {:else}
     <div class="shows-list">
-      {#if batchMode}
-        <div class="select-all">
-          <label>
-            <input type="checkbox" checked={allSelected} on:change={toggleSelectAll} />
-            全选 ({filteredShows.length} 场)
-          </label>
-        </div>
-      {/if}
       {#each filteredShows as show (show.id)}
         <div class="show-item" class:selected={selectedIds.has(show.id)}>
           {#if batchMode}
-            <input type="checkbox" class="select-check" checked={selectedIds.has(show.id)} on:change={() => toggleSelect(show.id)} />
+            <input type="checkbox" class="select-check" checked={selectedIds.has(show.id)} onchange={() => toggleSelect(show.id)} />
           {/if}
           <ShowCard {show} />
           <div class="show-actions">
             <a href="/shows/{show.id}/edit" class="edit-btn">编辑</a>
-            <button class="delete-btn" on:click={() => { if (confirm('确定删除？')) api.deleteShow(show.id).then(() => shows = shows.filter(s => s.id !== show.id)); }}>删除</button>
+            <button class="delete-btn" onclick={() => deleteShow(show.id)}>删除</button>
           </div>
         </div>
       {/each}
@@ -284,9 +282,9 @@
   .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .add-btn { padding: 8px 20px; background: #4A90D9; color: #fff; border-radius: 8px; font-weight: 500; }
   .add-btn:hover { background: #3a7bc8; }
-  .action-btn { padding: 8px 12px; background: #f0f0f0; border-radius: 8px; font-size: 14px; }
-  .action-btn:hover { background: #e0e0e0; }
-  .batch-btn { padding: 8px 16px; background: #f0f0f0; border-radius: 8px; font-weight: 500; font-size: 13px; }
+  .action-btn { padding: 8px 12px; background: var(--bg-surface); border-radius: 8px; font-size: 14px; }
+  .action-btn:hover { background: var(--bg-surface-hover); }
+  .batch-btn { padding: 8px 16px; background: var(--bg-surface); border-radius: 8px; font-weight: 500; font-size: 13px; }
   .batch-btn.active { background: #4A90D9; color: #fff; }
 
   .tabs { display: flex; gap: 4px; background: #f0f0f0; border-radius: 10px; padding: 4px; }
@@ -296,39 +294,39 @@
   .tab.active .tab-count { background: #4A90D9; color: #fff; }
 
   .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .filter-toggle { padding: 8px 16px; background: #f0f0f0; border-radius: 8px; font-size: 13px; position: relative; }
+  .filter-toggle { padding: 8px 16px; background: var(--bg-surface); border-radius: 8px; font-size: 13px; position: relative; }
   .filter-badge { position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; background: #E74C3C; border-radius: 50%; }
   .filters-panel { display: contents; }
   .filters-panel:not(.expanded) .filters { display: none; }
   .filters-panel.expanded .filters, .filters-panel .filters { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
   .search-input { padding: 8px 12px; border-radius: 8px; width: 140px; font-size: 13px; }
   .filters select { padding: 8px 12px; border-radius: 8px; font-size: 13px; }
-  .clear-btn { padding: 6px 12px; background: #fee; color: #c00; border-radius: 6px; font-size: 12px; font-weight: 500; }
-  .clear-btn:hover { background: #fdd; }
-  .result-count { font-size: 13px; color: #999; }
+  .clear-btn { padding: 6px 12px; background: var(--danger-bg); color: var(--danger-text); border-radius: 6px; font-size: 12px; font-weight: 500; }
+  .clear-btn:hover { background: var(--danger-bg-hover); }
+  .result-count { font-size: 13px; color: var(--text-muted); }
 
   .batch-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--bg-card); border-radius: 8px; flex-wrap: wrap; }
   .batch-count { font-weight: 500; color: #4A90D9; }
-  .batch-action { padding: 6px 14px; border-radius: 6px; font-size: 13px; background: #f0f0f0; }
-  .batch-action:hover:not(:disabled) { background: #e0e0e0; }
-  .batch-action.danger { background: #fee; color: #c00; }
-  .batch-action.danger:hover { background: #fdd; }
+  .batch-action { padding: 6px 14px; border-radius: 6px; font-size: 13px; background: var(--bg-surface); }
+  .batch-action:hover:not(:disabled) { background: var(--bg-surface-hover); }
+  .batch-action.danger { background: var(--danger-bg); color: var(--danger-text); }
+  .batch-action.danger:hover { background: var(--danger-bg-hover); }
   .batch-action:disabled { opacity: 0.6; }
 
   .batch-panel { padding: 20px; background: var(--bg-card); border-radius: 12px; }
   .batch-panel h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
   .batch-form { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
   .batch-form .form-group { min-width: 140px; }
-  .batch-form label { display: block; font-size: 13px; color: #666; margin-bottom: 6px; }
+  .batch-form label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
   .batch-form select { width: 100%; padding: 8px 12px; border-radius: 6px; }
   .btn-apply { padding: 8px 24px; background: #4A90D9; color: #fff; border-radius: 8px; font-weight: 500; }
   .btn-apply:hover:not(:disabled) { background: #3a7bc8; }
   .btn-apply:disabled { opacity: 0.6; }
 
-  .loading { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 60px 20px; color: #666; }
-  .spinner { width: 24px; height: 24px; border: 3px solid #ddd; border-top-color: #4A90D9; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  .loading { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 60px 20px; color: var(--text-secondary); }
+  .spinner { width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: #4A90D9; border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .empty { text-align: center; padding: 60px 20px; color: #666; }
+  .empty { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
   .empty a { display: inline-block; margin-top: 12px; color: #4A90D9; font-weight: 500; }
 
   .shows-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
@@ -354,77 +352,10 @@
     .filters-panel.expanded .filters { display: flex; flex-direction: column; gap: 8px; width: 100%; }
     .search-input { width: 100%; }
     .batch-bar { flex-wrap: wrap; gap: 8px; }
-    .shows-list { grid-template-columns: repeat(2, 1fr); }
+    .shows-list { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 480px) {
     .shows-list { grid-template-columns: 1fr; }
-  }
-
-  :global(.dark) .action-btn { background: #333; color: #ccc; }
-  :global(.dark) .action-btn:hover { background: #444; }
-  :global(.dark) .batch-btn { background: #333; color: #ccc; }
-  :global(.dark) .batch-btn.active { background: #4A90D9; color: #fff; }
-  :global(.dark) .tabs { background: #1e1e1e; }
-  :global(.dark) .tab { color: #999; }
-  :global(.dark) .tab.active { background: #2a2a2a; color: #e0e0e0; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
-  :global(.dark) .tab-count { background: #333; color: #999; }
-  :global(.dark) .filter-toggle { background: #333; color: #ccc; }
-  :global(.dark) .batch-bar { background: #2a2a2a; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-  :global(.dark) .batch-action { background: #333; color: #ccc; }
-  :global(.dark) .batch-action:hover:not(:disabled) { background: #444; }
-  :global(.dark) .batch-action.danger { background: #3a2020; color: #f66; }
-  :global(.dark) .batch-action.danger:hover { background: #4a2020; }
-  :global(.dark) .batch-panel { background: #2a2a2a; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-  :global(.dark) .batch-panel h3 { color: #e0e0e0; }
-  :global(.dark) .batch-form label { color: #999; }
-  :global(.dark) .select-all { background: #2a2a2a; border-color: #333; }
-  :global(.dark) .select-all label { color: #ccc; }
-  :global(.dark) .edit-btn { background: rgba(51,51,51,0.9); color: #ccc; }
-  :global(.dark) .edit-btn:hover { background: #444; }
-  :global(.dark) .delete-btn { background: rgba(58,32,32,0.9); color: #f66; }
-  :global(.dark) .delete-btn:hover { background: #4a2020; }
-  :global(.dark) .loading { color: #999; }
-  :global(.dark) .empty { color: #999; }
-  :global(.dark) .result-count { color: #777; }
-  :global(.dark) .clear-btn { background: #3a2020; color: #f66; }
-  :global(.dark) .clear-btn:hover { background: #4a2020; }
-  :global(.dark) .header-left h1 { color: #e0e0e0; }
-  :global(.dark) .show-item.selected { background: #1a2a3a; }
-  :global(.dark) .spinner { border-color: #444; border-top-color: #4A90D9; }
-
-  :global(.dark) .show-card {
-    background: #2a2a2a;
-    border-color: #333;
-  }
-
-  :global(.dark) .show-card:hover {
-    border-color: #444;
-  }
-
-  :global(.dark) .card-title {
-    color: #e0e0e0;
-  }
-
-  :global(.dark) .card-meta {
-    color: #888;
-  }
-
-  :global(.dark) .card-extra {
-    color: #777;
-    border-top-color: #333;
-  }
-
-  :global(.dark) .category {
-    background: #333;
-    color: #999;
-  }
-
-  :global(.dark) .star-mini {
-    color: #555;
-  }
-
-  :global(.dark) .card-poster {
-    background: #333;
   }
 </style>

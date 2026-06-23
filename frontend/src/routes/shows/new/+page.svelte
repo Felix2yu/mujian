@@ -13,7 +13,7 @@
 
 <div class="new-show">
   <h1>添加演出</h1>
-  <ShowForm on:saved={handleSaved} on:cancel={handleCancel} />
+  <ShowForm onsaved={handleSaved} oncancel={handleCancel} />
 </div>
 
 <style>

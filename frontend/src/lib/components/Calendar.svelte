@@ -1,28 +1,23 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
   import { fly } from 'svelte/transition';
 
-  export let events = [];
-  export let initialYear = new Date().getFullYear();
-  export let initialMonth = new Date().getMonth() + 1;
-
-  const dispatch = createEventDispatcher();
+  let { events = [], initialYear = new Date().getFullYear(), initialMonth = new Date().getMonth() + 1, onmonthchange } = $props();
 
   let today = new Date();
-  let year = initialYear;
-  let month = initialMonth;
+  let year = $state(initialYear);
+  let month = $state(initialMonth);
 
-  let popupEvents = [];
-  let popupPos = { x: 0, y: 0, align: 'center' };
+  let popupEvents = $state([]);
+  let popupPos = $state({ x: 0, y: 0, align: 'center' });
   const POPUP_W = 260;
   const POPUP_GAP = 8;
 
-  let slideDir = 0;
-  let animKey = 0;
+  let slideDir = $state(0);
+  let animKey = $state(0);
 
-  $: firstDay = (new Date(year, month - 1, 1).getDay() + 6) % 7;
-  $: daysInMonth = new Date(year, month, 0).getDate();
-  $: calendarDays = (() => {
+  let firstDay = $derived((new Date(year, month - 1, 1).getDay() + 6) % 7);
+  let daysInMonth = $derived(new Date(year, month, 0).getDate());
+  let calendarDays = $derived((() => {
     const safeEvents = Array.isArray(events) ? events : [];
     const days = [];
     for (let i = 0; i < firstDay; i++) {
@@ -37,7 +32,7 @@
       days.push({ day: null, events: [] });
     }
     return days;
-  })();
+  })());
 
   function isToday(d) {
     return year === today.getFullYear() && month === today.getMonth() + 1 && d === today.getDate();
@@ -48,7 +43,7 @@
     animKey++;
     month--;
     if (month < 1) { month = 12; year--; }
-    dispatch('monthChange', { year, month });
+    onmonthchange?.({ year, month });
   }
 
   function nextMonth() {
@@ -56,17 +51,17 @@
     animKey++;
     month++;
     if (month > 12) { month = 1; year++; }
-    dispatch('monthChange', { year, month });
+    onmonthchange?.({ year, month });
   }
 
   function goToToday() {
-    const prevMonth = month;
-    const prevYear = year;
+    const prevM = month;
+    const prevY = year;
     year = today.getFullYear();
     month = today.getMonth() + 1;
-    slideDir = year === prevYear ? (month > prevMonth ? 1 : -1) : (year > prevYear ? 1 : -1);
+    slideDir = year === prevY ? (month > prevM ? 1 : -1) : (year > prevY ? 1 : -1);
     animKey++;
-    dispatch('monthChange', { year, month });
+    onmonthchange?.({ year, month });
   }
 
   let touchStartX = 0;
@@ -84,7 +79,7 @@
     }
   }
 
-  function showPopup(events, e) {
+  function showPopup(evts, e) {
     e.preventDefault();
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
@@ -112,7 +107,7 @@
     }
 
     popupPos = { x, y, align, below };
-    popupEvents = events;
+    popupEvents = evts;
   }
 
   function closePopup() {
@@ -146,22 +141,23 @@
   }
 </script>
 
-<svelte:window on:click={closePopup} />
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<svelte:window onclick={closePopup} />
 
 <div class="calendar">
   <div class="calendar-header">
-    <button class="nav-btn" on:click={prevMonth}>‹</button>
+    <button class="nav-btn" onclick={prevMonth}>‹</button>
     <div class="title">
       <span class="year">{year}年</span>
       <span class="month">{month}月</span>
     </div>
-    <button class="nav-btn" on:click={nextMonth}>›</button>
-    <button class="today-btn" on:click={goToToday}>今天</button>
+    <button class="nav-btn" onclick={nextMonth}>›</button>
+    <button class="today-btn" onclick={goToToday}>今天</button>
   </div>
 
   <div class="calendar-grid-wrap"
-    on:touchstart={handleTouchStart}
-    on:touchend={handleTouchEnd}
+    ontouchstart={handleTouchStart}
+    ontouchend={handleTouchEnd}
   >
     {#key animKey}
       <div class="calendar-grid" in:fly={{ x: slideDir * 30, duration: 200, delay: 50 }}>
@@ -173,38 +169,38 @@
           <div class="day-cell" class:empty={!cell.day} class:today={cell.isToday}>
             {#if cell.day}
               <span class="day-number">{cell.day}</span>
-          <div class="day-events">
-            {#if cell.events.length > 0}
-              {@const first = cell.events[0]}
-              {@const posterEvents = cell.events.filter(ev => ev.poster_url)}
-              {@const textEvents = cell.events.filter(ev => !ev.poster_url)}
+              <div class="day-events">
+                {#if cell.events.length > 0}
+                  {@const first = cell.events[0]}
+                  {@const posterEvents = cell.events.filter(ev => ev.poster_url)}
+                  {@const textEvents = cell.events.filter(ev => !ev.poster_url)}
 
-              {#if posterEvents.length > 0}
-                <div class="poster-grid" class:grid-1={posterEvents.length === 1} class:grid-2={posterEvents.length === 2} class:grid-3={posterEvents.length >= 3}>
-                  {#each posterEvents.slice(0, 3) as ev}
-                    <button class="poster-cell" on:click={(e) => showPopup(cell.events, e)}>
-                      <img src={ev.poster_url} alt={ev.name} />
-                      <span class="poster-cell-status" style="background: {getEventColor(ev)}"></span>
-                    </button>
-                  {/each}
-                  {#if posterEvents.length > 3}
-                    <button class="poster-cell poster-cell-more" on:click={(e) => showPopup(cell.events, e)}>
-                      <span class="poster-more-num">+{posterEvents.length - 3}</span>
+                  {#if posterEvents.length > 0}
+                    <div class="poster-grid" class:grid-1={posterEvents.length === 1} class:grid-2={posterEvents.length === 2} class:grid-3={posterEvents.length >= 3}>
+                      {#each posterEvents.slice(0, 3) as ev}
+                        <button class="poster-cell" onclick={(e) => showPopup(cell.events, e)}>
+                          <img src={ev.poster_url} alt={ev.name} />
+                          <span class="poster-cell-status" style="background: {getEventColor(ev)}"></span>
+                        </button>
+                      {/each}
+                      {#if posterEvents.length > 3}
+                        <button class="poster-cell poster-cell-more" onclick={(e) => showPopup(cell.events, e)}>
+                          <span class="poster-more-num">+{posterEvents.length - 3}</span>
+                        </button>
+                      {/if}
+                    </div>
+                  {:else}
+                    <button class="event-text-btn" onclick={(e) => showPopup(cell.events, e)} style="background: {getEventColor(first)}">
+                      <span class="event-text">{first.name}</span>
+                      {#if cell.events.length > 1}
+                        <span class="text-count">{cell.events.length}</span>
+                      {/if}
                     </button>
                   {/if}
-                </div>
-              {:else}
-                <button class="event-text-btn" on:click={(e) => showPopup(cell.events, e)} style="background: {getEventColor(first)}">
-                  <span class="event-text">{first.name}</span>
-                  {#if cell.events.length > 1}
-                    <span class="text-count">{cell.events.length}</span>
-                  {/if}
-                </button>
-              {/if}
+                {/if}
+              </div>
             {/if}
           </div>
-        {/if}
-      </div>
         {/each}
       </div>
     {/key}
@@ -219,7 +215,8 @@
 </div>
 
 {#if popupEvents.length > 0}
-  <div class="popup-overlay" on:click={closePopup}></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="popup-overlay" onclick={closePopup}></div>
   <div class="popup popup-{popupPos.align}" class:popup-below={popupPos.below} style="left: {popupPos.x}px; top: {popupPos.y}px">
     {#if popupEvents.length === 1}
       {@const ev = popupEvents[0]}
@@ -447,12 +444,7 @@
   }
 
   .poster-cell:hover {
-    z-index: 1;
-  }
-
-  .poster-grid.grid-1 .poster-cell:hover {
-    transform: scale(1.02);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    opacity: 0.9;
   }
 
   .poster-cell-status {
@@ -467,7 +459,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.7);
   }
 
   .poster-more-num {
@@ -636,10 +628,6 @@
     padding: 10px 14px;
     text-decoration: none;
     transition: background 0.15s;
-  }
-
-  .popup-item:last-child {
-    border-bottom: none;
   }
 
   .popup-item:hover {

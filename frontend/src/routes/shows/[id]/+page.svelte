@@ -4,11 +4,11 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
 
-  let show = null;
-  let loading = true;
-  let error = '';
+  let show = $state(null);
+  let loading = $state(true);
+  let error = $state('');
 
-  $: id = $page.params.id;
+  let id = $derived($page.params.id);
 
   onMount(async () => {
     try {
@@ -61,7 +61,7 @@
     }
   }
 
-  $: totalCost = (show?.ticket_cost || 0) + (show?.other_cost || 0);
+  let totalCost = $derived((show?.ticket_cost || 0) + (show?.other_cost || 0));
 </script>
 
 <div class="show-detail">
@@ -94,64 +94,53 @@
         </div>
         <div class="header-actions">
           <a href="/shows/{show.id}/edit" class="edit-btn">编辑</a>
-          <button class="delete-btn" on:click={deleteShow}>删除</button>
+          <button class="delete-btn" onclick={deleteShow}>删除</button>
         </div>
       </div>
 
       <div class="info-grid">
         <div class="info-item">
-          <span class="info-label">时间</span>
-          <span class="info-value">{formatDate(show.date)} {formatTime(show.date)}</span>
+          <span class="info-label">日期</span>
+          <span class="info-value">{formatDate(show.date)}</span>
         </div>
-
+        <div class="info-item">
+          <span class="info-label">时间</span>
+          <span class="info-value">{formatTime(show.date)}</span>
+        </div>
         {#if show.venue}
           <div class="info-item">
             <span class="info-label">场地</span>
-            <a href="/search?field=venue&q={encodeURIComponent(show.venue)}" class="info-value linkable">{show.venue}</a>
+            <span class="info-value">{show.venue}</span>
           </div>
         {/if}
-
         {#if show.duration}
           <div class="info-item">
             <span class="info-label">时长</span>
             <span class="info-value">{formatDuration(show.duration)}</span>
           </div>
         {/if}
-
+        {#if show.company}
+          <div class="info-item">
+            <span class="info-label">剧团</span>
+            <span class="info-value">{show.company}</span>
+          </div>
+        {/if}
+        {#if show.cast}
+          <div class="info-item">
+            <span class="info-label">阵容</span>
+            <div class="cast-list">
+              {#each show.cast.split(/[,，]/) as actor}
+                <a href="/search?q={encodeURIComponent(actor.trim())}" class="linkable">{actor.trim()}</a>
+              {/each}
+            </div>
+          </div>
+        {/if}
         {#if show.seat}
           <div class="info-item">
             <span class="info-label">座位</span>
             <span class="info-value">{show.seat}</span>
           </div>
         {/if}
-
-        {#if show.company}
-          <div class="info-item">
-            <span class="info-label">剧团</span>
-            <a href="/search?field=company&q={encodeURIComponent(show.company)}" class="info-value linkable">{show.company}</a>
-          </div>
-        {/if}
-
-        {#if show.cast}
-          <div class="info-item">
-            <span class="info-label">阵容</span>
-            <div class="cast-list">
-              {#each show.cast.split(/[,，]/) as actor}
-                {#if actor.trim()}
-                  <a href="/search?field=cast&q={encodeURIComponent(actor.trim())}" class="linkable">{actor.trim()}</a>
-                {/if}
-              {/each}
-            </div>
-          </div>
-        {/if}
-
-        {#if show.friends}
-          <div class="info-item">
-            <span class="info-label">同行</span>
-            <span class="info-value">{show.friends}</span>
-          </div>
-        {/if}
-
         {#if show.ticket_cost != null || show.other_cost != null}
           <div class="info-item">
             <span class="info-label">花费</span>

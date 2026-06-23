@@ -5,11 +5,11 @@
   import { api } from '$lib/api';
   import ShowForm from '$lib/components/ShowForm.svelte';
 
-  let show = null;
-  let loading = true;
-  let error = '';
+  let show = $state(null);
+  let loading = $state(true);
+  let error = $state('');
 
-  $: id = $page.params.id;
+  let id = $derived($page.params.id);
 
   onMount(async () => {
     try {
@@ -37,7 +37,7 @@
     <div class="error">{error}</div>
   {:else if show}
     <h1>编辑演出</h1>
-    <ShowForm {show} on:saved={handleSaved} on:cancel={handleCancel} />
+    <ShowForm {show} onsaved={handleSaved} oncancel={handleCancel} />
   {/if}
 </div>
 
@@ -56,12 +56,12 @@
   .loading, .error {
     text-align: center;
     padding: 60px 20px;
-    color: #666;
+    color: var(--text-secondary);
   }
 
   .error {
-    color: #c00;
-    background: #fee;
+    color: var(--danger-text);
+    background: var(--danger-bg);
     border-radius: 8px;
   }
 </style>
