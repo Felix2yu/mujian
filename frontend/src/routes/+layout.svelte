@@ -378,7 +378,6 @@
   }
 
   :global(.dark .section),
-  :global(.dark .detail-card),
   :global(.dark .show-form),
   :global(.dark .calendar-section),
   :global(.dark .sidebar-section),
@@ -391,8 +390,8 @@
   :global(.dark .select-all),
   :global(.dark .card),
   :global(.dark .s3-form) {
-    background: #2a2a2a;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    background: var(--bg-card);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
   }
 
   :global(.dark .tabs),
