@@ -1,6 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import { fade, fly } from 'svelte/transition';
+  import { fly } from 'svelte/transition';
 
   export let events = [];
   export let initialYear = new Date().getFullYear();
@@ -163,7 +163,7 @@
     on:touchend={handleTouchEnd}
   >
     {#key animKey}
-      <div class="calendar-grid" in:fly={{ x: slideDir * 30, duration: 200, delay: 50 }} out:fade={{ duration: 100 }}>
+      <div class="calendar-grid" in:fly={{ x: slideDir * 30, duration: 200, delay: 50 }}>
         {#each weekDays as wd}
           <div class="weekday">{wd}</div>
         {/each}
