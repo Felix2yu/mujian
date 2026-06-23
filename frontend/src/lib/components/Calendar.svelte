@@ -697,6 +697,35 @@
     background: #333;
   }
 
+  :global(.dark) .calendar-header {
+    color: #e0e0e0;
+  }
+
+  :global(.dark) .nav-btn {
+    color: #ccc;
+  }
+
+  :global(.dark) .nav-btn:hover {
+    background: #333;
+  }
+
+  :global(.dark) .title {
+    color: #e0e0e0;
+  }
+
+  :global(.dark) .year {
+    color: #777;
+  }
+
+  :global(.dark) .today-btn {
+    background: #4A90D9;
+    color: #fff;
+  }
+
+  :global(.dark) .today-btn:hover {
+    background: #3a7bc8;
+  }
+
   :global(.dark) .weekday {
     background: #2a2a2a;
     color: #999;

@@ -581,4 +581,15 @@
   :global(.dark) .add-cat button { background: #4A90D9; }
   :global(.dark) .cat-actions button { color: #999; }
   :global(.dark) .cat-actions button:hover { color: #e0e0e0; }
+  :global(.dark) .form-group label { color: #999; }
+  :global(.dark) .hint { color: #777; }
+  :global(.dark) .cat-name { color: #e0e0e0; }
+  :global(.dark) .cat-name:focus { outline-color: #4A90D9; }
+  :global(.dark) .drag-handle { color: #666; }
+  :global(.dark) .drag-handle:hover { color: #999; }
+  :global(.dark) .cat-count { color: #777; }
+  :global(.dark) .btn-delete:hover { background: #3a2020; }
+  :global(.dark) .backup-desc { color: #999; }
+  :global(.dark) .btn-backup { background: #4A90D9; color: #fff; }
+  :global(.dark) .btn-backup:hover { background: #3a7bc8; }
 </style>

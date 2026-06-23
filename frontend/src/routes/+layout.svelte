@@ -362,9 +362,150 @@
   :global(.dark .batch-bar),
   :global(.dark .batch-panel),
   :global(.dark .select-all),
-  :global(.dark .card) {
+  :global(.dark .card),
+  :global(.dark .s3-form) {
     background: #2a2a2a;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  :global(.dark .tabs),
+  :global(.dark .calendar-grid) {
+    background: #1e1e1e;
+  }
+
+  :global(.dark .tab.active) {
+    background: #2a2a2a;
+    color: #e0e0e0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+
+  :global(.dark .action-btn),
+  :global(.dark .batch-btn),
+  :global(.dark .batch-action),
+  :global(.dark .edit-btn),
+  :global(.dark .btn-restore),
+  :global(.dark .btn-import-more),
+  :global(.dark .filter-toggle),
+  :global(.dark .nav-settings) {
+    background: #333;
+    color: #ccc;
+  }
+
+  :global(.dark .action-btn:hover),
+  :global(.dark .batch-btn:hover),
+  :global(.dark .batch-action:hover:not(:disabled)),
+  :global(.dark .edit-btn:hover),
+  :global(.dark .btn-restore:hover),
+  :global(.dark .btn-import-more:hover),
+  :global(.dark .filter-toggle:hover) {
+    background: #444;
+  }
+
+  :global(.dark .batch-action.danger),
+  :global(.dark .delete-btn),
+  :global(.dark .clear-btn) {
+    background: #3a2020;
+    color: #f66;
+  }
+
+  :global(.dark .batch-action.danger:hover),
+  :global(.dark .delete-btn:hover),
+  :global(.dark .clear-btn:hover) {
+    background: #4a2020;
+  }
+
+  :global(.dark .category) {
+    background: #333;
+    color: #999;
+  }
+
+  :global(.dark .category:hover) {
+    background: #444;
+  }
+
+  :global(.dark .info-label),
+  :global(.dark .form-section label) {
+    color: #999;
+  }
+
+  :global(.dark .info-value),
+  :global(.dark h1),
+  :global(.dark h2),
+  :global(.dark h3) {
+    color: #e0e0e0;
+  }
+
+  :global(.dark .text-content),
+  :global(.dark .card-info) {
+    color: #aaa;
+  }
+
+  :global(.dark .error) {
+    background: #3a2020;
+    color: #f66;
+  }
+
+  :global(.dark .empty),
+  :global(.dark .loading),
+  :global(.dark .result-count),
+  :global(.dark .restore-status) {
+    color: #999;
+  }
+
+  :global(.dark .spinner) {
+    border-color: #444;
+    border-top-color: #4A90D9;
+  }
+
+  :global(.dark .show-card) {
+    background: #2a2a2a;
+    border-color: #333;
+  }
+
+  :global(.dark .show-card:hover) {
+    border-color: #444;
+  }
+
+  :global(.dark .tag) {
+    background: #1a3a5a;
+    color: #ccc;
+  }
+
+  :global(.dark .tag-remove) {
+    color: #777;
+  }
+
+  :global(.dark .tag-remove:hover) {
+    color: #f66;
+  }
+
+  :global(.dark .tag-field) {
+    color: #e0e0e0;
+  }
+
+  :global(.dark .dropzone) {
+    border-color: #444;
+  }
+
+  :global(.dark .dropzone:hover),
+  :global(.dark .dropzone.dragover) {
+    background: #1a2a3a;
+  }
+
+  :global(.dark .col-group strong) {
+    color: #e0e0e0;
+  }
+
+  :global(.dark .col-group li) {
+    color: #999;
+  }
+
+  :global(.dark .instructions p) {
+    color: #999;
+  }
+
+  :global(.dark .result-stats) {
+    color: #999;
   }
 
   :global(.dark) :global(.tabs),
