@@ -36,6 +36,7 @@ func (h *Handler) Routes() chi.Router {
 
 	r.Route("/shows", func(r chi.Router) {
 		r.Get("/", h.listShows)
+		r.Get("/all", h.listAllShows)
 		r.Get("/search", h.searchShows)
 		r.Get("/upcoming", h.getUpcoming)
 		r.Get("/recent", h.getRecent)
@@ -116,6 +117,18 @@ func (h *Handler) listShows(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if shows == nil {
+		shows = []models.Show{}
+	}
+	jsonResp(w, 200, shows)
+}
+
+func (h *Handler) listAllShows(w http.ResponseWriter, r *http.Request) {
+	shows, err := h.db.ListAllShows()
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return

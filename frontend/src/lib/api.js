@@ -20,6 +20,7 @@ async function request(path, options = {}) {
 
 export const api = {
   listShows: (year, month) => request(`/api/shows?year=${year}&month=${month}`),
+  listAllShows: () => request('/api/shows/all'),
   listShowsByDateRange: (start, end) => {
     const params = new URLSearchParams();
     if (start) params.set('start', start);

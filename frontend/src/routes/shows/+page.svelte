@@ -57,7 +57,7 @@
     window.addEventListener('resize', checkMobile);
     try {
       const [allShows, cats] = await Promise.all([
-        api.listShowsByDateRange('', ''),
+        api.listAllShows(),
         api.listCategories()
       ]);
       shows = allShows;
@@ -107,7 +107,7 @@
       selectedIds.clear(); selectedIds = selectedIds;
       showBatchPanel = false;
       batchCategory = ''; batchRating = ''; batchStatus = '';
-      const allShows = await api.listShowsByDateRange('', '');
+      const allShows = await api.listAllShows();
       shows = allShows;
     } catch (e) { alert('批量更新失败: ' + e.message); }
     finally { batchSaving = false; }
@@ -121,7 +121,7 @@
       await api.batchDelete([...selectedIds]);
       selectedIds.clear(); selectedIds = selectedIds;
       showBatchPanel = false;
-      const allShows = await api.listShowsByDateRange('', '');
+      const allShows = await api.listAllShows();
       shows = allShows;
     } catch (e) { alert('批量删除失败: ' + e.message); }
     finally { batchSaving = false; }
