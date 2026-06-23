@@ -29,6 +29,9 @@
   let categories = [];
   let saving = false;
   let error = '';
+  let posterFile = null;
+  let posterPreview = '';
+  let dragover = false;
 
   onMount(async () => {
     categories = await api.listCategories();
@@ -52,20 +55,52 @@
         ticket_cost: show.ticket_cost,
         other_cost: show.other_cost
       };
+      if (show.poster_url) posterPreview = show.poster_url;
     } else {
-      const now = new Date();
-      form.date = formatDateTimeLocal(now.toISOString());
+      form.date = formatDateTimeLocal(new Date().toISOString());
     }
   });
 
   function formatDateTimeLocal(iso) {
     const d = new Date(iso);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
-    const hours = String(d.getHours()).padStart(2, '0');
-    const mins = String(d.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${mins}`;
+    const h = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${y}-${m}-${day}T${h}:${min}`;
+  }
+
+  function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (file) processFile(file);
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    dragover = false;
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) processFile(file);
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    dragover = true;
+  }
+
+  function handleDragLeave() {
+    dragover = false;
+  }
+
+  function processFile(file) {
+    posterFile = file;
+    const reader = new FileReader();
+    reader.onload = (e) => { posterPreview = e.target.result; };
+    reader.readAsDataURL(file);
+  }
+
+  function setRating(val) {
+    form.rating = form.rating === val ? null : val;
   }
 
   async function handleSubmit() {
@@ -82,6 +117,11 @@
     error = '';
 
     try {
+      if (posterFile) {
+        const res = await api.uploadFile(posterFile);
+        form.poster_url = res.url;
+      }
+
       if (show) {
         await api.updateShow(show.id, form);
       } else {
@@ -93,10 +133,6 @@
     } finally {
       saving = false;
     }
-  }
-
-  function handleCancel() {
-    dispatch('cancel');
   }
 </script>
 
@@ -113,7 +149,6 @@
         <label for="name">演出名称 *</label>
         <input type="text" id="name" bind:value={form.name} placeholder="如：茶馆" required />
       </div>
-
       <div class="form-group">
         <label for="venue">场地</label>
         <input type="text" id="venue" bind:value={form.venue} placeholder="如：国家大剧院" />
@@ -125,7 +160,6 @@
         <label for="date">演出时间 *</label>
         <input type="datetime-local" id="date" bind:value={form.date} required />
       </div>
-
       <div class="form-group">
         <label for="duration">时长(分钟)</label>
         <input type="number" id="duration" bind:value={form.duration} min="0" />
@@ -141,7 +175,6 @@
           <option value="cancelled">已取消</option>
         </select>
       </div>
-
       <div class="form-group">
         <label for="category">分类</label>
         <select id="category" bind:value={form.category_id}>
@@ -151,56 +184,75 @@
           {/each}
         </select>
       </div>
-
       <div class="form-group">
-        <label for="rating">评分</label>
-        <select id="rating" bind:value={form.rating}>
-          <option value={null}>无评分</option>
-          <option value={5}>★★★★★ 5</option>
-          <option value={4}>★★★★ 4</option>
-          <option value={3}>★★★ 3</option>
-          <option value={2}>★★ 2</option>
-          <option value={1}>★ 1</option>
-        </select>
+        <label>评分</label>
+        <div class="star-rating">
+          {#each [1,2,3,4,5] as val}
+            <button type="button" class="star-btn" class:active={form.rating >= val} on:click={() => setRating(val)}>
+              {form.rating >= val ? '★' : '☆'}
+            </button>
+          {/each}
+          {#if form.rating}
+            <span class="rating-text">{form.rating}/5</span>
+          {/if}
+        </div>
       </div>
     </div>
   </div>
 
   <div class="form-section">
-    <h3>详细信息</h3>
+    <h3>海报</h3>
+    <div class="poster-upload"
+      class:dragover
+      on:drop={handleDrop}
+      on:dragover={handleDragOver}
+      on:dragleave={handleDragLeave}
+    >
+      {#if posterPreview}
+        <img src={posterPreview} alt="海报预览" class="poster-preview" />
+        <button type="button" class="btn-remove-poster" on:click={() => { posterFile = null; posterPreview = ''; form.poster_url = ''; }}>移除</button>
+      {:else}
+        <div class="poster-placeholder">
+          <span class="poster-icon">🖼</span>
+          <p>拖拽图片到此处，或</p>
+          <label class="btn-select-poster">
+            选择图片
+            <input type="file" accept="image/*" on:change={handleFileSelect} hidden />
+          </label>
+          <span class="poster-hint">支持 JPG、PNG、WebP</span>
+        </div>
+      {/if}
+    </div>
+    <div class="form-group" style="margin-top:8px">
+      <input type="url" bind:value={form.poster_url} placeholder="或输入海报URL" />
+    </div>
+  </div>
 
+  <div class="form-section">
+    <h3>详细信息</h3>
     <div class="form-row">
       <div class="form-group">
         <label for="company">剧团</label>
         <input type="text" id="company" bind:value={form.company} placeholder="如：北京人艺" />
       </div>
-
       <div class="form-group">
         <label for="cast">阵容</label>
         <input type="text" id="cast" bind:value={form.cast} placeholder="如：于是之, 郑榕" />
       </div>
     </div>
-
     <div class="form-row">
       <div class="form-group">
         <label for="friends">同行好友</label>
         <input type="text" id="friends" bind:value={form.friends} placeholder="如：小明, 小红" />
       </div>
-
       <div class="form-group">
         <label for="seat">座位</label>
         <input type="text" id="seat" bind:value={form.seat} placeholder="如：3排15座" />
       </div>
     </div>
-
     <div class="form-group">
       <label for="setlist">剧目</label>
       <textarea id="setlist" bind:value={form.setlist} rows="3" placeholder="每行一个剧目"></textarea>
-    </div>
-
-    <div class="form-group">
-      <label for="poster_url">海报URL</label>
-      <input type="url" id="poster_url" bind:value={form.poster_url} placeholder="https://..." />
     </div>
   </div>
 
@@ -211,7 +263,6 @@
         <label for="ticket_cost">门票费用</label>
         <input type="number" id="ticket_cost" bind:value={form.ticket_cost} step="0.01" min="0" placeholder="元" />
       </div>
-
       <div class="form-group">
         <label for="other_cost">其他花费</label>
         <input type="number" id="other_cost" bind:value={form.other_cost} step="0.01" min="0" placeholder="元" />
@@ -221,12 +272,10 @@
 
   <div class="form-section">
     <h3>个人感受</h3>
-
     <div class="form-group">
       <label for="review">剧评</label>
       <textarea id="review" bind:value={form.review} rows="4" placeholder="写下你的感受..."></textarea>
     </div>
-
     <div class="form-group">
       <label for="notes">备注</label>
       <textarea id="notes" bind:value={form.notes} rows="2" placeholder="其他备注信息"></textarea>
@@ -234,7 +283,7 @@
   </div>
 
   <div class="form-actions">
-    <button type="button" class="btn-cancel" on:click={handleCancel}>取消</button>
+    <button type="button" class="btn-cancel" on:click={() => dispatch('cancel')}>取消</button>
     <button type="submit" class="btn-submit" disabled={saving}>
       {saving ? '保存中...' : show ? '更新' : '添加'}
     </button>
@@ -242,129 +291,47 @@
 </form>
 
 <style>
-  .show-form {
-    background: #fff;
-    border-radius: 12px;
-    padding: 24px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  }
+  .show-form { background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .error { background: #fee; color: #c00; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; }
+  .form-section { margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #eee; }
+  .form-section:last-of-type { border-bottom: none; }
+  .form-section h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333; }
+  .form-row { display: flex; gap: 16px; margin-bottom: 12px; }
+  .form-group { flex: 1; margin-bottom: 12px; }
+  .form-row .form-group { margin-bottom: 0; }
+  label { display: block; font-size: 13px; font-weight: 500; color: #666; margin-bottom: 6px; }
+  input, select, textarea { width: 100%; }
+  textarea { resize: vertical; }
 
-  .error {
-    background: #fee;
-    color: #c00;
-    padding: 12px 16px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-  }
+  .star-rating { display: flex; align-items: center; gap: 2px; padding-top: 4px; }
+  .star-btn { font-size: 24px; color: #ddd; cursor: pointer; padding: 0 2px; transition: color 0.15s, transform 0.15s; background: none; border: none; }
+  .star-btn:hover { transform: scale(1.2); }
+  .star-btn.active { color: #f39c12; }
+  .rating-text { margin-left: 8px; font-size: 13px; color: #999; }
 
-  .form-section {
-    margin-bottom: 24px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid #eee;
-  }
+  .poster-upload { border: 2px dashed #ddd; border-radius: 8px; padding: 24px; text-align: center; transition: border-color 0.2s, background 0.2s; cursor: pointer; }
+  .poster-upload.dragover { border-color: #4A90D9; background: #f0f7ff; }
+  .poster-preview { max-width: 200px; max-height: 200px; border-radius: 8px; object-fit: cover; }
+  .btn-remove-poster { margin-top: 8px; padding: 4px 12px; background: #fee; color: #c00; border-radius: 6px; font-size: 12px; }
+  .poster-placeholder { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .poster-icon { font-size: 32px; }
+  .poster-placeholder p { color: #666; margin: 0; font-size: 13px; }
+  .btn-select-poster { display: inline-block; padding: 6px 16px; background: #4A90D9; color: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .btn-select-poster:hover { background: #3a7bc8; }
+  .poster-hint { font-size: 11px; color: #999; }
 
-  .form-section:last-of-type {
-    border-bottom: none;
-  }
-
-  .form-section h3 {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 16px;
-    color: #333;
-  }
-
-  .form-row {
-    display: flex;
-    gap: 16px;
-    margin-bottom: 12px;
-  }
-
-  .form-group {
-    flex: 1;
-    margin-bottom: 12px;
-  }
-
-  .form-row .form-group {
-    margin-bottom: 0;
-  }
-
-  label {
-    display: block;
-    font-size: 13px;
-    font-weight: 500;
-    color: #666;
-    margin-bottom: 6px;
-  }
-
-  input, select, textarea {
-    width: 100%;
-  }
-
-  textarea {
-    resize: vertical;
-  }
-
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 24px;
-  }
-
-  .btn-cancel {
-    padding: 10px 24px;
-    border-radius: 8px;
-    background: #f0f0f0;
-    color: #666;
-    font-weight: 500;
-    transition: background 0.2s;
-  }
-
-  .btn-cancel:hover {
-    background: #e0e0e0;
-  }
-
-  .btn-submit {
-    padding: 10px 32px;
-    border-radius: 8px;
-    background: #4A90D9;
-    color: #fff;
-    font-weight: 500;
-    transition: background 0.2s;
-  }
-
-  .btn-submit:hover:not(:disabled) {
-    background: #3a7bc8;
-  }
-
-  .btn-submit:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
+  .form-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+  .btn-cancel { padding: 10px 24px; border-radius: 8px; background: #f0f0f0; color: #666; font-weight: 500; transition: background 0.2s; }
+  .btn-cancel:hover { background: #e0e0e0; }
+  .btn-submit { padding: 10px 32px; border-radius: 8px; background: #4A90D9; color: #fff; font-weight: 500; transition: background 0.2s; }
+  .btn-submit:hover:not(:disabled) { background: #3a7bc8; }
+  .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
 
   @media (max-width: 768px) {
-    .show-form {
-      padding: 16px;
-    }
-
-    .form-row {
-      flex-direction: column;
-      gap: 0;
-    }
-
-    .form-row .form-group {
-      margin-bottom: 12px;
-    }
-
-    .form-actions {
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .form-actions button {
-      width: 100%;
-      text-align: center;
-    }
+    .show-form { padding: 16px; }
+    .form-row { flex-direction: column; gap: 0; }
+    .form-row .form-group { margin-bottom: 12px; }
+    .form-actions { flex-direction: column; gap: 8px; }
+    .form-actions button { width: 100%; text-align: center; }
   }
 </style>
