@@ -9,7 +9,9 @@
   let currentYear = new Date().getFullYear();
   let currentMonth = new Date().getMonth() + 1;
   let statusFilter = '';
-  let viewMode = 'list';
+  let dateMode = 'month';
+  let startDate = '';
+  let endDate = '';
 
   $: filteredShows = statusFilter
     ? shows.filter(s => s.status === statusFilter)
@@ -20,7 +22,11 @@
   async function loadShows() {
     loading = true;
     try {
-      shows = await api.listShows(currentYear, currentMonth);
+      if (dateMode === 'range') {
+        shows = await api.listShowsByDateRange(startDate, endDate);
+      } else {
+        shows = await api.listShows(currentYear, currentMonth);
+      }
     } catch (e) {
       console.error('Failed to load shows:', e);
     } finally {
@@ -33,6 +39,20 @@
     if (currentMonth < 1) { currentMonth = 12; currentYear--; }
     if (currentMonth > 12) { currentMonth = 1; currentYear++; }
     loadShows();
+  }
+
+  function switchMode(mode) {
+    dateMode = mode;
+    if (mode === 'month') {
+      loadShows();
+    } else {
+      if (!startDate) {
+        const now = new Date();
+        startDate = `${now.getFullYear()}-01-01`;
+        endDate = now.toISOString().split('T')[0];
+      }
+      loadShows();
+    }
   }
 
   async function deleteShow(id) {
@@ -50,10 +70,24 @@
   <div class="page-header">
     <div class="header-left">
       <h1>演出列表</h1>
-      <div class="month-nav">
-        <button on:click={() => changeMonth(-1)}>‹</button>
-        <span>{currentYear}年{currentMonth}月</span>
-        <button on:click={() => changeMonth(1)}>›</button>
+      <div class="date-controls">
+        <div class="mode-toggle">
+          <button class:active={dateMode === 'month'} on:click={() => switchMode('month')}>按月</button>
+          <button class:active={dateMode === 'range'} on:click={() => switchMode('range')}>按日期</button>
+        </div>
+        {#if dateMode === 'month'}
+          <div class="month-nav">
+            <button on:click={() => changeMonth(-1)}>‹</button>
+            <span>{currentYear}年{currentMonth}月</span>
+            <button on:click={() => changeMonth(1)}>›</button>
+          </div>
+        {:else}
+          <div class="date-range">
+            <input type="date" bind:value={startDate} on:change={loadShows} />
+            <span>至</span>
+            <input type="date" bind:value={endDate} on:change={loadShows} />
+          </div>
+        {/if}
       </div>
     </div>
     <div class="header-right">
@@ -103,20 +137,48 @@
   .page-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     flex-wrap: wrap;
     gap: 16px;
   }
 
   .header-left {
     display: flex;
-    align-items: center;
-    gap: 24px;
+    flex-direction: column;
+    gap: 12px;
   }
 
   .header-left h1 {
     font-size: 24px;
     font-weight: 700;
+  }
+
+  .date-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .mode-toggle {
+    display: flex;
+    background: #f0f0f0;
+    border-radius: 8px;
+    padding: 2px;
+  }
+
+  .mode-toggle button {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #666;
+    transition: all 0.2s;
+  }
+
+  .mode-toggle button.active {
+    background: #fff;
+    color: #333;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   }
 
   .month-nav {
@@ -140,10 +202,27 @@
     background: #e0e0e0;
   }
 
+  .date-range {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .date-range input[type="date"] {
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+
+  .date-range span {
+    color: #999;
+  }
+
   .header-right {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
+    flex-wrap: wrap;
   }
 
   .filters select {
@@ -151,7 +230,7 @@
     border-radius: 8px;
   }
 
-  .import-btn {
+  .import-btn, .export-btn {
     padding: 8px 16px;
     background: #f0f0f0;
     color: #333;
@@ -160,20 +239,7 @@
     transition: background 0.2s;
   }
 
-  .import-btn:hover {
-    background: #e0e0e0;
-  }
-
-  .export-btn {
-    padding: 8px 16px;
-    background: #f0f0f0;
-    color: #333;
-    border-radius: 8px;
-    font-weight: 500;
-    transition: background 0.2s;
-  }
-
-  .export-btn:hover {
+  .import-btn:hover, .export-btn:hover {
     background: #e0e0e0;
   }
 
@@ -249,5 +315,16 @@
 
   .delete-btn:hover {
     background: #fdd;
+  }
+
+  @media (max-width: 768px) {
+    .page-header {
+      flex-direction: column;
+    }
+
+    .header-right {
+      width: 100%;
+      justify-content: flex-start;
+    }
   }
 </style>

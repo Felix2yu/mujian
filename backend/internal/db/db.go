@@ -133,6 +133,42 @@ func (db *DB) ListShows(year, month int) ([]models.Show, error) {
 	return scanShows(rows)
 }
 
+func (db *DB) ListShowsByDateRange(startStr, endStr string) ([]models.Show, error) {
+	query := `
+		SELECT s.id, s.name, s.venue, s.date, s.duration, s.status, s.category_id,
+		       s.poster_url, s.setlist, s.cast, s.company, s.friends, s.rating,
+		       s.seat, s.notes, s.review, s.ticket_cost, s.other_cost,
+		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
+		FROM shows s
+		LEFT JOIN categories c ON s.category_id = c.id
+		WHERE 1=1
+	`
+	args := []interface{}{}
+
+	if startStr != "" {
+		if t, err := time.Parse("2006-01-02", startStr); err == nil {
+			query += " AND s.date >= ?"
+			args = append(args, t)
+		}
+	}
+	if endStr != "" {
+		if t, err := time.Parse("2006-01-02", endStr); err == nil {
+			query += " AND s.date < ?"
+			args = append(args, t.AddDate(0, 0, 1))
+		}
+	}
+
+	query += " ORDER BY s.date ASC"
+
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanShows(rows)
+}
+
 func (db *DB) ListAllShows() ([]models.Show, error) {
 	rows, err := db.conn.Query(`
 		SELECT s.id, s.name, s.venue, s.date, s.duration, s.status, s.category_id,

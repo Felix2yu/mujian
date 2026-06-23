@@ -75,17 +75,26 @@ func jsonErr(w http.ResponseWriter, status int, msg string) {
 }
 
 func (h *Handler) listShows(w http.ResponseWriter, r *http.Request) {
-	year := time.Now().Year()
-	month := int(time.Now().Month())
+	startDate := r.URL.Query().Get("start")
+	endDate := r.URL.Query().Get("end")
 
-	if y := r.URL.Query().Get("year"); y != "" {
-		year, _ = strconv.Atoi(y)
-	}
-	if m := r.URL.Query().Get("month"); m != "" {
-		month, _ = strconv.Atoi(m)
+	var shows []models.Show
+	var err error
+
+	if startDate != "" || endDate != "" {
+		shows, err = h.db.ListShowsByDateRange(startDate, endDate)
+	} else {
+		year := time.Now().Year()
+		month := int(time.Now().Month())
+		if y := r.URL.Query().Get("year"); y != "" {
+			year, _ = strconv.Atoi(y)
+		}
+		if m := r.URL.Query().Get("month"); m != "" {
+			month, _ = strconv.Atoi(m)
+		}
+		shows, err = h.db.ListShows(year, month)
 	}
 
-	shows, err := h.db.ListShows(year, month)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return

@@ -20,6 +20,12 @@ async function request(path, options = {}) {
 
 export const api = {
   listShows: (year, month) => request(`/api/shows?year=${year}&month=${month}`),
+  listShowsByDateRange: (start, end) => {
+    const params = new URLSearchParams();
+    if (start) params.set('start', start);
+    if (end) params.set('end', end);
+    return request(`/api/shows?${params.toString()}`);
+  },
   getShow: (id) => request(`/api/shows/${id}`),
   createShow: (data) => request('/api/shows', { method: 'POST', body: JSON.stringify(data) }),
   updateShow: (id, data) => request(`/api/shows/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
