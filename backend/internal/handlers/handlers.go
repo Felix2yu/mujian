@@ -48,6 +48,7 @@ func (h *Handler) Routes() chi.Router {
 		r.Post("/", h.createCategory)
 		r.Put("/{id}", h.updateCategory)
 		r.Delete("/{id}", h.deleteCategory)
+		r.Patch("/sort", h.updateCategorySort)
 	})
 
 	r.Route("/settings", func(r chi.Router) {
@@ -278,6 +279,21 @@ func (h *Handler) deleteCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResp(w, 200, map[string]string{"message": "deleted"})
+}
+
+func (h *Handler) updateCategorySort(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if err := h.db.UpdateCategorySort(req.IDs); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "updated"})
 }
 
 func (h *Handler) searchShows(w http.ResponseWriter, r *http.Request) {

@@ -49,7 +49,8 @@ func (db *DB) migrate() error {
 		`CREATE TABLE IF NOT EXISTS categories (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL UNIQUE,
-			color TEXT NOT NULL DEFAULT '#4A90D9'
+			color TEXT NOT NULL DEFAULT '#4A90D9',
+			sort_order INTEGER NOT NULL DEFAULT 0
 		)`,
 		`CREATE TABLE IF NOT EXISTS shows (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,6 +82,9 @@ func (db *DB) migrate() error {
 			return fmt.Errorf("exec migration: %w", err)
 		}
 	}
+
+	// add sort_order column if missing (upgrade from older version)
+	db.conn.Exec("ALTER TABLE categories ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
 
 	// seed default categories
 	var count int
@@ -228,11 +232,11 @@ func (db *DB) DeleteShow(id int64) error {
 
 func (db *DB) ListCategories() ([]models.Category, error) {
 	rows, err := db.conn.Query(`
-		SELECT c.id, c.name, c.color, COUNT(s.id) as show_count
+		SELECT c.id, c.name, c.color, c.sort_order, COUNT(s.id) as show_count
 		FROM categories c
 		LEFT JOIN shows s ON s.category_id = c.id
 		GROUP BY c.id
-		ORDER BY c.name
+		ORDER BY c.sort_order, c.name
 	`)
 	if err != nil {
 		return nil, err
@@ -242,7 +246,7 @@ func (db *DB) ListCategories() ([]models.Category, error) {
 	var cats []models.Category
 	for rows.Next() {
 		var c models.Category
-		if err := rows.Scan(&c.ID, &c.Name, &c.Color, &c.ShowCount); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Color, &c.SortOrder, &c.ShowCount); err != nil {
 			return nil, err
 		}
 		cats = append(cats, c)
@@ -267,6 +271,28 @@ func (db *DB) UpdateCategory(id int64, name, color string) error {
 func (db *DB) DeleteCategory(id int64) error {
 	_, err := db.conn.Exec("DELETE FROM categories WHERE id=?", id)
 	return err
+}
+
+func (db *DB) UpdateCategorySort(ids []int64) error {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare("UPDATE categories SET sort_order = ? WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for i, id := range ids {
+		if _, err := stmt.Exec(i, id); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (db *DB) GetCalendarEvents(year, month int) ([]models.CalendarEvent, error) {

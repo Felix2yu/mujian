@@ -20,6 +20,7 @@
   let message = '';
   let newCatName = '';
   let newCatColor = '#4A90D9';
+  let dragIndex = null;
 
   onMount(async () => {
     const [s, c] = await Promise.all([api.getSettings(), api.listCategories()]);
@@ -72,6 +73,50 @@
       categories = categories.filter(c => c.id !== id);
     } catch (e) {
       alert('删除失败: ' + e.message);
+    }
+  }
+
+  function handleDragStart(e, index) {
+    dragIndex = index;
+    e.dataTransfer.effectAllowed = 'move';
+    e.target.style.opacity = '0.5';
+  }
+
+  function handleDragEnd(e) {
+    dragIndex = null;
+    e.target.style.opacity = '1';
+    document.querySelectorAll('.cat-item').forEach(el => {
+      el.classList.remove('drag-over');
+    });
+  }
+
+  function handleDragOver(e, index) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (index !== dragIndex) {
+      e.target.closest('.cat-item')?.classList.add('drag-over');
+    }
+  }
+
+  function handleDragLeave(e) {
+    e.target.closest('.cat-item')?.classList.remove('drag-over');
+  }
+
+  async function handleDrop(e, dropIndex) {
+    e.preventDefault();
+    e.target.closest('.cat-item')?.classList.remove('drag-over');
+
+    if (dragIndex === null || dragIndex === dropIndex) return;
+
+    const newCategories = [...categories];
+    const [moved] = newCategories.splice(dragIndex, 1);
+    newCategories.splice(dropIndex, 0, moved);
+    categories = newCategories;
+
+    try {
+      await api.updateCategorySort(categories.map(c => c.id));
+    } catch (err) {
+      alert('排序保存失败: ' + err.message);
     }
   }
 
@@ -156,10 +201,19 @@
   <div class="section">
     <h2>分类管理</h2>
     <div class="categories-list">
-      {#each categories as cat}
-        <div class="cat-item">
+      {#each categories as cat, index (cat.id)}
+        <div class="cat-item"
+          draggable="true"
+          on:dragstart={(e) => handleDragStart(e, index)}
+          on:dragend={handleDragEnd}
+          on:dragover={(e) => handleDragOver(e, index)}
+          on:dragleave={handleDragLeave}
+          on:drop={(e) => handleDrop(e, index)}
+        >
+          <span class="drag-handle">⠿</span>
           <input type="color" bind:value={cat.color} on:change={() => updateCategory(cat)} />
           <input type="text" bind:value={cat.name} on:blur={() => updateCategory(cat)} class="cat-name" />
+          <span class="cat-count">{cat.show_count} 场</span>
           <button class="btn-delete" on:click={() => deleteCategory(cat.id)}>×</button>
         </div>
       {/each}
@@ -279,10 +333,38 @@
     gap: 8px;
     padding: 8px 0;
     border-bottom: 1px solid #eee;
+    cursor: grab;
+    transition: background 0.2s;
   }
 
   .cat-item:last-child {
     border-bottom: none;
+  }
+
+  .cat-item.drag-over {
+    border-top: 2px solid #4A90D9;
+  }
+
+  .cat-item:active {
+    cursor: grabbing;
+  }
+
+  .drag-handle {
+    color: #ccc;
+    font-size: 16px;
+    cursor: grab;
+    user-select: none;
+  }
+
+  .drag-handle:hover {
+    color: #999;
+  }
+
+  .cat-count {
+    font-size: 12px;
+    color: #999;
+    min-width: 40px;
+    text-align: right;
   }
 
   .cat-name {

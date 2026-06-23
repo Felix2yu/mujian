@@ -37,6 +37,7 @@ export const api = {
   createCategory: (data) => request('/api/categories', { method: 'POST', body: JSON.stringify(data) }),
   updateCategory: (id, data) => request(`/api/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCategory: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
+  updateCategorySort: (ids) => request('/api/categories/sort', { method: 'PATCH', body: JSON.stringify({ ids }) }),
 
   getSettings: () => request('/api/settings'),
   updateSettings: (data) => request('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
