@@ -231,7 +231,7 @@
 <style>
   .show-form { background: var(--bg-card); border-radius: 12px; padding: 24px; }
   .error { background: #fee; color: #c00; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; }
-  .form-section { margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #eee; }
+  .form-section { margin-bottom: 24px; padding-bottom: 24px; }
   .form-section:last-of-type { border-bottom: none; }
   .form-section h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333; }
   .form-row { display: flex; gap: 16px; margin-bottom: 12px; }

@@ -117,7 +117,6 @@
     padding: 20px 24px;
     background: var(--bg-card);
     border-radius: 12px;
-    border: 1px solid var(--border);
   }
 
   .stat-item {
@@ -147,7 +146,6 @@
   .calendar-section {
     background: var(--bg-card);
     border-radius: 12px;
-    border: 1px solid var(--border);
     padding: 24px;
   }
 
@@ -160,7 +158,6 @@
   .sidebar-section {
     background: var(--bg-card);
     border-radius: 12px;
-    border: 1px solid var(--border);
     padding: 20px;
   }
 
@@ -219,7 +216,6 @@
 
   :global(.dark) .stats-bar {
     background: var(--bg-card);
-    border-color: var(--border);
   }
 
   :global(.dark) .stat-label {
@@ -228,7 +224,6 @@
 
   :global(.dark) .sidebar-section {
     background: var(--bg-card);
-    border-color: var(--border);
   }
 
   :global(.dark) .sidebar-section h3 {
@@ -241,6 +236,5 @@
 
   :global(.dark) .calendar-section {
     background: var(--bg-card);
-    border-color: var(--border);
   }
 </style>

@@ -88,7 +88,6 @@
     flex-wrap: wrap;
     gap: 4px;
     padding: 6px 10px;
-    border: 1px solid #ddd;
     border-radius: 6px;
     min-height: 38px;
     align-items: center;

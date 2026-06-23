@@ -200,7 +200,7 @@
   .error { color: var(--danger-text); background: var(--danger-bg); border-radius: 8px; }
   .poster { margin-bottom: 24px; border-radius: 12px; overflow: hidden; }
   .poster img { width: 100%; display: block; }
-  .detail-card { background: var(--bg-card); border-radius: 12px; padding: 32px; border: 1px solid var(--border); }
+  .detail-card { background: var(--bg-card); border-radius: 12px; padding: 32px; }
   .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
   .header-info h1 { font-size: 28px; font-weight: 700; margin-bottom: 12px; }
   .meta-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -215,7 +215,7 @@
   .edit-btn:hover { background: var(--bg-surface-hover); }
   .delete-btn { background: var(--danger-bg); color: var(--danger-text); }
   .delete-btn:hover { background: var(--danger-bg-hover); }
-  .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+  .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; padding-bottom: 24px; }
   .info-item { display: flex; flex-direction: column; gap: 4px; }
   .info-label { font-size: 12px; color: var(--text-muted); }
   .info-value { font-size: 15px; color: var(--text-primary); }

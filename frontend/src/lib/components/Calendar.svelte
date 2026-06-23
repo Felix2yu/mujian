@@ -538,7 +538,6 @@
     z-index: 1000;
     background: var(--bg-card);
     border-radius: 12px;
-    border: 1px solid var(--border);
     width: 260px;
     overflow: hidden;
   }
@@ -633,7 +632,6 @@
     display: flex;
     gap: 10px;
     padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
     text-decoration: none;
     transition: background 0.15s;
   }

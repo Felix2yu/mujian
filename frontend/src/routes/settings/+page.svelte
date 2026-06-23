@@ -371,7 +371,6 @@
     align-items: center;
     gap: 8px;
     padding: 8px 0;
-    border-bottom: 1px solid #eee;
     cursor: grab;
     transition: background 0.2s;
   }

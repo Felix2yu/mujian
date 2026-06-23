@@ -160,17 +160,17 @@
 
   :global(input, select, textarea) {
     font: inherit;
-    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 12px;
     background: var(--bg-input);
     color: var(--text-primary);
-    transition: border-color 0.2s, background 0.2s, color 0.2s;
+    transition: background 0.2s, color 0.2s;
   }
 
   :global(input:focus, select:focus, textarea:focus) {
     outline: none;
-    border-color: var(--accent);
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
   }
 
   :global(.dark select option) {
@@ -280,11 +280,10 @@
     display: flex;
     flex-direction: column;
     padding: 12px 16px;
-    border-bottom: 1px solid #eee;
   }
 
   :global(.dark) .search-item {
-    border-bottom-color: #444;
+    color: var(--text-primary);
   }
 
   .search-item:last-child {
@@ -314,11 +313,10 @@
     text-align: center;
     font-size: 13px;
     color: #4A90D9;
-    border-top: 1px solid #eee;
   }
 
   :global(.dark) .search-more {
-    border-top-color: #444;
+    color: #4A90D9;
   }
 
   .search-more:hover {
@@ -391,7 +389,6 @@
   :global(.dark .card),
   :global(.dark .s3-form) {
     background: var(--bg-card);
-    border: 1px solid var(--border);
   }
 
   :global(.dark .tabs),

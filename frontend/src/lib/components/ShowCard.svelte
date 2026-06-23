@@ -82,7 +82,6 @@
     padding: 14px 16px;
     background: var(--bg-card);
     border-radius: 10px;
-    border: 1px solid var(--border);
     transition: all 0.2s ease;
     margin-bottom: 8px;
     text-decoration: none;
@@ -90,7 +89,6 @@
   }
 
   .show-card:hover {
-    border-color: var(--border-hover);
     transform: translateY(-1px);
   }
 
@@ -227,7 +225,6 @@
     color: var(--text-muted);
     margin-top: 6px;
     padding-top: 6px;
-    border-top: 1px solid var(--border);
   }
 
   .extra-item {
