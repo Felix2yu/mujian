@@ -216,4 +216,26 @@
       font-size: 11px;
     }
   }
+
+  :global(.dark) .stats-bar {
+    background: #2a2a2a;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  :global(.dark) .stat-label {
+    color: #999;
+  }
+
+  :global(.dark) .sidebar-section {
+    background: #2a2a2a;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  :global(.dark) .sidebar-section h3 {
+    color: #e0e0e0;
+  }
+
+  :global(.dark) .empty {
+    color: #666;
+  }
 </style>

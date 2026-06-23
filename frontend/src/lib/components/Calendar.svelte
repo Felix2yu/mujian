@@ -692,4 +692,67 @@
       width: 220px;
     }
   }
+
+  :global(.dark) .calendar-grid {
+    background: #333;
+  }
+
+  :global(.dark) .weekday {
+    background: #2a2a2a;
+    color: #999;
+  }
+
+  :global(.dark) .day-cell {
+    background: #1e1e1e;
+  }
+
+  :global(.dark) .day-cell:not(.empty):hover {
+    background: #2a2a2a;
+  }
+
+  :global(.dark) .day-cell.empty {
+    background: #1a1a1a;
+  }
+
+  :global(.dark) .day-cell.today {
+    background: #1a2a3a;
+  }
+
+  :global(.dark) .day-number {
+    color: #ccc;
+  }
+
+  :global(.dark) .today .day-number {
+    background: #4A90D9;
+    color: #fff;
+  }
+
+  :global(.dark) .popup {
+    background: #2a2a2a;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  :global(.dark) .popup-name {
+    color: #e0e0e0;
+  }
+
+  :global(.dark) .popup-venue {
+    color: #999;
+  }
+
+  :global(.dark) .popup-item:hover {
+    background: #333;
+  }
+
+  :global(.dark) .popup-item {
+    border-bottom-color: #333;
+  }
+
+  :global(.dark) .poster-cell-more {
+    background: rgba(0,0,0,0.7);
+  }
+
+  :global(.dark) .legend-item {
+    color: #999;
+  }
 </style>

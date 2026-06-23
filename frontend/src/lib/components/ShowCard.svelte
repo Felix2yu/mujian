@@ -81,4 +81,21 @@
   .rating { margin-top: 6px; }
   .star { color: #ddd; font-size: 14px; }
   .star.filled { color: #f39c12; }
+
+  :global(.dark) .category {
+    background: #333;
+    color: #999;
+  }
+
+  :global(.dark) .card-title {
+    color: #e0e0e0;
+  }
+
+  :global(.dark) .card-info {
+    color: #999;
+  }
+
+  :global(.dark) .star {
+    color: #555;
+  }
 </style>

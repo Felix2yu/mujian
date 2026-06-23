@@ -273,4 +273,61 @@
     .form-actions { flex-direction: column; gap: 8px; }
     .form-actions button { width: 100%; text-align: center; }
   }
+
+  :global(.dark) .show-form {
+    background: #2a2a2a;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  :global(.dark) .form-section {
+    border-bottom-color: #333;
+  }
+
+  :global(.dark) .form-section h3 {
+    color: #e0e0e0;
+  }
+
+  :global(.dark) label {
+    color: #999;
+  }
+
+  :global(.dark) .star-btn {
+    color: #555;
+  }
+
+  :global(.dark) .star-btn.active {
+    color: #f39c12;
+  }
+
+  :global(.dark) .rating-text {
+    color: #777;
+  }
+
+  :global(.dark) .btn-cancel {
+    background: #333;
+    color: #ccc;
+  }
+
+  :global(.dark) .btn-cancel:hover {
+    background: #444;
+  }
+
+  :global(.dark) .poster-upload {
+    border-color: #444;
+    background: #1e1e1e;
+  }
+
+  :global(.dark) .poster-placeholder p {
+    color: #999;
+  }
+
+  :global(.dark) .btn-remove-poster {
+    background: #3a2020;
+    color: #f66;
+  }
+
+  :global(.dark) .error {
+    background: #3a2020;
+    color: #f66;
+  }
 </style>
