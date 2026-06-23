@@ -268,7 +268,7 @@
           <ShowCard {show} />
           <div class="show-actions">
             <a href="/shows/{show.id}/edit" class="edit-btn">编辑</a>
-            <button class="delete-btn" on:click={() => { if (confirm('确定删除？')) api.deleteShow(show.id).then(() => shows = shows.filter(s => s.id !== id)); }}>删除</button>
+            <button class="delete-btn" on:click={() => { if (confirm('确定删除？')) api.deleteShow(show.id).then(() => shows = shows.filter(s => s.id !== show.id)); }}>删除</button>
           </div>
         </div>
       {/each}
