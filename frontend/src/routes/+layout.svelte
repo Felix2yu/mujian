@@ -3,6 +3,7 @@
   import { api } from '$lib/api';
   import { theme } from '$lib/stores';
   import { onMount } from 'svelte';
+  import { requestPermission, startReminderCheck } from '$lib/notifications';
 
   let stats = null;
   let searchQuery = '';
@@ -26,6 +27,12 @@
       e.preventDefault();
       deferredPrompt = e;
       showInstall = true;
+    });
+
+    requestPermission().then(granted => {
+      if (granted) {
+        startReminderCheck(() => api.listAllShows());
+      }
     });
   });
 
@@ -105,8 +112,9 @@
         </div>
       {/if}
       {#if showInstall}
-        <button class="install-btn" on:click={installApp}>📱 安装</button>
+        <button class="install-btn" onclick={installApp}>📱 安装</button>
       {/if}
+      <button class="notify-btn" onclick={requestPermission}>🔔</button>
       <a href="/settings" class="nav-settings" class:active={currentPath === '/settings'}>⚙</a>
     </div>
   </nav>
@@ -369,6 +377,22 @@
 
   .install-btn:hover {
     background: #3a7bc8;
+  }
+
+  .notify-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .notify-btn:hover {
+    background: var(--bg-surface);
   }
 
   .nav-stats {

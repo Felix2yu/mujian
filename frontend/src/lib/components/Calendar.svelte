@@ -7,6 +7,11 @@
   let year = $state(initialYear);
   let month = $state(initialMonth);
 
+  $effect(() => {
+    year = initialYear;
+    month = initialMonth;
+  });
+
   let popupEvents = $state([]);
   let popupPos = $state({ x: 0, y: 0, align: 'center' });
   const POPUP_W = 260;
