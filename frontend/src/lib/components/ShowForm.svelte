@@ -343,10 +343,28 @@
     cursor: not-allowed;
   }
 
-  @media (max-width: 600px) {
+  @media (max-width: 768px) {
+    .show-form {
+      padding: 16px;
+    }
+
     .form-row {
       flex-direction: column;
       gap: 0;
+    }
+
+    .form-row .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-actions {
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .form-actions button {
+      width: 100%;
+      text-align: center;
     }
   }
 </style>

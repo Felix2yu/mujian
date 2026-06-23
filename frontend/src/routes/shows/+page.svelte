@@ -24,6 +24,14 @@
   let batchRating = '';
   let batchStatus = '';
   let batchSaving = false;
+  let filtersExpanded = false;
+  let isMobile = false;
+
+  function checkMobile() {
+    isMobile = window.innerWidth <= 768;
+  }
+
+  $: hasActiveFilters = searchQuery || statusFilter || categoryFilter || ratingFilter;
 
   $: filteredShows = shows.filter(s => {
     if (statusFilter && s.status !== statusFilter) return false;
@@ -53,6 +61,8 @@
   $: allSelected = filteredShows.length > 0 && filteredShows.every(s => selectedIds.has(s.id));
 
   onMount(async () => {
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
     loadShows();
     categories = await api.listCategories();
   });
@@ -209,47 +219,54 @@
       </div>
     </div>
     <div class="header-right">
-      <div class="filters">
-        <input type="text" class="search-input" placeholder="搜索..." bind:value={searchQuery} />
-        <select bind:value={statusFilter}>
-          <option value="">全部状态</option>
-          <option value="planned">计划中</option>
-          <option value="watched">已观看</option>
-          <option value="cancelled">已取消</option>
-        </select>
-        <select bind:value={categoryFilter}>
-          <option value="">全部分类</option>
-          {#each categories as cat}
-            <option value={cat.name}>{cat.name}</option>
-          {/each}
-        </select>
-        <select bind:value={ratingFilter}>
-          <option value="">全部评分</option>
-          <option value="5">★★★★★</option>
-          <option value="4">★★★★</option>
-          <option value="3">★★★</option>
-          <option value="2">★★</option>
-          <option value="1">★</option>
-          <option value="0">无评分</option>
-        </select>
-        <select bind:value={sortBy}>
-          <option value="date_desc">日期 ↓</option>
-          <option value="date_asc">日期 ↑</option>
-          <option value="name">名称</option>
-          <option value="rating_desc">评分 ↓</option>
-          <option value="rating_asc">评分 ↑</option>
-        </select>
-        {#if searchQuery || statusFilter || categoryFilter || ratingFilter}
-          <button class="clear-btn" on:click={clearFilters}>清除筛选</button>
-        {/if}
-      </div>
-      <span class="result-count">{filteredShows.length} / {shows.length}</span>
-      <button class="batch-btn" class:active={batchMode} on:click={toggleBatchMode}>
-        {batchMode ? '退出批量' : '批量操作'}
+      <button class="filter-toggle" on:click={() => filtersExpanded = !filtersExpanded}>
+        🔍 筛选 {#if hasActiveFilters}<span class="filter-badge"></span>{/if}
       </button>
-      <a href="/shows/import" class="import-btn">📥 导入</a>
-      <a href={api.getExportUrl()} class="export-btn" download>📤 导出</a>
-      <a href="/shows/new" class="add-btn">+ 添加演出</a>
+
+      <div class="filters-panel" class:expanded={filtersExpanded || !isMobile}>
+        <div class="filters">
+          <input type="text" class="search-input" placeholder="搜索..." bind:value={searchQuery} />
+          <select bind:value={statusFilter}>
+            <option value="">全部状态</option>
+            <option value="planned">计划中</option>
+            <option value="watched">已观看</option>
+            <option value="cancelled">已取消</option>
+          </select>
+          <select bind:value={categoryFilter}>
+            <option value="">全部分类</option>
+            {#each categories as cat}
+              <option value={cat.name}>{cat.name}</option>
+            {/each}
+          </select>
+          <select bind:value={ratingFilter}>
+            <option value="">全部评分</option>
+            <option value="5">★★★★★</option>
+            <option value="4">★★★★</option>
+            <option value="3">★★★</option>
+            <option value="2">★★</option>
+            <option value="1">★</option>
+            <option value="0">无评分</option>
+          </select>
+          <select bind:value={sortBy}>
+            <option value="date_desc">日期 ↓</option>
+            <option value="date_asc">日期 ↑</option>
+            <option value="name">名称</option>
+            <option value="rating_desc">评分 ↓</option>
+            <option value="rating_asc">评分 ↑</option>
+          </select>
+          {#if searchQuery || statusFilter || categoryFilter || ratingFilter}
+            <button class="clear-btn" on:click={clearFilters}>清除</button>
+          {/if}
+        </div>
+      </div>
+
+      <span class="result-count">{filteredShows.length}/{shows.length}</span>
+      <button class="batch-btn" class:active={batchMode} on:click={toggleBatchMode}>
+        {batchMode ? '退出' : '批量'}
+      </button>
+      <a href="/shows/import" class="action-btn" title="导入">📥</a>
+      <a href={api.getExportUrl()} class="action-btn" download title="导出">📤</a>
+      <a href="/shows/new" class="add-btn" title="添加">+</a>
     </div>
   </div>
 
@@ -721,14 +738,110 @@
     background: #fdd;
   }
 
+  .filter-toggle {
+    display: none;
+    padding: 8px 16px;
+    background: #f0f0f0;
+    border-radius: 8px;
+    font-weight: 500;
+    position: relative;
+  }
+
+  .filter-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 8px;
+    height: 8px;
+    background: #E74C3C;
+    border-radius: 50%;
+  }
+
+  .filters-panel {
+    display: contents;
+  }
+
+  .action-btn {
+    padding: 8px 12px;
+    background: #f0f0f0;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: background 0.2s;
+  }
+
+  .action-btn:hover {
+    background: #e0e0e0;
+  }
+
   @media (max-width: 768px) {
     .page-header {
       flex-direction: column;
+      gap: 12px;
     }
 
     .header-right {
       width: 100%;
-      justify-content: flex-start;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .filter-toggle {
+      display: block;
+    }
+
+    .filters-panel {
+      display: none;
+      width: 100%;
+    }
+
+    .filters-panel.expanded {
+      display: block;
+    }
+
+    .filters {
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .filters select, .search-input {
+      width: 100%;
+    }
+
+    .result-count {
+      font-size: 12px;
+    }
+
+    .batch-btn {
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+
+    .import-btn, .export-btn {
+      display: none;
+    }
+
+    .add-btn {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      padding: 0;
+    }
+
+    .batch-bar {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .batch-panel .batch-form {
+      flex-direction: column;
+    }
+
+    .batch-form .form-group {
+      width: 100%;
     }
   }
 </style>

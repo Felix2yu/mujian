@@ -65,6 +65,7 @@
     const canvas = document.getElementById('categoryChart');
     if (!canvas || !data.by_category?.length) return;
     const ctx = canvas.getContext('2d');
+    const isMobile = window.innerWidth <= 768;
 
     if (categoryChart) categoryChart.destroy();
     categoryChart = new Chart(ctx, {
@@ -80,7 +81,10 @@
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { position: 'right', labels: { padding: 12, usePointStyle: true } }
+          legend: {
+            position: isMobile ? 'bottom' : 'right',
+            labels: { padding: isMobile ? 8 : 12, usePointStyle: true, font: { size: isMobile ? 11 : 13 } }
+          }
         }
       }
     });
@@ -416,16 +420,66 @@
   }
 
   @media (max-width: 768px) {
+    .dashboard {
+      padding: 0;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin-bottom: 16px;
+    }
+
     .stats-grid {
       grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .stat-card {
+      padding: 14px 10px;
+    }
+
+    .stat-value {
+      font-size: 22px;
     }
 
     .charts-grid {
       grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .chart-card {
+      padding: 16px;
+    }
+
+    .chart-container {
+      height: 200px;
     }
 
     .lists-grid {
       grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .list-card {
+      padding: 16px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .stats-grid {
+      gap: 8px;
+    }
+
+    .stat-card {
+      padding: 12px 8px;
+    }
+
+    .stat-value {
+      font-size: 20px;
+    }
+
+    .stat-label {
+      font-size: 11px;
     }
   }
 </style>

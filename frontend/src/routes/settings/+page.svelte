@@ -512,6 +512,51 @@
     color: #27AE60;
   }
 
+  @media (max-width: 768px) {
+    .settings-page {
+      padding: 0;
+    }
+
+    h1 {
+      font-size: 20px;
+    }
+
+    .section {
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .form-group select, .form-group input {
+      max-width: 100%;
+    }
+
+    .s3-form .form-row {
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .cat-item {
+      padding: 8px 0;
+    }
+
+    .add-cat {
+      flex-wrap: wrap;
+    }
+
+    .add-cat input[type="text"] {
+      flex: 1 1 100%;
+    }
+
+    .backup-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .btn-backup, .btn-restore {
+      text-align: center;
+    }
+  }
+
   @media (max-width: 600px) {
     .form-row {
       flex-direction: column;

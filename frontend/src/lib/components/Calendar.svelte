@@ -266,4 +266,51 @@
     height: 10px;
     border-radius: 50%;
   }
+
+  @media (max-width: 768px) {
+    .calendar-header {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .title {
+      font-size: 16px;
+    }
+
+    .day-cell {
+      min-height: 60px;
+      padding: 2px;
+    }
+
+    .day-number {
+      font-size: 11px;
+    }
+
+    .event-dot {
+      font-size: 9px;
+      padding: 1px 4px;
+    }
+
+    .calendar-legend {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .day-cell {
+      min-height: 48px;
+    }
+
+    .event-text {
+      display: none;
+    }
+
+    .event-dot {
+      width: 6px;
+      height: 6px;
+      padding: 0;
+      border-radius: 50%;
+    }
+  }
 </style>

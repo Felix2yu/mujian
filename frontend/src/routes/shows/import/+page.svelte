@@ -463,9 +463,32 @@
     cursor: not-allowed;
   }
 
-  @media (max-width: 600px) {
+  @media (max-width: 768px) {
+    .import-page {
+      padding: 0;
+    }
+
     .columns-grid {
       grid-template-columns: 1fr;
+    }
+
+    .dropzone {
+      padding: 30px 16px;
+    }
+
+    .result-stats {
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .result-actions {
+      flex-direction: column;
+    }
+
+    .result-actions a,
+    .result-actions button {
+      width: 100%;
+      text-align: center;
     }
   }
 </style>

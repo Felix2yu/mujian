@@ -165,14 +165,43 @@
     font-size: 14px;
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 768px) {
     .main-content {
       grid-template-columns: 1fr;
     }
 
     .stats-bar {
-      flex-wrap: wrap;
-      gap: 16px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      padding: 16px;
+    }
+
+    .stat-value {
+      font-size: 22px;
+    }
+
+    .calendar-section {
+      padding: 12px;
+    }
+
+    .sidebar-section {
+      padding: 16px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .stats-bar {
+      gap: 8px;
+      padding: 12px;
+    }
+
+    .stat-value {
+      font-size: 20px;
+    }
+
+    .stat-label {
+      font-size: 11px;
     }
   }
 </style>
