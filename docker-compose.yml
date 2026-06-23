@@ -1,0 +1,14 @@
+services:
+  mujian:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - mujian-data:/app/data
+    environment:
+      - PORT=8080
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+
+volumes:
+  mujian-data:

@@ -1,0 +1,314 @@
+package handlers
+
+import (
+	"encoding/json"
+	"mujian/internal/db"
+	"mujian/internal/ics"
+	"mujian/internal/models"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+)
+
+type Handler struct {
+	db *db.DB
+}
+
+func New(db *db.DB) *Handler {
+	return &Handler{db: db}
+}
+
+func (h *Handler) Routes() chi.Router {
+	r := chi.NewRouter()
+
+	r.Get("/calendar", h.getCalendar)
+	r.Get("/calendar.ics", h.getICS)
+	r.Get("/stats", h.getStats)
+
+	r.Route("/shows", func(r chi.Router) {
+		r.Get("/", h.listShows)
+		r.Get("/search", h.searchShows)
+		r.Get("/upcoming", h.getUpcoming)
+		r.Get("/recent", h.getRecent)
+		r.Post("/", h.createShow)
+		r.Get("/{id}", h.getShow)
+		r.Put("/{id}", h.updateShow)
+		r.Delete("/{id}", h.deleteShow)
+	})
+
+	r.Route("/categories", func(r chi.Router) {
+		r.Get("/", h.listCategories)
+		r.Post("/", h.createCategory)
+		r.Put("/{id}", h.updateCategory)
+		r.Delete("/{id}", h.deleteCategory)
+	})
+
+	return r
+}
+
+func jsonResp(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
+}
+
+func jsonErr(w http.ResponseWriter, status int, msg string) {
+	jsonResp(w, status, map[string]string{"error": msg})
+}
+
+func (h *Handler) listShows(w http.ResponseWriter, r *http.Request) {
+	year := time.Now().Year()
+	month := int(time.Now().Month())
+
+	if y := r.URL.Query().Get("year"); y != "" {
+		year, _ = strconv.Atoi(y)
+	}
+	if m := r.URL.Query().Get("month"); m != "" {
+		month, _ = strconv.Atoi(m)
+	}
+
+	shows, err := h.db.ListShows(year, month)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if shows == nil {
+		shows = []models.Show{}
+	}
+	jsonResp(w, 200, shows)
+}
+
+func (h *Handler) getShow(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonErr(w, 400, "invalid id")
+		return
+	}
+
+	show, err := h.db.GetShow(id)
+	if err != nil {
+		jsonErr(w, 404, "show not found")
+		return
+	}
+	jsonResp(w, 200, show)
+}
+
+func (h *Handler) createShow(w http.ResponseWriter, r *http.Request) {
+	var req models.ShowRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+
+	if req.Name == "" {
+		jsonErr(w, 400, "name is required")
+		return
+	}
+
+	show, err := h.db.CreateShow(req)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 201, show)
+}
+
+func (h *Handler) updateShow(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonErr(w, 400, "invalid id")
+		return
+	}
+
+	var req models.ShowRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+
+	show, err := h.db.UpdateShow(id, req)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, show)
+}
+
+func (h *Handler) deleteShow(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonErr(w, 400, "invalid id")
+		return
+	}
+
+	if err := h.db.DeleteShow(id); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "deleted"})
+}
+
+func (h *Handler) getCalendar(w http.ResponseWriter, r *http.Request) {
+	year := time.Now().Year()
+	month := int(time.Now().Month())
+
+	if y := r.URL.Query().Get("year"); y != "" {
+		year, _ = strconv.Atoi(y)
+	}
+	if m := r.URL.Query().Get("month"); m != "" {
+		month, _ = strconv.Atoi(m)
+	}
+
+	events, err := h.db.GetCalendarEvents(year, month)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if events == nil {
+		events = []models.CalendarEvent{}
+	}
+	jsonResp(w, 200, events)
+}
+
+func (h *Handler) getICS(w http.ResponseWriter, r *http.Request) {
+	shows, err := h.db.ListAllShows()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
+	w.Header().Set("Content-Disposition", "attachment; filename=mujian.ics")
+	w.Write([]byte(ics.GenerateCalendar(shows)))
+}
+
+func (h *Handler) getStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.db.GetStats()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, stats)
+}
+
+func (h *Handler) listCategories(w http.ResponseWriter, r *http.Request) {
+	cats, err := h.db.ListCategories()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, cats)
+}
+
+func (h *Handler) createCategory(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name  string `json:"name"`
+		Color string `json:"color"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if req.Name == "" {
+		jsonErr(w, 400, "name is required")
+		return
+	}
+	if req.Color == "" {
+		req.Color = "#4A90D9"
+	}
+
+	cat, err := h.db.CreateCategory(req.Name, req.Color)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 201, cat)
+}
+
+func (h *Handler) updateCategory(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonErr(w, 400, "invalid id")
+		return
+	}
+
+	var req struct {
+		Name  string `json:"name"`
+		Color string `json:"color"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+
+	if err := h.db.UpdateCategory(id, req.Name, req.Color); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "updated"})
+}
+
+func (h *Handler) deleteCategory(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonErr(w, 400, "invalid id")
+		return
+	}
+	if err := h.db.DeleteCategory(id); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "deleted"})
+}
+
+func (h *Handler) searchShows(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		jsonResp(w, 200, []models.Show{})
+		return
+	}
+
+	shows, err := h.db.SearchShows(q)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if shows == nil {
+		shows = []models.Show{}
+	}
+	jsonResp(w, 200, shows)
+}
+
+func (h *Handler) getUpcoming(w http.ResponseWriter, r *http.Request) {
+	limit := 10
+	if l := r.URL.Query().Get("limit"); l != "" {
+		limit, _ = strconv.Atoi(l)
+	}
+	shows, err := h.db.GetUpcomingShows(limit)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if shows == nil {
+		shows = []models.Show{}
+	}
+	jsonResp(w, 200, shows)
+}
+
+func (h *Handler) getRecent(w http.ResponseWriter, r *http.Request) {
+	limit := 10
+	if l := r.URL.Query().Get("limit"); l != "" {
+		limit, _ = strconv.Atoi(l)
+	}
+	shows, err := h.db.GetRecentShows(limit)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if shows == nil {
+		shows = []models.Show{}
+	}
+	jsonResp(w, 200, shows)
+}

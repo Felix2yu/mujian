@@ -1,0 +1,233 @@
+<script>
+  import { page } from '$app/stores';
+  import { api } from '$lib/api';
+  import { onMount } from 'svelte';
+
+  let stats = null;
+  let searchQuery = '';
+  let searchResults = [];
+  let showSearch = false;
+
+  onMount(async () => {
+    try {
+      stats = await api.getStats();
+    } catch (e) {
+      console.error('Failed to load stats:', e);
+    }
+  });
+
+  async function handleSearch() {
+    if (!searchQuery.trim()) {
+      searchResults = [];
+      return;
+    }
+    try {
+      searchResults = await api.searchShows(searchQuery);
+      showSearch = true;
+    } catch (e) {
+      console.error('Search failed:', e);
+    }
+  }
+
+  function closeSearch() {
+    showSearch = false;
+    searchQuery = '';
+    searchResults = [];
+  }
+
+  $: currentPath = $page.url.pathname;
+</script>
+
+<div class="app">
+  <nav class="navbar">
+    <div class="nav-brand">
+      <a href="/">幕间</a>
+    </div>
+    <div class="nav-links">
+      <a href="/" class:active={currentPath === '/'}>日历</a>
+      <a href="/shows" class:active={currentPath.startsWith('/shows')}>演出列表</a>
+      <a href="/shows/new" class:active={currentPath === '/shows/new'}>添加演出</a>
+    </div>
+    <div class="nav-search">
+      <form on:submit|preventDefault={handleSearch}>
+        <input
+          type="text"
+          placeholder="搜索演出..."
+          bind:value={searchQuery}
+          on:blur={() => setTimeout(closeSearch, 200)}
+        />
+      </form>
+      {#if showSearch && searchResults.length > 0}
+        <div class="search-results">
+          {#each searchResults as show}
+            <a href="/shows/{show.id}" class="search-item">
+              <span class="search-name">{show.name}</span>
+              <span class="search-venue">{show.venue}</span>
+            </a>
+          {/each}
+        </div>
+      {/if}
+    </div>
+    {#if stats}
+      <div class="nav-stats">
+        <span>{stats.total_shows} 场演出</span>
+        <span>{stats.total_hours.toFixed(0)} 小时</span>
+      </div>
+    {/if}
+  </nav>
+
+  <main>
+    <slot />
+  </main>
+</div>
+
+<style>
+  :global(*) {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  :global(body) {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f5f5f5;
+    color: #333;
+    line-height: 1.6;
+  }
+
+  :global(a) {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  :global(button) {
+    cursor: pointer;
+    border: none;
+    background: none;
+    font: inherit;
+  }
+
+  :global(input, select, textarea) {
+    font: inherit;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 8px 12px;
+  }
+
+  :global(input:focus, select:focus, textarea:focus) {
+    outline: none;
+    border-color: #4A90D9;
+  }
+
+  .app {
+    min-height: 100vh;
+  }
+
+  .navbar {
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .nav-brand a {
+    font-size: 24px;
+    font-weight: 700;
+    color: #4A90D9;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 8px;
+  }
+
+  .nav-links a {
+    padding: 8px 16px;
+    border-radius: 6px;
+    transition: background 0.2s;
+  }
+
+  .nav-links a:hover {
+    background: #f0f0f0;
+  }
+
+  .nav-links a.active {
+    background: #4A90D9;
+    color: #fff;
+  }
+
+  .nav-search {
+    position: relative;
+  }
+
+  .nav-search input {
+    width: 200px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background: #f0f0f0;
+    border: none;
+  }
+
+  .nav-search input:focus {
+    background: #fff;
+    box-shadow: 0 0 0 2px #4A90D9;
+  }
+
+  .search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-radius: 8px;
+    margin-top: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 200;
+  }
+
+  .search-item {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 16px;
+    border-bottom: 1px solid #eee;
+  }
+
+  .search-item:last-child {
+    border-bottom: none;
+  }
+
+  .search-item:hover {
+    background: #f5f5f5;
+  }
+
+  .search-name {
+    font-weight: 500;
+  }
+
+  .search-venue {
+    font-size: 12px;
+    color: #666;
+  }
+
+  .nav-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 13px;
+    color: #666;
+    margin-left: auto;
+  }
+
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+</style>

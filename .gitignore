@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Build
+frontend/dist/
+frontend/.svelte-kit/
+backend/mujian
+backend/dist/
+
+# Data
+data/
+backend/data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
