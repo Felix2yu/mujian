@@ -38,6 +38,7 @@ export const api = {
   getICSUrl: () => `${API_BASE}/api/calendar.ics`,
 
   getStats: () => request('/api/stats'),
+  getDashboard: () => request('/api/dashboard'),
 
   listCategories: () => request('/api/categories'),
   createCategory: (data) => request('/api/categories', { method: 'POST', body: JSON.stringify(data) }),

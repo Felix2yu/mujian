@@ -31,6 +31,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/calendar", h.getCalendar)
 	r.Get("/calendar.ics", h.getICS)
 	r.Get("/stats", h.getStats)
+	r.Get("/dashboard", h.getDashboard)
 
 	r.Route("/shows", func(r chi.Router) {
 		r.Get("/", h.listShows)
@@ -216,6 +217,15 @@ func (h *Handler) getICS(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) getStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.db.GetStats()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, stats)
+}
+
+func (h *Handler) getDashboard(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.db.GetDashboardStats()
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return

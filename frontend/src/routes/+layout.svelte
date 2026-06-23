@@ -50,7 +50,8 @@
     </div>
     <div class="nav-links">
       <a href="/" class:active={currentPath === '/'}>日历</a>
-      <a href="/shows" class:active={currentPath.startsWith('/shows')}>演出列表</a>
+      <a href="/shows" class:active={currentPath.startsWith('/shows') && !currentPath.includes('/import') && !currentPath.includes('/new')}>演出列表</a>
+      <a href="/dashboard" class:active={currentPath === '/dashboard'}>看板</a>
       <a href="/shows/new" class:active={currentPath === '/shows/new'}>添加演出</a>
     </div>
     <div class="nav-search">
