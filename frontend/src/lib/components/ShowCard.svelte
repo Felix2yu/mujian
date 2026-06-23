@@ -34,7 +34,7 @@
         <span class="date">📅 {formatDateTime(show.date)}</span>
         {#if show.venue}<span class="venue">📍 {show.venue}</span>{/if}
         {#if show.company}<span class="company">🎭 {show.company}</span>{/if}
-        {#if show.cast}<span class="cast">👤 {show.cast}</span>{/if}
+        {#if show.cast}<span class="cast">👤 {show.cast.replace(/[,，]/g, ' ')}</span>{/if}
       </div>
 
       {#if show.rating}
@@ -69,8 +69,8 @@
   .show-card.compact:last-child { margin-bottom: 0; }
   .card-body { display: flex; gap: 16px; }
   .card-content { flex: 1; min-width: 0; }
-  .card-poster { width: 100px; height: 100px; flex-shrink: 0; border-radius: 6px; overflow: hidden; }
-  .card-poster img { width: 100%; height: 100%; object-fit: cover; }
+  .card-poster { max-width: 120px; flex-shrink: 0; border-radius: 6px; overflow: hidden; align-self: center; }
+  .card-poster img { width: 100%; display: block; border-radius: 6px; }
   .card-header { display: flex; gap: 8px; margin-bottom: 8px; }
   .status { font-size: 11px; padding: 2px 8px; border-radius: 10px; color: #fff; font-weight: 500; }
   .category { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #f0f0f0; color: #666; }
