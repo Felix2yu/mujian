@@ -385,4 +385,40 @@
   :global(.dark) .header-left h1 { color: #e0e0e0; }
   :global(.dark) .show-item.selected { background: #1a2a3a; }
   :global(.dark) .spinner { border-color: #444; border-top-color: #4A90D9; }
+
+  :global(.dark) .show-card {
+    background: #2a2a2a;
+    border-color: #333;
+  }
+
+  :global(.dark) .show-card:hover {
+    border-color: #444;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  }
+
+  :global(.dark) .card-title {
+    color: #e0e0e0;
+  }
+
+  :global(.dark) .card-meta {
+    color: #888;
+  }
+
+  :global(.dark) .card-extra {
+    color: #777;
+    border-top-color: #333;
+  }
+
+  :global(.dark) .category {
+    background: #333;
+    color: #999;
+  }
+
+  :global(.dark) .star-mini {
+    color: #555;
+  }
+
+  :global(.dark) .card-poster {
+    background: #333;
+  }
 </style>
