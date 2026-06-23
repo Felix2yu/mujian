@@ -216,7 +216,7 @@
       </div>
     {/if}
 
-    <button class="btn-save" on:click={saveSettings} disabled={saving}>
+    <button class="btn-save" onclick={saveSettings} disabled={saving}>
       {saving ? '保存中...' : '保存设置'}
     </button>
   </div>
@@ -229,20 +229,20 @@
           draggable="true"
           on:dragstart={(e) => handleDragStart(e, index)}
           on:dragend={handleDragEnd}
-          on:dragover={(e) => handleDragOver(e, index)}
-          on:dragleave={handleDragLeave}
-          on:drop={(e) => handleDrop(e, index)}
+          ondragover={(e) => handleDragOver(e, index)}
+          ondragleave={handleDragLeave}
+          ondrop={(e) => handleDrop(e, index)}
         >
           <span class="drag-handle">⠿</span>
-          <input type="text" bind:value={cat.name} on:blur={() => updateCategory(cat)} class="cat-name" />
+          <input type="text" bind:value={cat.name} onblur={() => updateCategory(cat)} class="cat-name" />
           <span class="cat-count">{cat.show_count} 场</span>
-          <button class="btn-delete" on:click={() => deleteCategory(cat.id)}>×</button>
+          <button class="btn-delete" onclick={() => deleteCategory(cat.id)}>×</button>
         </div>
       {/each}
     </div>
     <div class="add-cat">
-      <input type="text" bind:value={newCatName} placeholder="新分类名称" on:keydown={(e) => e.key === 'Enter' && addCategory()} />
-      <button class="btn-add" on:click={addCategory}>添加</button>
+      <input type="text" bind:value={newCatName} placeholder="新分类名称" onkeydown={(e) => e.key === 'Enter' && addCategory()} />
+      <button class="btn-add" onclick={addCategory}>添加</button>
     </div>
   </div>
 
@@ -254,7 +254,7 @@
       <div class="restore-area">
         <label class="btn-restore">
           📤 恢复备份
-          <input type="file" accept=".json" on:change={handleRestore} hidden />
+          <input type="file" accept=".json" onchange={handleRestore} hidden />
         </label>
         {#if restoring}
           <span class="restore-status">恢复中...</span>

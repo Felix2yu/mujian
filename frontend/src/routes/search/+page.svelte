@@ -59,7 +59,7 @@
 <div class="search-page">
   <h1>搜索演出</h1>
 
-  <form class="search-bar" on:submit={handleSubmit}>
+  <form class="search-bar" onsubmit={handleSubmit}>
     <input
       type="text"
       bind:value={query}

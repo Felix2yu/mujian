@@ -96,7 +96,7 @@
         </div>
       </div>
       <p class="tip">
-        <a href="javascript:void(0)" on:click={downloadTemplate}>下载导入模板</a>
+        <a href="javascript:void(0)" onclick={downloadTemplate}>下载导入模板</a>
         — 模板包含表头和示例数据
       </p>
     </div>
@@ -108,16 +108,16 @@
       class="dropzone"
       class:dragover
       class:has-file={file}
-      on:drop={handleDrop}
-      on:dragover={handleDragOver}
-      on:dragleave={handleDragLeave}
+      ondrop={handleDrop}
+      ondragover={handleDragOver}
+      ondragleave={handleDragLeave}
     >
       {#if file}
         <div class="file-info">
           <span class="file-icon">📄</span>
           <span class="file-name">{file.name}</span>
           <span class="file-size">({(file.size / 1024).toFixed(1)} KB)</span>
-          <button class="btn-remove" on:click={() => { file = null; result = null; }}>×</button>
+            <button class="btn-remove" onclick={() => { file = null; result = null; }}>×</button>
         </div>
       {:else}
         <div class="dropzone-content">
@@ -125,7 +125,7 @@
           <p>拖拽文件到此处，或</p>
           <label class="btn-select">
             选择文件
-            <input type="file" accept=".xlsx,.xls" on:change={handleFileSelect} hidden />
+            <input type="file" accept=".xlsx,.xls" onchange={handleFileSelect} hidden />
           </label>
         </div>
       {/if}
@@ -166,13 +166,13 @@
         {/if}
         <div class="result-actions">
           <a href="/shows" class="btn-view">查看演出列表</a>
-          <button class="btn-import-more" on:click={() => { file = null; result = null; error = ''; }}>继续导入</button>
+          <button class="btn-import-more" onclick={() => { file = null; result = null; error = ''; }}>继续导入</button>
         </div>
       </div>
     {/if}
 
     <div class="actions">
-      <button class="btn-import" on:click={handleImport} disabled={!file || importing}>
+      <button class="btn-import" onclick={handleImport} disabled={!file || importing}>
         {importing ? '导入中...' : '开始导入'}
       </button>
     </div>
