@@ -42,7 +42,7 @@ jobs:
         working-directory: backend
 
       - name: Upload binary
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: mujian
           path: backend/mujian
