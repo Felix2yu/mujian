@@ -122,4 +122,10 @@
   .placeholder p { color: #999; }
   .results-info { margin-bottom: 16px; font-size: 14px; color: #666; }
   .results-list { display: flex; flex-direction: column; gap: 12px; }
+
+  :global(.dark) .search-hint span:not(:first-child) { background: #333; color: #999; }
+  :global(.dark) .loading, :global(.dark) .empty, :global(.dark) .placeholder { color: #999; }
+  :global(.dark) .placeholder p { color: #777; }
+  :global(.dark) .empty-hint { color: #777; }
+  :global(.dark) .results-info { color: #999; }
 </style>

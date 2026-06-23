@@ -353,4 +353,33 @@
     .search-input { width: 100%; }
     .batch-bar { flex-wrap: wrap; gap: 8px; }
   }
+
+  :global(.dark) .action-btn { background: #333; color: #ccc; }
+  :global(.dark) .action-btn:hover { background: #444; }
+  :global(.dark) .batch-btn { background: #333; color: #ccc; }
+  :global(.dark) .batch-btn.active { background: #4A90D9; color: #fff; }
+  :global(.dark) .tabs { background: #1e1e1e; }
+  :global(.dark) .tab { color: #999; }
+  :global(.dark) .tab.active { background: #2a2a2a; color: #e0e0e0; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+  :global(.dark) .tab-count { background: #333; color: #999; }
+  :global(.dark) .filter-toggle { background: #333; color: #ccc; }
+  :global(.dark) .batch-bar { background: #2a2a2a; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  :global(.dark) .batch-action { background: #333; color: #ccc; }
+  :global(.dark) .batch-action:hover:not(:disabled) { background: #444; }
+  :global(.dark) .batch-action.danger { background: #3a2020; color: #f66; }
+  :global(.dark) .batch-action.danger:hover { background: #4a2020; }
+  :global(.dark) .batch-panel { background: #2a2a2a; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  :global(.dark) .batch-panel h3 { color: #e0e0e0; }
+  :global(.dark) .batch-form label { color: #999; }
+  :global(.dark) .select-all { background: #2a2a2a; border-color: #333; }
+  :global(.dark) .select-all label { color: #ccc; }
+  :global(.dark) .edit-btn { background: #333; color: #ccc; }
+  :global(.dark) .edit-btn:hover { background: #444; }
+  :global(.dark) .delete-btn { background: #3a2020; color: #f66; }
+  :global(.dark) .delete-btn:hover { background: #4a2020; }
+  :global(.dark) .loading { color: #999; }
+  :global(.dark) .empty { color: #999; }
+  :global(.dark) .result-count { color: #777; }
+  :global(.dark) .clear-btn { background: #3a2020; color: #f66; }
+  :global(.dark) .clear-btn:hover { background: #4a2020; }
 </style>

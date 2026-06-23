@@ -491,4 +491,7 @@
       text-align: center;
     }
   }
+
+  :global(.dark) .btn-import-more { background: #333; color: #ccc; }
+  :global(.dark) .btn-import-more:hover { background: #444; }
 </style>

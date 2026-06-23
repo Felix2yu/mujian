@@ -238,4 +238,17 @@
     .detail-card { padding: 16px 12px; }
     .header-info h1 { font-size: 20px; }
   }
+
+  :global(.dark) .error { background: #3a2020; color: #f66; }
+  :global(.dark) .category { background: #333; color: #999; }
+  :global(.dark) .category:hover { background: #444; }
+  :global(.dark) .rating { color: #555; }
+  :global(.dark) .edit-btn { background: #333; color: #ccc; }
+  :global(.dark) .edit-btn:hover { background: #444; }
+  :global(.dark) .delete-btn { background: #3a2020; color: #f66; }
+  :global(.dark) .delete-btn:hover { background: #4a2020; }
+  :global(.dark) .info-label { color: #777; }
+  :global(.dark) .info-value { color: #ccc; }
+  :global(.dark) .section h3 { color: #e0e0e0; }
+  :global(.dark) .text-content { color: #aaa; }
 </style>

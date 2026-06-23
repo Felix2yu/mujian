@@ -563,4 +563,9 @@
       gap: 0;
     }
   }
+
+  :global(.dark) .s3-form { background: #1e1e1e; }
+  :global(.dark) .btn-restore { background: #333; color: #ccc; }
+  :global(.dark) .btn-restore:hover { background: #444; }
+  :global(.dark) .restore-status { color: #999; }
 </style>
