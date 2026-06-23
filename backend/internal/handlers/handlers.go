@@ -59,6 +59,7 @@ func (h *Handler) Routes() chi.Router {
 
 	r.Post("/upload", h.uploadFile)
 	r.Get("/import/template", h.getImportTemplate)
+	r.Get("/export", h.exportShows)
 
 	return r
 }

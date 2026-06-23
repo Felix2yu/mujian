@@ -54,6 +54,7 @@ export const api = {
   },
 
   getImportTemplate: () => `${API_BASE}/api/import/template`,
+  getExportUrl: () => `${API_BASE}/api/export`,
 
   uploadFile: async (file) => {
     const form = new FormData();

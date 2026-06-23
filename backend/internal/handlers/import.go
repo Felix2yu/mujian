@@ -246,3 +246,69 @@ func (h *Handler) getImportTemplate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename=mujian_import_template.xlsx")
 	f.Write(w)
 }
+
+func (h *Handler) exportShows(w http.ResponseWriter, r *http.Request) {
+	shows, err := h.db.ListAllShows()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+
+	f := excelize.NewFile()
+	defer f.Close()
+
+	sheet := "演出数据"
+	f.SetSheetName("Sheet1", sheet)
+
+	headers := []string{
+		"名称", "场地", "日期", "时长", "状态", "分类",
+		"剧团", "阵容", "同行", "评分", "座位",
+		"门票", "其他花费", "剧目", "剧评", "备注",
+	}
+	for i, header := range headers {
+		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
+		f.SetCellValue(sheet, cell, header)
+	}
+
+	statusMap := map[string]string{
+		"planned":   "计划中",
+		"watched":   "已观看",
+		"cancelled": "已取消",
+	}
+
+	for rowIdx, show := range shows {
+		row := rowIdx + 2
+
+		setCell := func(col int, val string) {
+			cell, _ := excelize.CoordinatesToCellName(col, row)
+			f.SetCellValue(sheet, cell, val)
+		}
+
+		setCell(1, show.Name)
+		setCell(2, show.Venue)
+		setCell(3, show.Date.Format("2006-01-02 15:04"))
+		setCell(4, strconv.Itoa(show.Duration))
+		setCell(5, statusMap[string(show.Status)])
+		setCell(6, show.CategoryName)
+		setCell(7, show.Company)
+		setCell(8, show.Cast)
+		setCell(9, show.Friends)
+		if show.Rating != nil {
+			setCell(10, strconv.Itoa(*show.Rating))
+		}
+		setCell(11, show.Seat)
+		if show.TicketCost != nil {
+			setCell(12, fmt.Sprintf("%.2f", *show.TicketCost))
+		}
+		if show.OtherCost != nil {
+			setCell(13, fmt.Sprintf("%.2f", *show.OtherCost))
+		}
+		setCell(14, show.Setlist)
+		setCell(15, show.Review)
+		setCell(16, show.Notes)
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=mujian_export_%s.xlsx", time.Now().Format("20060102")))
+	f.Write(w)
+}

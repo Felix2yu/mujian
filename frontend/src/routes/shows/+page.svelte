@@ -66,6 +66,7 @@
         </select>
       </div>
       <a href="/shows/import" class="import-btn">📥 导入</a>
+      <a href={api.getExportUrl()} class="export-btn" download>📤 导出</a>
       <a href="/shows/new" class="add-btn">+ 添加演出</a>
     </div>
   </div>
@@ -160,6 +161,19 @@
   }
 
   .import-btn:hover {
+    background: #e0e0e0;
+  }
+
+  .export-btn {
+    padding: 8px 16px;
+    background: #f0f0f0;
+    color: #333;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: background 0.2s;
+  }
+
+  .export-btn:hover {
     background: #e0e0e0;
   }
 
