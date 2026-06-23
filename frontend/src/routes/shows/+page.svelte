@@ -330,20 +330,21 @@
   .empty { text-align: center; padding: 60px 20px; color: #666; }
   .empty a { display: inline-block; margin-top: 12px; color: #4A90D9; font-weight: 500; }
 
-  .shows-list { display: flex; flex-direction: column; gap: 10px; }
-  .select-all { padding: 12px 16px; background: #fff; border-radius: 8px; border: 1px solid #eee; }
-  .select-all label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #666; cursor: pointer; }
+  .shows-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .select-all { padding: 12px 16px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border); grid-column: 1 / -1; }
+  .select-all label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-secondary); cursor: pointer; }
   .select-all input[type="checkbox"] { width: 18px; height: 18px; }
-  .show-item { position: relative; display: flex; align-items: flex-start; gap: 10px; }
-  .show-item.selected { background: #f0f7ff; border-radius: 8px; }
-  .select-check { margin-top: 20px; width: 18px; height: 18px; flex-shrink: 0; cursor: pointer; }
-  .show-actions { position: absolute; top: 16px; right: 16px; display: flex; gap: 8px; opacity: 0; transition: opacity 0.2s; }
+  .show-item { position: relative; border-radius: 10px; transition: all 0.2s; }
+  .show-item:hover { transform: translateY(-2px); }
+  .show-item.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .select-check { position: absolute; top: 12px; left: 12px; width: 18px; height: 18px; z-index: 5; cursor: pointer; }
+  .show-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; opacity: 0; transition: opacity 0.2s; z-index: 10; }
   .show-item:hover .show-actions { opacity: 1; }
-  .edit-btn, .delete-btn { padding: 4px 12px; border-radius: 6px; font-size: 12px; }
-  .edit-btn { background: #f0f0f0; color: #666; }
-  .edit-btn:hover { background: #e0e0e0; }
-  .delete-btn { background: #fee; color: #c00; }
-  .delete-btn:hover { background: #fdd; }
+  .edit-btn, .delete-btn { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 500; backdrop-filter: blur(4px); }
+  .edit-btn { background: rgba(255,255,255,0.9); color: #555; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+  .edit-btn:hover { background: #fff; color: #333; }
+  .delete-btn { background: rgba(254,238,238,0.9); color: #c00; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+  .delete-btn:hover { background: #fee; }
 
   @media (max-width: 768px) {
     .header-right { width: 100%; justify-content: flex-start; }
@@ -352,6 +353,11 @@
     .filters-panel.expanded .filters { display: flex; flex-direction: column; gap: 8px; width: 100%; }
     .search-input { width: 100%; }
     .batch-bar { flex-wrap: wrap; gap: 8px; }
+    .shows-list { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 480px) {
+    .shows-list { grid-template-columns: 1fr; }
   }
 
   :global(.dark) .action-btn { background: #333; color: #ccc; }
@@ -373,9 +379,9 @@
   :global(.dark) .batch-form label { color: #999; }
   :global(.dark) .select-all { background: #2a2a2a; border-color: #333; }
   :global(.dark) .select-all label { color: #ccc; }
-  :global(.dark) .edit-btn { background: #333; color: #ccc; }
+  :global(.dark) .edit-btn { background: rgba(51,51,51,0.9); color: #ccc; }
   :global(.dark) .edit-btn:hover { background: #444; }
-  :global(.dark) .delete-btn { background: #3a2020; color: #f66; }
+  :global(.dark) .delete-btn { background: rgba(58,32,32,0.9); color: #f66; }
   :global(.dark) .delete-btn:hover { background: #4a2020; }
   :global(.dark) .loading { color: #999; }
   :global(.dark) .empty { color: #999; }
