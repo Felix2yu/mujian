@@ -19,7 +19,6 @@
   let saving = false;
   let message = '';
   let newCatName = '';
-  let newCatColor = '#4A90D9';
   let dragIndex = null;
   let restoring = false;
   let restoreResult = null;
@@ -73,10 +72,9 @@
   async function addCategory() {
     if (!newCatName.trim()) return;
     try {
-      const cat = await api.createCategory({ name: newCatName, color: newCatColor });
+      const cat = await api.createCategory({ name: newCatName });
       categories = [...categories, cat];
       newCatName = '';
-      newCatColor = '#4A90D9';
     } catch (e) {
       alert('添加失败: ' + e.message);
     }
@@ -236,7 +234,6 @@
           on:drop={(e) => handleDrop(e, index)}
         >
           <span class="drag-handle">⠿</span>
-          <input type="color" bind:value={cat.color} on:change={() => updateCategory(cat)} />
           <input type="text" bind:value={cat.name} on:blur={() => updateCategory(cat)} class="cat-name" />
           <span class="cat-count">{cat.show_count} 场</span>
           <button class="btn-delete" on:click={() => deleteCategory(cat.id)}>×</button>
@@ -244,7 +241,6 @@
       {/each}
     </div>
     <div class="add-cat">
-      <input type="color" bind:value={newCatColor} />
       <input type="text" bind:value={newCatName} placeholder="新分类名称" on:keydown={(e) => e.key === 'Enter' && addCategory()} />
       <button class="btn-add" on:click={addCategory}>添加</button>
     </div>
