@@ -8,7 +8,6 @@
   let searchQuery = '';
   let searchResults = [];
   let showSearch = false;
-  let mobileMenuOpen = false;
 
   onMount(async () => {
     try {
@@ -41,72 +40,45 @@
     searchResults = [];
   }
 
-  function closeMobileMenu() {
-    mobileMenuOpen = false;
-  }
-
-  function toggleMobileMenu() {
-    mobileMenuOpen = !mobileMenuOpen;
-  }
-
   $: currentPath = $page.url.pathname;
 </script>
 
 <div class="app">
   <nav class="navbar">
     <div class="nav-brand">
-      <a href="/" on:click={closeMobileMenu}>幕间</a>
+      <a href="/">幕间</a>
     </div>
-
-    <button class="hamburger" class:open={mobileMenuOpen} on:click={toggleMobileMenu} aria-label="菜单">
-      <span></span>
-      <span></span>
-      <span></span>
-    </button>
-
-    <div class="nav-menu" class:open={mobileMenuOpen}>
-      <div class="nav-links">
-        <a href="/" class:active={currentPath === '/'} on:click={closeMobileMenu}>日历</a>
-        <a href="/shows" class:active={currentPath.startsWith('/shows') && !currentPath.includes('/import') && !currentPath.includes('/new')} on:click={closeMobileMenu}>演出列表</a>
-        <a href="/dashboard" class:active={currentPath === '/dashboard'} on:click={closeMobileMenu}>看板</a>
-        <a href="/shows/new" class:active={currentPath === '/shows/new'} on:click={closeMobileMenu}>添加演出</a>
-      </div>
-      <div class="nav-search">
-        <form on:submit|preventDefault={handleSearch}>
-          <input
-            type="text"
-            placeholder="搜索演出..."
-            bind:value={searchQuery}
-            on:blur={() => setTimeout(closeSearch, 200)}
-          />
-        </form>
-        {#if showSearch && searchResults.length > 0}
-          <div class="search-results">
-            {#each searchResults.slice(0, 5) as show}
-              <a href="/shows/{show.id}" class="search-item" on:mousedown={closeSearch}>
-                <span class="search-name">{show.name}</span>
-                <span class="search-venue">{show.venue}</span>
-              </a>
-            {/each}
-            {#if searchResults.length > 5}
-              <a href="/search?q={encodeURIComponent(searchQuery)}" class="search-more" on:mousedown={closeSearch}>
-                查看全部 {searchResults.length} 条结果 →
-              </a>
-            {/if}
-          </div>
-        {/if}
-      </div>
-      <div class="nav-right-mobile">
-        {#if stats}
-          <div class="nav-stats">
-            <span>{stats.total_shows} 场演出</span>
-            <span>{stats.total_hours.toFixed(0)} 小时</span>
-          </div>
-        {/if}
-        <a href="/settings" class:active={currentPath === '/settings'} on:click={closeMobileMenu}>⚙ 设置</a>
-      </div>
+    <div class="nav-links">
+      <a href="/" class:active={currentPath === '/'}>日历</a>
+      <a href="/shows" class:active={currentPath.startsWith('/shows') && !currentPath.includes('/import') && !currentPath.includes('/new')}>演出列表</a>
+      <a href="/dashboard" class:active={currentPath === '/dashboard'}>看板</a>
+      <a href="/shows/new" class:active={currentPath === '/shows/new'}>添加演出</a>
     </div>
-
+    <div class="nav-search">
+      <form on:submit|preventDefault={handleSearch}>
+        <input
+          type="text"
+          placeholder="搜索演出..."
+          bind:value={searchQuery}
+          on:blur={() => setTimeout(closeSearch, 200)}
+        />
+      </form>
+      {#if showSearch && searchResults.length > 0}
+        <div class="search-results">
+          {#each searchResults.slice(0, 5) as show}
+            <a href="/shows/{show.id}" class="search-item">
+              <span class="search-name">{show.name}</span>
+              <span class="search-venue">{show.venue}</span>
+            </a>
+          {/each}
+          {#if searchResults.length > 5}
+            <a href="/search?q={encodeURIComponent(searchQuery)}" class="search-more">
+              查看全部 {searchResults.length} 条结果 →
+            </a>
+          {/if}
+        </div>
+      {/if}
+    </div>
     <div class="nav-right">
       {#if stats}
         <div class="nav-stats">
@@ -136,7 +108,6 @@
     color: #333;
     line-height: 1.6;
     transition: background 0.3s, color 0.3s;
-    -webkit-text-size-adjust: 100%;
   }
 
   :global(.dark body),
@@ -208,49 +179,6 @@
     font-size: 24px;
     font-weight: 700;
     color: #4A90D9;
-  }
-
-  .hamburger {
-    display: none;
-    flex-direction: column;
-    justify-content: center;
-    gap: 5px;
-    width: 36px;
-    height: 36px;
-    padding: 6px;
-    z-index: 110;
-  }
-
-  .hamburger span {
-    display: block;
-    width: 100%;
-    height: 2px;
-    background: #333;
-    border-radius: 2px;
-    transition: all 0.3s;
-  }
-
-  :global(.dark) .hamburger span {
-    background: #e0e0e0;
-  }
-
-  .hamburger.open span:nth-child(1) {
-    transform: rotate(45deg) translate(5px, 5px);
-  }
-
-  .hamburger.open span:nth-child(2) {
-    opacity: 0;
-  }
-
-  .hamburger.open span:nth-child(3) {
-    transform: rotate(-45deg) translate(5px, -5px);
-  }
-
-  .nav-menu {
-    display: flex;
-    align-items: center;
-    gap: 24px;
-    flex: 1;
   }
 
   .nav-links {
@@ -382,10 +310,6 @@
     margin-left: auto;
   }
 
-  .nav-right-mobile {
-    display: none;
-  }
-
   .nav-stats {
     display: flex;
     gap: 16px;
@@ -442,101 +366,41 @@
 
   @media (max-width: 768px) {
     .navbar {
-      padding: 0 16px;
-      gap: 0;
-    }
-
-    .hamburger {
-      display: flex;
-    }
-
-    .nav-menu {
-      position: fixed;
-      top: 60px;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: #fff;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      transform: translateX(100%);
-      transition: transform 0.3s ease;
-      z-index: 105;
-      overflow-y: auto;
-    }
-
-    :global(.dark) .nav-menu {
-      background: #1a1a1a;
-    }
-
-    .nav-menu.open {
-      transform: translateX(0);
+      padding: 0 12px;
+      gap: 12px;
     }
 
     .nav-links {
-      flex-direction: column;
       gap: 4px;
     }
 
     .nav-links a {
-      padding: 12px 16px;
-      font-size: 16px;
-    }
-
-    .nav-search {
-      width: 100%;
+      padding: 6px 10px;
+      font-size: 13px;
     }
 
     .nav-search input {
-      width: 100%;
-      padding: 10px 16px;
-      font-size: 16px;
-      border-radius: 8px;
+      width: 120px;
+      font-size: 13px;
     }
 
-    .search-results {
-      position: static;
-      min-width: unset;
-      margin-top: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-
-    .nav-right {
+    .nav-stats {
       display: none;
-    }
-
-    .nav-right-mobile {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      padding-top: 16px;
-      border-top: 1px solid #eee;
-    }
-
-    :global(.dark) .nav-right-mobile {
-      border-top-color: #444;
-    }
-
-    .nav-right-mobile .nav-stats {
-      justify-content: center;
-    }
-
-    .nav-right-mobile a {
-      padding: 12px 16px;
-      border-radius: 8px;
-      background: #f0f0f0;
-      text-align: center;
-      font-weight: 500;
-    }
-
-    :global(.dark) .nav-right-mobile a {
-      background: #2a2a2a;
     }
 
     main {
       padding: 16px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .nav-links a {
+      padding: 6px 8px;
+      font-size: 12px;
+    }
+
+    .nav-search input {
+      width: 100px;
     }
   }
 </style>
