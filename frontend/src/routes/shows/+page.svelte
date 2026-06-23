@@ -9,6 +9,10 @@
   let currentYear = new Date().getFullYear();
   let currentMonth = new Date().getMonth() + 1;
   let statusFilter = '';
+  let categoryFilter = '';
+  let ratingFilter = '';
+  let searchQuery = '';
+  let sortBy = 'date_desc';
   let dateMode = 'month';
   let startDate = '';
   let endDate = '';
@@ -21,9 +25,30 @@
   let batchStatus = '';
   let batchSaving = false;
 
-  $: filteredShows = statusFilter
-    ? shows.filter(s => s.status === statusFilter)
-    : shows;
+  $: filteredShows = shows.filter(s => {
+    if (statusFilter && s.status !== statusFilter) return false;
+    if (categoryFilter && s.category_name !== categoryFilter) return false;
+    if (ratingFilter) {
+      const r = parseInt(ratingFilter);
+      if (r === 0 && s.rating != null) return false;
+      if (r > 0 && s.rating !== r) return false;
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const text = `${s.name} ${s.venue} ${s.company} ${s.cast} ${s.friends} ${s.notes} ${s.review}`.toLowerCase();
+      if (!text.includes(q)) return false;
+    }
+    return true;
+  }).sort((a, b) => {
+    switch (sortBy) {
+      case 'date_asc': return new Date(a.date) - new Date(b.date);
+      case 'date_desc': return new Date(b.date) - new Date(a.date);
+      case 'name': return a.name.localeCompare(b.name);
+      case 'rating_desc': return (b.rating || 0) - (a.rating || 0);
+      case 'rating_asc': return (a.rating || 0) - (b.rating || 0);
+      default: return 0;
+    }
+  });
 
   $: allSelected = filteredShows.length > 0 && filteredShows.every(s => selectedIds.has(s.id));
 
@@ -66,6 +91,14 @@
       }
       loadShows();
     }
+  }
+
+  function clearFilters() {
+    statusFilter = '';
+    categoryFilter = '';
+    ratingFilter = '';
+    searchQuery = '';
+    sortBy = 'date_desc';
   }
 
   function toggleSelectAll() {
@@ -177,13 +210,40 @@
     </div>
     <div class="header-right">
       <div class="filters">
+        <input type="text" class="search-input" placeholder="搜索..." bind:value={searchQuery} />
         <select bind:value={statusFilter}>
           <option value="">全部状态</option>
           <option value="planned">计划中</option>
           <option value="watched">已观看</option>
           <option value="cancelled">已取消</option>
         </select>
+        <select bind:value={categoryFilter}>
+          <option value="">全部分类</option>
+          {#each categories as cat}
+            <option value={cat.name}>{cat.name}</option>
+          {/each}
+        </select>
+        <select bind:value={ratingFilter}>
+          <option value="">全部评分</option>
+          <option value="5">★★★★★</option>
+          <option value="4">★★★★</option>
+          <option value="3">★★★</option>
+          <option value="2">★★</option>
+          <option value="1">★</option>
+          <option value="0">无评分</option>
+        </select>
+        <select bind:value={sortBy}>
+          <option value="date_desc">日期 ↓</option>
+          <option value="date_asc">日期 ↑</option>
+          <option value="name">名称</option>
+          <option value="rating_desc">评分 ↓</option>
+          <option value="rating_asc">评分 ↑</option>
+        </select>
+        {#if searchQuery || statusFilter || categoryFilter || ratingFilter}
+          <button class="clear-btn" on:click={clearFilters}>清除筛选</button>
+        {/if}
       </div>
+      <span class="result-count">{filteredShows.length} / {shows.length}</span>
       <button class="batch-btn" class:active={batchMode} on:click={toggleBatchMode}>
         {batchMode ? '退出批量' : '批量操作'}
       </button>
@@ -380,9 +440,44 @@
     flex-wrap: wrap;
   }
 
+  .filters {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .search-input {
+    padding: 8px 12px;
+    border-radius: 8px;
+    width: 160px;
+    font-size: 13px;
+  }
+
   .filters select {
     padding: 8px 12px;
     border-radius: 8px;
+    font-size: 13px;
+  }
+
+  .clear-btn {
+    padding: 6px 12px;
+    background: #fee;
+    color: #c00;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    transition: background 0.2s;
+  }
+
+  .clear-btn:hover {
+    background: #fdd;
+  }
+
+  .result-count {
+    font-size: 13px;
+    color: #999;
+    white-space: nowrap;
   }
 
   .import-btn, .export-btn {
