@@ -80,12 +80,12 @@
       <a href="/shows/new" class:active={currentPath === '/shows/new'}>添加演出</a>
     </div>
     <div class="nav-search">
-      <form on:submit|preventDefault={handleSearch}>
+        <form onsubmit={(e) => { e.preventDefault(); handleSearch(); }}>
         <input
           type="text"
           placeholder="搜索演出..."
           bind:value={searchQuery}
-          on:blur={() => setTimeout(closeSearch, 200)}
+          onblur={() => setTimeout(closeSearch, 200)}
         />
       </form>
       {#if showSearch && searchResults.length > 0}
