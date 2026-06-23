@@ -15,6 +15,7 @@ type ImportResult struct {
 	Total   int      `json:"total"`
 	Success int      `json:"success"`
 	Failed  int      `json:"failed"`
+	Skipped int      `json:"skipped"`
 	Errors  []string `json:"errors"`
 }
 

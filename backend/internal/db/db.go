@@ -277,6 +277,13 @@ func (db *DB) CreateShow(req models.ShowRequest) (*models.Show, error) {
 		}
 	}
 
+	// check for duplicate by name + date
+	var existingID int64
+	err = db.conn.QueryRow("SELECT id FROM shows WHERE name = ? AND date = ?", req.Name, date).Scan(&existingID)
+	if err == nil {
+		return db.GetShow(existingID)
+	}
+
 	status := req.Status
 	if status == "" {
 		status = "planned"

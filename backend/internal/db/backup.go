@@ -78,7 +78,17 @@ func (db *DB) Import(data *BackupData) error {
 		catMap[cat.ID] = newID
 	}
 
+	imported := 0
+	skipped := 0
 	for _, show := range data.Shows {
+		// deduplicate by name + date
+		var existingID int64
+		err := tx.QueryRow("SELECT id FROM shows WHERE name = ? AND date = ?", show.Name, show.Date).Scan(&existingID)
+		if err == nil {
+			skipped++
+			continue
+		}
+
 		var newCatID *int64
 		if show.CategoryID != nil {
 			if newID, ok := catMap[*show.CategoryID]; ok {
@@ -86,7 +96,7 @@ func (db *DB) Import(data *BackupData) error {
 			}
 		}
 
-		_, err := tx.Exec(`
+		_, err = tx.Exec(`
 			INSERT INTO shows (name, venue, date, duration, status, category_id, poster_url,
 				setlist, cast, company, friends, rating, seat, notes, review, ticket_cost, other_cost,
 				created_at, updated_at)
@@ -100,8 +110,11 @@ func (db *DB) Import(data *BackupData) error {
 		if err != nil {
 			return fmt.Errorf("import show %s: %w", show.Name, err)
 		}
+		imported++
 	}
 
+	_ = imported
+	_ = skipped
 	return tx.Commit()
 }
 
