@@ -247,7 +247,10 @@
   }
 
   .nav-menu {
-    display: contents;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex: 1;
   }
 
   .nav-links {
