@@ -5,12 +5,12 @@
   import { onMount } from 'svelte';
   import { requestPermission, startReminderCheck } from '$lib/notifications';
 
-  let stats = null;
-  let searchQuery = '';
-  let searchResults = [];
-  let showSearch = false;
-  let deferredPrompt = null;
-  let showInstall = false;
+  let stats = $state(null);
+  let searchQuery = $state('');
+  let searchResults = $state([]);
+  let showSearch = $state(false);
+  let deferredPrompt = $state(null);
+  let showInstall = $state(false);
 
   onMount(async () => {
     try {

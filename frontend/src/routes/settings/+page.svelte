@@ -227,8 +227,8 @@
       {#each categories as cat, index (cat.id)}
         <div class="cat-item"
           draggable="true"
-          on:dragstart={(e) => handleDragStart(e, index)}
-          on:dragend={handleDragEnd}
+          ondragstart={(e) => handleDragStart(e, index)}
+          ondragend={handleDragEnd}
           ondragover={(e) => handleDragOver(e, index)}
           ondragleave={handleDragLeave}
           ondrop={(e) => handleDrop(e, index)}
