@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { fade, fly } from 'svelte/transition';
 
   export let events = [];
   export let initialYear = new Date().getFullYear();
@@ -15,6 +16,9 @@
   let popupPos = { x: 0, y: 0, align: 'center' };
   const POPUP_W = 260;
   const POPUP_GAP = 8;
+
+  let slideDir = 0;
+  let animKey = 0;
 
   $: firstDay = (new Date(year, month - 1, 1).getDay() + 6) % 7;
   $: daysInMonth = new Date(year, month, 0).getDate();
@@ -40,21 +44,44 @@
   }
 
   function prevMonth() {
+    slideDir = -1;
+    animKey++;
     month--;
     if (month < 1) { month = 12; year--; }
     dispatch('monthChange', { year, month });
   }
 
   function nextMonth() {
+    slideDir = 1;
+    animKey++;
     month++;
     if (month > 12) { month = 1; year++; }
     dispatch('monthChange', { year, month });
   }
 
   function goToToday() {
+    const prevMonth = month;
+    const prevYear = year;
     year = today.getFullYear();
     month = today.getMonth() + 1;
+    slideDir = year === prevYear ? (month > prevMonth ? 1 : -1) : (year > prevYear ? 1 : -1);
+    animKey++;
     dispatch('monthChange', { year, month });
+  }
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+  function handleTouchStart(e) {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }
+  function handleTouchEnd(e) {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 0) prevMonth();
+      else nextMonth();
+    }
   }
 
   function showPopup(events, e) {
@@ -131,15 +158,20 @@
     <button class="today-btn" on:click={goToToday}>今天</button>
   </div>
 
-  <div class="calendar-grid">
-    {#each weekDays as wd}
-      <div class="weekday">{wd}</div>
-    {/each}
+  <div class="calendar-grid-wrap"
+    on:touchstart={handleTouchStart}
+    on:touchend={handleTouchEnd}
+  >
+    {#key animKey}
+      <div class="calendar-grid" in:fly={{ x: slideDir * 30, duration: 200, delay: 50 }} out:fade={{ duration: 100 }}>
+        {#each weekDays as wd}
+          <div class="weekday">{wd}</div>
+        {/each}
 
-    {#each calendarDays as cell}
-      <div class="day-cell" class:empty={!cell.day} class:today={cell.isToday}>
-        {#if cell.day}
-          <span class="day-number">{cell.day}</span>
+        {#each calendarDays as cell}
+          <div class="day-cell" class:empty={!cell.day} class:today={cell.isToday}>
+            {#if cell.day}
+              <span class="day-number">{cell.day}</span>
           <div class="day-events">
             {#if cell.events.length > 0}
               {@const first = cell.events[0]}
@@ -172,7 +204,9 @@
           </div>
         {/if}
       </div>
-    {/each}
+        {/each}
+      </div>
+    {/key}
   </div>
 
   <div class="calendar-legend">
@@ -250,10 +284,21 @@
     align-items: center;
     justify-content: center;
     transition: background 0.2s;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .nav-btn:hover {
     background: #f0f0f0;
+  }
+
+  .nav-btn:active {
+    background: #e0e0e0;
+    transform: scale(0.95);
+  }
+
+  .calendar-grid-wrap {
+    overflow: hidden;
+    border-radius: 8px;
   }
 
   .title {
@@ -648,21 +693,38 @@
 
   @media (max-width: 768px) {
     .calendar-header {
-      flex-wrap: wrap;
       gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .nav-btn {
+      width: 40px;
+      height: 40px;
+      font-size: 22px;
+    }
+
+    .today-btn {
+      padding: 8px 16px;
+      font-size: 14px;
     }
 
     .title {
-      font-size: 16px;
+      font-size: 18px;
+    }
+
+    .weekday {
+      padding: 10px 4px;
+      font-size: 12px;
     }
 
     .day-cell {
-      min-height: 60px;
-      padding: 2px;
+      min-height: 64px;
+      padding: 3px;
     }
 
     .day-number {
-      font-size: 11px;
+      font-size: 12px;
+      padding: 1px 4px;
     }
 
     .poster-more-num {
@@ -672,12 +734,46 @@
     .calendar-legend {
       flex-wrap: wrap;
       gap: 8px;
+      margin-top: 12px;
+    }
+
+    .legend-item {
+      font-size: 11px;
     }
   }
 
   @media (max-width: 480px) {
+    .calendar-header {
+      gap: 6px;
+    }
+
+    .nav-btn {
+      width: 36px;
+      height: 36px;
+      font-size: 20px;
+    }
+
+    .today-btn {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    .title {
+      font-size: 16px;
+    }
+
+    .weekday {
+      padding: 8px 2px;
+      font-size: 11px;
+    }
+
     .day-cell {
-      min-height: 48px;
+      min-height: 52px;
+      padding: 2px;
+    }
+
+    .day-number {
+      font-size: 11px;
     }
 
     .poster-grid.grid-1 .poster-cell {
@@ -690,6 +786,14 @@
 
     .popup {
       width: 220px;
+    }
+
+    .calendar-legend {
+      gap: 6px;
+    }
+
+    .legend-item {
+      font-size: 10px;
     }
   }
 
