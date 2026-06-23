@@ -1,16 +1,9 @@
 <script>
-  import { tick } from 'svelte';
-
   let { events = [], initialYear = new Date().getFullYear(), initialMonth = new Date().getMonth() + 1, onmonthchange } = $props();
 
   let today = new Date();
   let year = $state(initialYear);
   let month = $state(initialMonth);
-
-  $effect(() => {
-    year = initialYear;
-    month = initialMonth;
-  });
 
   let popupEvents = $state([]);
   let popupPos = $state({ x: 0, y: 0, align: 'center' });
