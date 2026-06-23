@@ -501,4 +501,9 @@
   :global(.dark) .dropzone:hover, :global(.dark) .dropzone.dragover { background: #1a2a3a; }
   :global(.dark) .instructions p { color: #999; }
   :global(.dark) .result-stats { color: #999; }
+
+  :global(.dark) .section {
+    background: #2a2a2a;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
 </style>
