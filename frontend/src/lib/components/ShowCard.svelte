@@ -71,7 +71,6 @@
     {#if show.poster_url && !compact}
       <div class="card-poster">
         <img src={show.poster_url} alt={show.name} />
-        <span class="poster-overlay" style="background: {statusColor(show.status)}20"></span>
       </div>
     {/if}
   </div>
@@ -81,9 +80,9 @@
   .show-card {
     display: block;
     padding: 14px 16px;
-    background: #fff;
+    background: var(--bg-card);
     border-radius: 10px;
-    border: 1px solid #eee;
+    border: 1px solid var(--border);
     transition: all 0.2s ease;
     margin-bottom: 8px;
     text-decoration: none;
@@ -92,7 +91,7 @@
 
   .show-card:hover {
     box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-    border-color: #ddd;
+    border-color: var(--border-hover);
     transform: translateY(-1px);
   }
 
@@ -128,7 +127,7 @@
     border-radius: 6px;
     overflow: hidden;
     position: relative;
-    background: #f0f0f0;
+    background: var(--bg-surface);
   }
 
   .card-poster img {
@@ -136,13 +135,6 @@
     height: 100%;
     object-fit: cover;
     display: block;
-  }
-
-  .poster-overlay {
-    position: absolute;
-    inset: 0;
-    opacity: 0.1;
-    pointer-events: none;
   }
 
   .card-header {
@@ -166,8 +158,8 @@
     font-size: 11px;
     padding: 2px 8px;
     border-radius: 10px;
-    background: #f5f5f5;
-    color: #666;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
   }
 
   .rating-badge {
@@ -183,14 +175,14 @@
   }
 
   .star-mini.filled {
-    color: #f39c12;
+    color: var(--warning);
   }
 
   .card-title {
     font-size: 15px;
     font-weight: 600;
     margin-bottom: 8px;
-    color: #222;
+    color: var(--text-primary);
     line-height: 1.3;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -208,7 +200,7 @@
     flex-wrap: wrap;
     gap: 4px 12px;
     font-size: 12px;
-    color: #888;
+    color: var(--text-muted);
   }
 
   .meta-item {
@@ -234,10 +226,10 @@
     flex-wrap: wrap;
     gap: 4px 12px;
     font-size: 12px;
-    color: #999;
+    color: var(--text-muted);
     margin-top: 6px;
     padding-top: 6px;
-    border-top: 1px solid #f5f5f5;
+    border-top: 1px solid var(--border);
   }
 
   .extra-item {
@@ -256,42 +248,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  :global(.dark) .show-card {
-    background: #2a2a2a;
-    border-color: #333;
-  }
-
-  :global(.dark) .show-card:hover {
-    border-color: #444;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-  }
-
-  :global(.dark) .category {
-    background: #333;
-    color: #999;
-  }
-
-  :global(.dark) .card-title {
-    color: #e0e0e0;
-  }
-
-  :global(.dark) .card-meta {
-    color: #888;
-  }
-
-  :global(.dark) .card-extra {
-    color: #777;
-    border-top-color: #333;
-  }
-
-  :global(.dark) .star-mini {
-    color: #555;
-  }
-
-  :global(.dark) .card-poster {
-    background: #333;
   }
 
   @media (max-width: 768px) {

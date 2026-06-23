@@ -95,6 +95,43 @@
 </div>
 
 <style>
+  :global(:root) {
+    --bg-body: #f5f5f5;
+    --bg-card: #fff;
+    --bg-card-hover: #fafafa;
+    --bg-surface: #f0f0f0;
+    --bg-surface-hover: #e0e0e0;
+    --bg-input: #fff;
+    --border: #eee;
+    --border-hover: #ddd;
+    --text-primary: #333;
+    --text-secondary: #666;
+    --text-muted: #999;
+    --accent: #4A90D9;
+    --danger-bg: #fee;
+    --danger-text: #c00;
+    --danger-bg-hover: #fdd;
+    --success: #27AE60;
+    --warning: #f39c12;
+  }
+
+  :global(.dark) {
+    --bg-body: #1a1a1a;
+    --bg-card: #2a2a2a;
+    --bg-card-hover: #333;
+    --bg-surface: #333;
+    --bg-surface-hover: #444;
+    --bg-input: #2a2a2a;
+    --border: #333;
+    --border-hover: #444;
+    --text-primary: #e0e0e0;
+    --text-secondary: #aaa;
+    --text-muted: #777;
+    --danger-bg: #3a2020;
+    --danger-text: #f66;
+    --danger-bg-hover: #4a2020;
+  }
+
   :global(*) {
     margin: 0;
     padding: 0;
@@ -103,16 +140,10 @@
 
   :global(body) {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #f5f5f5;
-    color: #333;
+    background: var(--bg-body);
+    color: var(--text-primary);
     line-height: 1.6;
     transition: background 0.3s, color 0.3s;
-  }
-
-  :global(.dark body),
-  :global(body.dark) {
-    background: #1a1a1a;
-    color: #e0e0e0;
   }
 
   :global(a) {
@@ -129,26 +160,22 @@
 
   :global(input, select, textarea) {
     font: inherit;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 12px;
+    background: var(--bg-input);
+    color: var(--text-primary);
     transition: border-color 0.2s, background 0.2s, color 0.2s;
-  }
-
-  :global(.dark input, .dark select, .dark textarea) {
-    background: #2a2a2a;
-    border-color: #444;
-    color: #e0e0e0;
   }
 
   :global(input:focus, select:focus, textarea:focus) {
     outline: none;
-    border-color: #4A90D9;
+    border-color: var(--accent);
   }
 
   :global(.dark select option) {
-    background: #2a2a2a;
-    color: #e0e0e0;
+    background: var(--bg-input);
+    color: var(--text-primary);
   }
 
   .app {
