@@ -568,4 +568,17 @@
   :global(.dark) .btn-restore { background: #333; color: #ccc; }
   :global(.dark) .btn-restore:hover { background: #444; }
   :global(.dark) .restore-status { color: #999; }
+  :global(.dark) .cat-item { border-bottom-color: #333; }
+  :global(.dark) .cat-item:hover { background: #2a2a2a; }
+  :global(.dark) h2 { color: #e0e0e0; }
+  :global(.dark) .section h2 { color: #e0e0e0; }
+  :global(.dark) .backup-actions { gap: 12px; }
+  :global(.dark) .backup-info { color: #999; }
+  :global(.dark) .backup-status { color: #999; }
+  :global(.dark) .backup-status.success { color: #27AE60; }
+  :global(.dark) .theme-options label { color: #ccc; }
+  :global(.dark) .add-cat input[type="text"] { background: #1e1e1e; border-color: #444; color: #e0e0e0; }
+  :global(.dark) .add-cat button { background: #4A90D9; }
+  :global(.dark) .cat-actions button { color: #999; }
+  :global(.dark) .cat-actions button:hover { color: #e0e0e0; }
 </style>

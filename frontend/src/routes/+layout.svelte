@@ -358,9 +358,97 @@
   :global(.dark .stats-bar),
   :global(.dark .stat-card),
   :global(.dark .chart-card),
-  :global(.dark .list-card) {
+  :global(.dark .list-card),
+  :global(.dark .batch-bar),
+  :global(.dark .batch-panel),
+  :global(.dark .select-all),
+  :global(.dark .card) {
     background: #2a2a2a;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  :global(.dark) :global(.tabs),
+  :global(.dark .tabs) {
+    background: #1e1e1e;
+  }
+
+  :global(.dark .tab.active) {
+    background: #2a2a2a;
+    color: #e0e0e0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+
+  :global(.dark .action-btn),
+  :global(.dark .batch-btn),
+  :global(.dark .batch-action),
+  :global(.dark .edit-btn),
+  :global(.dark .btn-restore),
+  :global(.dark .btn-import-more),
+  :global(.dark .filter-toggle),
+  :global(.dark .nav-settings) {
+    background: #333;
+    color: #ccc;
+  }
+
+  :global(.dark .action-btn:hover),
+  :global(.dark .batch-btn:hover),
+  :global(.dark .batch-action:hover:not(:disabled)),
+  :global(.dark .edit-btn:hover),
+  :global(.dark .btn-restore:hover),
+  :global(.dark .btn-import-more:hover),
+  :global(.dark .filter-toggle:hover) {
+    background: #444;
+  }
+
+  :global(.dark .batch-action.danger),
+  :global(.dark .delete-btn),
+  :global(.dark .clear-btn) {
+    background: #3a2020;
+    color: #f66;
+  }
+
+  :global(.dark .batch-action.danger:hover),
+  :global(.dark .delete-btn:hover),
+  :global(.dark .clear-btn:hover) {
+    background: #4a2020;
+  }
+
+  :global(.dark .category) {
+    background: #333;
+    color: #999;
+  }
+
+  :global(.dark .category:hover) {
+    background: #444;
+  }
+
+  :global(.dark .info-label),
+  :global(.dark .form-section label) {
+    color: #999;
+  }
+
+  :global(.dark .info-value),
+  :global(.dark h1),
+  :global(.dark h2),
+  :global(.dark h3) {
+    color: #e0e0e0;
+  }
+
+  :global(.dark .text-content),
+  :global(.dark .card-info) {
+    color: #aaa;
+  }
+
+  :global(.dark .error) {
+    background: #3a2020;
+    color: #f66;
+  }
+
+  :global(.dark .empty),
+  :global(.dark .loading),
+  :global(.dark .result-count),
+  :global(.dark .restore-status) {
+    color: #999;
   }
 
   @media (max-width: 768px) {

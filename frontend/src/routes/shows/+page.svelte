@@ -382,4 +382,7 @@
   :global(.dark) .result-count { color: #777; }
   :global(.dark) .clear-btn { background: #3a2020; color: #f66; }
   :global(.dark) .clear-btn:hover { background: #4a2020; }
+  :global(.dark) .header-left h1 { color: #e0e0e0; }
+  :global(.dark) .show-item.selected { background: #1a2a3a; }
+  :global(.dark) .spinner { border-color: #444; border-top-color: #4A90D9; }
 </style>

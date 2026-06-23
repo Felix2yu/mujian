@@ -82,6 +82,15 @@
   .star { color: #ddd; font-size: 14px; }
   .star.filled { color: #f39c12; }
 
+  :global(.dark) .show-card {
+    background: #2a2a2a;
+    border-color: #333;
+  }
+
+  :global(.dark) .show-card:hover {
+    border-color: #444;
+  }
+
   :global(.dark) .category {
     background: #333;
     color: #999;

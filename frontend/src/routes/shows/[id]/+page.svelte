@@ -251,4 +251,6 @@
   :global(.dark) .info-value { color: #ccc; }
   :global(.dark) .section h3 { color: #e0e0e0; }
   :global(.dark) .text-content { color: #aaa; }
+  :global(.dark) .info-grid { border-bottom-color: #333; }
+  :global(.dark) .cast-list { color: #ccc; }
 </style>

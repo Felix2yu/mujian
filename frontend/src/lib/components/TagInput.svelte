@@ -153,4 +153,21 @@
   }
   .suggestion-item:hover { background: #f0f0f0; }
   :global(.dark) .suggestion-item:hover { background: #333; }
+
+  :global(.dark) .tag {
+    background: #1a3a5a;
+    color: #ccc;
+  }
+
+  :global(.dark) .tag-remove {
+    color: #777;
+  }
+
+  :global(.dark) .tag-remove:hover {
+    color: #f66;
+  }
+
+  :global(.dark) .tag-field {
+    color: #e0e0e0;
+  }
 </style>

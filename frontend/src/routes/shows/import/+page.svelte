@@ -494,4 +494,11 @@
 
   :global(.dark) .btn-import-more { background: #333; color: #ccc; }
   :global(.dark) .btn-import-more:hover { background: #444; }
+  :global(.dark) h2 { color: #e0e0e0; }
+  :global(.dark) .col-group strong { color: #e0e0e0; }
+  :global(.dark) .col-group li { color: #999; }
+  :global(.dark) .dropzone { border-color: #444; }
+  :global(.dark) .dropzone:hover, :global(.dark) .dropzone.dragover { background: #1a2a3a; }
+  :global(.dark) .instructions p { color: #999; }
+  :global(.dark) .result-stats { color: #999; }
 </style>
