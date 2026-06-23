@@ -8,6 +8,8 @@
   let searchQuery = '';
   let searchResults = [];
   let showSearch = false;
+  let deferredPrompt = null;
+  let showInstall = false;
 
   onMount(async () => {
     try {
@@ -19,7 +21,23 @@
     } catch (e) {
       console.error('Failed to load data:', e);
     }
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      showInstall = true;
+    });
   });
+
+  async function installApp() {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      showInstall = false;
+    }
+    deferredPrompt = null;
+  }
 
   async function handleSearch() {
     if (!searchQuery.trim()) {
@@ -84,6 +102,9 @@
           <span>{stats.total_shows} 场演出</span>
           <span>{stats.total_hours.toFixed(0)} 小时</span>
         </div>
+      {/if}
+      {#if showInstall}
+        <button class="install-btn" on:click={installApp}>📱 安装</button>
       {/if}
       <a href="/settings" class="nav-settings" class:active={currentPath === '/settings'}>⚙</a>
     </div>
@@ -330,8 +351,23 @@
   .nav-right {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     margin-left: auto;
+  }
+
+  .install-btn {
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background 0.2s;
+  }
+
+  .install-btn:hover {
+    background: #3a7bc8;
   }
 
   .nav-stats {
