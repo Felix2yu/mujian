@@ -348,6 +348,70 @@ func (db *DB) UpdateCategorySort(ids []int64) error {
 	return tx.Commit()
 }
 
+func (db *DB) BatchUpdateShows(ids []int64, categoryID *int64, rating *int, status *string, ticketCost *float64) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, 0, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+	inClause := "(" + strings.Join(placeholders, ",") + ")"
+
+	sets := []string{}
+	if categoryID != nil {
+		sets = append(sets, "category_id = ?")
+		args = append(args, *categoryID)
+	}
+	if rating != nil {
+		sets = append(sets, "rating = ?")
+		args = append(args, *rating)
+	}
+	if status != nil {
+		sets = append(sets, "status = ?")
+		args = append(args, *status)
+	}
+	if ticketCost != nil {
+		sets = append(sets, "ticket_cost = ?")
+		args = append(args, *ticketCost)
+	}
+
+	if len(sets) == 0 {
+		return 0, nil
+	}
+
+	query := "UPDATE shows SET " + strings.Join(sets, ", ") + ", updated_at = CURRENT_TIMESTAMP WHERE id IN " + inClause
+
+	result, err := db.conn.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+func (db *DB) BatchDeleteShows(ids []int64) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	inClause := "(" + strings.Join(placeholders, ",") + ")"
+
+	result, err := db.conn.Exec("DELETE FROM shows WHERE id IN "+inClause, args...)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 func (db *DB) GetCalendarEvents(year, month int) ([]models.CalendarEvent, error) {
 	shows, err := db.ListShows(year, month)
 	if err != nil {

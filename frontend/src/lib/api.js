@@ -30,6 +30,8 @@ export const api = {
   createShow: (data) => request('/api/shows', { method: 'POST', body: JSON.stringify(data) }),
   updateShow: (id, data) => request(`/api/shows/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteShow: (id) => request(`/api/shows/${id}`, { method: 'DELETE' }),
+  batchUpdate: (ids, data) => request('/api/shows/batch', { method: 'POST', body: JSON.stringify({ ids, ...data }) }),
+  batchDelete: (ids) => request('/api/shows/batch/delete', { method: 'POST', body: JSON.stringify({ ids }) }),
   searchShows: (q) => request(`/api/shows/search?q=${encodeURIComponent(q)}`),
   getUpcoming: (limit = 10) => request(`/api/shows/upcoming?limit=${limit}`),
   getRecent: (limit = 10) => request(`/api/shows/recent?limit=${limit}`),

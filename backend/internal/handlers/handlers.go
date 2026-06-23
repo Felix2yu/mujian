@@ -41,6 +41,8 @@ func (h *Handler) Routes() chi.Router {
 		r.Get("/recent", h.getRecent)
 		r.Post("/", h.createShow)
 		r.Post("/import", h.importShows)
+		r.Post("/batch", h.batchUpdate)
+		r.Post("/batch/delete", h.batchDelete)
 		r.Get("/{id}", h.getShow)
 		r.Put("/{id}", h.updateShow)
 		r.Delete("/{id}", h.deleteShow)
@@ -349,6 +351,52 @@ func (h *Handler) searchShows(w http.ResponseWriter, r *http.Request) {
 		shows = []models.Show{}
 	}
 	jsonResp(w, 200, shows)
+}
+
+func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs        []int64  `json:"ids"`
+		CategoryID *int64   `json:"category_id"`
+		Rating     *int     `json:"rating"`
+		Status     *string  `json:"status"`
+		TicketCost *float64 `json:"ticket_cost"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if len(req.IDs) == 0 {
+		jsonErr(w, 400, "no ids provided")
+		return
+	}
+
+	updated, err := h.db.BatchUpdateShows(req.IDs, req.CategoryID, req.Rating, req.Status, req.TicketCost)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]interface{}{"updated": updated})
+}
+
+func (h *Handler) batchDelete(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if len(req.IDs) == 0 {
+		jsonErr(w, 400, "no ids provided")
+		return
+	}
+
+	deleted, err := h.db.BatchDeleteShows(req.IDs)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]interface{}{"deleted": deleted})
 }
 
 func (h *Handler) getUpcoming(w http.ResponseWriter, r *http.Request) {
