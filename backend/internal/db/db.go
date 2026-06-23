@@ -117,7 +117,7 @@ func (db *DB) migrate() error {
 }
 
 func (db *DB) ListShows(year, month int) ([]models.Show, error) {
-	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, db.loc)
 	end := start.AddDate(0, 1, 0)
 
 	rows, err := db.conn.Query(`

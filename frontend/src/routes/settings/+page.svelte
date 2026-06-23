@@ -21,12 +21,37 @@
   let newCatName = '';
   let newCatColor = '#4A90D9';
   let dragIndex = null;
+  let restoring = false;
+  let restoreResult = null;
 
   onMount(async () => {
     const [s, c] = await Promise.all([api.getSettings(), api.listCategories()]);
     settings = s;
     categories = c || [];
   });
+
+  async function handleRestore(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!confirm('恢复将追加数据到现有记录，确定继续吗？')) {
+      e.target.value = '';
+      return;
+    }
+
+    restoring = true;
+    restoreResult = null;
+    try {
+      restoreResult = await api.restoreBackup(file);
+      const c = await api.listCategories();
+      categories = c || [];
+    } catch (err) {
+      alert('恢复失败: ' + err.message);
+    } finally {
+      restoring = false;
+      e.target.value = '';
+    }
+  }
 
   async function saveSettings() {
     saving = true;
@@ -224,6 +249,25 @@
       <button class="btn-add" on:click={addCategory}>添加</button>
     </div>
   </div>
+
+  <div class="section">
+    <h2>数据备份</h2>
+    <p class="backup-desc">备份包含所有分类和演出数据，可用于迁移或恢复。</p>
+    <div class="backup-actions">
+      <a href={api.getBackupUrl()} class="btn-backup" download>📥 下载备份</a>
+      <div class="restore-area">
+        <label class="btn-restore">
+          📤 恢复备份
+          <input type="file" accept=".json" on:change={handleRestore} hidden />
+        </label>
+        {#if restoring}
+          <span class="restore-status">恢复中...</span>
+        {:else if restoreResult}
+          <span class="restore-status success">已恢复 {restoreResult.categories} 个分类、{restoreResult.shows} 场演出</span>
+        {/if}
+      </div>
+    </div>
+  </div>
 </div>
 
 <style>
@@ -411,6 +455,61 @@
 
   .btn-add:hover {
     background: #219a52;
+  }
+
+  .backup-desc {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 16px;
+  }
+
+  .backup-actions {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .btn-backup {
+    padding: 10px 24px;
+    background: #4A90D9;
+    color: #fff;
+    border-radius: 8px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+
+  .btn-backup:hover {
+    background: #3a7bc8;
+  }
+
+  .restore-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .btn-restore {
+    padding: 10px 24px;
+    background: #f0f0f0;
+    color: #333;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .btn-restore:hover {
+    background: #e0e0e0;
+  }
+
+  .restore-status {
+    font-size: 13px;
+    color: #666;
+  }
+
+  .restore-status.success {
+    color: #27AE60;
   }
 
   @media (max-width: 600px) {

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"mujian/internal/config"
 	"mujian/internal/db"
 	"mujian/internal/ics"
@@ -62,6 +63,11 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/import/template", h.getImportTemplate)
 	r.Get("/export", h.exportShows)
 
+	r.Route("/backup", func(r chi.Router) {
+		r.Get("/download", h.backupDownload)
+		r.Post("/restore", h.backupRestore)
+	})
+
 	return r
 }
 
@@ -85,15 +91,24 @@ func (h *Handler) listShows(w http.ResponseWriter, r *http.Request) {
 	if startDate != "" || endDate != "" {
 		shows, err = h.db.ListShowsByDateRange(startDate, endDate)
 	} else {
-		year := time.Now().Year()
-		month := int(time.Now().Month())
-		if y := r.URL.Query().Get("year"); y != "" {
-			year, _ = strconv.Atoi(y)
+		year := r.URL.Query().Get("year")
+		month := r.URL.Query().Get("month")
+
+		if year != "" && month == "" {
+			startDate = year + "-01-01"
+			endDate = year + "-12-31"
+			shows, err = h.db.ListShowsByDateRange(startDate, endDate)
+		} else {
+			y := time.Now().Year()
+			m := int(time.Now().Month())
+			if year != "" {
+				y, _ = strconv.Atoi(year)
+			}
+			if month != "" {
+				m, _ = strconv.Atoi(month)
+			}
+			shows, err = h.db.ListShows(y, m)
 		}
-		if m := r.URL.Query().Get("month"); m != "" {
-			month, _ = strconv.Atoi(m)
-		}
-		shows, err = h.db.ListShows(year, month)
 	}
 
 	if err != nil {
@@ -407,4 +422,50 @@ func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResp(w, 200, map[string]string{"url": url})
+}
+
+func (h *Handler) backupDownload(w http.ResponseWriter, r *http.Request) {
+	data, err := h.db.Export()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+
+	b, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+
+	filename := fmt.Sprintf("mujian_backup_%s.json", time.Now().Format("20060102_150405"))
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	w.Write(b)
+}
+
+func (h *Handler) backupRestore(w http.ResponseWriter, r *http.Request) {
+	r.ParseMultipartForm(32 << 20)
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		jsonErr(w, 400, "no file provided")
+		return
+	}
+	defer file.Close()
+
+	var data db.BackupData
+	if err := json.NewDecoder(file).Decode(&data); err != nil {
+		jsonErr(w, 400, "invalid backup file: "+err.Error())
+		return
+	}
+
+	if err := h.db.Import(&data); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+
+	jsonResp(w, 200, map[string]interface{}{
+		"message":  "restore completed",
+		"categories": len(data.Categories),
+		"shows":      len(data.Shows),
+	})
 }

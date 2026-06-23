@@ -63,6 +63,18 @@ export const api = {
   getImportTemplate: () => `${API_BASE}/api/import/template`,
   getExportUrl: () => `${API_BASE}/api/export`,
 
+  getBackupUrl: () => `${API_BASE}/api/backup/download`,
+  restoreBackup: async (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${API_BASE}/api/backup/restore`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Restore failed' }));
+      throw new Error(err.error || 'Restore failed');
+    }
+    return res.json();
+  },
+
   uploadFile: async (file) => {
     const form = new FormData();
     form.append('file', file);
