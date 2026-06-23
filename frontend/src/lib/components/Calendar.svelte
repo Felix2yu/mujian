@@ -788,8 +788,4 @@
   :global(.dark) .legend-item {
     color: #999;
   }
-
-  :global(.dark) .calendar-grid {
-    background: #333;
-  }
 </style>
