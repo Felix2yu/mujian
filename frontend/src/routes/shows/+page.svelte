@@ -65,6 +65,7 @@
           <option value="cancelled">已取消</option>
         </select>
       </div>
+      <a href="/shows/import" class="import-btn">📥 导入</a>
       <a href="/shows/new" class="add-btn">+ 添加演出</a>
     </div>
   </div>
@@ -147,6 +148,19 @@
   .filters select {
     padding: 8px 12px;
     border-radius: 8px;
+  }
+
+  .import-btn {
+    padding: 8px 16px;
+    background: #f0f0f0;
+    color: #333;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: background 0.2s;
+  }
+
+  .import-btn:hover {
+    background: #e0e0e0;
   }
 
   .add-btn {

@@ -42,6 +42,19 @@ export const api = {
   getSettings: () => request('/api/settings'),
   updateSettings: (data) => request('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
 
+  importShows: async (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${API_BASE}/api/shows/import`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Import failed' }));
+      throw new Error(err.error || 'Import failed');
+    }
+    return res.json();
+  },
+
+  getImportTemplate: () => `${API_BASE}/api/import/template`,
+
   uploadFile: async (file) => {
     const form = new FormData();
     form.append('file', file);

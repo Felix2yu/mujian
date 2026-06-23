@@ -38,6 +38,7 @@ func (h *Handler) Routes() chi.Router {
 		r.Get("/upcoming", h.getUpcoming)
 		r.Get("/recent", h.getRecent)
 		r.Post("/", h.createShow)
+		r.Post("/import", h.importShows)
 		r.Get("/{id}", h.getShow)
 		r.Put("/{id}", h.updateShow)
 		r.Delete("/{id}", h.deleteShow)
@@ -57,6 +58,7 @@ func (h *Handler) Routes() chi.Router {
 	})
 
 	r.Post("/upload", h.uploadFile)
+	r.Get("/import/template", h.getImportTemplate)
 
 	return r
 }

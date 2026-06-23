@@ -263,6 +263,18 @@ func (db *DB) CreateCategory(name, color string) (*models.Category, error) {
 	return &models.Category{ID: id, Name: name, Color: color}, nil
 }
 
+func (db *DB) FindOrCreateCategory(name string) (*models.Category, error) {
+	var c models.Category
+	err := db.conn.QueryRow("SELECT id, name, color FROM categories WHERE name = ?", name).Scan(&c.ID, &c.Name, &c.Color)
+	if err == nil {
+		return &c, nil
+	}
+
+	colors := []string{"#E74C3C", "#9B59B6", "#E67E22", "#1ABC9C", "#34495E", "#2ECC71", "#3498DB"}
+	color := colors[len(name)%len(colors)]
+	return db.CreateCategory(name, color)
+}
+
 func (db *DB) UpdateCategory(id int64, name, color string) error {
 	_, err := db.conn.Exec("UPDATE categories SET name=?, color=? WHERE id=?", name, color, id)
 	return err
