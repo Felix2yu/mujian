@@ -7,7 +7,7 @@ COPY frontend/ .
 RUN npm run build
 
 # Build backend
-FROM golang:1.22-alpine AS backend
+FROM golang:1.26-alpine AS backend
 WORKDIR /app
 COPY backend/go.mod backend/go.sum ./
 RUN GOPROXY=https://goproxy.cn,direct go mod download
