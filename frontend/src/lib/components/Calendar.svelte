@@ -15,7 +15,7 @@
 
   let firstDay = $derived((new Date(year, month - 1, 1).getDay() + 6) % 7);
   let daysInMonth = $derived(new Date(year, month, 0).getDate());
-  let calendarDays = $derived((() => {
+  let calendarDays = $derived.by(() => {
     const safeEvents = Array.isArray(events) ? events : [];
     const days = [];
     for (let i = 0; i < firstDay; i++) {
@@ -31,7 +31,7 @@
       days.push({ day: null, events: [] });
     }
     return days;
-  })());
+  });
 
   function isToday(d) {
     return year === today.getFullYear() && month === today.getMonth() + 1 && d === today.getDate();
