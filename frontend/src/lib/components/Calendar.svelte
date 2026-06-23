@@ -33,7 +33,8 @@
       const dayEvents = safeEvents.filter(e => e.date === dateStr);
       days.push({ day: d, events: dayEvents, isToday: isToday(d) });
     }
-    while (days.length < 42) {
+    const target = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+    while (days.length < target) {
       days.push({ day: null, events: [] });
     }
     return days;
