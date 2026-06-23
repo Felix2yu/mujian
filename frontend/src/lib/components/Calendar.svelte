@@ -536,7 +536,7 @@
   .popup {
     position: fixed;
     z-index: 1000;
-    background: #fff;
+    background: var(--bg-card);
     border-radius: 12px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.18);
     width: 260px;
@@ -587,18 +587,18 @@
   .popup-name {
     font-size: 15px;
     font-weight: 600;
-    color: #333;
+    color: var(--text-primary);
     display: block;
     margin-bottom: 4px;
   }
 
   .popup-name:hover {
-    color: #4A90D9;
+    color: var(--accent);
   }
 
   .popup-venue {
     font-size: 13px;
-    color: #666;
+    color: var(--text-muted);
     margin-bottom: 6px;
   }
 
@@ -620,7 +620,7 @@
   .popup-link {
     display: inline-block;
     font-size: 13px;
-    color: #4A90D9;
+    color: var(--accent);
     font-weight: 500;
   }
 
@@ -633,7 +633,7 @@
     display: flex;
     gap: 10px;
     padding: 10px 14px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--border);
     text-decoration: none;
     transition: background 0.15s;
   }
@@ -652,7 +652,7 @@
     border-radius: 4px;
     overflow: hidden;
     flex-shrink: 0;
-    background: #f0f0f0;
+    background: var(--bg-surface);
   }
 
   .popup-item-poster img {
@@ -672,7 +672,7 @@
   .popup-item-name {
     font-size: 13px;
     font-weight: 600;
-    color: #333;
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -680,7 +680,7 @@
 
   .popup-item-venue {
     font-size: 12px;
-    color: #666;
+    color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -858,27 +858,6 @@
   :global(.dark) .today .day-number {
     background: #4A90D9;
     color: #fff;
-  }
-
-  :global(.dark) .popup {
-    background: #2a2a2a;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  }
-
-  :global(.dark) .popup-name {
-    color: #e0e0e0;
-  }
-
-  :global(.dark) .popup-venue {
-    color: #999;
-  }
-
-  :global(.dark) .popup-item:hover {
-    background: #333;
-  }
-
-  :global(.dark) .popup-item {
-    border-bottom-color: #333;
   }
 
   :global(.dark) .poster-cell-more {

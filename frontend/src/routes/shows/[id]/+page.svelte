@@ -200,7 +200,7 @@
   .error { color: var(--danger-text); background: var(--danger-bg); border-radius: 8px; }
   .poster { margin-bottom: 24px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
   .poster img { width: 100%; display: block; }
-  .detail-card { background: var(--bg-card); border-radius: 12px; padding: 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .detail-card { background: var(--bg-card); border-radius: 12px; padding: 32px; border: 1px solid var(--border); }
   .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
   .header-info h1 { font-size: 28px; font-weight: 700; margin-bottom: 12px; }
   .meta-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
