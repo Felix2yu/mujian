@@ -1,5 +1,5 @@
 <script>
-  import { fly } from 'svelte/transition';
+  import { tick } from 'svelte';
 
   let { events = [], initialYear = new Date().getFullYear(), initialMonth = new Date().getMonth() + 1, onmonthchange } = $props();
 
@@ -119,6 +119,16 @@
     popupEvents = [];
   }
 
+  $effect(() => {
+    function handleClick(e) {
+      if (popupEvents.length > 0 && !e.target.closest('.popup') && !e.target.closest('.poster-cell') && !e.target.closest('.event-text-btn')) {
+        closePopup();
+      }
+    }
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  });
+
   function getStatusLabel(status) {
     const labels = { normal: '正常', cancelled: '已取消', pending_tickets: '待开票', no_show: '未赴约' };
     return labels[status] || status;
@@ -145,9 +155,6 @@
     return event.color || colors[event.status] || '#999';
   }
 </script>
-
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<svelte:window onclick={closePopup} />
 
 <div class="calendar">
   <div class="calendar-header">
