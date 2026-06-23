@@ -64,12 +64,17 @@
       </form>
       {#if showSearch && searchResults.length > 0}
         <div class="search-results">
-          {#each searchResults as show}
+          {#each searchResults.slice(0, 5) as show}
             <a href="/shows/{show.id}" class="search-item">
               <span class="search-name">{show.name}</span>
               <span class="search-venue">{show.venue}</span>
             </a>
           {/each}
+          {#if searchResults.length > 5}
+            <a href="/search?q={encodeURIComponent(searchQuery)}" class="search-more">
+              查看全部 {searchResults.length} 条结果 →
+            </a>
+          {/if}
         </div>
       {/if}
     </div>
@@ -267,6 +272,27 @@
   .search-venue {
     font-size: 12px;
     color: #666;
+  }
+
+  .search-more {
+    display: block;
+    padding: 12px 16px;
+    text-align: center;
+    font-size: 13px;
+    color: #4A90D9;
+    border-top: 1px solid #eee;
+  }
+
+  :global(.dark) .search-more {
+    border-top-color: #444;
+  }
+
+  .search-more:hover {
+    background: #f5f5f5;
+  }
+
+  :global(.dark) .search-more:hover {
+    background: #333;
   }
 
   .nav-right {

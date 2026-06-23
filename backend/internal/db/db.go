@@ -422,7 +422,26 @@ func (db *DB) GetRecentShows(limit int) ([]models.Show, error) {
 }
 
 func (db *DB) SearchShows(query string) ([]models.Show, error) {
-	q := "%" + strings.ToLower(query) + "%"
+	words := strings.Fields(strings.ToLower(query))
+	if len(words) == 0 {
+		return []models.Show{}, nil
+	}
+
+	where := make([]string, 0, len(words))
+	args := make([]interface{}, 0, len(words)*9)
+	for _, w := range words {
+		like := "%" + w + "%"
+		where = append(where, `(LOWER(s.name) LIKE ? OR LOWER(s.venue) LIKE ? OR LOWER(s.company) LIKE ?
+			OR LOWER(s.cast) LIKE ? OR LOWER(s.friends) LIKE ? OR LOWER(s.review) LIKE ?
+			OR LOWER(s.notes) LIKE ? OR LOWER(s.setlist) LIKE ? OR LOWER(s.seat) LIKE ?
+			OR LOWER(c.name) LIKE ?)`)
+		for i := 0; i < 10; i++ {
+			args = append(args, like)
+		}
+	}
+
+	q := "WHERE " + strings.Join(where, " AND ")
+
 	rows, err := db.conn.Query(`
 		SELECT s.id, s.name, s.venue, s.date, s.duration, s.status, s.category_id,
 		       s.poster_url, s.setlist, s.cast, s.company, s.friends, s.rating,
@@ -430,10 +449,9 @@ func (db *DB) SearchShows(query string) ([]models.Show, error) {
 		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
 		FROM shows s
 		LEFT JOIN categories c ON s.category_id = c.id
-		WHERE LOWER(s.name) LIKE ? OR LOWER(s.venue) LIKE ? OR LOWER(s.company) LIKE ?
-		   OR LOWER(s.cast) LIKE ? OR LOWER(s.friends) LIKE ?
+		`+q+`
 		ORDER BY s.date DESC
-	`, q, q, q, q, q)
+	`, args...)
 	if err != nil {
 		return nil, err
 	}
