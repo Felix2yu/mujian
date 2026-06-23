@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"sync"
+	"time"
 )
 
 type Config struct {
@@ -11,6 +12,7 @@ type Config struct {
 	DBPath            string `json:"-"`
 	UploadDir         string `json:"-"`
 	Port              string `json:"-"`
+	Timezone          string `json:"-"`
 	Theme             string `json:"theme"`
 	StorageType       string `json:"storage_type"`
 	S3Endpoint        string `json:"s3_endpoint"`
@@ -27,11 +29,13 @@ var (
 )
 
 func Load() *Config {
+	loc := loadTimezone(getEnv("TZ", "Asia/Shanghai"))
 	global = &Config{
 		AllowLocalStorage: os.Getenv("ALLOW_LOCAL_STORAGE") != "false",
 		DBPath:            getEnv("DB_PATH", "./data/mujian.db"),
 		UploadDir:         getEnv("UPLOAD_DIR", "./data/uploads"),
 		Port:              getEnv("PORT", "8080"),
+		Timezone:          loc.String(),
 		Theme:             getEnv("THEME", "auto"),
 		StorageType:       getEnv("STORAGE_TYPE", "local"),
 		S3Endpoint:        os.Getenv("S3_ENDPOINT"),
@@ -42,6 +46,18 @@ func Load() *Config {
 		S3PublicURL:       os.Getenv("S3_PUBLIC_URL"),
 	}
 	return global
+}
+
+func (c *Config) Location() *time.Location {
+	return loadTimezone(c.Timezone)
+}
+
+func loadTimezone(name string) *time.Location {
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
 }
 
 func Get() *Config {

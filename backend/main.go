@@ -27,6 +27,7 @@ func main() {
 		log.Fatalf("failed to init db: %v", err)
 	}
 	defer database.Close()
+	database.SetLocation(cfg.Location())
 
 	cfg.LoadFromFile(filepath.Join(filepath.Dir(cfg.DBPath), "settings.json"))
 

@@ -7,40 +7,43 @@ import (
 	"time"
 )
 
-func GenerateCalendar(shows []models.Show) string {
+func GenerateCalendar(shows []models.Show, loc *time.Location) string {
 	var b strings.Builder
 	b.WriteString("BEGIN:VCALENDAR\r\n")
 	b.WriteString("VERSION:2.0\r\n")
 	b.WriteString("PRODID:-//Mujian//Performance Tracker//CN\r\n")
 	b.WriteString("CALSCALE:GREGORIAN\r\n")
 	b.WriteString("METHOD:PUBLISH\r\n")
-	b.WriteString("X-WR-CALNAME:现场演出\r\n")
-	b.WriteString("X-WR-TIMEZONE:Asia/Shanghai\r\n")
+	b.WriteString(fmt.Sprintf("X-WR-CALNAME:现场演出\r\n"))
+	b.WriteString(fmt.Sprintf("X-WR-TIMEZONE:%s\r\n", loc.String()))
 	b.WriteString("BEGIN:VTIMEZONE\r\n")
-	b.WriteString("TZID:Asia/Shanghai\r\n")
+	b.WriteString(fmt.Sprintf("TZID:%s\r\n", loc.String()))
 	b.WriteString("BEGIN:STANDARD\r\n")
 	b.WriteString("DTSTART:19700101T000000\r\n")
-	b.WriteString("TZOFFSETFROM:+0800\r\n")
-	b.WriteString("TZOFFSETTO:+0800\r\n")
+	_, offsetSec := time.Now().In(loc).Zone()
+	offsetH := offsetSec / 3600
+	offsetM := (offsetSec % 3600) / 60
+	b.WriteString(fmt.Sprintf("TZOFFSETFROM:+%02d%02d\r\n", offsetH, offsetM))
+	b.WriteString(fmt.Sprintf("TZOFFSETTO:+%02d%02d\r\n", offsetH, offsetM))
 	b.WriteString("END:STANDARD\r\n")
 	b.WriteString("END:VTIMEZONE\r\n")
 
 	for _, show := range shows {
-		writeEvent(&b, show)
+		writeEvent(&b, show, loc)
 	}
 
 	b.WriteString("END:VCALENDAR\r\n")
 	return b.String()
 }
 
-func writeEvent(b *strings.Builder, show models.Show) {
-	start := show.Date.Format("20060102T150405")
-	end := show.Date.Add(time.Duration(show.Duration) * time.Minute).Format("20060102T150405")
+func writeEvent(b *strings.Builder, show models.Show, loc *time.Location) {
+	start := show.Date.In(loc).Format("20060102T150405")
+	end := show.Date.Add(time.Duration(show.Duration) * time.Minute).In(loc).Format("20060102T150405")
 
 	b.WriteString("BEGIN:VEVENT\r\n")
 	b.WriteString(fmt.Sprintf("UID:%d@mujian\r\n", show.ID))
-	b.WriteString(fmt.Sprintf("DTSTART;TZID=Asia/Shanghai:%s\r\n", start))
-	b.WriteString(fmt.Sprintf("DTEND;TZID=Asia/Shanghai:%s\r\n", end))
+	b.WriteString(fmt.Sprintf("DTSTART;TZID=%s:%s\r\n", loc.String(), start))
+	b.WriteString(fmt.Sprintf("DTEND;TZID=%s:%s\r\n", loc.String(), end))
 	b.WriteString(fmt.Sprintf("SUMMARY:%s\r\n", escapeICS(show.Name)))
 
 	if show.Venue != "" {

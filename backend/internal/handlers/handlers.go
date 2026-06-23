@@ -212,7 +212,7 @@ func (h *Handler) getICS(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
 	w.Header().Set("Content-Disposition", "attachment; filename=mujian.ics")
-	w.Write([]byte(ics.GenerateCalendar(shows)))
+	w.Write([]byte(ics.GenerateCalendar(shows, h.cfg.Location())))
 }
 
 func (h *Handler) getStats(w http.ResponseWriter, r *http.Request) {

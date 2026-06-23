@@ -15,6 +15,7 @@ import (
 
 type DB struct {
 	conn *sql.DB
+	loc  *time.Location
 }
 
 func New(dbPath string) (*DB, error) {
@@ -32,12 +33,16 @@ func New(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
 
-	db := &DB{conn: conn}
+	db := &DB{conn: conn, loc: time.UTC}
 	if err := db.migrate(); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
 	return db, nil
+}
+
+func (db *DB) SetLocation(loc *time.Location) {
+	db.loc = loc
 }
 
 func (db *DB) Close() {
@@ -146,13 +151,13 @@ func (db *DB) ListShowsByDateRange(startStr, endStr string) ([]models.Show, erro
 	args := []interface{}{}
 
 	if startStr != "" {
-		if t, err := time.Parse("2006-01-02", startStr); err == nil {
+		if t, err := time.ParseInLocation("2006-01-02", startStr, db.loc); err == nil {
 			query += " AND s.date >= ?"
 			args = append(args, t)
 		}
 	}
 	if endStr != "" {
-		if t, err := time.Parse("2006-01-02", endStr); err == nil {
+		if t, err := time.ParseInLocation("2006-01-02", endStr, db.loc); err == nil {
 			query += " AND s.date < ?"
 			args = append(args, t.AddDate(0, 0, 1))
 		}
@@ -209,9 +214,9 @@ func (db *DB) GetShow(id int64) (*models.Show, error) {
 }
 
 func (db *DB) CreateShow(req models.ShowRequest) (*models.Show, error) {
-	date, err := time.Parse("2006-01-02T15:04", req.Date)
+	date, err := time.ParseInLocation("2006-01-02T15:04", req.Date, db.loc)
 	if err != nil {
-		date, err = time.Parse("2006-01-02", req.Date)
+		date, err = time.ParseInLocation("2006-01-02", req.Date, db.loc)
 		if err != nil {
 			return nil, fmt.Errorf("invalid date format: %w", err)
 		}
@@ -238,9 +243,9 @@ func (db *DB) CreateShow(req models.ShowRequest) (*models.Show, error) {
 }
 
 func (db *DB) UpdateShow(id int64, req models.ShowRequest) (*models.Show, error) {
-	date, err := time.Parse("2006-01-02T15:04", req.Date)
+	date, err := time.ParseInLocation("2006-01-02T15:04", req.Date, db.loc)
 	if err != nil {
-		date, err = time.Parse("2006-01-02", req.Date)
+		date, err = time.ParseInLocation("2006-01-02", req.Date, db.loc)
 		if err != nil {
 			return nil, fmt.Errorf("invalid date format: %w", err)
 		}

@@ -142,6 +142,7 @@ func (h *Handler) parseRowToShow(row []string, colMap map[string]int) models.Sho
 	}
 
 	if d := get("date"); d != "" {
+		loc := h.cfg.Location()
 		formats := []string{
 			"2006-01-02 15:04",
 			"2006-01-02T15:04",
@@ -154,7 +155,7 @@ func (h *Handler) parseRowToShow(row []string, colMap map[string]int) models.Sho
 			"1/2/2006",
 		}
 		for _, format := range formats {
-			if t, err := time.Parse(format, d); err == nil {
+			if t, err := time.ParseInLocation(format, d, loc); err == nil {
 				show.Date = t.Format("2006-01-02T15:04")
 				break
 			}
