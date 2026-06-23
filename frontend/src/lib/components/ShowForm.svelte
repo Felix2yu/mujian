@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher, onMount } from 'svelte';
   import { api } from '$lib/api';
+  import TagInput from './TagInput.svelte';
 
   export let show = null;
 
@@ -173,21 +174,18 @@
     <h3>详细信息</h3>
     <div class="form-row">
       <div class="form-group">
-        <label for="company">剧团</label>
-        <input type="text" id="company" bind:value={form.company} list="company-list" placeholder="如：北京人艺" />
-        <datalist id="company-list">{#each companyList as c}<option value={c} />{/each}</datalist>
+        <label>剧团</label>
+        <TagInput bind:value={form.company} placeholder="输入剧团名按回车" suggestions={companyList} />
       </div>
       <div class="form-group">
-        <label for="cast">阵容</label>
-        <input type="text" id="cast" bind:value={form.cast} list="cast-list" placeholder="如：于是之, 郑榕" />
-        <datalist id="cast-list">{#each castList as c}<option value={c} />{/each}</datalist>
+        <label>阵容</label>
+        <TagInput bind:value={form.cast} placeholder="输入演员名按回车" suggestions={castList} />
       </div>
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label for="friends">同行好友</label>
-        <input type="text" id="friends" bind:value={form.friends} list="friends-list" placeholder="如：小明, 小红" />
-        <datalist id="friends-list">{#each friendsList as f}<option value={f} />{/each}</datalist>
+        <label>同行好友</label>
+        <TagInput bind:value={form.friends} placeholder="输入好友名按回车" suggestions={friendsList} />
       </div>
       <div class="form-group">
         <label for="seat">座位</label>
@@ -195,8 +193,8 @@
       </div>
     </div>
     <div class="form-group">
-      <label for="setlist">剧目</label>
-      <textarea id="setlist" bind:value={form.setlist} rows="3" placeholder="每行一个剧目"></textarea>
+      <label>剧目</label>
+      <TagInput bind:value={form.setlist} placeholder="输入剧目名按回车" suggestions={[]} />
     </div>
   </div>
 

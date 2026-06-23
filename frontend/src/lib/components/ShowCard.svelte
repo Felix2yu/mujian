@@ -19,29 +19,39 @@
 </script>
 
 <a href="/shows/{show.id}" class="show-card" class:compact>
-  <div class="card-header">
-    <span class="status" style="background: {statusColor(show.status)}">{statusLabel(show.status)}</span>
-    {#if show.category_name}
-      <span class="category">{show.category_name}</span>
+  <div class="card-body">
+    <div class="card-content">
+      <div class="card-header">
+        <span class="status" style="background: {statusColor(show.status)}">{statusLabel(show.status)}</span>
+        {#if show.category_name}
+          <span class="category">{show.category_name}</span>
+        {/if}
+      </div>
+
+      <h3 class="card-title">{show.name}</h3>
+
+      <div class="card-info">
+        <span class="date">📅 {formatDateTime(show.date)}</span>
+        {#if show.venue}<span class="venue">📍 {show.venue}</span>{/if}
+        {#if show.company}<span class="company">🎭 {show.company}</span>{/if}
+        {#if show.cast}<span class="cast">👤 {show.cast}</span>{/if}
+      </div>
+
+      {#if show.rating}
+        <div class="rating">
+          {#each Array(5) as _, i}
+            <span class="star" class:filled={i < show.rating}>★</span>
+          {/each}
+        </div>
+      {/if}
+    </div>
+
+    {#if show.poster_url && !compact}
+      <div class="card-poster">
+        <img src={show.poster_url} alt={show.name} />
+      </div>
     {/if}
   </div>
-
-  <h3 class="card-title">{show.name}</h3>
-
-  <div class="card-info">
-    <span class="date">📅 {formatDateTime(show.date)}</span>
-    {#if show.venue}<span class="venue">📍 {show.venue}</span>{/if}
-    {#if show.company}<span class="company">🎭 {show.company}</span>{/if}
-    {#if show.cast}<span class="cast">👤 {show.cast}</span>{/if}
-  </div>
-
-  {#if show.rating}
-    <div class="rating">
-      {#each Array(5) as _, i}
-        <span class="star" class:filled={i < show.rating}>★</span>
-      {/each}
-    </div>
-  {/if}
 </a>
 
 <style>
@@ -57,14 +67,18 @@
   .show-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-color: #ddd; }
   .show-card.compact { padding: 12px; margin-bottom: 8px; }
   .show-card.compact:last-child { margin-bottom: 0; }
+  .card-body { display: flex; gap: 16px; }
+  .card-content { flex: 1; min-width: 0; }
+  .card-poster { width: 100px; height: 100px; flex-shrink: 0; border-radius: 6px; overflow: hidden; }
+  .card-poster img { width: 100%; height: 100%; object-fit: cover; }
   .card-header { display: flex; gap: 8px; margin-bottom: 8px; }
   .status { font-size: 11px; padding: 2px 8px; border-radius: 10px; color: #fff; font-weight: 500; }
   .category { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #f0f0f0; color: #666; }
   .card-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #333; }
   .compact .card-title { font-size: 14px; margin-bottom: 4px; }
-  .card-info { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: #666; }
+  .card-info { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: #666; }
   .card-info span { white-space: nowrap; }
-  .rating { margin-top: 8px; }
+  .rating { margin-top: 6px; }
   .star { color: #ddd; font-size: 14px; }
   .star.filled { color: #f39c12; }
 </style>
