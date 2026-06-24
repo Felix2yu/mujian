@@ -10,15 +10,6 @@
 
   let years = $state([]);
 
-  let categoryStats = $state({});
-  let monthlyStats = $state({});
-  let venueStats = $state({});
-  let ratingStats = $state({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
-  let statusStats = $state({ normal: 0, cancelled: 0, pending_tickets: 0, no_show: 0 });
-  let totalCost = $state(0);
-  let avgDuration = $state(0);
-  let totalCount = $state(0);
-
   onMount(async () => {
     try {
       allShows = await api.listAllShows();
@@ -28,7 +19,6 @@
         yearSet.add(y);
       });
       years = [...yearSet].sort().reverse();
-      analyzeData();
     } catch (e) {
       console.error('Failed to load data:', e);
     } finally {
@@ -45,50 +35,64 @@
     return true;
   }));
 
-  $effect(() => {
-    const shows = filteredShows;
-    analyzeData(shows);
-  });
-
   function analyzeData(shows) {
-    categoryStats = {};
-    monthlyStats = {};
-    venueStats = {};
-    ratingStats = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    statusStats = { normal: 0, cancelled: 0, pending_tickets: 0, no_show: 0 };
-    totalCost = 0;
-    let totalDuration = 0;
-    let durationCount = 0;
-    totalCount = shows.length;
+    const cats = {};
+    const months = {};
+    const venues = {};
+    const ratings = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    const statuses = { normal: 0, cancelled: 0, pending_tickets: 0, no_show: 0 };
+    let cost = 0;
+    let duration = 0;
+    let durCount = 0;
 
     shows.forEach(show => {
       const cat = show.category_name || '未分类';
-      categoryStats[cat] = (categoryStats[cat] || 0) + 1;
+      cats[cat] = (cats[cat] || 0) + 1;
 
       const month = show.date.substring(0, 7);
-      monthlyStats[month] = (monthlyStats[month] || 0) + 1;
+      months[month] = (months[month] || 0) + 1;
 
       if (show.venue) {
-        venueStats[show.venue] = (venueStats[show.venue] || 0) + 1;
+        venues[show.venue] = (venues[show.venue] || 0) + 1;
       }
 
       if (show.rating) {
-        ratingStats[show.rating] = (ratingStats[show.rating] || 0) + 1;
+        ratings[show.rating] = (ratings[show.rating] || 0) + 1;
       }
 
-      statusStats[show.status] = (statusStats[show.status] || 0) + 1;
+      statuses[show.status] = (statuses[show.status] || 0) + 1;
 
-      if (show.ticket_cost) totalCost += show.ticket_cost;
-      if (show.other_cost) totalCost += show.other_cost;
+      if (show.ticket_cost) cost += show.ticket_cost;
+      if (show.other_cost) cost += show.other_cost;
 
       if (show.duration > 0) {
-        totalDuration += show.duration;
-        durationCount++;
+        duration += show.duration;
+        durCount++;
       }
     });
 
-    avgDuration = durationCount > 0 ? Math.round(totalDuration / durationCount) : 0;
+    return {
+      categoryStats: cats,
+      monthlyStats: months,
+      venueStats: venues,
+      ratingStats: ratings,
+      statusStats: statuses,
+      totalCost: cost,
+      avgDuration: durCount > 0 ? Math.round(duration / durCount) : 0,
+      totalCount: shows.length
+    };
   }
+
+  let analysis = $derived.by(() => analyzeData(filteredShows));
+
+  let categoryStats = $derived(analysis.categoryStats);
+  let monthlyStats = $derived(analysis.monthlyStats);
+  let venueStats = $derived(analysis.venueStats);
+  let ratingStats = $derived(analysis.ratingStats);
+  let statusStats = $derived(analysis.statusStats);
+  let totalCost = $derived(analysis.totalCost);
+  let avgDuration = $derived(analysis.avgDuration);
+  let totalCount = $derived(analysis.totalCount);
 
   function getMaxValue(obj) {
     return Math.max(...Object.values(obj), 1);
