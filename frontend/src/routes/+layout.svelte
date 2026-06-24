@@ -120,7 +120,7 @@
       <div class="nav-links" class:open={mobileMenuOpen}>
         <a href="/" class:active={currentPath === '/'} onclick={() => mobileMenuOpen = false}>日历</a>
         <a href="/shows" class:active={currentPath.startsWith('/shows') && !currentPath.includes('/import') && !currentPath.includes('/new')} onclick={() => mobileMenuOpen = false}>演出</a>
-        <a href="/analytics" class:active={currentPath === '/analytics'} onclick={() => mobileMenuOpen = false}>数据分析</a>
+        <a href="/analytics" class:active={currentPath === '/analytics'} onclick={() => mobileMenuOpen = false}>分析</a>
       </div>
 
       <div class="nav-search">

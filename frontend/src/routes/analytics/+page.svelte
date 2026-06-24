@@ -41,6 +41,9 @@
     const venues = {};
     const ratings = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     const statuses = { normal: 0, cancelled: 0, pending_tickets: 0, no_show: 0 };
+    const plays = {};
+    const scenes = {};
+    const companies = {};
     let cost = 0;
     let duration = 0;
     let durCount = 0;
@@ -69,6 +72,27 @@
         duration += show.duration;
         durCount++;
       }
+
+      if (show.company) {
+        const parts = show.company.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+        parts.forEach(c => { companies[c] = (companies[c] || 0) + 1; });
+      }
+
+      if (show.setlist) {
+        const lines = show.setlist.split('\n').map(s => s.trim()).filter(Boolean);
+        for (const line of lines) {
+          const idx = line.indexOf('•');
+          if (idx === -1) {
+            plays[line] = (plays[line] || 0) + 1;
+          } else {
+            const play = line.substring(0, idx).trim();
+            plays[play] = (plays[play] || 0) + 1;
+            line.substring(idx + 1).split('•').map(s => s.trim()).filter(Boolean).forEach(s => {
+              scenes[`${play}•${s}`] = (scenes[`${play}•${s}`] || 0) + 1;
+            });
+          }
+        }
+      }
     });
 
     return {
@@ -77,6 +101,9 @@
       venueStats: venues,
       ratingStats: ratings,
       statusStats: statuses,
+      playStats: plays,
+      sceneStats: scenes,
+      companyStats: companies,
       totalCost: cost,
       avgDuration: durCount > 0 ? Math.round(duration / durCount) : 0,
       totalCount: shows.length
@@ -90,6 +117,9 @@
   let venueStats = $derived(analysis.venueStats);
   let ratingStats = $derived(analysis.ratingStats);
   let statusStats = $derived(analysis.statusStats);
+  let playStats = $derived(analysis.playStats);
+  let sceneStats = $derived(analysis.sceneStats);
+  let companyStats = $derived(analysis.companyStats);
   let totalCost = $derived(analysis.totalCost);
   let avgDuration = $derived(analysis.avgDuration);
   let totalCount = $derived(analysis.totalCount);
@@ -125,7 +155,7 @@
 
 <div class="analytics-page">
   <div class="page-header">
-    <h1>数据分析</h1>
+    <h1>分析</h1>
     <div class="filters">
       <select bind:value={selectedYear}>
         <option value="all">全部年份</option>
@@ -292,6 +322,51 @@
           {/each}
         </div>
       </div>
+
+      {#if Object.keys(playStats).length > 0}
+        <div class="chart-card full-width">
+          <h3>剧目统计</h3>
+          <div class="venue-list">
+            {#each Object.entries(playStats).sort((a, b) => b[1] - a[1]).slice(0, 10) as [play, count], i}
+              <div class="venue-item">
+                <span class="venue-rank">#{i + 1}</span>
+                <span class="venue-name">{play}</span>
+                <span class="venue-count">{count} 场</span>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
+      {#if Object.keys(sceneStats).length > 0}
+        <div class="chart-card full-width">
+          <h3>折子统计</h3>
+          <div class="venue-list">
+            {#each Object.entries(sceneStats).sort((a, b) => b[1] - a[1]).slice(0, 15) as [scene, count], i}
+              <div class="venue-item">
+                <span class="venue-rank">#{i + 1}</span>
+                <span class="venue-name">{scene}</span>
+                <span class="venue-count">{count} 场</span>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
+      {#if Object.keys(companyStats).length > 0}
+        <div class="chart-card full-width">
+          <h3>剧团统计</h3>
+          <div class="venue-list">
+            {#each Object.entries(companyStats).sort((a, b) => b[1] - a[1]).slice(0, 10) as [company, count], i}
+              <div class="venue-item">
+                <span class="venue-rank">#{i + 1}</span>
+                <span class="venue-name">{company}</span>
+                <span class="venue-count">{count} 场</span>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
