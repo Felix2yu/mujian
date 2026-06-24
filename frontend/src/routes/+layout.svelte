@@ -321,6 +321,12 @@
     min-height: 100vh;
   }
 
+  main {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 32px;
+  }
+
   .navbar {
     background: rgba(255,255,255,0.8);
     backdrop-filter: blur(20px) saturate(180%);
@@ -334,7 +340,7 @@
   }
 
   .nav-inner {
-    max-width: 1280px;
+    max-width: 1400px;
     margin: 0 auto;
     display: flex;
     align-items: center;

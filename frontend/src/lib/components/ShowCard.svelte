@@ -20,8 +20,12 @@
 <a href="/shows/{show.id}" class="show-card" class:compact>
   <div class="card-body">
     <div class="card-content">
-      <div class="card-title-row">
+      <h3 class="card-title">
         <span class="status" style="background: {statusColor(show.status)}">{statusLabel(show.status)}</span>
+        {show.name}
+      </h3>
+
+      <div class="card-header">
         {#if show.category_name}
           <span class="category">{show.category_name}</span>
         {/if}
@@ -33,8 +37,6 @@
           </span>
         {/if}
       </div>
-
-      <h3 class="card-title">{show.name}</h3>
 
       <div class="card-meta">
         <span class="meta-item">
@@ -129,12 +131,27 @@
     display: block;
   }
 
-  .card-title-row {
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text-primary);
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .card-header {
     display: flex;
     gap: 6px;
-    margin-bottom: 4px;
     align-items: center;
-    flex-wrap: wrap;
   }
 
   .status {
@@ -189,6 +206,10 @@
   .compact .card-title {
     font-size: 14px;
     margin-bottom: 4px;
+  }
+
+  .compact .card-header {
+    display: none;
   }
 
   .card-meta {
