@@ -15,6 +15,8 @@
   let upcomingShows = $state([]);
   let showUpcomingPopup = $state(false);
   let upcomingClosing = $state(false);
+  let bellBtn = $state(null);
+  let popupPos = $state({ top: 72, right: 32 });
 
   function formatDateTime(dateStr) {
     const d = new Date(dateStr);
@@ -28,6 +30,10 @@
       closeUpcoming();
     } else {
       upcomingClosing = false;
+      if (bellBtn) {
+        const rect = bellBtn.getBoundingClientRect();
+        popupPos = { top: rect.bottom + 8, right: window.innerWidth - rect.right };
+      }
       showUpcomingPopup = true;
     }
   }
@@ -153,7 +159,7 @@
           </button>
         {/if}
         <div class="notify-wrapper">
-          <button class="icon-btn notify-btn" class:has-upcoming={hasUpcoming} onclick={toggleUpcoming} title="即将演出">
+          <button bind:this={bellBtn} class="icon-btn notify-btn" class:has-upcoming={hasUpcoming} onclick={toggleUpcoming} title="即将演出">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
           </button>
         </div>
@@ -176,7 +182,7 @@
 
   {#if showUpcomingPopup}
     <div class="popup-overlay" onclick={closeUpcoming}></div>
-    <div class="upcoming-popup" class:closing={upcomingClosing} onanimationend={onPopupAnimEnd}>
+    <div class="upcoming-popup" class:closing={upcomingClosing} onanimationend={onPopupAnimEnd} style="top: {popupPos.top}px; right: {popupPos.right}px">
       <div class="popup-header">即将演出</div>
       {#if upcomingShows.length === 0}
         <div class="popup-empty">暂无即将进行的演出</div>
@@ -563,8 +569,6 @@
 
   .upcoming-popup {
     position: fixed;
-    top: 72px;
-    right: 32px;
     width: 300px;
     background: var(--bg-card);
     border: 1px solid var(--border);
