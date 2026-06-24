@@ -3,7 +3,7 @@
   import { api } from '$lib/api';
   import { theme } from '$lib/stores';
   import { onMount } from 'svelte';
-  import { requestPermission, startReminderCheck } from '$lib/notifications';
+  import { requestPermission, startReminderCheck, checkUpcomingShows } from '$lib/notifications';
 
   let searchQuery = $state('');
   let searchResults = $state([]);
@@ -11,6 +11,7 @@
   let deferredPrompt = $state(null);
   let showInstall = $state(false);
   let mobileMenuOpen = $state(false);
+  let hasUpcoming = $state(false);
 
   onMount(async () => {
     try {
@@ -33,6 +34,11 @@
         startReminderCheck(() => api.listAllShows());
       }
     });
+
+    try {
+      const allShows = await api.listAllShows();
+      hasUpcoming = checkUpcomingShows(allShows).length > 0;
+    } catch {}
   });
 
   async function installApp() {
@@ -116,7 +122,7 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           </button>
         {/if}
-        <button class="icon-btn" onclick={requestPermission} title="通知">
+        <button class="icon-btn notify-btn" class:has-upcoming={hasUpcoming} onclick={requestPermission} title="通知">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
         </button>
         <a href="/settings" class="icon-btn" class:active={currentPath === '/settings'} title="设置">
@@ -430,6 +436,22 @@
   .icon-btn:hover {
     background: var(--bg-surface);
     color: var(--text-primary);
+  }
+
+  .notify-btn {
+    position: relative;
+  }
+
+  .notify-btn.has-upcoming::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 8px;
+    height: 8px;
+    background: #ef4444;
+    border-radius: 50%;
+    border: 2px solid var(--bg-card);
   }
 
   .icon-btn.active {
