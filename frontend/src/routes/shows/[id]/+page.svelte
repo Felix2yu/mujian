@@ -15,13 +15,21 @@
   function parseSetlist(setlist) {
     if (!setlist) return [];
     const lines = setlist.split('\n').map(s => s.trim()).filter(Boolean);
-    return lines.map(line => {
+    const playMap = new Map();
+    for (const line of lines) {
       const idx = line.indexOf('•');
-      if (idx === -1) return { play: line, scenes: [] };
-      const play = line.substring(0, idx).trim();
-      const scenes = line.substring(idx + 1).split('•').map(s => s.trim()).filter(Boolean);
-      return { play, scenes };
-    });
+      if (idx === -1) {
+        if (!playMap.has(line)) playMap.set(line, []);
+      } else {
+        const play = line.substring(0, idx).trim();
+        const scenes = line.substring(idx + 1).split('•').map(s => s.trim()).filter(Boolean);
+        if (!playMap.has(play)) playMap.set(play, []);
+        for (const s of scenes) {
+          if (!playMap.get(play).includes(s)) playMap.get(play).push(s);
+        }
+      }
+    }
+    return [...playMap.entries()].map(([play, scenes]) => ({ play, scenes }));
   }
 
   function sortScenes(play, scenes) {
