@@ -55,20 +55,35 @@
   {#if stats && stats.total_shows > 0}
     <div class="stats-bar">
       <div class="stat-item">
-        <span class="stat-value">{stats.total_shows}</span>
-        <span class="stat-label">场演出</span>
+        <span class="stat-icon">🎭</span>
+        <div class="stat-info">
+          <span class="stat-value">{stats.total_shows}</span>
+          <span class="stat-label">场演出</span>
+        </div>
       </div>
+      <div class="stat-divider"></div>
       <div class="stat-item">
-        <span class="stat-value">{stats.total_hours.toFixed(0)}</span>
-        <span class="stat-label">小时</span>
+        <span class="stat-icon">⏱️</span>
+        <div class="stat-info">
+          <span class="stat-value">{stats.total_hours.toFixed(0)}</span>
+          <span class="stat-label">小时</span>
+        </div>
       </div>
+      <div class="stat-divider"></div>
       <div class="stat-item">
-        <span class="stat-value">{stats.total_venues}</span>
-        <span class="stat-label">个场馆</span>
+        <span class="stat-icon">🏛️</span>
+        <div class="stat-info">
+          <span class="stat-value">{stats.total_venues}</span>
+          <span class="stat-label">个场馆</span>
+        </div>
       </div>
+      <div class="stat-divider"></div>
       <div class="stat-item">
-        <span class="stat-value">{stats.avg_rating > 0 ? stats.avg_rating.toFixed(1) : '-'}</span>
-        <span class="stat-label">平均评分</span>
+        <span class="stat-icon">⭐</span>
+        <div class="stat-info">
+          <span class="stat-value">{stats.avg_rating > 0 ? stats.avg_rating.toFixed(1) : '-'}</span>
+          <span class="stat-label">平均评分</span>
+        </div>
       </div>
     </div>
   {/if}
@@ -80,24 +95,44 @@
 
     <div class="sidebar">
       <div class="sidebar-section">
-        <h3>即将到来</h3>
+        <div class="section-header">
+          <h3>即将到来</h3>
+          {#if upcoming.length > 0}
+            <span class="section-badge">{upcoming.length}</span>
+          {/if}
+        </div>
         {#if upcoming.length === 0}
-          <p class="empty">暂无即将进行的演出</p>
+          <div class="empty-state">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <p>暂无即将进行的演出</p>
+          </div>
         {:else}
-          {#each upcoming as show}
-            <ShowCard {show} compact />
-          {/each}
+          <div class="card-list">
+            {#each upcoming as show}
+              <ShowCard {show} compact />
+            {/each}
+          </div>
         {/if}
       </div>
 
       <div class="sidebar-section">
-        <h3>最近观看</h3>
+        <div class="section-header">
+          <h3>最近观看</h3>
+          {#if recent.length > 0}
+            <span class="section-badge">{recent.length}</span>
+          {/if}
+        </div>
         {#if recent.length === 0}
-          <p class="empty">暂无观看记录</p>
+          <div class="empty-state">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <p>暂无观看记录</p>
+          </div>
         {:else}
-          {#each recent as show}
-            <ShowCard {show} compact />
-          {/each}
+          <div class="card-list">
+            {#each recent as show}
+              <ShowCard {show} compact />
+            {/each}
+          </div>
         {/if}
       </div>
     </div>
@@ -108,90 +143,174 @@
   .home {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 28px;
   }
 
   .stats-bar {
     display: flex;
-    gap: 32px;
-    padding: 20px 24px;
+    align-items: center;
+    gap: 0;
+    padding: 24px 32px;
     background: var(--bg-card);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
   }
 
   .stat-item {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 12px;
+    flex: 1;
+    justify-content: center;
+  }
+
+  .stat-icon {
+    font-size: 24px;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-bg);
+    border-radius: var(--radius-md);
+  }
+
+  .stat-info {
+    display: flex;
+    flex-direction: column;
   }
 
   .stat-value {
-    font-size: 28px;
+    font-size: 24px;
     font-weight: 700;
-    color: #4A90D9;
+    color: var(--text-primary);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
   }
 
   .stat-label {
     font-size: 13px;
-    color: #666;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .stat-divider {
+    width: 1px;
+    height: 40px;
+    background: var(--border);
+    margin: 0 8px;
+    flex-shrink: 0;
   }
 
   .main-content {
     display: grid;
-    grid-template-columns: 1fr 320px;
-    gap: 24px;
+    grid-template-columns: 1fr 360px;
+    gap: 28px;
   }
 
   .calendar-section {
     background: var(--bg-card);
-    border-radius: 12px;
-    padding: 24px;
+    border-radius: var(--radius-lg);
+    padding: 28px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
   }
 
   .sidebar {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 20px;
   }
 
   .sidebar-section {
     background: var(--bg-card);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     padding: 20px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
   }
 
   .sidebar-section h3 {
-    margin-bottom: 16px;
-    font-size: 16px;
-    color: #333;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
   }
 
-  .empty {
-    color: #999;
-    text-align: center;
-    padding: 20px;
+  .section-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: var(--accent-bg);
+    color: var(--accent);
+  }
+
+  .card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 24px;
+    color: var(--text-muted);
+  }
+
+  .empty-state svg {
+    opacity: 0.4;
+  }
+
+  .empty-state p {
     font-size: 14px;
+    text-align: center;
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 1024px) {
     .main-content {
       grid-template-columns: 1fr;
     }
+  }
 
+  @media (max-width: 768px) {
     .stats-bar {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-      padding: 16px;
+      gap: 16px;
+      padding: 20px;
+    }
+
+    .stat-divider {
+      display: none;
+    }
+
+    .stat-item {
+      justify-content: flex-start;
     }
 
     .stat-value {
-      font-size: 22px;
+      font-size: 20px;
+    }
+
+    .stat-icon {
+      width: 40px;
+      height: 40px;
+      font-size: 20px;
     }
 
     .calendar-section {
-      padding: 12px;
+      padding: 16px;
     }
 
     .sidebar-section {
@@ -201,40 +320,16 @@
 
   @media (max-width: 480px) {
     .stats-bar {
-      gap: 8px;
-      padding: 12px;
+      gap: 12px;
+      padding: 16px;
     }
 
     .stat-value {
-      font-size: 20px;
+      font-size: 18px;
     }
 
     .stat-label {
-      font-size: 11px;
+      font-size: 12px;
     }
-  }
-
-  :global(.dark) .stats-bar {
-    background: var(--bg-card);
-  }
-
-  :global(.dark) .stat-label {
-    color: var(--text-muted);
-  }
-
-  :global(.dark) .sidebar-section {
-    background: var(--bg-card);
-  }
-
-  :global(.dark) .sidebar-section h3 {
-    color: var(--text-primary);
-  }
-
-  :global(.dark) .empty {
-    color: var(--text-muted);
-  }
-
-  :global(.dark) .calendar-section {
-    background: var(--bg-card);
   }
 </style>

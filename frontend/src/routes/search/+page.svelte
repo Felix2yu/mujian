@@ -60,19 +60,30 @@
   <h1>搜索演出</h1>
 
   <form class="search-bar" onsubmit={handleSubmit}>
-    <input
-      type="text"
-      bind:value={query}
-      placeholder="输入关键词搜索（支持空格分词，如：茶馆 话剧）"
-      autofocus
-    />
-    <button type="submit" class="btn-search">搜索</button>
+    <div class="search-input-wrapper">
+      <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input
+        type="text"
+        bind:value={query}
+        placeholder="输入关键词搜索（支持空格分词，如：茶馆 话剧）"
+        autofocus
+      />
+    </div>
+    <button type="submit" class="primary-btn">搜索</button>
   </form>
 
   <div class="search-hint">
-    <span>支持搜索：</span>
-    <span>名称</span><span>场地</span><span>剧团</span><span>阵容</span>
-    <span>同行</span><span>分类</span><span>剧目</span><span>剧评</span><span>备注</span><span>座位</span>
+    <span class="hint-label">支持搜索：</span>
+    <span class="hint-tag">名称</span>
+    <span class="hint-tag">场地</span>
+    <span class="hint-tag">剧团</span>
+    <span class="hint-tag">阵容</span>
+    <span class="hint-tag">同行</span>
+    <span class="hint-tag">分类</span>
+    <span class="hint-tag">剧目</span>
+    <span class="hint-tag">剧评</span>
+    <span class="hint-tag">备注</span>
+    <span class="hint-tag">座位</span>
   </div>
 
   {#if loading}
@@ -82,6 +93,7 @@
     </div>
   {:else if searched && shows.length === 0}
     <div class="empty">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
       <p>未找到匹配的演出</p>
       <p class="empty-hint">试试其他关键词</p>
     </div>
@@ -96,6 +108,7 @@
     </div>
   {:else}
     <div class="placeholder">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
       <p>输入关键词开始搜索</p>
     </div>
   {/if}
@@ -103,29 +116,135 @@
 
 <style>
   .search-page { max-width: 800px; margin: 0 auto; }
-  h1 { font-size: 24px; font-weight: 700; margin-bottom: 24px; }
-  .search-bar { display: flex; gap: 8px; margin-bottom: 12px; }
-  .search-bar input { flex: 1; padding: 12px 16px; font-size: 16px; border-radius: 8px; border: 2px solid #ddd; transition: border-color 0.2s; }
-  .search-bar input:focus { border-color: #4A90D9; outline: none; }
-  .btn-search { padding: 12px 32px; background: #4A90D9; color: #fff; border-radius: 8px; font-size: 16px; font-weight: 500; transition: background 0.2s; }
-  .btn-search:hover { background: #3a7bc8; }
-  .search-hint { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; color: #999; margin-bottom: 32px; }
-  .search-hint span:not(:first-child) { padding: 2px 8px; background: #f0f0f0; border-radius: 4px; }
-  .loading, .empty, .placeholder { text-align: center; padding: 60px 20px; color: #666; }
-  .loading { display: flex; align-items: center; justify-content: center; gap: 12px; }
-  .spinner {
-    width: 24px; height: 24px; border: 3px solid #ddd; border-top-color: #4A90D9;
-    border-radius: 50%; animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .empty-hint { font-size: 13px; color: #999; margin-top: 8px; }
-  .placeholder p { color: #999; }
-  .results-info { margin-bottom: 16px; font-size: 14px; color: #666; }
-  .results-list { display: flex; flex-direction: column; gap: 12px; }
+  h1 { font-size: 24px; font-weight: 700; margin-bottom: 24px; letter-spacing: -0.02em; }
 
-  :global(.dark) .search-hint span:not(:first-child) { background: #333; color: #999; }
-  :global(.dark) .loading, :global(.dark) .empty, :global(.dark) .placeholder { color: #999; }
-  :global(.dark) .placeholder p { color: #777; }
-  :global(.dark) .empty-hint { color: #777; }
-  :global(.dark) .results-info { color: #999; }
+  .search-bar { display: flex; gap: 10px; margin-bottom: 16px; }
+
+  .search-input-wrapper {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 14px;
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+
+  .search-input-wrapper input {
+    width: 100%;
+    padding: 14px 16px 14px 44px;
+    font-size: 15px;
+    border-radius: var(--radius-md);
+    border: 1.5px solid var(--border);
+    transition: all 0.2s;
+    background: var(--bg-input);
+    color: var(--text-primary);
+  }
+
+  .search-input-wrapper input:hover {
+    border-color: var(--border-hover);
+  }
+
+  .search-input-wrapper input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-bg);
+    outline: none;
+  }
+
+  .primary-btn {
+    padding: 14px 36px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: var(--radius-md);
+    font-size: 15px;
+    font-weight: 500;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .primary-btn:hover {
+    background: var(--accent-light);
+    transform: translateY(-1px);
+  }
+
+  .search-hint {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 12px;
+    margin-bottom: 32px;
+    align-items: center;
+  }
+
+  .hint-label {
+    color: var(--text-muted);
+  }
+
+  .hint-tag {
+    padding: 4px 10px;
+    background: var(--bg-surface);
+    border-radius: 20px;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  .loading, .empty, .placeholder {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty svg, .placeholder svg {
+    opacity: 0.3;
+  }
+
+  .empty p, .placeholder p {
+    font-size: 15px;
+  }
+
+  .empty-hint {
+    font-size: 13px;
+    color: var(--text-muted) !important;
+    margin-top: 4px;
+  }
+
+  .placeholder p {
+    color: var(--text-muted);
+  }
+
+  .results-info {
+    margin-bottom: 16px;
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  .results-info strong {
+    color: var(--accent);
+  }
+
+  .results-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
 </style>

@@ -11,6 +11,7 @@
   let showSearch = $state(false);
   let deferredPrompt = $state(null);
   let showInstall = $state(false);
+  let mobileMenuOpen = $state(false);
 
   onMount(async () => {
     try {
@@ -70,52 +71,76 @@
 
 <div class="app">
   <nav class="navbar">
-    <div class="nav-brand">
-      <a href="/">幕间</a>
-    </div>
-    <div class="nav-links">
-      <a href="/" class:active={currentPath === '/'}>日历</a>
-      <a href="/shows" class:active={currentPath.startsWith('/shows') && !currentPath.includes('/import') && !currentPath.includes('/new')}>演出</a>
-      <a href="/analytics" class:active={currentPath === '/analytics'}>数据分析</a>
-      <a href="/shows/new" class:active={currentPath === '/shows/new'}>添加演出</a>
-    </div>
-    <div class="nav-search">
+    <div class="nav-inner">
+      <div class="nav-brand">
+        <a href="/">幕间</a>
+      </div>
+
+      <div class="nav-links" class:open={mobileMenuOpen}>
+        <a href="/" class:active={currentPath === '/'} onclick={() => mobileMenuOpen = false}>日历</a>
+        <a href="/shows" class:active={currentPath.startsWith('/shows') && !currentPath.includes('/import') && !currentPath.includes('/new')} onclick={() => mobileMenuOpen = false}>演出</a>
+        <a href="/analytics" class:active={currentPath === '/analytics'} onclick={() => mobileMenuOpen = false}>数据分析</a>
+        <a href="/shows/new" class:active={currentPath === '/shows/new'} onclick={() => mobileMenuOpen = false}>添加演出</a>
+      </div>
+
+      <div class="nav-search">
         <form onsubmit={(e) => { e.preventDefault(); handleSearch(); }}>
-        <input
-          type="text"
-          placeholder="搜索演出..."
-          bind:value={searchQuery}
-          onblur={() => setTimeout(closeSearch, 200)}
-        />
-      </form>
-      {#if showSearch && searchResults.length > 0}
-        <div class="search-results">
-          {#each searchResults.slice(0, 5) as show}
-            <a href="/shows/{show.id}" class="search-item">
-              <span class="search-name">{show.name}</span>
-              <span class="search-venue">{show.venue}</span>
-            </a>
-          {/each}
-          {#if searchResults.length > 5}
-            <a href="/search?q={encodeURIComponent(searchQuery)}" class="search-more">
-              查看全部 {searchResults.length} 条结果 →
-            </a>
-          {/if}
-        </div>
-      {/if}
-    </div>
-    <div class="nav-right">
-      {#if stats}
-        <div class="nav-stats">
-          <span>{stats.total_shows} 场演出</span>
-          <span>{stats.total_hours.toFixed(0)} 小时</span>
-        </div>
-      {/if}
-      {#if showInstall}
-        <button class="install-btn" onclick={installApp}>📱 安装</button>
-      {/if}
-      <button class="notify-btn" onclick={requestPermission}>🔔</button>
-      <a href="/settings" class="nav-settings" class:active={currentPath === '/settings'}>⚙</a>
+          <div class="search-wrapper">
+            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input
+              type="text"
+              placeholder="搜索演出..."
+              bind:value={searchQuery}
+              onblur={() => setTimeout(closeSearch, 200)}
+            />
+          </div>
+        </form>
+        {#if showSearch && searchResults.length > 0}
+          <div class="search-results">
+            {#each searchResults.slice(0, 5) as show}
+              <a href="/shows/{show.id}" class="search-item">
+                <span class="search-name">{show.name}</span>
+                <span class="search-venue">{show.venue}</span>
+              </a>
+            {/each}
+            {#if searchResults.length > 5}
+              <a href="/search?q={encodeURIComponent(searchQuery)}" class="search-more">
+                查看全部 {searchResults.length} 条结果 →
+              </a>
+            {/if}
+          </div>
+        {/if}
+      </div>
+
+      <div class="nav-right">
+        {#if stats}
+          <div class="nav-stats">
+            <span class="stat-pill">{stats.total_shows} 场</span>
+            <span class="stat-pill">{stats.total_hours.toFixed(0)}h</span>
+          </div>
+        {/if}
+        {#if showInstall}
+          <button class="icon-btn install-btn" onclick={installApp} title="安装应用">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
+        {/if}
+        <button class="icon-btn" onclick={requestPermission} title="通知">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+        </button>
+        <a href="/settings" class="icon-btn" class:active={currentPath === '/settings'} title="设置">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        </a>
+
+        <button class="mobile-menu-btn" onclick={() => mobileMenuOpen = !mobileMenuOpen}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            {#if mobileMenuOpen}
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            {:else}
+              <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+            {/if}
+          </svg>
+        </button>
+      </div>
     </div>
   </nav>
 
@@ -126,40 +151,61 @@
 
 <style>
   :global(:root) {
-    --bg-body: #f5f5f5;
-    --bg-card: #fff;
-    --bg-card-hover: #fafafa;
-    --bg-surface: #f0f0f0;
-    --bg-surface-hover: #e0e0e0;
-    --bg-input: #fff;
-    --border: #eee;
-    --border-hover: #ddd;
-    --text-primary: #333;
-    --text-secondary: #666;
-    --text-muted: #999;
-    --accent: #4A90D9;
-    --danger-bg: #fee;
-    --danger-text: #c00;
-    --danger-bg-hover: #fdd;
-    --success: #27AE60;
-    --warning: #f39c12;
+    --bg-body: #f8f9fc;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f8f9fc;
+    --bg-surface: #f1f3f9;
+    --bg-surface-hover: #e5e8f0;
+    --bg-input: #ffffff;
+    --border: #e2e5f0;
+    --border-hover: #d0d5e4;
+    --text-primary: #1a1d2e;
+    --text-secondary: #5a6178;
+    --text-muted: #8b91a8;
+    --accent: #6366f1;
+    --accent-light: #818cf8;
+    --accent-bg: #eef2ff;
+    --danger-bg: #fef2f2;
+    --danger-text: #dc2626;
+    --danger-bg-hover: #fee2e2;
+    --success: #10b981;
+    --success-bg: #ecfdf5;
+    --warning: #f59e0b;
+    --warning-bg: #fffbeb;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+    --shadow-lg: 0 8px 30px rgba(0,0,0,0.08);
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
   }
 
   :global(.dark) {
-    --bg-body: #1a1a1a;
-    --bg-card: #2a2a2a;
-    --bg-card-hover: #333;
-    --bg-surface: #333;
-    --bg-surface-hover: #444;
-    --bg-input: #2a2a2a;
-    --border: #333;
-    --border-hover: #444;
-    --text-primary: #e0e0e0;
-    --text-secondary: #aaa;
-    --text-muted: #777;
-    --danger-bg: #3a2020;
-    --danger-text: #f66;
-    --danger-bg-hover: #4a2020;
+    --bg-body: #0f1117;
+    --bg-card: #1a1d2e;
+    --bg-card-hover: #222639;
+    --bg-surface: #222639;
+    --bg-surface-hover: #2a2e44;
+    --bg-input: #1a1d2e;
+    --border: #2a2e44;
+    --border-hover: #3a3f5c;
+    --text-primary: #e8eaf0;
+    --text-secondary: #9ca3bf;
+    --text-muted: #6b7394;
+    --accent: #818cf8;
+    --accent-light: #a5b4fc;
+    --accent-bg: rgba(99,102,241,0.15);
+    --danger-bg: rgba(220,38,38,0.15);
+    --danger-text: #f87171;
+    --danger-bg-hover: rgba(220,38,38,0.25);
+    --success: #34d399;
+    --success-bg: rgba(16,185,129,0.15);
+    --warning: #fbbf24;
+    --warning-bg: rgba(245,158,11,0.15);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
+    --shadow-lg: 0 8px 30px rgba(0,0,0,0.4);
   }
 
   :global(*) {
@@ -169,10 +215,12 @@
   }
 
   :global(body) {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
     background: var(--bg-body);
     color: var(--text-primary);
     line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     transition: background 0.3s, color 0.3s;
   }
 
@@ -186,21 +234,23 @@
     border: none;
     background: none;
     font: inherit;
+    color: inherit;
   }
 
   :global(input, select, textarea) {
     font: inherit;
-    border-radius: 6px;
-    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
     background: var(--bg-input);
     color: var(--text-primary);
-    transition: background 0.2s, color 0.2s;
+    border: 1.5px solid var(--border);
+    transition: all 0.2s ease;
   }
 
   :global(input:focus, select:focus, textarea:focus) {
     outline: none;
-    outline: 2px solid var(--accent);
-    outline-offset: -1px;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-bg);
   }
 
   :global(.dark select option) {
@@ -208,133 +258,148 @@
     color: var(--text-primary);
   }
 
+  :global(h1) { font-weight: 700; letter-spacing: -0.02em; }
+  :global(h2) { font-weight: 600; letter-spacing: -0.01em; }
+  :global(h3) { font-weight: 600; }
+
   .app {
     min-height: 100vh;
   }
 
   .navbar {
-    background: #fff;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    padding: 0 24px;
-    display: flex;
-    align-items: center;
-    gap: 32px;
-    height: 60px;
+    background: rgba(255,255,255,0.8);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
     position: sticky;
     top: 0;
     z-index: 100;
     transition: background 0.3s;
   }
 
+  .nav-inner {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    height: 64px;
+  }
+
   :global(.dark) .navbar {
-    background: #222;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    background: rgba(15,17,23,0.85);
   }
 
   .nav-brand a {
-    font-size: 24px;
-    font-weight: 700;
-    color: #4A90D9;
+    font-size: 22px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.02em;
   }
 
   .nav-links {
     display: flex;
-    gap: 8px;
+    gap: 4px;
   }
 
   .nav-links a {
     padding: 8px 16px;
-    border-radius: 6px;
-    transition: background 0.2s;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
     white-space: nowrap;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
   }
 
   .nav-links a:hover {
-    background: #f0f0f0;
-  }
-
-  :global(.dark) .nav-links a:hover {
-    background: #333;
+    background: var(--bg-surface);
+    color: var(--text-primary);
   }
 
   .nav-links a.active {
-    background: #4A90D9;
+    background: var(--accent);
     color: #fff;
   }
 
   .nav-search {
     position: relative;
+    flex: 1;
+    max-width: 320px;
+  }
+
+  .search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 12px;
+    color: var(--text-muted);
+    pointer-events: none;
   }
 
   .nav-search input {
-    width: 200px;
-    padding: 6px 12px;
-    border-radius: 20px;
-    background: #f0f0f0;
-    border: none;
+    width: 100%;
+    padding: 8px 14px 8px 36px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    border: 1.5px solid transparent;
+    font-size: 13px;
+    transition: all 0.2s ease;
   }
 
-  :global(.dark) .nav-search input {
-    background: #333;
+  .nav-search input:hover {
+    border-color: var(--border-hover);
   }
 
   .nav-search input:focus {
-    background: #fff;
-    box-shadow: 0 0 0 2px #4A90D9;
-  }
-
-  :global(.dark) .nav-search input:focus {
-    background: #2a2a2a;
+    background: var(--bg-input);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-bg);
   }
 
   .search-results {
     position: absolute;
-    top: 100%;
+    top: calc(100% + 8px);
     left: 0;
     right: 0;
-    background: #fff;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    border-radius: 8px;
-    margin-top: 8px;
-    max-height: 300px;
+    background: var(--bg-card);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    max-height: 320px;
     overflow-y: auto;
     z-index: 200;
-    min-width: 250px;
-  }
-
-  :global(.dark) .search-results {
-    background: #2a2a2a;
+    min-width: 280px;
   }
 
   .search-item {
     display: flex;
     flex-direction: column;
     padding: 12px 16px;
-  }
-
-  :global(.dark) .search-item {
-    color: var(--text-primary);
-  }
-
-  .search-item:last-child {
-    border-bottom: none;
+    transition: background 0.15s;
   }
 
   .search-item:hover {
-    background: #f5f5f5;
-  }
-
-  :global(.dark) .search-item:hover {
-    background: #333;
+    background: var(--bg-surface);
   }
 
   .search-name {
     font-weight: 500;
+    font-size: 14px;
   }
 
   .search-venue {
     font-size: 12px;
-    color: #666;
+    color: var(--text-muted);
+    margin-top: 2px;
   }
 
   .search-more {
@@ -342,366 +407,146 @@
     padding: 12px 16px;
     text-align: center;
     font-size: 13px;
-    color: #4A90D9;
-  }
-
-  :global(.dark) .search-more {
-    color: #4A90D9;
+    color: var(--accent);
+    font-weight: 500;
+    border-top: 1px solid var(--border);
+    transition: background 0.15s;
   }
 
   .search-more:hover {
-    background: #f5f5f5;
-  }
-
-  :global(.dark) .search-more:hover {
-    background: #333;
+    background: var(--bg-surface);
   }
 
   .nav-right {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     margin-left: auto;
-  }
-
-  .install-btn {
-    padding: 6px 12px;
-    border-radius: 8px;
-    background: var(--accent);
-    color: #fff;
-    font-size: 12px;
-    font-weight: 500;
-    white-space: nowrap;
-    transition: background 0.2s;
-  }
-
-  .install-btn:hover {
-    background: #3a7bc8;
-  }
-
-  .notify-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    font-size: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .notify-btn:hover {
-    background: var(--bg-surface);
   }
 
   .nav-stats {
     display: flex;
-    gap: 16px;
-    font-size: 13px;
-    color: #666;
+    gap: 6px;
   }
 
-  .nav-settings {
-    font-size: 20px;
+  .stat-pill {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: var(--accent-bg);
+    color: var(--accent);
+  }
+
+  .icon-btn {
     width: 36px;
     height: 36px;
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
-    transition: background 0.2s;
+    transition: all 0.2s ease;
+    color: var(--text-secondary);
   }
 
-  .nav-settings:hover {
-    background: #f0f0f0;
+  .icon-btn:hover {
+    background: var(--bg-surface);
+    color: var(--text-primary);
   }
 
-  :global(.dark) .nav-settings:hover {
-    background: #333;
+  .icon-btn.active {
+    background: var(--accent-bg);
+    color: var(--accent);
   }
 
-  .nav-settings.active {
-    background: #4A90D9;
+  .install-btn {
+    width: auto;
+    padding: 6px 12px;
+    gap: 6px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .install-btn:hover {
+    background: var(--accent);
     color: #fff;
+  }
+
+  .mobile-menu-btn {
+    display: none;
   }
 
   main {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 24px;
+    padding: 32px;
   }
 
-  :global(.dark main) {
-    background: transparent;
-  }
-
-  :global(.dark .section),
-  :global(.dark .show-form),
-  :global(.dark .calendar-section),
-  :global(.dark .sidebar-section),
-  :global(.dark .stats-bar),
-  :global(.dark .stat-card),
-  :global(.dark .chart-card),
-  :global(.dark .list-card),
-  :global(.dark .batch-bar),
-  :global(.dark .batch-panel),
-  :global(.dark .select-all),
-  :global(.dark .card),
-  :global(.dark .s3-form) {
-    background: var(--bg-card);
-  }
-
-  :global(.dark .tabs),
-  :global(.dark .calendar-grid) {
-    background: #1e1e1e;
-  }
-
-  :global(.dark .tab.active) {
-    background: #2a2a2a;
-    color: #e0e0e0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-  }
-
-  :global(.dark .action-btn),
-  :global(.dark .batch-btn),
-  :global(.dark .batch-action),
-  :global(.dark .edit-btn),
-  :global(.dark .btn-restore),
-  :global(.dark .btn-import-more),
-  :global(.dark .filter-toggle),
-  :global(.dark .nav-settings) {
-    background: #333;
-    color: #ccc;
-  }
-
-  :global(.dark .action-btn:hover),
-  :global(.dark .batch-btn:hover),
-  :global(.dark .batch-action:hover:not(:disabled)),
-  :global(.dark .edit-btn:hover),
-  :global(.dark .btn-restore:hover),
-  :global(.dark .btn-import-more:hover),
-  :global(.dark .filter-toggle:hover) {
-    background: #444;
-  }
-
-  :global(.dark .batch-action.danger),
-  :global(.dark .delete-btn),
-  :global(.dark .clear-btn) {
-    background: #3a2020;
-    color: #f66;
-  }
-
-  :global(.dark .batch-action.danger:hover),
-  :global(.dark .delete-btn:hover),
-  :global(.dark .clear-btn:hover) {
-    background: #4a2020;
-  }
-
-  :global(.dark .category) {
-    background: #333;
-    color: #999;
-  }
-
-  :global(.dark .category:hover) {
-    background: #444;
-  }
-
-  :global(.dark .info-label),
-  :global(.dark .form-section label) {
-    color: #999;
-  }
-
-  :global(.dark .info-value),
-  :global(.dark h1),
-  :global(.dark h2),
-  :global(.dark h3) {
-    color: #e0e0e0;
-  }
-
-  :global(.dark .text-content),
-  :global(.dark .card-info) {
-    color: #aaa;
-  }
-
-  :global(.dark .error) {
-    background: #3a2020;
-    color: #f66;
-  }
-
-  :global(.dark .empty),
-  :global(.dark .loading),
-  :global(.dark .result-count),
-  :global(.dark .restore-status) {
-    color: #999;
-  }
-
-  :global(.dark .spinner) {
-    border-color: #444;
-    border-top-color: #4A90D9;
-  }
-
-  :global(.dark .show-card) {
-    background: #2a2a2a;
-    border-color: #333;
-  }
-
-  :global(.dark .show-card:hover) {
-    border-color: #444;
-  }
-
-  :global(.dark .tag) {
-    background: #1a3a5a;
-    color: #ccc;
-  }
-
-  :global(.dark .tag-remove) {
-    color: #777;
-  }
-
-  :global(.dark .tag-remove:hover) {
-    color: #f66;
-  }
-
-  :global(.dark .tag-field) {
-    color: #e0e0e0;
-  }
-
-  :global(.dark .dropzone) {
-    border-color: #444;
-  }
-
-  :global(.dark .dropzone:hover),
-  :global(.dark .dropzone.dragover) {
-    background: #1a2a3a;
-  }
-
-  :global(.dark .col-group strong) {
-    color: #e0e0e0;
-  }
-
-  :global(.dark .col-group li) {
-    color: #999;
-  }
-
-  :global(.dark .instructions p) {
-    color: #999;
-  }
-
-  :global(.dark .result-stats) {
-    color: #999;
-  }
-
-  :global(.dark .nav-links a:hover) {
-    background: #333;
-  }
-
-  :global(.dark .nav-search input) {
-    background: #333;
-    color: #e0e0e0;
-  }
-
-  :global(.dark .nav-search input:focus) {
-    background: #2a2a2a;
-  }
-
-  :global(.dark .search-results) {
-    background: #2a2a2a;
-    border-color: #333;
-  }
-
-  :global(.dark .search-item) {
-    border-bottom-color: #333;
-    color: #e0e0e0;
-  }
-
-  :global(.dark .search-item:hover) {
-    background: #333;
-  }
-
-  :global(.dark .search-item .search-venue) {
-    color: #999;
-  }
-
-  :global(.dark .search-more) {
-    border-top-color: #333;
-    color: #4A90D9;
-  }
-
-  :global(.dark .search-more:hover) {
-    background: #333;
-  }
-
-  :global(.dark .nav-settings:hover) {
-    background: #333;
-  }
-
-  :global(.dark .nav-settings.active) {
-    background: #4A90D9;
-    color: #fff;
-  }
-
-  :global(.dark .day-cell.empty) {
-    background: #1a1a1a;
-  }
-
-  :global(.dark .day-cell:not(.empty):hover) {
-    background: #2a2a2a;
-  }
-
-  :global(.dark .poster-cell) {
-    background: #333;
-  }
-
-  :global(.dark .popup-item:hover) {
-    background: #333;
-  }
-
-  :global(.dark .popup-item) {
-    border-bottom-color: #333;
-  }
-
-  :global(.dark .popup-list) {
-    border-top: 1px solid #333;
+  @media (max-width: 1024px) {
+    main {
+      padding: 24px;
+    }
   }
 
   @media (max-width: 768px) {
     .navbar {
-      padding: 0 12px;
+      padding: 0 16px;
+    }
+
+    .nav-inner {
       gap: 12px;
     }
 
     .nav-links {
+      display: none;
+      position: absolute;
+      top: 64px;
+      left: 0;
+      right: 0;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      flex-direction: column;
+      padding: 12px;
       gap: 4px;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .nav-links.open {
+      display: flex;
     }
 
     .nav-links a {
-      padding: 6px 10px;
-      font-size: 13px;
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
     }
 
-    .nav-search input {
-      width: 120px;
-      font-size: 13px;
+    .nav-search {
+      display: none;
     }
 
     .nav-stats {
       display: none;
     }
 
+    .mobile-menu-btn {
+      display: flex;
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      align-items: center;
+      justify-content: center;
+      color: var(--text-secondary);
+      transition: all 0.2s;
+    }
+
+    .mobile-menu-btn:hover {
+      background: var(--bg-surface);
+    }
+
     main {
       padding: 16px;
-    }
-  }
-
-  @media (max-width: 480px) {
-    .nav-links a {
-      padding: 6px 8px;
-      font-size: 12px;
-    }
-
-    .nav-search input {
-      width: 100px;
     }
   }
 </style>

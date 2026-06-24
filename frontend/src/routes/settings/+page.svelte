@@ -148,7 +148,10 @@
   {/if}
 
   <div class="section">
-    <h2>外观</h2>
+    <div class="section-header">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      <h2>外观</h2>
+    </div>
     <div class="form-group">
       <label for="theme">主题</label>
       <select id="theme" bind:value={settings.theme}>
@@ -160,7 +163,10 @@
   </div>
 
   <div class="section">
-    <h2>海报存储</h2>
+    <div class="section-header">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      <h2>海报存储</h2>
+    </div>
     <div class="form-group">
       <label for="storage">存储方式</label>
       <select id="storage" bind:value={settings.storage_type} disabled={!canUseLocal && settings.storage_type !== 's3'}>
@@ -209,13 +215,16 @@
       </div>
     {/if}
 
-    <button class="btn-save" onclick={saveSettings} disabled={saving}>
+    <button class="primary-btn" onclick={saveSettings} disabled={saving}>
       {saving ? '保存中...' : '保存设置'}
     </button>
   </div>
 
   <div class="section">
-    <h2>分类管理</h2>
+    <div class="section-header">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      <h2>分类管理</h2>
+    </div>
     <div class="categories-list">
       {#each categories as cat, index (cat.id)}
         <div class="cat-item"
@@ -226,27 +235,38 @@
           ondragleave={handleDragLeave}
           ondrop={(e) => handleDrop(e, index)}
         >
-          <span class="drag-handle">⠿</span>
+          <span class="drag-handle">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+          </span>
           <input type="text" bind:value={cat.name} onblur={() => updateCategory(cat)} class="cat-name" />
           <span class="cat-count">{cat.show_count} 场</span>
-          <button class="btn-delete" onclick={() => deleteCategory(cat.id)}>×</button>
+          <button class="btn-delete" onclick={() => deleteCategory(cat.id)}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
         </div>
       {/each}
     </div>
     <div class="add-cat">
       <input type="text" bind:value={newCatName} placeholder="新分类名称" onkeydown={(e) => e.key === 'Enter' && addCategory()} />
-      <button class="btn-add" onclick={addCategory}>添加</button>
+      <button class="add-btn" onclick={addCategory}>添加</button>
     </div>
   </div>
 
   <div class="section">
-    <h2>数据备份</h2>
+    <div class="section-header">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <h2>数据备份</h2>
+    </div>
     <p class="backup-desc">备份包含所有分类和演出数据，可用于迁移或恢复。</p>
     <div class="backup-actions">
-      <a href={api.getBackupUrl()} class="btn-backup" download>📥 下载备份</a>
+      <a href={api.getBackupUrl()} class="backup-btn" download>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        下载备份
+      </a>
       <div class="restore-area">
-        <label class="btn-restore">
-          📤 恢复备份
+        <label class="restore-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          恢复备份
           <input type="file" accept=".json" onchange={handleRestore} hidden />
         </label>
         {#if restoring}
@@ -268,33 +288,55 @@
   h1 {
     font-size: 24px;
     font-weight: 700;
-    margin-bottom: 24px;
+    margin-bottom: 28px;
+    letter-spacing: -0.02em;
   }
 
   .message {
     padding: 12px 16px;
-    border-radius: 8px;
-    background: #d4edda;
-    color: #155724;
+    border-radius: var(--radius-sm);
+    background: var(--success-bg);
+    color: var(--success);
     margin-bottom: 20px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
+
+  .message::before { content: '✓'; font-weight: 700; }
 
   .message.error {
-    background: #f8d7da;
-    color: #721c24;
+    background: var(--danger-bg);
+    color: var(--danger-text);
   }
 
+  .message.error::before { content: '✕'; }
+
   .section {
-    background: #fff;
-    border-radius: 12px;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
     padding: 24px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     margin-bottom: 20px;
+  }
+
+  .section-header svg {
+    color: var(--accent);
   }
 
   h2 {
-    font-size: 18px;
+    font-size: 17px;
     font-weight: 600;
-    margin-bottom: 16px;
+    letter-spacing: -0.01em;
   }
 
   .form-group {
@@ -305,8 +347,8 @@
     display: block;
     font-size: 13px;
     font-weight: 500;
-    color: #666;
-    margin-bottom: 6px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
   }
 
   .form-group select, .form-group input {
@@ -317,15 +359,16 @@
   .hint {
     display: block;
     font-size: 12px;
-    color: #999;
-    margin-top: 4px;
+    color: var(--text-muted);
+    margin-top: 6px;
   }
 
   .s3-form {
     margin-top: 16px;
-    padding: 16px;
-    background: #f8f8f8;
-    border-radius: 8px;
+    padding: 20px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
   }
 
   .form-row {
@@ -337,22 +380,28 @@
     flex: 1;
   }
 
-  .btn-save {
+  .primary-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 10px 24px;
-    background: #4A90D9;
+    background: var(--accent);
     color: #fff;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     font-weight: 500;
+    font-size: 14px;
     margin-top: 8px;
-    transition: background 0.2s;
+    transition: all 0.2s;
   }
 
-  .btn-save:hover:not(:disabled) {
-    background: #3a7bc8;
+  .primary-btn:hover:not(:disabled) {
+    background: var(--accent-light);
+    transform: translateY(-1px);
   }
 
-  .btn-save:disabled {
+  .primary-btn:disabled {
     opacity: 0.6;
+    cursor: not-allowed;
   }
 
   .categories-list {
@@ -362,10 +411,11 @@
   .cat-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 0;
+    gap: 10px;
+    padding: 10px 0;
     cursor: grab;
-    transition: background 0.2s;
+    transition: all 0.2s;
+    border-bottom: 1px solid var(--border);
   }
 
   .cat-item:last-child {
@@ -373,7 +423,7 @@
   }
 
   .cat-item.drag-over {
-    border-top: 2px solid #4A90D9;
+    border-top: 2px solid var(--accent);
   }
 
   .cat-item:active {
@@ -381,45 +431,61 @@
   }
 
   .drag-handle {
-    color: #ccc;
-    font-size: 16px;
+    color: var(--text-muted);
     cursor: grab;
     user-select: none;
+    display: flex;
+    align-items: center;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.15s;
   }
 
   .drag-handle:hover {
-    color: #999;
+    color: var(--text-secondary);
+    background: var(--bg-surface);
   }
 
   .cat-count {
     font-size: 12px;
-    color: #999;
+    color: var(--text-muted);
     min-width: 40px;
     text-align: right;
+    font-weight: 500;
   }
 
   .cat-name {
     flex: 1;
     border: none;
     background: transparent;
-    font-size: 15px;
+    font-size: 14px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    color: var(--text-primary);
+  }
+
+  .cat-name:hover {
+    background: var(--bg-surface);
   }
 
   .cat-name:focus {
-    outline: 1px solid #4A90D9;
-    border-radius: 4px;
-    padding: 4px 8px;
+    outline: 2px solid var(--accent);
+    background: var(--bg-input);
   }
 
   .btn-delete {
-    color: #c00;
-    font-size: 18px;
+    color: var(--text-muted);
     padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
   }
 
   .btn-delete:hover {
-    background: #fee;
-    border-radius: 4px;
+    background: var(--danger-bg);
+    color: var(--danger-text);
   }
 
   .add-cat {
@@ -432,42 +498,51 @@
     flex: 1;
   }
 
-  .btn-add {
-    padding: 8px 16px;
-    background: #27AE60;
+  .add-btn {
+    padding: 8px 18px;
+    background: var(--success);
     color: #fff;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     font-weight: 500;
+    font-size: 13px;
+    transition: all 0.2s;
   }
 
-  .btn-add:hover {
-    background: #219a52;
+  .add-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
   }
 
   .backup-desc {
     font-size: 13px;
-    color: #666;
+    color: var(--text-muted);
     margin-bottom: 16px;
+    line-height: 1.6;
   }
 
   .backup-actions {
     display: flex;
-    gap: 16px;
+    gap: 12px;
     align-items: center;
   }
 
-  .btn-backup {
+  .backup-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 10px 24px;
-    background: #4A90D9;
+    background: var(--accent);
     color: #fff;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     font-weight: 500;
+    font-size: 14px;
     text-decoration: none;
-    transition: background 0.2s;
+    transition: all 0.2s;
   }
 
-  .btn-backup:hover {
-    background: #3a7bc8;
+  .backup-btn:hover {
+    background: var(--accent-light);
+    transform: translateY(-1px);
   }
 
   .restore-area {
@@ -476,27 +551,33 @@
     gap: 12px;
   }
 
-  .btn-restore {
+  .restore-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 10px 24px;
-    background: #f0f0f0;
-    color: #333;
-    border-radius: 8px;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
     font-weight: 500;
+    font-size: 14px;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: all 0.2s;
+    border: 1px solid var(--border);
   }
 
-  .btn-restore:hover {
-    background: #e0e0e0;
+  .restore-btn:hover {
+    background: var(--bg-surface-hover);
   }
 
   .restore-status {
     font-size: 13px;
-    color: #666;
+    color: var(--text-muted);
+    font-weight: 500;
   }
 
   .restore-status.success {
-    color: #27AE60;
+    color: var(--success);
   }
 
   @media (max-width: 768px) {
@@ -523,7 +604,7 @@
     }
 
     .cat-item {
-      padding: 8px 0;
+      padding: 10px 0;
     }
 
     .add-cat {
@@ -539,8 +620,8 @@
       align-items: stretch;
     }
 
-    .btn-backup, .btn-restore {
-      text-align: center;
+    .backup-btn, .restore-btn {
+      justify-content: center;
     }
   }
 
@@ -549,39 +630,5 @@
       flex-direction: column;
       gap: 0;
     }
-  }
-
-  :global(.dark) .s3-form { background: #1e1e1e; }
-  :global(.dark) .btn-restore { background: #333; color: #ccc; }
-  :global(.dark) .btn-restore:hover { background: #444; }
-  :global(.dark) .restore-status { color: #999; }
-  :global(.dark) .cat-item { border-bottom-color: #333; }
-  :global(.dark) .cat-item:hover { background: #2a2a2a; }
-  :global(.dark) h2 { color: #e0e0e0; }
-  :global(.dark) .section h2 { color: #e0e0e0; }
-  :global(.dark) .backup-actions { gap: 12px; }
-  :global(.dark) .backup-info { color: #999; }
-  :global(.dark) .backup-status { color: #999; }
-  :global(.dark) .backup-status.success { color: #27AE60; }
-  :global(.dark) .theme-options label { color: #ccc; }
-  :global(.dark) .add-cat input[type="text"] { background: #1e1e1e; border-color: #444; color: #e0e0e0; }
-  :global(.dark) .add-cat button { background: #4A90D9; }
-  :global(.dark) .cat-actions button { color: #999; }
-  :global(.dark) .cat-actions button:hover { color: #e0e0e0; }
-  :global(.dark) .form-group label { color: #999; }
-  :global(.dark) .hint { color: #777; }
-  :global(.dark) .cat-name { color: #e0e0e0; }
-  :global(.dark) .cat-name:focus { outline-color: #4A90D9; }
-  :global(.dark) .drag-handle { color: #666; }
-  :global(.dark) .drag-handle:hover { color: #999; }
-  :global(.dark) .cat-count { color: #777; }
-  :global(.dark) .btn-delete:hover { background: #3a2020; }
-  :global(.dark) .backup-desc { color: #999; }
-  :global(.dark) .btn-backup { background: #4A90D9; color: #fff; }
-  :global(.dark) .btn-backup:hover { background: #3a7bc8; }
-
-  :global(.dark) .section {
-    background: #2a2a2a;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   }
 </style>

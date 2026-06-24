@@ -158,14 +158,13 @@
 
   <div class="form-section">
     <h3>海报</h3>
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="poster-upload" class:dragover ondrop={handleDrop} ondragover={handleDragOver} ondragleave={handleDragLeave}>
       {#if posterPreview}
         <img src={posterPreview} alt="海报预览" class="poster-preview" />
         <button type="button" class="btn-remove-poster" onclick={() => { posterFile = null; posterPreview = ''; form.poster_url = ''; }}>移除</button>
       {:else}
         <div class="poster-placeholder">
-          <span class="poster-icon">🖼</span>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
           <p>拖拽图片到此处，或</p>
           <label class="btn-select-poster">选择图片<input type="file" accept="image/*" onchange={handleFileSelect} hidden /></label>
           <span class="poster-hint">支持 JPG、PNG、WebP</span>
@@ -236,46 +235,148 @@
 </form>
 
 <style>
-  .show-form { background: var(--bg-card); border-radius: 12px; padding: 24px; }
-  .error { background: var(--danger-bg); color: var(--danger-text); padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; }
-  .form-section { margin-bottom: 24px; padding-bottom: 24px; }
-  .form-section h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: var(--text-primary); }
-  .form-row { display: flex; gap: 16px; margin-bottom: 12px; }
-  .form-group { flex: 1; margin-bottom: 12px; }
-  .form-row .form-group { margin-bottom: 0; }
-  .form-group-short { flex: 0 0 120px; }
-  .form-group-rating { flex: 0 0 auto; }
-  label { display: block; font-size: 13px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px; }
-  input, select, textarea { width: 100%; }
+  .show-form {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+  }
+  .error {
+    background: var(--danger-bg);
+    color: var(--danger-text);
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 24px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .error::before {
+    content: '⚠';
+  }
+  .form-section {
+    margin-bottom: 28px;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+  }
+  .form-section:last-of-type {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+  .form-section h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 18px;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+  }
+  .form-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+  .form-group {
+    flex: 1;
+    margin-bottom: 14px;
+  }
+  .form-row .form-group {
+    margin-bottom: 0;
+  }
+  .form-group-short {
+    flex: 0 0 130px;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  input, select, textarea {
+    width: 100%;
+  }
   input[type="number"]::-webkit-inner-spin-button,
   input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   input[type="number"] { -moz-appearance: textfield; }
   textarea { resize: vertical; }
   .star-rating { display: flex; align-items: center; gap: 2px; padding: 8px 0; }
-  .star-btn { font-size: 24px; color: #ddd; cursor: pointer; padding: 0 2px; transition: color 0.15s, transform 0.15s; background: none; border: none; }
+  .star-btn { font-size: 24px; color: var(--border); cursor: pointer; padding: 0 2px; transition: color 0.15s, transform 0.15s; background: none; border: none; }
   .star-btn:hover { transform: scale(1.2); }
-  .star-btn.active { color: #f39c12; }
-  .rating-text { margin-left: 8px; font-size: 13px; color: #999; }
-  .poster-upload { border: 2px dashed var(--border); border-radius: 8px; padding: 24px; text-align: center; transition: border-color 0.2s, background 0.2s; cursor: pointer; }
-  .poster-upload.dragover { border-color: #4A90D9; background: #f0f7ff; }
-  .poster-preview { max-width: 200px; max-height: 200px; border-radius: 8px; object-fit: cover; }
-  .btn-remove-poster { margin-top: 8px; padding: 4px 12px; background: var(--danger-bg); color: var(--danger-text); border-radius: 6px; font-size: 12px; }
-  .poster-placeholder { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-  .poster-icon { font-size: 32px; }
+  .star-btn.active { color: var(--warning); }
+  .rating-text { margin-left: 8px; font-size: 13px; color: var(--text-muted); }
+  .poster-upload {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-md);
+    padding: 32px;
+    text-align: center;
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .poster-upload:hover { border-color: var(--accent); background: var(--accent-bg); }
+  .poster-upload.dragover { border-color: var(--accent); background: var(--accent-bg); }
+  .poster-preview { max-width: 200px; max-height: 200px; border-radius: var(--radius-sm); object-fit: cover; }
+  .btn-remove-poster {
+    margin-top: 12px;
+    padding: 6px 16px;
+    background: var(--danger-bg);
+    color: var(--danger-text);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .btn-remove-poster:hover { background: var(--danger-bg-hover); }
+  .poster-placeholder { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .poster-placeholder svg { color: var(--text-muted); opacity: 0.5; }
   .poster-placeholder p { color: var(--text-muted); margin: 0; font-size: 13px; }
-  .btn-select-poster { display: inline-block; padding: 6px 16px; background: #4A90D9; color: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; }
-  .btn-select-poster:hover { background: #3a7bc8; }
-  .poster-hint { font-size: 11px; color: #999; }
-  .form-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
-  .btn-cancel { padding: 10px 24px; border-radius: 8px; background: var(--bg-surface); color: var(--text-secondary); font-weight: 500; transition: background 0.2s; }
+  .btn-select-poster {
+    display: inline-block;
+    padding: 8px 20px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  .btn-select-poster:hover { background: var(--accent-light); }
+  .poster-hint { font-size: 12px; color: var(--text-muted); }
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 28px;
+  }
+  .btn-cancel {
+    padding: 10px 24px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 14px;
+    transition: all 0.2s;
+    border: 1px solid var(--border);
+  }
   .btn-cancel:hover { background: var(--bg-surface-hover); }
-  .btn-submit { padding: 10px 32px; border-radius: 8px; background: #4A90D9; color: #fff; font-weight: 500; transition: background 0.2s; }
-  .btn-submit:hover:not(:disabled) { background: #3a7bc8; }
+  .btn-submit {
+    padding: 10px 32px;
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: #fff;
+    font-weight: 500;
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+  .btn-submit:hover:not(:disabled) { background: var(--accent-light); transform: translateY(-1px); }
   .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
   @media (max-width: 768px) {
     .show-form { padding: 16px; }
     .form-row { flex-direction: column; gap: 0; }
-    .form-row .form-group { margin-bottom: 12px; }
+    .form-row .form-group { margin-bottom: 14px; }
     .form-actions { flex-direction: column; gap: 8px; }
     .form-actions button { width: 100%; text-align: center; }
   }

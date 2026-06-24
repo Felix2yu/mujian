@@ -7,7 +7,7 @@
 
   let popupEvents = $state([]);
   let popupPos = $state({ x: 0, y: 0, align: 'center' });
-  const POPUP_W = 260;
+  const POPUP_W = 280;
   const POPUP_GAP = 8;
 
   let slideDir = $state(0);
@@ -131,23 +131,29 @@
 
   function getEventColor(event) {
     const colors = {
-      normal: '#27AE60',
-      cancelled: '#E74C3C',
-      pending_tickets: '#F39C12',
-      no_show: '#95A5A6'
+      normal: '#10b981',
+      cancelled: '#ef4444',
+      pending_tickets: '#f59e0b',
+      no_show: '#94a3b8'
     };
-    return event.color || colors[event.status] || '#999';
+    return event.color || colors[event.status] || '#94a3b8';
   }
 </script>
 
 <div class="calendar">
   <div class="calendar-header">
-    <button class="nav-btn" onclick={prevMonth}>‹</button>
-    <div class="title">
-      <span class="year">{year}年</span>
-      <span class="month">{month}月</span>
+    <div class="nav-group">
+      <button class="nav-btn" onclick={prevMonth}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <button class="nav-btn" onclick={nextMonth}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
     </div>
-    <button class="nav-btn" onclick={nextMonth}>›</button>
+    <div class="title">
+      <span class="month">{month}月</span>
+      <span class="year">{year}年</span>
+    </div>
     <button class="today-btn" onclick={goToToday}>今天</button>
   </div>
 
@@ -203,15 +209,14 @@
   </div>
 
   <div class="calendar-legend">
-    <span class="legend-item"><span class="legend-dot" style="background: #27AE60"></span>正常</span>
-    <span class="legend-item"><span class="legend-dot" style="background: #E74C3C"></span>已取消</span>
-    <span class="legend-item"><span class="legend-dot" style="background: #F39C12"></span>待开票</span>
-    <span class="legend-item"><span class="legend-dot" style="background: #95A5A6"></span>未赴约</span>
+    <span class="legend-item"><span class="legend-dot" style="background: #10b981"></span>正常</span>
+    <span class="legend-item"><span class="legend-dot" style="background: #ef4444"></span>已取消</span>
+    <span class="legend-item"><span class="legend-dot" style="background: #f59e0b"></span>待开票</span>
+    <span class="legend-item"><span class="legend-dot" style="background: #94a3b8"></span>未赴约</span>
   </div>
 </div>
 
 {#if popupEvents.length > 0}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="popup-overlay" onclick={closePopup}></div>
   <div class="popup popup-{popupPos.align}" class:popup-below={popupPos.below} style="left: {popupPos.x}px; top: {popupPos.y}px">
     {#if popupEvents.length === 1}
@@ -265,112 +270,131 @@
   .calendar-header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 20px;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .nav-group {
+    display: flex;
+    gap: 4px;
   }
 
   .nav-btn {
     width: 36px;
     height: 36px;
-    border-radius: 50%;
-    font-size: 20px;
-    color: #666;
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.2s;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
     -webkit-tap-highlight-color: transparent;
   }
 
   .nav-btn:hover {
-    background: #f0f0f0;
+    background: var(--bg-surface);
+    color: var(--text-primary);
   }
 
   .nav-btn:active {
-    background: #e0e0e0;
     transform: scale(0.95);
   }
 
   .calendar-grid-wrap {
     overflow: hidden;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
   }
 
   .title {
-    font-size: 20px;
-    font-weight: 600;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .month {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
   }
 
   .year {
-    color: #999;
-    font-weight: 400;
+    font-size: 15px;
+    color: var(--text-muted);
+    font-weight: 500;
   }
 
   .today-btn {
     margin-left: auto;
-    padding: 6px 16px;
+    padding: 6px 18px;
     border-radius: 20px;
-    background: #4A90D9;
+    background: var(--accent);
     color: #fff;
     font-size: 13px;
-    transition: background 0.2s;
+    font-weight: 500;
+    transition: all 0.2s ease;
   }
 
   .today-btn:hover {
-    background: #3a7bc8;
+    background: var(--accent-light);
+    transform: translateY(-1px);
   }
 
   .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 1px;
-    background: #eee;
-    border-radius: 8px;
+    background: var(--border);
+    border-radius: var(--radius-md);
     overflow: hidden;
   }
 
   .weekday {
-    padding: 8px;
+    padding: 10px 4px;
     text-align: center;
-    font-size: 13px;
-    font-weight: 500;
-    color: #666;
-    background: #f8f8f8;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--bg-surface);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   .day-cell {
     min-height: 90px;
-    padding: 4px;
-    background: #fff;
+    padding: 6px;
+    background: var(--bg-card);
     transition: background 0.2s;
     overflow: hidden;
   }
 
   .day-cell:not(.empty):hover {
-    background: #f8f8f8;
+    background: var(--bg-card-hover);
   }
 
   .day-cell.empty {
-    background: #fafafa;
+    background: var(--bg-surface);
+    opacity: 0.5;
   }
 
   .day-cell.today {
-    background: #e8f4fd;
+    background: var(--accent-bg);
   }
 
   .day-number {
     display: block;
     font-size: 13px;
-    color: #333;
+    color: var(--text-secondary);
     padding: 2px 6px;
+    font-weight: 500;
   }
 
   .today .day-number {
-    background: #4A90D9;
+    background: var(--accent);
     color: #fff;
     border-radius: 50%;
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -405,11 +429,11 @@
 
   .poster-cell {
     position: relative;
-    border-radius: 3px;
+    border-radius: 4px;
     overflow: hidden;
     border: none;
     padding: 0;
-    background: #f0f0f0;
+    background: var(--bg-surface);
     cursor: pointer;
     aspect-ratio: 2/3;
   }
@@ -440,7 +464,7 @@
   }
 
   .poster-cell:hover {
-    opacity: 0.9;
+    opacity: 0.85;
   }
 
   .poster-cell-status {
@@ -448,14 +472,15 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: 2px;
+    height: 3px;
   }
 
   .poster-cell-more {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0,0,0,0.7);
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
   }
 
   .poster-more-num {
@@ -467,8 +492,8 @@
   .event-text-btn {
     display: block;
     width: 100%;
-    padding: 2px 6px;
-    border-radius: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
     color: #fff;
     font-size: 11px;
     white-space: nowrap;
@@ -478,6 +503,7 @@
     text-align: left;
     transition: opacity 0.2s;
     border: none;
+    font-weight: 500;
   }
 
   .event-text-btn:hover {
@@ -490,16 +516,10 @@
     text-overflow: ellipsis;
   }
 
-  .more {
-    font-size: 11px;
-    color: #999;
-    padding: 0 6px;
-  }
-
   .calendar-legend {
     display: flex;
-    gap: 16px;
-    margin-top: 16px;
+    gap: 20px;
+    margin-top: 20px;
     justify-content: center;
   }
 
@@ -508,12 +528,13 @@
     align-items: center;
     gap: 6px;
     font-size: 12px;
-    color: #666;
+    color: var(--text-muted);
+    font-weight: 500;
   }
 
   .legend-dot {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
   }
 
@@ -527,9 +548,11 @@
     position: fixed;
     z-index: 1000;
     background: var(--bg-card);
-    border-radius: 12px;
-    width: 260px;
+    border-radius: var(--radius-md);
+    width: 280px;
     overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
   }
 
   .popup-center {
@@ -570,11 +593,11 @@
   }
 
   .popup-content {
-    padding: 12px 14px;
+    padding: 16px;
   }
 
   .popup-name {
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
     color: var(--text-primary);
     display: block;
@@ -588,22 +611,22 @@
   .popup-venue {
     font-size: 13px;
     color: var(--text-muted);
-    margin-bottom: 6px;
+    margin-bottom: 8px;
   }
 
   .popup-meta {
     display: flex;
     gap: 12px;
     font-size: 12px;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
   }
 
   .popup-status {
-    font-weight: 500;
+    font-weight: 600;
   }
 
   .popup-duration {
-    color: #999;
+    color: var(--text-muted);
   }
 
   .popup-link {
@@ -620,20 +643,25 @@
 
   .popup-item {
     display: flex;
-    gap: 10px;
-    padding: 10px 14px;
+    gap: 12px;
+    padding: 12px 16px;
     text-decoration: none;
     transition: background 0.15s;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .popup-item:last-child {
+    border-bottom: none;
   }
 
   .popup-item:hover {
-    background: #f8f8f8;
+    background: var(--bg-surface);
   }
 
   .popup-item-poster {
     width: 40px;
     height: 56px;
-    border-radius: 4px;
+    border-radius: 6px;
     overflow: hidden;
     flex-shrink: 0;
     background: var(--bg-surface);
@@ -654,7 +682,7 @@
   }
 
   .popup-item-name {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text-primary);
     white-space: nowrap;
@@ -672,38 +700,45 @@
 
   .popup-item-status {
     font-size: 11px;
-    font-weight: 500;
+    font-weight: 600;
   }
 
   @media (max-width: 768px) {
     .calendar-header {
-      gap: 8px;
-      margin-bottom: 12px;
+      gap: 10px;
+      margin-bottom: 16px;
     }
 
     .nav-btn {
       width: 40px;
       height: 40px;
-      font-size: 22px;
+    }
+
+    .title {
+      gap: 4px;
+    }
+
+    .month {
+      font-size: 18px;
+    }
+
+    .year {
+      font-size: 13px;
     }
 
     .today-btn {
       padding: 8px 16px;
-      font-size: 14px;
-    }
-
-    .title {
-      font-size: 18px;
+      font-size: 13px;
     }
 
     .weekday {
-      padding: 10px 4px;
-      font-size: 12px;
+      padding: 10px 2px;
+      font-size: 11px;
     }
 
     .day-cell {
       min-height: 64px;
-      padding: 3px;
+      padding: 4px;
     }
 
     .day-number {
@@ -717,8 +752,8 @@
 
     .calendar-legend {
       flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 12px;
+      gap: 12px;
+      margin-top: 16px;
     }
 
     .legend-item {
@@ -734,26 +769,25 @@
     .nav-btn {
       width: 36px;
       height: 36px;
-      font-size: 20px;
     }
 
     .today-btn {
       padding: 6px 12px;
-      font-size: 13px;
+      font-size: 12px;
     }
 
-    .title {
+    .month {
       font-size: 16px;
     }
 
     .weekday {
       padding: 8px 2px;
-      font-size: 11px;
+      font-size: 10px;
     }
 
     .day-cell {
       min-height: 52px;
-      padding: 2px;
+      padding: 3px;
     }
 
     .day-number {
@@ -769,90 +803,15 @@
     }
 
     .popup {
-      width: 220px;
+      width: 240px;
     }
 
     .calendar-legend {
-      gap: 6px;
+      gap: 8px;
     }
 
     .legend-item {
       font-size: 10px;
     }
-  }
-
-  :global(.dark) .calendar-grid {
-    background: #333;
-  }
-
-  :global(.dark) .calendar-header {
-    color: #e0e0e0;
-  }
-
-  :global(.dark) .nav-btn {
-    color: #ccc;
-  }
-
-  :global(.dark) .nav-btn:hover {
-    background: #333;
-  }
-
-  :global(.dark) .title {
-    color: #e0e0e0;
-  }
-
-  :global(.dark) .year {
-    color: #777;
-  }
-
-  :global(.dark) .today-btn {
-    background: #4A90D9;
-    color: #fff;
-  }
-
-  :global(.dark) .today-btn:hover {
-    background: #3a7bc8;
-  }
-
-  :global(.dark) .weekday {
-    background: #2a2a2a;
-    color: #999;
-  }
-
-  :global(.dark) .day-cell {
-    background: #1e1e1e;
-  }
-
-  :global(.dark) .day-cell:not(.empty):hover {
-    background: #2a2a2a;
-  }
-
-  :global(.dark) .day-cell.empty {
-    background: #1a1a1a;
-  }
-
-  :global(.dark) .day-cell.today {
-    background: #1a2a3a;
-  }
-
-  :global(.dark) .day-number {
-    color: #ccc;
-  }
-
-  :global(.dark) .today .day-number {
-    background: #4A90D9;
-    color: #fff;
-  }
-
-  :global(.dark) .poster-cell-more {
-    background: rgba(0,0,0,0.7);
-  }
-
-  :global(.dark) .poster-cell {
-    background: #333;
-  }
-
-  :global(.dark) .legend-item {
-    color: #999;
   }
 </style>

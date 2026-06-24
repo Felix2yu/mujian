@@ -64,7 +64,10 @@
   <h1>批量导入演出</h1>
 
   <div class="section">
-    <h2>导入说明</h2>
+    <div class="section-header">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <h2>导入说明</h2>
+    </div>
     <div class="instructions">
       <p>支持从 Excel 文件 (.xlsx) 批量导入演出数据。文件需包含表头行，以下列名均可识别：</p>
       <div class="columns-grid">
@@ -103,7 +106,10 @@
   </div>
 
   <div class="section">
-    <h2>选择文件</h2>
+    <div class="section-header">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+      <h2>选择文件</h2>
+    </div>
     <div
       class="dropzone"
       class:dragover
@@ -114,14 +120,20 @@
     >
       {#if file}
         <div class="file-info">
-          <span class="file-icon">📄</span>
-          <span class="file-name">{file.name}</span>
-          <span class="file-size">({(file.size / 1024).toFixed(1)} KB)</span>
-            <button class="btn-remove" onclick={() => { file = null; result = null; }}>×</button>
+          <div class="file-icon-wrap">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+          </div>
+          <div class="file-details">
+            <span class="file-name">{file.name}</span>
+            <span class="file-size">({(file.size / 1024).toFixed(1)} KB)</span>
+          </div>
+          <button class="btn-remove" onclick={() => { file = null; result = null; }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
         </div>
       {:else}
         <div class="dropzone-content">
-          <span class="dropzone-icon">📁</span>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <p>拖拽文件到此处，或</p>
           <label class="btn-select">
             选择文件
@@ -132,25 +144,25 @@
     </div>
 
     {#if error}
-      <div class="error">{error}</div>
+      <div class="error-msg">{error}</div>
     {/if}
 
     {#if result}
       <div class="result" class:has-failed={result.failed > 0}>
         <h3>导入完成</h3>
         <div class="result-stats">
-          <div class="stat">
-            <span class="stat-value">{result.total}</span>
-            <span class="stat-label">总计</span>
+          <div class="result-stat">
+            <span class="result-stat-value">{result.total}</span>
+            <span class="result-stat-label">总计</span>
           </div>
-          <div class="stat success">
-            <span class="stat-value">{result.success}</span>
-            <span class="stat-label">成功</span>
+          <div class="result-stat success">
+            <span class="result-stat-value">{result.success}</span>
+            <span class="result-stat-label">成功</span>
           </div>
           {#if result.failed > 0}
-            <div class="stat failed">
-              <span class="stat-value">{result.failed}</span>
-              <span class="stat-label">失败</span>
+            <div class="result-stat failed">
+              <span class="result-stat-value">{result.failed}</span>
+              <span class="result-stat-label">失败</span>
             </div>
           {/if}
         </div>
@@ -165,15 +177,21 @@
           </div>
         {/if}
         <div class="result-actions">
-          <a href="/shows" class="btn-view">查看演出列表</a>
-          <button class="btn-import-more" onclick={() => { file = null; result = null; error = ''; }}>继续导入</button>
+          <a href="/shows" class="primary-btn">查看演出列表</a>
+          <button class="secondary-btn" onclick={() => { file = null; result = null; error = ''; }}>继续导入</button>
         </div>
       </div>
     {/if}
 
     <div class="actions">
-      <button class="btn-import" onclick={handleImport} disabled={!file || importing}>
-        {importing ? '导入中...' : '开始导入'}
+      <button class="import-btn" onclick={handleImport} disabled={!file || importing}>
+        {#if importing}
+          <div class="spinner"></div>
+          导入中...
+        {:else}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          开始导入
+        {/if}
       </button>
     </div>
   </div>
@@ -188,39 +206,54 @@
   h1 {
     font-size: 24px;
     font-weight: 700;
-    margin-bottom: 24px;
+    margin-bottom: 28px;
+    letter-spacing: -0.02em;
   }
 
   .section {
-    background: #fff;
-    border-radius: 12px;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
     padding: 24px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     margin-bottom: 20px;
   }
 
+  .section-header svg {
+    color: var(--accent);
+  }
+
   h2 {
-    font-size: 18px;
+    font-size: 17px;
     font-weight: 600;
-    margin-bottom: 16px;
+    letter-spacing: -0.01em;
   }
 
   .instructions p {
     margin-bottom: 12px;
-    color: #666;
+    color: var(--text-secondary);
     line-height: 1.6;
   }
 
   .columns-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 16px;
+    gap: 20px;
     margin-bottom: 16px;
   }
 
   .col-group strong {
     display: block;
     margin-bottom: 8px;
-    color: #333;
+    color: var(--text-primary);
+    font-size: 13px;
   }
 
   .col-group ul {
@@ -230,13 +263,14 @@
 
   .col-group li {
     font-size: 13px;
-    color: #666;
+    color: var(--text-secondary);
     padding: 2px 0;
   }
 
   .tip {
     font-size: 13px;
-    color: #4A90D9;
+    color: var(--accent);
+    font-weight: 500;
   }
 
   .tip a {
@@ -245,22 +279,23 @@
   }
 
   .dropzone {
-    border: 2px dashed #ddd;
-    border-radius: 12px;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-md);
     padding: 40px 20px;
     text-align: center;
-    transition: border-color 0.2s, background 0.2s;
+    transition: all 0.2s ease;
     cursor: pointer;
   }
 
   .dropzone:hover, .dropzone.dragover {
-    border-color: #4A90D9;
-    background: #f0f7ff;
+    border-color: var(--accent);
+    background: var(--accent-bg);
   }
 
   .dropzone.has-file {
-    border-color: #27AE60;
-    background: #f0fff4;
+    border-color: var(--success);
+    background: var(--success-bg);
+    border-style: solid;
   }
 
   .dropzone-content {
@@ -270,86 +305,117 @@
     gap: 12px;
   }
 
-  .dropzone-icon {
-    font-size: 48px;
+  .dropzone-content svg {
+    color: var(--text-muted);
+    opacity: 0.4;
   }
 
   .dropzone-content p {
-    color: #666;
+    color: var(--text-secondary);
     margin: 0;
+    font-size: 14px;
   }
 
   .btn-select {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 8px 20px;
-    background: #4A90D9;
+    background: var(--accent);
     color: #fff;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     font-weight: 500;
-    transition: background 0.2s;
+    font-size: 13px;
+    transition: all 0.2s;
   }
 
   .btn-select:hover {
-    background: #3a7bc8;
+    background: var(--accent-light);
   }
 
   .file-info {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 12px;
   }
 
-  .file-icon {
-    font-size: 24px;
+  .file-icon-wrap {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-bg);
+    border-radius: var(--radius-sm);
+    color: var(--accent);
+  }
+
+  .file-details {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .file-name {
-    font-weight: 500;
-    color: #333;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 14px;
   }
 
   .file-size {
-    color: #999;
-    font-size: 13px;
+    color: var(--text-muted);
+    font-size: 12px;
   }
 
   .btn-remove {
-    color: #c00;
-    font-size: 20px;
-    padding: 4px 8px;
+    color: var(--text-muted);
+    padding: 6px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    transition: all 0.15s;
   }
 
   .btn-remove:hover {
-    background: #fee;
-    border-radius: 4px;
+    background: var(--danger-bg);
+    color: var(--danger-text);
   }
 
-  .error {
+  .error-msg {
     margin-top: 12px;
     padding: 12px 16px;
-    background: #f8d7da;
-    color: #721c24;
-    border-radius: 8px;
+    background: var(--danger-bg);
+    color: var(--danger-text);
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .error-msg::before {
+    content: '⚠';
   }
 
   .result {
     margin-top: 16px;
-    padding: 20px;
-    background: #f0fff4;
-    border-radius: 12px;
-    border: 1px solid #d4edda;
+    padding: 24px;
+    background: var(--success-bg);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--success);
   }
 
   .result.has-failed {
-    background: #fff3cd;
-    border-color: #ffc107;
+    background: var(--warning-bg);
+    border-color: var(--warning);
   }
 
   .result h3 {
     margin-bottom: 16px;
     font-size: 16px;
+    font-weight: 600;
   }
 
   .result-stats {
@@ -358,36 +424,38 @@
     margin-bottom: 16px;
   }
 
-  .stat {
+  .result-stat {
     display: flex;
     flex-direction: column;
     align-items: center;
   }
 
-  .stat-value {
+  .result-stat-value {
     font-size: 28px;
     font-weight: 700;
-    color: #333;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
   }
 
-  .stat.success .stat-value {
-    color: #27AE60;
+  .result-stat.success .result-stat-value {
+    color: var(--success);
   }
 
-  .stat.failed .stat-value {
-    color: #c00;
+  .result-stat.failed .result-stat-value {
+    color: var(--danger-text);
   }
 
-  .stat-label {
+  .result-stat-label {
     font-size: 12px;
-    color: #666;
+    color: var(--text-muted);
+    font-weight: 500;
   }
 
   .error-list {
     margin-top: 12px;
-    padding: 12px;
-    background: rgba(255,255,255,0.7);
-    border-radius: 8px;
+    padding: 16px;
+    background: rgba(255,255,255,0.5);
+    border-radius: var(--radius-sm);
     max-height: 200px;
     overflow-y: auto;
   }
@@ -396,6 +464,7 @@
     display: block;
     margin-bottom: 8px;
     font-size: 13px;
+    color: var(--text-primary);
   }
 
   .error-list ul {
@@ -405,7 +474,7 @@
 
   .error-list li {
     font-size: 12px;
-    color: #666;
+    color: var(--text-secondary);
     margin-bottom: 4px;
   }
 
@@ -415,52 +484,76 @@
     margin-top: 16px;
   }
 
-  .btn-view {
+  .primary-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 8px 20px;
-    background: #4A90D9;
+    background: var(--accent);
     color: #fff;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     font-weight: 500;
+    font-size: 13px;
+    text-decoration: none;
+    transition: all 0.2s;
   }
 
-  .btn-view:hover {
-    background: #3a7bc8;
+  .primary-btn:hover {
+    background: var(--accent-light);
   }
 
-  .btn-import-more {
+  .secondary-btn {
     padding: 8px 20px;
-    background: #f0f0f0;
-    color: #666;
-    border-radius: 8px;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
     font-weight: 500;
+    font-size: 13px;
+    border: 1px solid var(--border);
+    transition: all 0.2s;
   }
 
-  .btn-import-more:hover {
-    background: #e0e0e0;
+  .secondary-btn:hover {
+    background: var(--bg-surface-hover);
   }
 
   .actions {
     margin-top: 20px;
   }
 
-  .btn-import {
+  .import-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     padding: 10px 32px;
-    background: #27AE60;
+    background: var(--success);
     color: #fff;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     font-weight: 500;
-    font-size: 15px;
-    transition: background 0.2s;
+    font-size: 14px;
+    transition: all 0.2s;
   }
 
-  .btn-import:hover:not(:disabled) {
-    background: #219a52;
+  .import-btn:hover:not(:disabled) {
+    opacity: 0.9;
+    transform: translateY(-1px);
   }
 
-  .btn-import:disabled {
+  .import-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
   }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   @media (max-width: 768px) {
     .import-page {
@@ -488,21 +581,7 @@
     .result-actions button {
       width: 100%;
       text-align: center;
+      justify-content: center;
     }
-  }
-
-  :global(.dark) .btn-import-more { background: #333; color: #ccc; }
-  :global(.dark) .btn-import-more:hover { background: #444; }
-  :global(.dark) h2 { color: #e0e0e0; }
-  :global(.dark) .col-group strong { color: #e0e0e0; }
-  :global(.dark) .col-group li { color: #999; }
-  :global(.dark) .dropzone { border-color: #444; }
-  :global(.dark) .dropzone:hover, :global(.dark) .dropzone.dragover { background: #1a2a3a; }
-  :global(.dark) .instructions p { color: #999; }
-  :global(.dark) .result-stats { color: #999; }
-
-  :global(.dark) .section {
-    background: #2a2a2a;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   }
 </style>

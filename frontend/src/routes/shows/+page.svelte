@@ -142,14 +142,25 @@
   <div class="page-header">
     <div class="header-left">
       <h1>演出</h1>
+      <span class="count-badge">{shows.length}</span>
     </div>
     <div class="header-right">
-      <button class="batch-btn" class:active={batchMode} onclick={toggleBatchMode}>
+      <button class="action-btn" class:active={batchMode} onclick={toggleBatchMode}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         {batchMode ? '退出' : '批量'}
       </button>
-      <a href="/shows/import" class="action-btn" title="导入">📥</a>
-      <a href={api.getExportUrl()} class="action-btn" download title="导出">📤</a>
-      <a href="/shows/new" class="add-btn">+ 添加</a>
+      <a href="/shows/import" class="action-btn" title="导入">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        导入
+      </a>
+      <a href={api.getExportUrl()} class="action-btn" download title="导出">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        导出
+      </a>
+      <a href="/shows/new" class="primary-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        添加
+      </a>
     </div>
   </div>
 
@@ -168,9 +179,21 @@
 
   {#if batchMode}
     <div class="batch-bar">
-      <span>已选 <strong>{selectedIds.size}</strong> 场</span>
-      <button class="batch-action" onclick={applyBatchUpdate} disabled={batchSaving || selectedIds.size === 0}>批量更新</button>
-      <button class="batch-action danger" onclick={applyBatchDelete} disabled={batchSaving || selectedIds.size === 0}>批量删除</button>
+      <span class="batch-info">已选 <strong>{selectedIds.size}</strong> 场</span>
+      <label class="select-all-label">
+        <input type="checkbox" checked={allSelected} onchange={toggleSelectAll} />
+        全选
+      </label>
+      <div class="batch-actions">
+        <button class="batch-action" onclick={applyBatchUpdate} disabled={batchSaving || selectedIds.size === 0}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          批量更新
+        </button>
+        <button class="batch-action danger" onclick={applyBatchDelete} disabled={batchSaving || selectedIds.size === 0}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          批量删除
+        </button>
+      </div>
     </div>
 
     {#if showBatchPanel}
@@ -206,7 +229,7 @@
               <option value="no_show">未赴约</option>
             </select>
           </div>
-          <button class="btn-apply" onclick={applyBatchUpdate} disabled={batchSaving}>
+          <button class="primary-btn" onclick={applyBatchUpdate} disabled={batchSaving}>
             {batchSaving ? '保存中...' : '应用'}
           </button>
         </div>
@@ -216,12 +239,17 @@
 
   <div class="toolbar">
     <button class="filter-toggle" onclick={() => filtersExpanded = !filtersExpanded}>
-      🔍 筛选 {#if hasActiveFilters}<span class="filter-badge"></span>{/if}
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      筛选
+      {#if hasActiveFilters}<span class="filter-badge"></span>{/if}
     </button>
 
     <div class="filters-panel" class:expanded={filtersExpanded || !isMobile}>
       <div class="filters">
-        <input type="text" class="search-input" placeholder="搜索..." bind:value={searchQuery} />
+        <div class="search-wrapper">
+          <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" class="search-input" placeholder="搜索..." bind:value={searchQuery} />
+        </div>
         <select bind:value={categoryFilter}>
           <option value="">全部分类</option>
           {#each categories as cat}
@@ -251,23 +279,33 @@
   </div>
 
   {#if loading}
-    <div class="loading"><div class="spinner"></div>加载中...</div>
+    <div class="loading">
+      <div class="spinner"></div>
+      加载中...
+    </div>
   {:else if filteredShows.length === 0}
     <div class="empty">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 15h8"/><path d="M9 9h.01"/><path d="M15 9h.01"/></svg>
       <p>{activeTab === 'normal' ? '暂无待看演出' : '暂无演出记录'}</p>
-      <a href="/shows/new">添加第一场演出</a>
+      <a href="/shows/new" class="primary-btn">添加第一场演出</a>
     </div>
   {:else}
     <div class="shows-list">
       {#each filteredShows as show (show.id)}
         <div class="show-item" class:selected={selectedIds.has(show.id)}>
           {#if batchMode}
-            <input type="checkbox" class="select-check" checked={selectedIds.has(show.id)} onchange={() => toggleSelect(show.id)} />
+            <label class="select-check-wrapper">
+              <input type="checkbox" class="select-check" checked={selectedIds.has(show.id)} onchange={() => toggleSelect(show.id)} />
+            </label>
           {/if}
           <ShowCard {show} />
           <div class="show-actions">
-            <a href="/shows/{show.id}/edit" class="edit-btn">编辑</a>
-            <button class="delete-btn" onclick={() => deleteShow(show.id)}>删除</button>
+            <a href="/shows/{show.id}/edit" class="edit-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </a>
+            <button class="delete-btn" onclick={() => deleteShow(show.id)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
           </div>
         </div>
       {/each}
@@ -278,80 +316,287 @@
 <style>
   .shows-page { display: flex; flex-direction: column; gap: 16px; }
   .page-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
-  .header-left h1 { font-size: 24px; font-weight: 700; }
-  .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .add-btn { padding: 8px 20px; background: #4A90D9; color: #fff; border-radius: 8px; font-weight: 500; }
-  .add-btn:hover { background: #3a7bc8; }
-  .action-btn { padding: 8px 12px; background: var(--bg-surface); border-radius: 8px; font-size: 14px; }
-  .action-btn:hover { background: var(--bg-surface-hover); }
-  .batch-btn { padding: 8px 16px; background: var(--bg-surface); border-radius: 8px; font-weight: 500; font-size: 13px; }
-  .batch-btn.active { background: #4A90D9; color: #fff; }
+  .header-left { display: flex; align-items: center; gap: 10px; }
+  .header-left h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+  .count-badge {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: var(--accent-bg);
+    color: var(--accent);
+  }
+  .header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-  .tabs { display: flex; gap: 4px; background: #f0f0f0; border-radius: 10px; padding: 4px; }
-  .tab { flex: 1; padding: 10px 20px; border-radius: 8px; font-size: 15px; font-weight: 500; color: #666; display: flex; align-items: center; justify-content: center; gap: 8px; }
-  .tab.active { background: var(--bg-card); color: var(--text-primary); }
-  .tab-count { font-size: 12px; background: #e0e0e0; padding: 1px 7px; border-radius: 10px; }
-  .tab.active .tab-count { background: #4A90D9; color: #fff; }
+  .primary-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    font-size: 13px;
+    transition: all 0.2s;
+  }
+  .primary-btn:hover { background: var(--accent-light); transform: translateY(-1px); }
+
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+    border: 1px solid var(--border);
+  }
+  .action-btn:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
+  .action-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    border: 1px solid var(--border);
+  }
+  .tab {
+    flex: 1;
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+  }
+  .tab:hover { color: var(--text-secondary); }
+  .tab.active { background: var(--bg-card); color: var(--text-primary); box-shadow: var(--shadow-sm); }
+  .tab-count {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: var(--border);
+    color: var(--text-muted);
+  }
+  .tab.active .tab-count { background: var(--accent-bg); color: var(--accent); }
 
   .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .filter-toggle { padding: 8px 16px; background: var(--bg-surface); border-radius: 8px; font-size: 13px; position: relative; }
-  .filter-badge { position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; background: #E74C3C; border-radius: 50%; }
+  .filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    position: relative;
+    transition: all 0.2s;
+  }
+  .filter-toggle:hover { background: var(--bg-surface-hover); }
+  .filter-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 7px;
+    height: 7px;
+    background: var(--danger-text);
+    border-radius: 50%;
+  }
   .filters-panel { display: contents; }
   .filters-panel:not(.expanded) .filters { display: none; }
   .filters-panel.expanded .filters, .filters-panel .filters { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
-  .search-input { padding: 8px 12px; border-radius: 8px; width: 140px; font-size: 13px; }
-  .filters select { padding: 8px 12px; border-radius: 8px; font-size: 13px; }
-  .clear-btn { padding: 6px 12px; background: var(--danger-bg); color: var(--danger-text); border-radius: 6px; font-size: 12px; font-weight: 500; }
-  .clear-btn:hover { background: var(--danger-bg-hover); }
-  .result-count { font-size: 13px; color: var(--text-muted); }
 
-  .batch-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--bg-card); border-radius: 8px; flex-wrap: wrap; }
-  .batch-count { font-weight: 500; color: #4A90D9; }
-  .batch-action { padding: 6px 14px; border-radius: 6px; font-size: 13px; background: var(--bg-surface); }
+  .search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .search-icon {
+    position: absolute;
+    left: 10px;
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+  .search-input {
+    padding-left: 32px !important;
+  }
+  .search-input, .filters select {
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    min-width: 140px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+  }
+  .result-count { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+
+  .batch-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 18px;
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .batch-info { font-size: 14px; color: var(--text-secondary); }
+  .batch-info strong { color: var(--accent); }
+  .select-all-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .select-all-label input { width: 16px; height: 16px; }
+  .batch-actions { display: flex; gap: 8px; margin-left: auto; }
+  .batch-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+  }
   .batch-action:hover:not(:disabled) { background: var(--bg-surface-hover); }
-  .batch-action.danger { background: var(--danger-bg); color: var(--danger-text); }
+  .batch-action.danger { background: var(--danger-bg); color: var(--danger-text); border-color: transparent; }
   .batch-action.danger:hover { background: var(--danger-bg-hover); }
-  .batch-action:disabled { opacity: 0.6; }
+  .batch-action:disabled { opacity: 0.6; cursor: not-allowed; }
 
-  .batch-panel { padding: 20px; background: var(--bg-card); border-radius: 12px; }
-  .batch-panel h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+  .batch-panel {
+    padding: 20px;
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+  }
+  .batch-panel h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
   .batch-form { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
   .batch-form .form-group { min-width: 140px; }
-  .batch-form label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
-  .batch-form select { width: 100%; padding: 8px 12px; border-radius: 6px; }
-  .btn-apply { padding: 8px 24px; background: #4A90D9; color: #fff; border-radius: 8px; font-weight: 500; }
-  .btn-apply:hover:not(:disabled) { background: #3a7bc8; }
-  .btn-apply:disabled { opacity: 0.6; }
+  .batch-form label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; }
+  .batch-form select { width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
 
-  .loading { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 60px 20px; color: var(--text-secondary); }
-  .spinner { width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: #4A90D9; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+  }
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .empty { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
-  .empty a { display: inline-block; margin-top: 12px; color: #4A90D9; font-weight: 500; }
 
-  .shows-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-  .select-all { padding: 12px 16px; background: var(--bg-card); border-radius: 8px; grid-column: 1 / -1; }
-  .select-all label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-secondary); cursor: pointer; }
-  .select-all input[type="checkbox"] { width: 18px; height: 18px; }
-  .show-item { position: relative; border-radius: 10px; transition: all 0.2s; }
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .empty svg { opacity: 0.3; }
+  .empty p { font-size: 15px; }
+
+  .shows-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .show-item {
+    position: relative;
+    border-radius: var(--radius-md);
+    transition: all 0.2s;
+  }
   .show-item:hover { transform: translateY(-2px); }
-  .show-item.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
-  .select-check { position: absolute; top: 12px; left: 12px; width: 18px; height: 18px; z-index: 5; cursor: pointer; }
-  .show-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; opacity: 0; transition: opacity 0.2s; z-index: 10; }
+  .show-item.selected { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius-md); }
+
+  .select-check-wrapper {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 5;
+    cursor: pointer;
+  }
+  .select-check {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--accent);
+  }
+
+  .show-actions {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 10;
+  }
   .show-item:hover .show-actions { opacity: 1; }
-  .edit-btn, .delete-btn { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 500; backdrop-filter: blur(4px); }
-  .edit-btn { background: rgba(255,255,255,0.9); color: #555; }
-  .edit-btn:hover { background: #fff; color: #333; }
-  .delete-btn { background: rgba(254,238,238,0.9); color: #c00; }
-  .delete-btn:hover { background: #fee; }
+
+  .edit-btn, .delete-btn {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    backdrop-filter: blur(8px);
+    transition: all 0.15s;
+  }
+  .edit-btn {
+    background: rgba(255,255,255,0.85);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .edit-btn:hover { background: var(--bg-card); color: var(--accent); }
+  .delete-btn {
+    background: rgba(254,242,242,0.9);
+    color: var(--danger-text);
+    border: 1px solid transparent;
+  }
+  .delete-btn:hover { background: var(--danger-bg); }
 
   @media (max-width: 768px) {
     .header-right { width: 100%; justify-content: flex-start; }
-    .filter-toggle { display: block; }
+    .filter-toggle { display: inline-flex; }
     .filters-panel:not(.expanded) .filters { display: none; }
     .filters-panel.expanded .filters { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-    .search-input { width: 100%; }
+    .search-input, .filters select { width: 100%; min-width: auto; }
     .batch-bar { flex-wrap: wrap; gap: 8px; }
+    .batch-actions { margin-left: 0; }
     .shows-list { grid-template-columns: 1fr; }
   }
 

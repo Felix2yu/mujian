@@ -44,7 +44,7 @@
   }
 
   function statusColor(status) {
-    return { normal: '#27AE60', cancelled: '#E74C3C', pending_tickets: '#F39C12', no_show: '#95A5A6' }[status] || '#999';
+    return { normal: '#10b981', cancelled: '#ef4444', pending_tickets: '#f59e0b', no_show: '#94a3b8' }[status] || '#94a3b8';
   }
 
   function formatCost(val) {
@@ -66,7 +66,10 @@
 
 <div class="show-detail">
   {#if loading}
-    <div class="loading">加载中...</div>
+    <div class="loading">
+      <div class="spinner"></div>
+      加载中...
+    </div>
   {:else if error}
     <div class="error">{error}</div>
   {:else if show}
@@ -93,8 +96,14 @@
           </div>
         </div>
         <div class="header-actions">
-          <a href="/shows/{show.id}/edit" class="edit-btn">编辑</a>
-          <button class="delete-btn" onclick={deleteShow}>删除</button>
+          <a href="/shows/{show.id}/edit" class="edit-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            编辑
+          </a>
+          <button class="delete-btn" onclick={deleteShow}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            删除
+          </button>
         </div>
       </div>
 
@@ -185,34 +194,75 @@
 
 <style>
   .show-detail { max-width: 800px; margin: 0 auto; }
-  .loading, .error { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
-  .error { color: var(--danger-text); background: var(--danger-bg); border-radius: 8px; }
-  .poster { margin-bottom: 24px; border-radius: 12px; overflow: hidden; }
+  .loading, .error { text-align: center; padding: 60px 20px; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; gap: 12px; }
+  .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error { color: var(--danger-text); background: var(--danger-bg); border-radius: var(--radius-md); }
+  .poster { margin-bottom: 24px; border-radius: var(--radius-lg); overflow: hidden; }
   .poster img { width: 100%; display: block; }
-  .detail-card { background: var(--bg-card); border-radius: 12px; padding: 32px; }
-  .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
-  .header-info h1 { font-size: 28px; font-weight: 700; margin-bottom: 12px; }
+  .detail-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+  }
+  .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; }
+  .header-info h1 { font-size: 28px; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.02em; }
   .meta-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .status { font-size: 12px; padding: 4px 12px; border-radius: 12px; color: #fff; font-weight: 500; }
-  .category { font-size: 12px; padding: 4px 12px; border-radius: 12px; background: var(--bg-surface); color: var(--text-secondary); text-decoration: none; }
+  .status { font-size: 12px; padding: 4px 12px; border-radius: 20px; color: #fff; font-weight: 600; }
+  .category {
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
   .category:hover { background: var(--bg-surface-hover); }
-  .rating { font-size: 16px; color: #ddd; }
+  .rating { font-size: 16px; color: var(--border); }
   .rating .filled { color: var(--warning); }
   .header-actions { display: flex; gap: 8px; }
-  .edit-btn, .delete-btn { padding: 8px 16px; border-radius: 8px; font-size: 14px; }
-  .edit-btn { background: var(--bg-surface); color: var(--text-primary); }
+  .edit-btn, .delete-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  .edit-btn {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
   .edit-btn:hover { background: var(--bg-surface-hover); }
-  .delete-btn { background: var(--danger-bg); color: var(--danger-text); }
+  .delete-btn {
+    background: var(--danger-bg);
+    color: var(--danger-text);
+    border: 1px solid transparent;
+  }
   .delete-btn:hover { background: var(--danger-bg-hover); }
-  .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; padding-bottom: 24px; }
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 28px;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+  }
   .info-item { display: flex; flex-direction: column; gap: 4px; }
-  .info-label { font-size: 12px; color: var(--text-muted); }
-  .info-value { font-size: 15px; color: var(--text-primary); }
+  .info-label { font-size: 12px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+  .info-value { font-size: 15px; color: var(--text-primary); font-weight: 500; }
   .linkable { color: var(--accent); text-decoration: none; }
   .linkable:hover { text-decoration: underline; }
   .cast-list { display: flex; flex-wrap: wrap; gap: 6px; font-size: 15px; }
-  .section { margin-bottom: 24px; }
-  .section h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--text-primary); }
+  .section { margin-bottom: 28px; }
+  .section h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: var(--text-primary); letter-spacing: -0.01em; }
   .text-content { font-size: 15px; line-height: 1.8; color: var(--text-secondary); white-space: pre-wrap; }
   @media (max-width: 768px) {
     .show-detail { padding: 0; }
@@ -220,7 +270,7 @@
     .detail-header { flex-direction: column; gap: 16px; }
     .header-info h1 { font-size: 22px; }
     .header-actions { width: 100%; display: flex; gap: 8px; }
-    .header-actions .edit-btn, .header-actions .delete-btn { flex: 1; text-align: center; }
+    .header-actions .edit-btn, .header-actions .delete-btn { flex: 1; justify-content: center; }
     .info-grid { grid-template-columns: 1fr; gap: 12px; }
   }
   @media (max-width: 480px) {

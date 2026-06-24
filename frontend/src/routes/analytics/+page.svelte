@@ -120,7 +120,7 @@
     { value: '11', label: '11月' }, { value: '12', label: '12月' }
   ];
 
-  const catColors = ['#4A90D9', '#27AE60', '#E74C3C', '#9B59B6', '#E67E22', '#1ABC9C', '#34495E', '#F39C12'];
+  const catColors = ['#6366f1', '#10b981', '#ef4444', '#8b5cf6', '#f97316', '#06b6d4', '#475569', '#f59e0b'];
 </script>
 
 <div class="analytics-page">
@@ -146,26 +146,44 @@
   {:else}
     <div class="stats-grid">
       <div class="stat-card">
+        <div class="stat-icon-wrap" style="background: var(--accent-bg)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </div>
         <span class="stat-value">{totalCount}</span>
         <span class="stat-label">总演出</span>
       </div>
       <div class="stat-card">
+        <div class="stat-icon-wrap" style="background: var(--success-bg)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
         <span class="stat-value">{formatDuration(avgDuration * totalCount)}</span>
         <span class="stat-label">总时长</span>
       </div>
       <div class="stat-card">
+        <div class="stat-icon-wrap" style="background: var(--warning-bg)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        </div>
         <span class="stat-value">{Object.keys(venueStats).length}</span>
         <span class="stat-label">场馆数</span>
       </div>
       <div class="stat-card">
+        <div class="stat-icon-wrap" style="background: var(--danger-bg)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--danger-text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
         <span class="stat-value">{totalCount > 0 ? (filteredShows.filter(s => s.rating).reduce((a, s) => a + s.rating, 0) / filteredShows.filter(s => s.rating).length || 0).toFixed(1) : '-'}</span>
         <span class="stat-label">平均评分</span>
       </div>
       <div class="stat-card">
+        <div class="stat-icon-wrap" style="background: var(--accent-bg)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
         <span class="stat-value">¥{totalCost.toFixed(0)}</span>
         <span class="stat-label">总花费</span>
       </div>
       <div class="stat-card">
+        <div class="stat-icon-wrap" style="background: var(--success-bg)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
         <span class="stat-value">{formatDuration(avgDuration)}</span>
         <span class="stat-label">平均时长</span>
       </div>
@@ -177,41 +195,41 @@
         <div class="status-bars">
           <div class="status-bar">
             <div class="status-label">
-              <span class="status-dot" style="background: #27AE60"></span>
+              <span class="status-dot" style="background: #10b981"></span>
               正常
             </div>
             <div class="bar-track">
-              <div class="bar-fill" style="width: {getBarWidth(statusStats.normal, totalCount)}%; background: #27AE60"></div>
+              <div class="bar-fill" style="width: {getBarWidth(statusStats.normal, totalCount)}%; background: #10b981"></div>
             </div>
             <span class="bar-value">{statusStats.normal}</span>
           </div>
           <div class="status-bar">
             <div class="status-label">
-              <span class="status-dot" style="background: #E74C3C"></span>
+              <span class="status-dot" style="background: #ef4444"></span>
               已取消
             </div>
             <div class="bar-track">
-              <div class="bar-fill" style="width: {getBarWidth(statusStats.cancelled, totalCount)}%; background: #E74C3C"></div>
+              <div class="bar-fill" style="width: {getBarWidth(statusStats.cancelled, totalCount)}%; background: #ef4444"></div>
             </div>
             <span class="bar-value">{statusStats.cancelled}</span>
           </div>
           <div class="status-bar">
             <div class="status-label">
-              <span class="status-dot" style="background: #F39C12"></span>
+              <span class="status-dot" style="background: #f59e0b"></span>
               待开票
             </div>
             <div class="bar-track">
-              <div class="bar-fill" style="width: {getBarWidth(statusStats.pending_tickets, totalCount)}%; background: #F39C12"></div>
+              <div class="bar-fill" style="width: {getBarWidth(statusStats.pending_tickets, totalCount)}%; background: #f59e0b"></div>
             </div>
             <span class="bar-value">{statusStats.pending_tickets}</span>
           </div>
           <div class="status-bar">
             <div class="status-label">
-              <span class="status-dot" style="background: #95A5A6"></span>
+              <span class="status-dot" style="background: #94a3b8"></span>
               未赴约
             </div>
             <div class="bar-track">
-              <div class="bar-fill" style="width: {getBarWidth(statusStats.no_show, totalCount)}%; background: #95A5A6"></div>
+              <div class="bar-fill" style="width: {getBarWidth(statusStats.no_show, totalCount)}%; background: #94a3b8"></div>
             </div>
             <span class="bar-value">{statusStats.no_show}</span>
           </div>
@@ -225,7 +243,7 @@
             <div class="rating-bar">
               <span class="star-label">{star}★</span>
               <div class="bar-track">
-                <div class="bar-fill" style="width: {getBarWidth(ratingStats[star], getMaxValue(ratingStats))}%; background: #F39C12"></div>
+                <div class="bar-fill" style="width: {getBarWidth(ratingStats[star], getMaxValue(ratingStats))}%; background: var(--warning)"></div>
               </div>
               <span class="bar-value">{ratingStats[star]}</span>
             </div>
@@ -288,7 +306,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 24px;
+    margin-bottom: 28px;
     flex-wrap: wrap;
     gap: 12px;
   }
@@ -296,6 +314,7 @@
   h1 {
     font-size: 24px;
     font-weight: 700;
+    letter-spacing: -0.02em;
   }
 
   .filters {
@@ -304,10 +323,13 @@
   }
 
   .filters select {
-    padding: 8px 12px;
-    border-radius: 8px;
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
     font-size: 13px;
     min-width: 100px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    font-weight: 500;
   }
 
   .loading {
@@ -321,9 +343,9 @@
   }
 
   .spinner {
-    width: 24px;
-    height: 24px;
-    border: 3px solid var(--border);
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border);
     border-top-color: var(--accent);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
@@ -337,27 +359,47 @@
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 12px;
-    margin-bottom: 24px;
+    margin-bottom: 28px;
   }
 
   .stat-card {
     background: var(--bg-card);
-    border-radius: 12px;
-    padding: 16px;
+    border-radius: var(--radius-md);
+    padding: 20px;
     text-align: center;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .stat-icon-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 12px;
   }
 
   .stat-value {
     display: block;
     font-size: 24px;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--text-primary);
     margin-bottom: 4px;
+    letter-spacing: -0.02em;
   }
 
   .stat-label {
     font-size: 12px;
     color: var(--text-muted);
+    font-weight: 500;
   }
 
   .charts-grid {
@@ -368,8 +410,10 @@
 
   .chart-card {
     background: var(--bg-card);
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: var(--radius-md);
+    padding: 24px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
   }
 
   .chart-card.full-width {
@@ -379,8 +423,9 @@
   .chart-card h3 {
     font-size: 15px;
     font-weight: 600;
-    margin-bottom: 16px;
+    margin-bottom: 18px;
     color: var(--text-primary);
+    letter-spacing: -0.01em;
   }
 
   .status-bars, .rating-bars, .category-bars {
@@ -403,6 +448,7 @@
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
+    font-weight: 500;
   }
 
   .status-dot {
@@ -415,13 +461,13 @@
     flex: 1;
     height: 20px;
     background: var(--bg-surface);
-    border-radius: 4px;
+    border-radius: 10px;
     overflow: hidden;
   }
 
   .bar-fill {
     height: 100%;
-    border-radius: 4px;
+    border-radius: 10px;
     transition: width 0.5s ease;
   }
 
@@ -429,15 +475,15 @@
     width: 30px;
     text-align: right;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-primary);
   }
 
   .monthly-chart {
     display: flex;
     align-items: flex-end;
-    gap: 8px;
-    height: 150px;
+    gap: 6px;
+    height: 160px;
     padding-top: 20px;
   }
 
@@ -453,12 +499,12 @@
   .bar-fill-v {
     width: 100%;
     background: var(--accent);
-    border-radius: 4px 4px 0 0;
+    border-radius: 6px 6px 0 0;
     display: flex;
     align-items: flex-start;
     justify-content: center;
     padding-top: 4px;
-    min-height: 20px;
+    min-height: 24px;
   }
 
   .bar-fill-v .bar-value {
@@ -471,6 +517,7 @@
     font-size: 11px;
     color: var(--text-muted);
     margin-top: 6px;
+    font-weight: 500;
   }
 
   .venue-list {
@@ -483,16 +530,21 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 12px;
+    padding: 12px 14px;
     background: var(--bg-surface);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
+    transition: background 0.15s;
+  }
+
+  .venue-item:hover {
+    background: var(--bg-surface-hover);
   }
 
   .venue-rank {
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--accent);
-    width: 24px;
+    width: 28px;
   }
 
   .venue-name {
@@ -502,12 +554,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-weight: 500;
   }
 
   .venue-count {
     font-size: 12px;
     color: var(--text-muted);
     flex-shrink: 0;
+    font-weight: 500;
   }
 
   @media (max-width: 768px) {

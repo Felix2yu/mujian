@@ -49,8 +49,6 @@
 </script>
 
 <div class="tag-input-wrapper">
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="tag-input" onclick={() => inputEl?.focus()}>
     {#each tags as tag, i}
       <span class="tag">
@@ -82,36 +80,43 @@
   .tag-input {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
-    padding: 6px 10px;
-    border-radius: 6px;
-    min-height: 38px;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    min-height: 42px;
     align-items: center;
     cursor: text;
-    transition: border-color 0.2s;
-    background: #fff;
+    transition: all 0.2s ease;
+    background: var(--bg-input);
+    border: 1.5px solid var(--border);
   }
-  .tag-input:focus-within { border-color: #4A90D9; }
-  :global(.dark) .tag-input { background: #2a2a2a; border-color: #444; }
-  :global(.dark) .tag-input:focus-within { border-color: #4A90D9; }
+  .tag-input:hover {
+    border-color: var(--border-hover);
+  }
+  .tag-input:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-bg);
+  }
   .tag {
     display: flex;
     align-items: center;
     gap: 4px;
-    background: #e8f0fe;
-    color: #333;
-    padding: 2px 6px;
-    border-radius: 4px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    padding: 3px 8px;
+    border-radius: 6px;
     font-size: 13px;
+    font-weight: 500;
     white-space: nowrap;
   }
   .tag-remove {
     font-size: 14px;
-    color: #999;
+    color: var(--text-muted);
     padding: 0 2px;
     line-height: 1;
+    transition: color 0.15s;
   }
-  .tag-remove:hover { color: #c00; }
+  .tag-remove:hover { color: var(--danger-text); }
   .tag-field {
     border: none;
     outline: none;
@@ -119,50 +124,33 @@
     font-size: 14px;
     flex: 1;
     min-width: 60px;
-    padding: 2px 0;
+    padding: 4px 0;
+    color: var(--text-primary);
   }
   .suggestions {
     position: absolute;
-    top: 100%;
+    top: calc(100% + 4px);
     left: 0;
     right: 0;
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    margin-top: 4px;
-    max-height: 160px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    max-height: 180px;
     overflow-y: auto;
     z-index: 50;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-md);
   }
-  :global(.dark) .suggestions { background: #2a2a2a; border-color: #444; }
   .suggestion-item {
     display: block;
     width: 100%;
     text-align: left;
-    padding: 8px 12px;
+    padding: 10px 14px;
     font-size: 13px;
     background: transparent;
     border: none;
     cursor: pointer;
+    transition: background 0.15s;
+    color: var(--text-primary);
   }
-  .suggestion-item:hover { background: #f0f0f0; }
-  :global(.dark) .suggestion-item:hover { background: #333; }
-
-  :global(.dark) .tag {
-    background: #1a3a5a;
-    color: #ccc;
-  }
-
-  :global(.dark) .tag-remove {
-    color: #777;
-  }
-
-  :global(.dark) .tag-remove:hover {
-    color: #f66;
-  }
-
-  :global(.dark) .tag-field {
-    color: #e0e0e0;
-  }
+  .suggestion-item:hover { background: var(--bg-surface); }
 </style>
