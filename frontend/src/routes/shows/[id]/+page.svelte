@@ -7,8 +7,9 @@
   let show = $state(null);
   let loading = $state(true);
   let error = $state('');
-  let expandedPlays = $state(new Set());
+  let expandedPlays = $state(null);
   let sceneSorts = $state({});
+  let lightboxSrc = $state('');
 
   let id = $derived($page.params.id);
 
@@ -50,7 +51,16 @@
     return result;
   }
 
+  function isPlayExpanded(play) {
+    if (expandedPlays === null) return true;
+    return expandedPlays.has(play);
+  }
+
   function togglePlay(play) {
+    if (expandedPlays === null) {
+      const plays = parseSetlist(show?.setlist).map(p => p.play);
+      expandedPlays = new Set(plays);
+    }
     const s = new Set(expandedPlays);
     if (s.has(play)) s.delete(play); else s.add(play);
     expandedPlays = s;
@@ -128,39 +138,35 @@
       返回
     </a>
 
-    {#if show.poster_url}
-      <div class="poster">
-        <img src={show.poster_url} alt={show.name} />
-      </div>
-    {/if}
-
     <div class="detail-card">
-      <div class="detail-header">
-        <div class="header-info">
-          <h1>{show.name}</h1>
-          <div class="meta-row">
-            <span class="status" style="background: {statusColor(show.status)}">{statusLabel(show.status)}</span>
-            {#if show.category_name}
-              <a href="/search?q={encodeURIComponent(show.category_name)}" class="category">{show.category_name}</a>
-            {/if}
-            {#if show.rating}
-              <span class="rating">
-                {#each Array(5) as _, i}<span class:filled={i < show.rating}>★</span>{/each}
-              </span>
-            {/if}
+      <div class="detail-layout">
+        <div class="detail-main">
+          <div class="detail-header">
+            <div class="header-info">
+              <h1>{show.name}</h1>
+              <div class="meta-row">
+                <span class="status" style="background: {statusColor(show.status)}">{statusLabel(show.status)}</span>
+                {#if show.category_name}
+                  <a href="/search?q={encodeURIComponent(show.category_name)}" class="category">{show.category_name}</a>
+                {/if}
+                {#if show.rating}
+                  <span class="rating">
+                    {#each Array(5) as _, i}<span class:filled={i < show.rating}>★</span>{/each}
+                  </span>
+                {/if}
+              </div>
+            </div>
+            <div class="header-actions">
+              <a href="/shows/{show.id}/edit" class="edit-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                编辑
+              </a>
+              <button class="delete-btn" onclick={deleteShow}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                删除
+              </button>
+            </div>
           </div>
-        </div>
-        <div class="header-actions">
-          <a href="/shows/{show.id}/edit" class="edit-btn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            编辑
-          </a>
-          <button class="delete-btn" onclick={deleteShow}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            删除
-          </button>
-        </div>
-      </div>
 
       <div class="info-grid">
         <div class="info-item">
@@ -225,11 +231,11 @@
               <div class="setlist-item">
                 {#if item.scenes.length > 0}
                   <button class="play-header" onclick={() => togglePlay(item.play)}>
-                    <svg class="play-arrow" class:expanded={expandedPlays.has(item.play)} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    <svg class="play-arrow" class:expanded={isPlayExpanded(item.play)} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                     <a href="/search?field=setlist&q={encodeURIComponent(item.play)}" class="linkable" onclick={(e) => e.stopPropagation()}>{item.play}</a>
                     <span class="scene-count">{item.scenes.length}折</span>
                   </button>
-                  {#if expandedPlays.has(item.play)}
+                  {#if isPlayExpanded(item.play)}
                     <div class="scene-list">
                       {#each sortScenes(item.play, item.scenes) as scene}
                         <a href="/search?field=setlist&q={encodeURIComponent(item.play + '•' + scene)}" class="scene-item linkable">{scene}</a>
@@ -258,9 +264,29 @@
           <div class="text-content">{show.notes}</div>
         </div>
       {/if}
+        </div>
+
+        {#if show.poster_url}
+          <div class="detail-poster">
+            <button class="poster-btn" onclick={() => lightboxSrc = show.poster_url}>
+              <img src={show.poster_url} alt={show.name} />
+            </button>
+          </div>
+        {/if}
+      </div>
     </div>
   {/if}
 </div>
+
+{#if lightboxSrc}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="lightbox" onclick={() => lightboxSrc = ''}>
+    <button class="lightbox-close" onclick={() => lightboxSrc = ''}>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <img src={lightboxSrc} alt="海报大图" />
+  </div>
+{/if}
 
 <style>
   .show-detail { max-width: 800px; margin: 0 auto; }
@@ -280,8 +306,6 @@
   .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .error { color: var(--danger-text); background: var(--danger-bg); border-radius: var(--radius-md); }
-  .poster { margin-bottom: 24px; border-radius: var(--radius-lg); overflow: hidden; }
-  .poster img { width: 100%; display: block; }
   .detail-card {
     background: var(--bg-card);
     border-radius: var(--radius-lg);
@@ -289,6 +313,71 @@
     border: 1px solid var(--border);
     box-shadow: var(--shadow-sm);
   }
+  .detail-layout {
+    display: flex;
+    gap: 28px;
+  }
+  .detail-main { flex: 1; min-width: 0; }
+  .detail-poster {
+    width: 200px;
+    flex-shrink: 0;
+  }
+  .poster-btn {
+    width: 100%;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: block;
+    padding: 0;
+    background: none;
+    border: none;
+  }
+  .poster-btn:hover {
+    transform: scale(1.02);
+    box-shadow: var(--shadow-md);
+  }
+  .poster-btn img {
+    width: 100%;
+    display: block;
+    border-radius: var(--radius-md);
+  }
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    cursor: pointer;
+    animation: fadeIn 0.2s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .lightbox img {
+    max-width: 90vw;
+    max-height: 90vh;
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    cursor: default;
+  }
+  .lightbox-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s;
+  }
+  .lightbox-close:hover { background: rgba(255,255,255,0.3); }
   .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; }
   .header-info h1 { font-size: 28px; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.02em; }
   .meta-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -381,6 +470,8 @@
   @media (max-width: 768px) {
     .show-detail { padding: 0; }
     .detail-card { padding: 20px 16px; }
+    .detail-layout { flex-direction: column-reverse; gap: 20px; }
+    .detail-poster { width: 100%; }
     .detail-header { flex-direction: column; gap: 16px; }
     .header-info h1 { font-size: 22px; }
     .header-actions { width: 100%; display: flex; gap: 8px; }
