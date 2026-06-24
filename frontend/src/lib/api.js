@@ -90,5 +90,9 @@ export const api = {
       throw new Error(err.error || 'Upload failed');
     }
     return res.json();
-  }
+  },
+
+  getSceneSorts: () => request('/api/scene-sorts'),
+  updateSceneSort: (play, scenes) => request('/api/scene-sorts', { method: 'PUT', body: JSON.stringify({ play, scenes }) }),
+  deleteSceneSort: (play) => request(`/api/scene-sorts/${encodeURIComponent(play)}`, { method: 'DELETE' }),
 };

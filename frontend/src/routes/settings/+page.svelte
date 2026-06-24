@@ -15,12 +15,111 @@
   let dragIndex = $state(null);
   let restoring = $state(false);
   let restoreResult = $state(null);
+  let sceneSorts = $state([]);
+  let expandedPlay = $state('');
+  let sceneDragIndex = $state(null);
 
   onMount(async () => {
-    const [s, c] = await Promise.all([api.getSettings(), api.listCategories()]);
+    const [s, c, ss] = await Promise.all([api.getSettings(), api.listCategories(), api.getSceneSorts()]);
     settings = s;
     categories = c || [];
+    sceneSorts = ss || [];
   });
+
+  function extractPlaysFromSetlists(shows) {
+    const playScenes = {};
+    shows.forEach(show => {
+      if (!show.setlist) return;
+      show.setlist.split('\n').forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        const idx = trimmed.indexOf('•');
+        if (idx === -1) {
+          if (!playScenes[trimmed]) playScenes[trimmed] = new Set();
+        } else {
+          const play = trimmed.substring(0, idx).trim();
+          if (!playScenes[play]) playScenes[play] = new Set();
+          trimmed.substring(idx + 1).split('•').forEach(s => {
+            const scene = s.trim();
+            if (scene) playScenes[play].add(scene);
+          });
+        }
+      });
+    });
+    return playScenes;
+  }
+
+  function applySortPrefs(playScenes) {
+    const sortMap = {};
+    sceneSorts.forEach(ss => {
+      try { sortMap[ss.play] = JSON.parse(ss.scenes); } catch {}
+    });
+    const result = {};
+    Object.entries(playScenes).forEach(([play, scenes]) => {
+      const arr = [...scenes];
+      const sorted = sortMap[play];
+      if (sorted && Array.isArray(sorted)) {
+        const sortedSet = new Set(sorted);
+        const preferred = sorted.filter(s => arr.includes(s));
+        arr.forEach(s => { if (!sortedSet.has(s)) preferred.push(s); });
+        result[play] = preferred;
+      } else {
+        result[play] = arr;
+      }
+    });
+    return result;
+  }
+
+  let scenePlayData = $state({});
+  let sortedPlays = $state([]);
+
+  async function loadSceneSorts() {
+    const [shows, sorts] = await Promise.all([api.listAllShows(), api.getSceneSorts()]);
+    sceneSorts = sorts || [];
+    const raw = extractPlaysFromSetlists(shows || []);
+    scenePlayData = applySortPrefs(raw);
+    sortedPlays = Object.keys(scenePlayData).sort();
+  }
+
+  async function saveSceneSort(play) {
+    const scenes = scenePlayData[play] || [];
+    try {
+      await api.updateSceneSort(play, JSON.stringify(scenes));
+    } catch (e) {
+      alert('保存失败: ' + e.message);
+    }
+  }
+
+  function moveScene(play, fromIdx, toIdx) {
+    const scenes = [...scenePlayData[play]];
+    const [moved] = scenes.splice(fromIdx, 1);
+    scenes.splice(toIdx, 0, moved);
+    scenePlayData = { ...scenePlayData, [play]: scenes };
+    saveSceneSort(play);
+  }
+
+  function sceneDragStart(e, play, index) {
+    sceneDragIndex = { play, index };
+    e.dataTransfer.effectAllowed = 'move';
+    e.target.style.opacity = '0.5';
+  }
+
+  function sceneDragEnd(e) {
+    sceneDragIndex = null;
+    e.target.style.opacity = '1';
+  }
+
+  function sceneDragOver(e, play, index) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }
+
+  function sceneDrop(e, play, dropIndex) {
+    e.preventDefault();
+    if (!sceneDragIndex || sceneDragIndex.play !== play) return;
+    moveScene(play, sceneDragIndex.index, dropIndex);
+    sceneDragIndex = null;
+  }
 
   async function handleRestore(e) {
     const file = e.target.files[0];
@@ -250,6 +349,49 @@
       <input type="text" bind:value={newCatName} placeholder="新分类名称" onkeydown={(e) => e.key === 'Enter' && addCategory()} />
       <button class="add-btn" onclick={addCategory}>添加</button>
     </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      <h2>折子排序</h2>
+      <button class="load-scenes-btn" onclick={loadSceneSorts}>加载剧目数据</button>
+    </div>
+    {#if sortedPlays.length === 0}
+      <p class="backup-desc">点击"加载剧目数据"从所有演出中提取剧目和折子信息。</p>
+    {:else}
+      <div class="scene-plays">
+        {#each sortedPlays as play}
+          <div class="scene-play-item">
+            <button class="scene-play-header" onclick={() => expandedPlay = expandedPlay === play ? '' : play}>
+              <svg class="play-arrow" class:expanded={expandedPlay === play} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              <span class="scene-play-name">{play}</span>
+              <span class="scene-play-count">{scenePlayData[play]?.length || 0} 折</span>
+            </button>
+            {#if expandedPlay === play}
+              <div class="scene-drag-list">
+                {#each (scenePlayData[play] || []) as scene, idx}
+                  <div
+                    class="scene-drag-item"
+                    draggable="true"
+                    ondragstart={(e) => sceneDragStart(e, play, idx)}
+                    ondragend={sceneDragEnd}
+                    ondragover={(e) => sceneDragOver(e, play, idx)}
+                    ondrop={(e) => sceneDrop(e, play, idx)}
+                  >
+                    <span class="scene-drag-handle">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+                    </span>
+                    <span class="scene-drag-name">{scene}</span>
+                    <span class="scene-drag-idx">{idx + 1}</span>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
   </div>
 
   <div class="section">
@@ -513,6 +655,56 @@
     transform: translateY(-1px);
   }
 
+  .load-scenes-btn {
+    margin-left: auto;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+  }
+  .load-scenes-btn:hover { background: var(--bg-surface-hover); }
+  .scene-plays { display: flex; flex-direction: column; gap: 4px; }
+  .scene-play-item { border-bottom: 1px solid var(--border); }
+  .scene-play-item:last-child { border-bottom: none; }
+  .scene-play-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    transition: color 0.15s;
+  }
+  .scene-play-header:hover { color: var(--accent); }
+  .play-arrow { transition: transform 0.2s; color: var(--text-muted); flex-shrink: 0; }
+  .play-arrow.expanded { transform: rotate(90deg); }
+  .scene-play-name { flex: 1; text-align: left; }
+  .scene-play-count { font-size: 12px; color: var(--text-muted); font-weight: 400; }
+  .scene-drag-list { padding: 0 0 8px 22px; }
+  .scene-drag-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: grab;
+    transition: background 0.15s;
+    font-size: 13px;
+  }
+  .scene-drag-item:hover { background: var(--bg-surface); }
+  .scene-drag-item:active { cursor: grabbing; }
+  .scene-drag-handle { color: var(--text-muted); display: flex; align-items: center; }
+  .scene-drag-name { flex: 1; }
+  .scene-drag-idx { font-size: 11px; color: var(--text-muted); min-width: 20px; text-align: right; }
   .backup-desc {
     font-size: 13px;
     color: var(--text-muted);

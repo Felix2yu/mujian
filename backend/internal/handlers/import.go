@@ -139,7 +139,7 @@ func (h *Handler) parseRowToShow(row []string, colMap map[string]int) models.Sho
 		Notes:     get("notes"),
 		Review:    get("review"),
 		PosterURL: get("poster_url"),
-		Setlist:   get("setlist"),
+		Setlist:   strings.ReplaceAll(strings.ReplaceAll(get("setlist"), "·", "•"), "*", "•"),
 	}
 
 	if d := get("date"); d != "" {

@@ -75,6 +75,10 @@
 
   function setRating(val) { form.rating = form.rating === val ? null : val; }
 
+  function normalizeSetlist(text) {
+    return text.replace(/[·\*]/g, '•');
+  }
+
   let flushers = [];
   function registerFlush(fn) { flushers.push(fn); }
 
@@ -204,8 +208,9 @@
       </div>
     </div>
     <div class="form-group">
-      <label>剧目</label>
-      <TagInput bind:value={form.setlist} placeholder="输入剧目名按回车" suggestions={[]} onflush={registerFlush} />
+      <label for="setlist">剧目</label>
+      <textarea id="setlist" bind:value={form.setlist} rows="3" placeholder="每行一个剧目，折子用•分隔&#10;如：牡丹亭•游园&#10;牡丹亭•惊梦&#10;茶馆" oninput={() => { form.setlist = normalizeSetlist(form.setlist); }}></textarea>
+      <span class="field-hint">折子分隔符·、*会自动转为•</span>
     </div>
   </div>
 
@@ -307,6 +312,7 @@
   input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   input[type="number"] { -moz-appearance: textfield; }
   textarea { resize: vertical; }
+  .field-hint { display: block; font-size: 12px; color: var(--text-muted); margin-top: 4px; }
   .star-rating { display: flex; align-items: center; gap: 2px; padding: 8px 0; }
   .star-btn { font-size: 24px; color: var(--border); cursor: pointer; padding: 0 2px; transition: color 0.15s, transform 0.15s; background: none; border: none; }
   .star-btn:hover { transform: scale(1.2); }

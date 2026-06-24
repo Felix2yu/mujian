@@ -103,3 +103,10 @@ type SettingsRequest struct {
 	S3SecretKey *string `json:"s3_secret_key"`
 	S3PublicURL *string `json:"s3_public_url"`
 }
+
+type SceneSort struct {
+	ID        int64  `json:"id"`
+	Play      string `json:"play"`
+	Scenes    string `json:"scenes"`
+	UpdatedAt string `json:"updated_at"`
+}

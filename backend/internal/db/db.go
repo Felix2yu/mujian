@@ -95,6 +95,14 @@ func (db *DB) migrate() error {
 	db.conn.Exec("UPDATE shows SET status = 'normal' WHERE status = 'planned'")
 	db.conn.Exec("UPDATE shows SET status = 'normal' WHERE status = 'watched'")
 
+	// scene sorts table
+	db.conn.Exec(`CREATE TABLE IF NOT EXISTS scene_sorts (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		play TEXT NOT NULL UNIQUE,
+		scenes TEXT NOT NULL DEFAULT '[]',
+		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+
 	// seed default categories
 	var count int
 	db.conn.QueryRow("SELECT COUNT(*) FROM categories").Scan(&count)
@@ -614,4 +622,35 @@ func scanShows(rows *sql.Rows) ([]models.Show, error) {
 		shows = append(shows, s)
 	}
 	return shows, nil
+}
+
+func (db *DB) GetSceneSorts() ([]models.SceneSort, error) {
+	rows, err := db.conn.Query("SELECT id, play, scenes, updated_at FROM scene_sorts ORDER BY play")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var sorts []models.SceneSort
+	for rows.Next() {
+		var s models.SceneSort
+		if err := rows.Scan(&s.ID, &s.Play, &s.Scenes, &s.UpdatedAt); err != nil {
+			continue
+		}
+		sorts = append(sorts, s)
+	}
+	return sorts, nil
+}
+
+func (db *DB) UpdateSceneSort(play, scenes string) error {
+	_, err := db.conn.Exec(
+		`INSERT INTO scene_sorts (play, scenes, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+		 ON CONFLICT(play) DO UPDATE SET scenes = excluded.scenes, updated_at = excluded.updated_at`,
+		play, scenes,
+	)
+	return err
+}
+
+func (db *DB) DeleteSceneSort(play string) error {
+	_, err := db.conn.Exec("DELETE FROM scene_sorts WHERE play = ?", play)
+	return err
 }

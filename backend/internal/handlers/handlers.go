@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -72,6 +73,12 @@ func (h *Handler) Routes() chi.Router {
 	r.Route("/backup", func(r chi.Router) {
 		r.Get("/download", h.backupDownload)
 		r.Post("/restore", h.backupRestore)
+	})
+
+	r.Route("/scene-sorts", func(r chi.Router) {
+		r.Get("/", h.getSceneSorts)
+		r.Put("/", h.updateSceneSort)
+		r.Delete("/{play}", h.deleteSceneSort)
 	})
 
 	return r
@@ -165,6 +172,7 @@ func (h *Handler) createShow(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "name is required")
 		return
 	}
+	req.Setlist = strings.ReplaceAll(strings.ReplaceAll(req.Setlist, "·", "•"), "*", "•")
 
 	show, err := h.db.CreateShow(req)
 	if err != nil {
@@ -186,6 +194,7 @@ func (h *Handler) updateShow(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "invalid request body")
 		return
 	}
+	req.Setlist = strings.ReplaceAll(strings.ReplaceAll(req.Setlist, "·", "•"), "*", "•")
 
 	show, err := h.db.UpdateShow(id, req)
 	if err != nil {
@@ -558,4 +567,49 @@ func (h *Handler) backupRestore(w http.ResponseWriter, r *http.Request) {
 		"shows":      importResult.Shows,
 		"skipped":    importResult.Skipped,
 	})
+}
+
+func (h *Handler) getSceneSorts(w http.ResponseWriter, r *http.Request) {
+	sorts, err := h.db.GetSceneSorts()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if sorts == nil {
+		sorts = []models.SceneSort{}
+	}
+	jsonResp(w, 200, sorts)
+}
+
+func (h *Handler) updateSceneSort(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Play   string `json:"play"`
+		Scenes string `json:"scenes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if req.Play == "" {
+		jsonErr(w, 400, "play is required")
+		return
+	}
+	if err := h.db.UpdateSceneSort(req.Play, req.Scenes); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "updated"})
+}
+
+func (h *Handler) deleteSceneSort(w http.ResponseWriter, r *http.Request) {
+	play := chi.URLParam(r, "play")
+	if play == "" {
+		jsonErr(w, 400, "play is required")
+		return
+	}
+	if err := h.db.DeleteSceneSort(play); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "deleted"})
 }

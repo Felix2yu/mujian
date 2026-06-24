@@ -92,7 +92,7 @@
             <li>座位 / seat</li>
             <li>门票 / ticket_cost</li>
             <li>其他花费 / other_cost</li>
-            <li>剧目 / setlist</li>
+            <li>剧目 / setlist（折子用•分隔，如：牡丹亭•游园）</li>
             <li>剧评 / review</li>
             <li>备注 / notes</li>
           </ul>

@@ -7,12 +7,45 @@
   let show = $state(null);
   let loading = $state(true);
   let error = $state('');
+  let expandedPlays = $state(new Set());
+  let sceneSorts = $state({});
 
   let id = $derived($page.params.id);
 
+  function parseSetlist(setlist) {
+    if (!setlist) return [];
+    const lines = setlist.split('\n').map(s => s.trim()).filter(Boolean);
+    return lines.map(line => {
+      const idx = line.indexOf('•');
+      if (idx === -1) return { play: line, scenes: [] };
+      const play = line.substring(0, idx).trim();
+      const scenes = line.substring(idx + 1).split('•').map(s => s.trim()).filter(Boolean);
+      return { play, scenes };
+    });
+  }
+
+  function sortScenes(play, scenes) {
+    const sorted = sceneSorts[play];
+    if (!sorted || !Array.isArray(sorted)) return scenes;
+    const sortedSet = new Set(sorted);
+    const result = sorted.filter(s => scenes.includes(s));
+    scenes.forEach(s => { if (!sortedSet.has(s)) result.push(s); });
+    return result;
+  }
+
+  function togglePlay(play) {
+    const s = new Set(expandedPlays);
+    if (s.has(play)) s.delete(play); else s.add(play);
+    expandedPlays = s;
+  }
+
   onMount(async () => {
     try {
-      show = await api.getShow(id);
+      const [showData, sorts] = await Promise.all([api.getShow(id), api.getSceneSorts()]);
+      show = showData;
+      const map = {};
+      sorts.forEach(s => { try { map[s.play] = JSON.parse(s.scenes); } catch {} });
+      sceneSorts = map;
     } catch (e) {
       error = e.message;
     } finally {
@@ -165,11 +198,26 @@
       {#if show.setlist}
         <div class="section">
           <h3>剧目</h3>
-          <div class="text-content">
-            {#each show.setlist.split('\n') as item}
-              {#if item.trim()}
-                <a href="/search?field=setlist&q={encodeURIComponent(item.trim())}" class="linkable">{item.trim()}</a><br/>
-              {/if}
+          <div class="setlist">
+            {#each parseSetlist(show.setlist) as item}
+              <div class="setlist-item">
+                {#if item.scenes.length > 0}
+                  <button class="play-header" onclick={() => togglePlay(item.play)}>
+                    <svg class="play-arrow" class:expanded={expandedPlays.has(item.play)} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    <a href="/search?field=setlist&q={encodeURIComponent(item.play)}" class="linkable" onclick={(e) => e.stopPropagation()}>{item.play}</a>
+                    <span class="scene-count">{item.scenes.length}折</span>
+                  </button>
+                  {#if expandedPlays.has(item.play)}
+                    <div class="scene-list">
+                      {#each sortScenes(item.play, item.scenes) as scene}
+                        <a href="/search?field=setlist&q={encodeURIComponent(item.play + '•' + scene)}" class="scene-item linkable">{scene}</a>
+                      {/each}
+                    </div>
+                  {/if}
+                {:else}
+                  <a href="/search?field=setlist&q={encodeURIComponent(item.play)}" class="linkable">{item.play}</a>
+                {/if}
+              </div>
             {/each}
           </div>
         </div>
@@ -264,6 +312,38 @@
   .section { margin-bottom: 28px; }
   .section h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: var(--text-primary); letter-spacing: -0.01em; }
   .text-content { font-size: 15px; line-height: 1.8; color: var(--text-secondary); white-space: pre-wrap; }
+  .setlist { display: flex; flex-direction: column; gap: 4px; }
+  .setlist-item { }
+  .play-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    transition: color 0.15s;
+  }
+  .play-header:hover { color: var(--accent); }
+  .play-arrow { transition: transform 0.2s; color: var(--text-muted); flex-shrink: 0; }
+  .play-arrow.expanded { transform: rotate(90deg); }
+  .scene-count { font-size: 12px; color: var(--text-muted); font-weight: 400; margin-left: 4px; }
+  .scene-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 0 4px 20px;
+  }
+  .scene-item {
+    font-size: 14px;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    transition: background 0.15s;
+  }
+  .scene-item:hover { background: var(--bg-surface); }
   @media (max-width: 768px) {
     .show-detail { padding: 0; }
     .detail-card { padding: 20px 16px; }
