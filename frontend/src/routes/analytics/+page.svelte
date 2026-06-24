@@ -334,7 +334,7 @@
       </div>
 
       <div class="chart-card full-width clickable" onclick={() => openModal('场馆统计', venueStats)}>
-        <h3>常去场馆 TOP 10 <span class="click-hint">点击查看全部</span></h3>
+        <h3>场馆统计 <span class="click-hint">点击查看全部</span></h3>
         <div class="venue-list">
           {#each Object.entries(venueStats).sort((a, b) => b[1] - a[1]).slice(0, 10) as [venue, count], i}
             <div class="venue-item">
