@@ -9,7 +9,10 @@
   let error = $state('');
   let expandedPlays = $state(null);
   let sceneSorts = $state({});
-  let lightboxSrc = $state('');
+  let lightboxIdx = $state(-1);
+  let allShows = $state([]);
+
+  let lightboxShow = $derived(lightboxIdx >= 0 ? allShows[lightboxIdx] : null);
 
   let id = $derived($page.params.id);
 
@@ -68,8 +71,9 @@
 
   onMount(async () => {
     try {
-      const [showData, sorts] = await Promise.all([api.getShow(id), api.getSceneSorts()]);
+      const [showData, sorts, shows] = await Promise.all([api.getShow(id), api.getSceneSorts(), api.listAllShows()]);
       show = showData;
+      allShows = (shows || []).filter(s => s.poster_url);
       const map = {};
       sorts.forEach(s => { try { map[s.play] = JSON.parse(s.scenes); } catch {} });
       sceneSorts = map;
@@ -79,6 +83,25 @@
       loading = false;
     }
   });
+
+  function openLightbox(showId) {
+    const idx = allShows.findIndex(s => s.id == showId);
+    if (idx >= 0) lightboxIdx = idx;
+  }
+
+  function closeLightbox() {
+    lightboxIdx = -1;
+  }
+
+  function prevPoster() {
+    if (allShows.length === 0) return;
+    lightboxIdx = (lightboxIdx - 1 + allShows.length) % allShows.length;
+  }
+
+  function nextPoster() {
+    if (allShows.length === 0) return;
+    lightboxIdx = (lightboxIdx + 1) % allShows.length;
+  }
 
   function formatDate(dateStr) {
     const d = new Date(dateStr);
@@ -268,7 +291,7 @@
 
         {#if show.poster_url}
           <div class="detail-poster">
-            <button class="poster-btn" onclick={() => lightboxSrc = show.poster_url}>
+            <button class="poster-btn" onclick={() => openLightbox(show.id)}>
               <img src={show.poster_url} alt={show.name} />
             </button>
           </div>
@@ -278,13 +301,25 @@
   {/if}
 </div>
 
-{#if lightboxSrc}
+{#if lightboxShow}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="lightbox" onclick={() => lightboxSrc = ''}>
-    <button class="lightbox-close" onclick={() => lightboxSrc = ''}>
+  <div class="lightbox" onclick={closeLightbox}>
+    <button class="lightbox-close" onclick={closeLightbox}>
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
-    <img src={lightboxSrc} alt="海报大图" />
+    {#if allShows.length > 1}
+      <button class="lightbox-nav lightbox-prev" onclick={(e) => { e.stopPropagation(); prevPoster(); }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <button class="lightbox-nav lightbox-next" onclick={(e) => { e.stopPropagation(); nextPoster(); }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    {/if}
+    <div class="lightbox-content" onclick={(e) => e.stopPropagation()}>
+      <img src={lightboxShow.poster_url} alt={lightboxShow.name} />
+      <div class="lightbox-caption">{lightboxShow.name}</div>
+      <div class="lightbox-counter">{lightboxIdx + 1} / {allShows.length}</div>
+    </div>
   </div>
 {/if}
 
@@ -345,7 +380,7 @@
   .lightbox {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.85);
+    background: rgba(0,0,0,0.9);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -354,12 +389,27 @@
     animation: fadeIn 0.2s ease;
   }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-  .lightbox img {
-    max-width: 90vw;
-    max-height: 90vh;
+  .lightbox-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    cursor: default;
+  }
+  .lightbox-content img {
+    max-width: 85vw;
+    max-height: 80vh;
     border-radius: var(--radius-md);
     box-shadow: 0 8px 40px rgba(0,0,0,0.5);
-    cursor: default;
+  }
+  .lightbox-caption {
+    font-size: 15px;
+    color: #fff;
+    font-weight: 500;
+  }
+  .lightbox-counter {
+    font-size: 13px;
+    color: rgba(255,255,255,0.6);
   }
   .lightbox-close {
     position: absolute;
@@ -376,8 +426,29 @@
     cursor: pointer;
     border: none;
     transition: background 0.2s;
+    z-index: 10;
   }
   .lightbox-close:hover { background: rgba(255,255,255,0.3); }
+  .lightbox-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s;
+    z-index: 10;
+  }
+  .lightbox-nav:hover { background: rgba(255,255,255,0.3); }
+  .lightbox-prev { left: 20px; }
+  .lightbox-next { right: 20px; }
   .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; }
   .header-info h1 { font-size: 28px; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.02em; }
   .meta-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
