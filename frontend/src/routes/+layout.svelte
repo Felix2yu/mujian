@@ -524,6 +524,12 @@
     box-shadow: var(--shadow-lg);
     z-index: 100;
     overflow: hidden;
+    animation: slideDown 0.2s ease;
+  }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   .popup-header {
