@@ -20,7 +20,7 @@
 <a href="/shows/{show.id}" class="show-card" class:compact>
   <div class="card-body">
     <div class="card-content">
-      <div class="card-header">
+      <div class="card-title-row">
         <span class="status" style="background: {statusColor(show.status)}">{statusLabel(show.status)}</span>
         {#if show.category_name}
           <span class="category">{show.category_name}</span>
@@ -129,30 +129,32 @@
     display: block;
   }
 
-  .card-header {
+  .card-title-row {
     display: flex;
     gap: 6px;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     align-items: center;
     flex-wrap: wrap;
   }
 
   .status {
     font-size: 11px;
-    padding: 3px 10px;
-    border-radius: 20px;
+    padding: 2px 8px;
+    border-radius: 4px;
     color: #fff;
     font-weight: 600;
     letter-spacing: 0.02em;
+    flex-shrink: 0;
   }
 
   .category {
     font-size: 11px;
-    padding: 3px 10px;
-    border-radius: 20px;
+    padding: 2px 8px;
+    border-radius: 4px;
     background: var(--bg-surface);
     color: var(--text-secondary);
     font-weight: 500;
+    flex-shrink: 0;
   }
 
   .rating-badge {
