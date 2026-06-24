@@ -14,7 +14,16 @@
 
   function parseSetlist(setlist) {
     if (!setlist) return [];
-    const lines = setlist.split('\n').map(s => s.trim()).filter(Boolean);
+    const rawLines = setlist.split('\n').map(s => s.trim()).filter(Boolean);
+    const lines = [];
+    for (const raw of rawLines) {
+      const parts = raw.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+      if (parts.length > 1) {
+        lines.push(...parts);
+      } else {
+        lines.push(raw);
+      }
+    }
     const playMap = new Map();
     for (const line of lines) {
       const idx = line.indexOf('•');
