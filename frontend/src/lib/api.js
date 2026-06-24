@@ -95,4 +95,12 @@ export const api = {
   getSceneSorts: () => request('/api/scene-sorts'),
   updateSceneSort: (play, scenes) => request('/api/scene-sorts', { method: 'PUT', body: JSON.stringify({ play, scenes }) }),
   deleteSceneSort: (play) => request(`/api/scene-sorts/${encodeURIComponent(play)}`, { method: 'DELETE' }),
+
+  listActors: () => request('/api/actors'),
+  getActor: (name) => request(`/api/actors/${encodeURIComponent(name)}`),
+  updateActor: (name, data) => request(`/api/actors/${encodeURIComponent(name)}`, { method: 'PUT', body: JSON.stringify(data) }),
+  getActorShows: (name) => request(`/api/actors/${encodeURIComponent(name)}/shows`),
+
+  listPlays: () => request('/api/plays'),
+  getPlayShows: (name) => request(`/api/field/setlist/${encodeURIComponent(name)}`),
 };

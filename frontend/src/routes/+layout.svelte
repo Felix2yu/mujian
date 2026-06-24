@@ -120,6 +120,8 @@
       <div class="nav-links" class:open={mobileMenuOpen}>
         <a href="/" class:active={currentPath === '/'} onclick={() => mobileMenuOpen = false}>日历</a>
         <a href="/shows" class:active={currentPath.startsWith('/shows') && !currentPath.includes('/import') && !currentPath.includes('/new')} onclick={() => mobileMenuOpen = false}>演出</a>
+        <a href="/plays" class:active={currentPath.startsWith('/plays')} onclick={() => mobileMenuOpen = false}>剧目</a>
+        <a href="/cast" class:active={currentPath.startsWith('/cast')} onclick={() => mobileMenuOpen = false}>演员</a>
         <a href="/analytics" class:active={currentPath === '/analytics'} onclick={() => mobileMenuOpen = false}>分析</a>
       </div>
 

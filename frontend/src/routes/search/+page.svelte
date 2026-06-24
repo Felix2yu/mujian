@@ -57,7 +57,9 @@
 </script>
 
 <div class="search-page">
-  <h1>搜索演出</h1>
+  <div class="page-header">
+    <h1>搜索演出</h1>
+  </div>
 
   <form class="search-bar" onsubmit={handleSubmit}>
     <div class="search-input-wrapper">
@@ -116,9 +118,23 @@
 
 <style>
   .search-page { max-width: 800px; margin: 0 auto; }
-  h1 { font-size: 24px; font-weight: 700; margin-bottom: 24px; letter-spacing: -0.02em; }
 
-  .search-bar { display: flex; gap: 10px; margin-bottom: 16px; }
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+
+  .search-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
 
   .search-input-wrapper {
     position: relative;
@@ -182,30 +198,36 @@
 
   .hint-label {
     color: var(--text-muted);
+    font-weight: 500;
   }
 
   .hint-tag {
-    padding: 4px 10px;
+    padding: 5px 12px;
     background: var(--bg-surface);
     border-radius: 20px;
     color: var(--text-secondary);
     font-weight: 500;
+    transition: background 0.15s;
+  }
+
+  .hint-tag:hover {
+    background: var(--bg-surface-hover);
   }
 
   .loading, .empty, .placeholder {
     text-align: center;
-    padding: 60px 20px;
+    padding: 80px 20px;
     color: var(--text-secondary);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: 16px;
   }
 
   .spinner {
-    width: 20px;
-    height: 20px;
-    border: 2px solid var(--border);
+    width: 24px;
+    height: 24px;
+    border: 2.5px solid var(--border);
     border-top-color: var(--accent);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
@@ -214,21 +236,25 @@
   @keyframes spin { to { transform: rotate(360deg); } }
 
   .empty svg, .placeholder svg {
-    opacity: 0.3;
+    opacity: 0.25;
+    color: var(--text-muted);
   }
 
   .empty p, .placeholder p {
     font-size: 15px;
+    font-weight: 500;
   }
 
   .empty-hint {
     font-size: 13px;
     color: var(--text-muted) !important;
+    font-weight: 400 !important;
     margin-top: 4px;
   }
 
   .placeholder p {
     color: var(--text-muted);
+    font-weight: 400;
   }
 
   .results-info {
@@ -245,6 +271,11 @@
   .results-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
+  }
+
+  @media (max-width: 480px) {
+    .search-bar { flex-direction: column; }
+    .primary-btn { width: 100%; justify-content: center; }
   }
 </style>

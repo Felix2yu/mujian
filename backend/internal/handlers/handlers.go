@@ -10,6 +10,7 @@ import (
 	"mujian/internal/storage"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -80,6 +81,15 @@ func (h *Handler) Routes() chi.Router {
 		r.Put("/", h.updateSceneSort)
 		r.Delete("/{play}", h.deleteSceneSort)
 	})
+
+	r.Route("/actors", func(r chi.Router) {
+		r.Get("/", h.listActors)
+		r.Get("/{name}", h.getActor)
+		r.Put("/{name}", h.updateActor)
+		r.Get("/{name}/shows", h.getActorShows)
+	})
+
+	r.Get("/plays", h.listPlays)
 
 	return r
 }
@@ -612,4 +622,141 @@ func (h *Handler) deleteSceneSort(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResp(w, 200, map[string]string{"message": "deleted"})
+}
+
+func (h *Handler) listActors(w http.ResponseWriter, r *http.Request) {
+	actors, err := h.db.ListActors()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if actors == nil {
+		actors = []models.Actor{}
+	}
+	jsonResp(w, 200, actors)
+}
+
+func (h *Handler) getActor(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		jsonErr(w, 400, "name is required")
+		return
+	}
+	actor, err := h.db.GetActor(name)
+	if err != nil {
+		jsonErr(w, 404, err.Error())
+		return
+	}
+	jsonResp(w, 200, actor)
+}
+
+func (h *Handler) updateActor(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		jsonErr(w, 400, "name is required")
+		return
+	}
+
+	var req models.ActorRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	req.Name = name
+
+	actor, err := h.db.UpsertActor(req)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, actor)
+}
+
+func (h *Handler) getActorShows(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		jsonErr(w, 400, "name is required")
+		return
+	}
+	shows, err := h.db.GetShowsByActor(name)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if shows == nil {
+		shows = []models.Show{}
+	}
+	jsonResp(w, 200, shows)
+}
+
+func (h *Handler) listPlays(w http.ResponseWriter, r *http.Request) {
+	shows, err := h.db.ListAllShows()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+
+	type PlayInfo struct {
+		Name       string `json:"name"`
+		SceneCount int    `json:"scene_count"`
+		ShowCount  int    `json:"show_count"`
+	}
+
+	playMap := make(map[string]*PlayInfo)
+	for _, s := range shows {
+		if s.Setlist == "" {
+			continue
+		}
+		lines := strings.Split(s.Setlist, "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			parts := strings.Split(line, ",")
+			for _, part := range parts {
+				part = strings.TrimSpace(part)
+				if part == "" {
+					continue
+				}
+				idx := strings.Index(part, "•")
+				var playName string
+				var sceneCount int
+				if idx == -1 {
+					playName = part
+					sceneCount = 0
+				} else {
+					playName = strings.TrimSpace(part[:idx])
+					scenes := strings.Split(part[idx+1:], "•")
+					seen := make(map[string]bool)
+					for _, sc := range scenes {
+						sc = strings.TrimSpace(sc)
+						if sc != "" && !seen[sc] {
+							seen[sc] = true
+							sceneCount++
+						}
+					}
+				}
+				if playName == "" {
+					continue
+				}
+				if _, exists := playMap[playName]; !exists {
+					playMap[playName] = &PlayInfo{Name: playName}
+				}
+				playMap[playName].ShowCount++
+				if sceneCount > playMap[playName].SceneCount {
+					playMap[playName].SceneCount = sceneCount
+				}
+			}
+		}
+	}
+
+	plays := make([]PlayInfo, 0, len(playMap))
+	for _, p := range playMap {
+		plays = append(plays, *p)
+	}
+	sort.Slice(plays, func(i, j int) bool {
+		return plays[i].Name < plays[j].Name
+	})
+	jsonResp(w, 200, plays)
 }

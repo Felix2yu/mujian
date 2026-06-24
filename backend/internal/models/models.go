@@ -110,3 +110,17 @@ type SceneSort struct {
 	Scenes    string `json:"scenes"`
 	UpdatedAt string `json:"updated_at"`
 }
+
+type Actor struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Bio       string `json:"bio"`
+	PhotoURL  string `json:"photo_url"`
+	ShowCount int    `json:"show_count"`
+}
+
+type ActorRequest struct {
+	Name     string `json:"name"`
+	Bio      string `json:"bio"`
+	PhotoURL string `json:"photo_url"`
+}

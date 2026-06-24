@@ -140,9 +140,9 @@
   function formatDuration(mins) {
     const h = Math.floor(mins / 60);
     const m = mins % 60;
-    if (h > 0 && m > 0) return `${h}h ${m}m`;
-    if (h > 0) return `${h}h`;
-    return `${m}m`;
+    if (h > 0 && m > 0) return `${h}小时${m}分钟`;
+    if (h > 0) return `${h}小时`;
+    return `${m}分钟`;
   }
 
   const months = [

@@ -58,9 +58,11 @@
 
   .page-header {
     display: flex;
-    flex-direction: column;
-    gap: 16px;
-    margin-bottom: 24px;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 12px;
   }
 
   .back-link {
@@ -72,7 +74,6 @@
     text-decoration: none;
     font-weight: 500;
     transition: color 0.15s;
-    width: fit-content;
   }
 
   .back-link:hover {

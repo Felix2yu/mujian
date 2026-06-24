@@ -7,6 +7,7 @@ import (
 	"mujian/internal/models"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -100,6 +101,16 @@ func (db *DB) migrate() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		play TEXT NOT NULL UNIQUE,
 		scenes TEXT NOT NULL DEFAULT '[]',
+		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+
+	// actors table
+	db.conn.Exec(`CREATE TABLE IF NOT EXISTS actors (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL UNIQUE,
+		bio TEXT NOT NULL DEFAULT '',
+		photo_url TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`)
 
@@ -653,4 +664,92 @@ func (db *DB) UpdateSceneSort(play, scenes string) error {
 func (db *DB) DeleteSceneSort(play string) error {
 	_, err := db.conn.Exec("DELETE FROM scene_sorts WHERE play = ?", play)
 	return err
+}
+
+func (db *DB) ListActors() ([]models.Actor, error) {
+	shows, err := db.ListAllShows()
+	if err != nil {
+		return nil, err
+	}
+
+	type actorInfo struct {
+		name      string
+		showCount int
+	}
+	actorMap := make(map[string]*actorInfo)
+	for _, s := range shows {
+		if s.Cast == "" {
+			continue
+		}
+		parts := strings.Split(s.Cast, ",")
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			p = strings.TrimLeft(p, "，")
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			if _, exists := actorMap[p]; !exists {
+				actorMap[p] = &actorInfo{name: p}
+			}
+			actorMap[p].showCount++
+		}
+	}
+
+	var actors []models.Actor
+	for _, info := range actorMap {
+		a := models.Actor{Name: info.name, ShowCount: info.showCount}
+		row := db.conn.QueryRow("SELECT id, bio, photo_url FROM actors WHERE name = ?", info.name)
+		row.Scan(&a.ID, &a.Bio, &a.PhotoURL)
+		actors = append(actors, a)
+	}
+	sort.Slice(actors, func(i, j int) bool {
+		return actors[i].Name < actors[j].Name
+	})
+	return actors, nil
+}
+
+func (db *DB) GetActor(name string) (*models.Actor, error) {
+	var a models.Actor
+	err := db.conn.QueryRow(`
+		SELECT a.id, a.name, a.bio, a.photo_url,
+			COUNT(DISTINCT s.id) as show_count
+		FROM actors a
+		LEFT JOIN shows s ON s.cast LIKE '%' || a.name || '%'
+		WHERE a.name = ?
+		GROUP BY a.id
+	`, name).Scan(&a.ID, &a.Name, &a.Bio, &a.PhotoURL, &a.ShowCount)
+	if err != nil {
+		return nil, fmt.Errorf("actor not found: %w", err)
+	}
+	return &a, nil
+}
+
+func (db *DB) UpsertActor(req models.ActorRequest) (*models.Actor, error) {
+	_, err := db.conn.Exec(`
+		INSERT INTO actors (name, bio, photo_url, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(name) DO UPDATE SET bio = excluded.bio, photo_url = excluded.photo_url, updated_at = CURRENT_TIMESTAMP
+	`, req.Name, req.Bio, req.PhotoURL)
+	if err != nil {
+		return nil, err
+	}
+	return db.GetActor(req.Name)
+}
+
+func (db *DB) GetShowsByActor(name string) ([]models.Show, error) {
+	rows, err := db.conn.Query(`
+		SELECT s.id, s.name, s.venue, s.date, s.duration, s.status, s.category_id,
+		       s.poster_url, s.setlist, s.cast, s.company, s.friends, s.rating,
+		       s.seat, s.notes, s.review, s.ticket_cost, s.other_cost,
+		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
+		FROM shows s
+		LEFT JOIN categories c ON s.category_id = c.id
+		WHERE s.cast LIKE ?
+		ORDER BY s.date DESC
+	`, "%"+name+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanShows(rows)
 }

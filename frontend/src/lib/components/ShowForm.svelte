@@ -248,10 +248,11 @@
   .show-form {
     background: var(--bg-card);
     border-radius: var(--radius-lg);
-    padding: 28px;
+    padding: 32px;
     border: 1px solid var(--border);
     box-shadow: var(--shadow-sm);
   }
+
   .error {
     background: var(--danger-bg);
     color: var(--danger-text);
@@ -263,72 +264,93 @@
     align-items: center;
     gap: 8px;
   }
+
   .error::before {
     content: '⚠';
   }
+
   .form-section {
     margin-bottom: 28px;
     padding-bottom: 28px;
     border-bottom: 1px solid var(--border);
   }
+
   .form-section:last-of-type {
     border-bottom: none;
     margin-bottom: 0;
     padding-bottom: 0;
   }
+
   .form-section h3 {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
-    margin-bottom: 18px;
-    color: var(--text-primary);
-    letter-spacing: -0.01em;
+    margin-bottom: 20px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
+
   .form-row {
     display: flex;
     gap: 16px;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
   }
+
   .form-group {
     flex: 1;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
   }
+
   .form-row .form-group {
     margin-bottom: 0;
   }
+
   .form-group-short {
     flex: 0 0 130px;
   }
+
   label {
     display: block;
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 12px;
+    font-weight: 600;
     color: var(--text-muted);
     margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
+
   input, select, textarea {
     width: 100%;
   }
+
   input[type="number"]::-webkit-inner-spin-button,
   input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   input[type="number"] { -moz-appearance: textfield; }
   textarea { resize: vertical; }
-  .field-hint { display: block; font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  .field-hint { display: block; font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+
   .star-rating { display: flex; align-items: center; gap: 2px; padding: 8px 0; }
   .star-btn { font-size: 24px; color: var(--border); cursor: pointer; padding: 0 2px; transition: color 0.15s, transform 0.15s; background: none; border: none; }
   .star-btn:hover { transform: scale(1.2); }
   .star-btn.active { color: var(--warning); }
   .rating-text { margin-left: 8px; font-size: 13px; color: var(--text-muted); }
+
   .poster-upload {
     border: 2px dashed var(--border);
     border-radius: var(--radius-md);
-    padding: 32px;
+    padding: 40px 32px;
     text-align: center;
     transition: all 0.2s ease;
     cursor: pointer;
+    background: var(--bg-surface);
   }
+
   .poster-upload:hover { border-color: var(--accent); background: var(--accent-bg); }
   .poster-upload.dragover { border-color: var(--accent); background: var(--accent-bg); }
-  .poster-preview { max-width: 200px; max-height: 200px; border-radius: var(--radius-sm); object-fit: cover; }
+
+  .poster-preview { max-width: 200px; max-height: 200px; border-radius: var(--radius-md); object-fit: cover; }
+
   .btn-remove-poster {
     margin-top: 12px;
     padding: 6px 16px;
@@ -339,13 +361,16 @@
     font-weight: 500;
     transition: all 0.15s;
   }
+
   .btn-remove-poster:hover { background: var(--danger-bg-hover); }
-  .poster-placeholder { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-  .poster-placeholder svg { color: var(--text-muted); opacity: 0.5; }
-  .poster-placeholder p { color: var(--text-muted); margin: 0; font-size: 13px; }
+
+  .poster-placeholder { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .poster-placeholder svg { color: var(--text-muted); opacity: 0.4; }
+  .poster-placeholder p { color: var(--text-muted); margin: 0; font-size: 14px; }
+
   .btn-select-poster {
     display: inline-block;
-    padding: 8px 20px;
+    padding: 10px 24px;
     background: var(--accent);
     color: #fff;
     border-radius: var(--radius-sm);
@@ -354,14 +379,20 @@
     font-weight: 500;
     transition: all 0.2s;
   }
-  .btn-select-poster:hover { background: var(--accent-light); }
+
+  .btn-select-poster:hover { background: var(--accent-light); transform: translateY(-1px); }
+
   .poster-hint { font-size: 12px; color: var(--text-muted); }
+
   .form-actions {
     display: flex;
     justify-content: flex-end;
     gap: 12px;
     margin-top: 28px;
+    padding-top: 28px;
+    border-top: 1px solid var(--border);
   }
+
   .btn-cancel {
     padding: 10px 24px;
     border-radius: var(--radius-sm);
@@ -372,7 +403,9 @@
     transition: all 0.2s;
     border: 1px solid var(--border);
   }
+
   .btn-cancel:hover { background: var(--bg-surface-hover); }
+
   .btn-submit {
     padding: 10px 32px;
     border-radius: var(--radius-sm);
@@ -382,12 +415,14 @@
     font-size: 14px;
     transition: all 0.2s;
   }
+
   .btn-submit:hover:not(:disabled) { background: var(--accent-light); transform: translateY(-1px); }
   .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
   @media (max-width: 768px) {
-    .show-form { padding: 16px; }
+    .show-form { padding: 20px 16px; }
     .form-row { flex-direction: column; gap: 0; }
-    .form-row .form-group { margin-bottom: 14px; }
+    .form-row .form-group { margin-bottom: 16px; }
     .form-actions { flex-direction: column; gap: 8px; }
     .form-actions button { width: 100%; text-align: center; }
   }

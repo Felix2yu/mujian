@@ -527,9 +527,9 @@
   .empty p { font-size: 15px; }
 
   .shows-list {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
 
   .show-item {
@@ -537,13 +537,13 @@
     border-radius: var(--radius-md);
     transition: all 0.2s;
   }
-  .show-item:hover { transform: translateY(-2px); }
+  .show-item:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
   .show-item.selected { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius-md); }
 
   .select-check-wrapper {
     position: absolute;
-    top: 12px;
-    left: 12px;
+    top: 14px;
+    left: 14px;
     z-index: 5;
     cursor: pointer;
   }
@@ -556,10 +556,10 @@
 
   .show-actions {
     position: absolute;
-    top: 10px;
-    right: 10px;
+    top: 12px;
+    right: 12px;
     display: flex;
-    gap: 4px;
+    gap: 6px;
     opacity: 0;
     transition: opacity 0.2s;
     z-index: 10;
@@ -567,8 +567,8 @@
   .show-item:hover .show-actions { opacity: 1; }
 
   .edit-btn, .delete-btn {
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -577,13 +577,13 @@
     transition: all 0.15s;
   }
   .edit-btn {
-    background: rgba(255,255,255,0.85);
+    background: rgba(255,255,255,0.9);
     color: var(--text-secondary);
     border: 1px solid var(--border);
   }
-  .edit-btn:hover { background: var(--bg-card); color: var(--accent); }
+  .edit-btn:hover { background: var(--bg-card); color: var(--accent); border-color: var(--accent); }
   .delete-btn {
-    background: rgba(254,242,242,0.9);
+    background: rgba(254,242,242,0.95);
     color: var(--danger-text);
     border: 1px solid transparent;
   }
@@ -597,10 +597,10 @@
     .search-input, .filters select { width: 100%; min-width: auto; }
     .batch-bar { flex-wrap: wrap; gap: 8px; }
     .batch-actions { margin-left: 0; }
-    .shows-list { grid-template-columns: 1fr; }
+    .show-actions { opacity: 1; }
   }
 
   @media (max-width: 480px) {
-    .shows-list { grid-template-columns: 1fr; }
+    .show-actions { opacity: 1; }
   }
 </style>
