@@ -3,6 +3,7 @@ const API_BASE = '';
 async function request(path, options = {}) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...options.headers
@@ -102,5 +103,11 @@ export const api = {
   getActorShows: (name) => request(`/api/actors/${encodeURIComponent(name)}/shows`),
 
   listPlays: () => request('/api/plays'),
-  getPlayShows: (name) => request(`/api/field/setlist/${encodeURIComponent(name)}`),
+
+  register: (username, password) => request('/api/auth/register', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  login: (username, password) => request('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  logout: () => request('/api/auth/logout', { method: 'POST' }),
+  getMe: () => request('/api/auth/me'),
+  changePassword: (oldPassword, newPassword) => request('/api/auth/password', { method: 'PUT', body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }) }),
+  deleteAccount: () => request('/api/auth/account', { method: 'DELETE' }),
 };

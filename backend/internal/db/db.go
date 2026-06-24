@@ -52,19 +52,29 @@ func (db *DB) Close() {
 
 func (db *DB) migrate() error {
 	queries := []string{
+		`CREATE TABLE IF NOT EXISTS users (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			username TEXT NOT NULL UNIQUE,
+			password_hash TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 		`CREATE TABLE IF NOT EXISTS categories (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL UNIQUE,
+			user_id INTEGER NOT NULL,
+			name TEXT NOT NULL,
 			color TEXT NOT NULL DEFAULT '#4A90D9',
-			sort_order INTEGER NOT NULL DEFAULT 0
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			UNIQUE(user_id, name),
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 		)`,
 		`CREATE TABLE IF NOT EXISTS shows (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
 			name TEXT NOT NULL,
 			venue TEXT NOT NULL DEFAULT '',
 			date DATETIME NOT NULL,
 			duration INTEGER NOT NULL DEFAULT 0,
-			status TEXT NOT NULL DEFAULT 'planned',
+			status TEXT NOT NULL DEFAULT 'normal',
 			category_id INTEGER,
 			poster_url TEXT NOT NULL DEFAULT '',
 			setlist TEXT NOT NULL DEFAULT '',
@@ -79,6 +89,7 @@ func (db *DB) migrate() error {
 			other_cost REAL,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
 			FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
 		)`,
 	}
@@ -89,57 +100,34 @@ func (db *DB) migrate() error {
 		}
 	}
 
-	// add sort_order column if missing (upgrade from older version)
-	db.conn.Exec("ALTER TABLE categories ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
-
-	// migrate old status values to new ones
-	db.conn.Exec("UPDATE shows SET status = 'normal' WHERE status = 'planned'")
-	db.conn.Exec("UPDATE shows SET status = 'normal' WHERE status = 'watched'")
-
 	// scene sorts table
 	db.conn.Exec(`CREATE TABLE IF NOT EXISTS scene_sorts (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		play TEXT NOT NULL UNIQUE,
+		user_id INTEGER NOT NULL,
+		play TEXT NOT NULL,
 		scenes TEXT NOT NULL DEFAULT '[]',
-		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(user_id, play),
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	)`)
 
 	// actors table
 	db.conn.Exec(`CREATE TABLE IF NOT EXISTS actors (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
+		user_id INTEGER NOT NULL,
+		name TEXT NOT NULL,
 		bio TEXT NOT NULL DEFAULT '',
 		photo_url TEXT NOT NULL DEFAULT '',
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(user_id, name),
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	)`)
-
-	// seed default categories
-	var count int
-	db.conn.QueryRow("SELECT COUNT(*) FROM categories").Scan(&count)
-	if count == 0 {
-		defaults := []struct {
-			name  string
-			color string
-		}{
-			{"话剧", "#E74C3C"},
-			{"音乐剧", "#9B59B6"},
-			{"演唱会", "#E67E22"},
-			{"舞蹈", "#1ABC9C"},
-			{"相声", "#34495E"},
-			{"脱口秀", "#2ECC71"},
-			{"展览", "#3498DB"},
-			{"其他", "#95A5A6"},
-		}
-		for _, d := range defaults {
-			db.conn.Exec("INSERT INTO categories (name, color) VALUES (?, ?)", d.name, d.color)
-		}
-	}
 
 	return nil
 }
 
-func (db *DB) ListShows(year, month int) ([]models.Show, error) {
+func (db *DB) ListShows(userID int64, year, month int) ([]models.Show, error) {
 	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, db.loc)
 	end := start.AddDate(0, 1, 0)
 
@@ -150,9 +138,9 @@ func (db *DB) ListShows(year, month int) ([]models.Show, error) {
 		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
 		FROM shows s
 		LEFT JOIN categories c ON s.category_id = c.id
-		WHERE s.date >= ? AND s.date < ?
+		WHERE s.user_id = ? AND s.date >= ? AND s.date < ?
 		ORDER BY s.date ASC
-	`, start, end)
+	`, userID, start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +149,7 @@ func (db *DB) ListShows(year, month int) ([]models.Show, error) {
 	return scanShows(rows)
 }
 
-func (db *DB) ListShowsByDateRange(startStr, endStr string) ([]models.Show, error) {
+func (db *DB) ListShowsByDateRange(userID int64, startStr, endStr string) ([]models.Show, error) {
 	query := `
 		SELECT s.id, s.name, s.venue, s.date, s.duration, s.status, s.category_id,
 		       s.poster_url, s.setlist, s.cast, s.company, s.friends, s.rating,
@@ -169,9 +157,9 @@ func (db *DB) ListShowsByDateRange(startStr, endStr string) ([]models.Show, erro
 		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
 		FROM shows s
 		LEFT JOIN categories c ON s.category_id = c.id
-		WHERE 1=1
+		WHERE s.user_id = ?
 	`
-	args := []interface{}{}
+	args := []interface{}{userID}
 
 	if startStr != "" {
 		if t, err := time.ParseInLocation("2006-01-02", startStr, db.loc); err == nil {
@@ -197,7 +185,7 @@ func (db *DB) ListShowsByDateRange(startStr, endStr string) ([]models.Show, erro
 	return scanShows(rows)
 }
 
-func (db *DB) ListAllShows() ([]models.Show, error) {
+func (db *DB) ListAllShows(userID int64) ([]models.Show, error) {
 	rows, err := db.conn.Query(`
 		SELECT s.id, s.name, s.venue, s.date, s.duration, s.status, s.category_id,
 		       s.poster_url, s.setlist, s.cast, s.company, s.friends, s.rating,
@@ -205,8 +193,9 @@ func (db *DB) ListAllShows() ([]models.Show, error) {
 		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
 		FROM shows s
 		LEFT JOIN categories c ON s.category_id = c.id
+		WHERE s.user_id = ?
 		ORDER BY s.date DESC
-	`)
+	`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +203,7 @@ func (db *DB) ListAllShows() ([]models.Show, error) {
 	return scanShows(rows)
 }
 
-func (db *DB) GetAutocomplete(field string) ([]string, error) {
+func (db *DB) GetAutocomplete(userID int64, field string) ([]string, error) {
 	validFields := map[string]bool{
 		"company": true, "cast": true, "friends": true, "venue": true, "seat": true,
 	}
@@ -224,7 +213,8 @@ func (db *DB) GetAutocomplete(field string) ([]string, error) {
 
 	quoted := "`" + field + "`"
 	rows, err := db.conn.Query(
-		"SELECT DISTINCT " + quoted + " FROM shows WHERE " + quoted + " != '' ORDER BY " + quoted,
+		"SELECT DISTINCT "+quoted+" FROM shows WHERE user_id = ? AND "+quoted+" != '' ORDER BY "+quoted,
+		userID,
 	)
 	if err != nil {
 		return nil, err
@@ -242,7 +232,7 @@ func (db *DB) GetAutocomplete(field string) ([]string, error) {
 	return values, nil
 }
 
-func (db *DB) GetShowsByField(field, value string) ([]models.Show, error) {
+func (db *DB) GetShowsByField(userID int64, field, value string) ([]models.Show, error) {
 	validFields := map[string]bool{
 		"company": true, "cast": true, "friends": true,
 		"venue": true, "setlist": true,
@@ -259,9 +249,9 @@ func (db *DB) GetShowsByField(field, value string) ([]models.Show, error) {
 		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
 		FROM shows s
 		LEFT JOIN categories c ON s.category_id = c.id
-		WHERE `+quoted+` LIKE ?
+		WHERE s.user_id = ? AND `+quoted+` LIKE ?
 		ORDER BY s.date DESC
-	`, "%"+value+"%")
+	`, userID, "%"+value+"%")
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +259,7 @@ func (db *DB) GetShowsByField(field, value string) ([]models.Show, error) {
 	return scanShows(rows)
 }
 
-func (db *DB) GetShow(id int64) (*models.Show, error) {
+func (db *DB) GetShow(userID, id int64) (*models.Show, error) {
 	var s models.Show
 	err := db.conn.QueryRow(`
 		SELECT s.id, s.name, s.venue, s.date, s.duration, s.status, s.category_id,
@@ -278,8 +268,8 @@ func (db *DB) GetShow(id int64) (*models.Show, error) {
 		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
 		FROM shows s
 		LEFT JOIN categories c ON s.category_id = c.id
-		WHERE s.id = ?
-	`, id).Scan(
+		WHERE s.user_id = ? AND s.id = ?
+	`, userID, id).Scan(
 		&s.ID, &s.Name, &s.Venue, &s.Date, &s.Duration, &s.Status, &s.CategoryID,
 		&s.PosterURL, &s.Setlist, &s.Cast, &s.Company, &s.Friends, &s.Rating,
 		&s.Seat, &s.Notes, &s.Review, &s.TicketCost, &s.OtherCost,
@@ -291,7 +281,7 @@ func (db *DB) GetShow(id int64) (*models.Show, error) {
 	return &s, nil
 }
 
-func (db *DB) CreateShow(req models.ShowRequest) (*models.Show, error) {
+func (db *DB) CreateShow(userID int64, req models.ShowRequest) (*models.Show, error) {
 	date, err := time.ParseInLocation("2006-01-02T15:04", req.Date, db.loc)
 	if err != nil {
 		date, err = time.ParseInLocation("2006-01-02", req.Date, db.loc)
@@ -303,9 +293,9 @@ func (db *DB) CreateShow(req models.ShowRequest) (*models.Show, error) {
 	// check for duplicate by name + date (use date-only format for matching)
 	dateOnly := date.Format("2006-01-02")
 	var existingID int64
-	err = db.conn.QueryRow("SELECT id FROM shows WHERE name = ? AND date LIKE ?", req.Name, dateOnly+"%").Scan(&existingID)
+	err = db.conn.QueryRow("SELECT id FROM shows WHERE user_id = ? AND name = ? AND date LIKE ?", userID, req.Name, dateOnly+"%").Scan(&existingID)
 	if err == nil {
-		return db.GetShow(existingID)
+		return db.GetShow(userID, existingID)
 	}
 
 	status := req.Status
@@ -314,10 +304,10 @@ func (db *DB) CreateShow(req models.ShowRequest) (*models.Show, error) {
 	}
 
 	result, err := db.conn.Exec(`
-		INSERT INTO shows (name, venue, date, duration, status, category_id, poster_url,
+		INSERT INTO shows (user_id, name, venue, date, duration, status, category_id, poster_url,
 			setlist, cast, company, friends, rating, seat, notes, review, ticket_cost, other_cost)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, req.Name, req.Venue, date, req.Duration, status, req.CategoryID, req.PosterURL,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, userID, req.Name, req.Venue, date, req.Duration, status, req.CategoryID, req.PosterURL,
 		req.Setlist, req.Cast, req.Company, req.Friends, req.Rating, req.Seat,
 		req.Notes, req.Review, req.TicketCost, req.OtherCost)
 	if err != nil {
@@ -325,10 +315,10 @@ func (db *DB) CreateShow(req models.ShowRequest) (*models.Show, error) {
 	}
 
 	id, _ := result.LastInsertId()
-	return db.GetShow(id)
+	return db.GetShow(userID, id)
 }
 
-func (db *DB) UpdateShow(id int64, req models.ShowRequest) (*models.Show, error) {
+func (db *DB) UpdateShow(userID, id int64, req models.ShowRequest) (*models.Show, error) {
 	date, err := time.ParseInLocation("2006-01-02T15:04", req.Date, db.loc)
 	if err != nil {
 		date, err = time.ParseInLocation("2006-01-02", req.Date, db.loc)
@@ -341,30 +331,31 @@ func (db *DB) UpdateShow(id int64, req models.ShowRequest) (*models.Show, error)
 		UPDATE shows SET name=?, venue=?, date=?, duration=?, status=?, category_id=?,
 			poster_url=?, setlist=?, cast=?, company=?, friends=?, rating=?, seat=?,
 			notes=?, review=?, ticket_cost=?, other_cost=?, updated_at=CURRENT_TIMESTAMP
-		WHERE id=?
+		WHERE user_id=? AND id=?
 	`, req.Name, req.Venue, date, req.Duration, req.Status, req.CategoryID, req.PosterURL,
 		req.Setlist, req.Cast, req.Company, req.Friends, req.Rating, req.Seat,
-		req.Notes, req.Review, req.TicketCost, req.OtherCost, id)
+		req.Notes, req.Review, req.TicketCost, req.OtherCost, userID, id)
 	if err != nil {
 		return nil, err
 	}
 
-	return db.GetShow(id)
+	return db.GetShow(userID, id)
 }
 
-func (db *DB) DeleteShow(id int64) error {
-	_, err := db.conn.Exec("DELETE FROM shows WHERE id=?", id)
+func (db *DB) DeleteShow(userID, id int64) error {
+	_, err := db.conn.Exec("DELETE FROM shows WHERE user_id=? AND id=?", userID, id)
 	return err
 }
 
-func (db *DB) ListCategories() ([]models.Category, error) {
+func (db *DB) ListCategories(userID int64) ([]models.Category, error) {
 	rows, err := db.conn.Query(`
 		SELECT c.id, c.name, c.color, c.sort_order, COUNT(s.id) as show_count
 		FROM categories c
-		LEFT JOIN shows s ON s.category_id = c.id
+		LEFT JOIN shows s ON s.category_id = c.id AND s.user_id = c.user_id
+		WHERE c.user_id = ?
 		GROUP BY c.id
 		ORDER BY c.sort_order, c.name
-	`)
+	`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -381,8 +372,8 @@ func (db *DB) ListCategories() ([]models.Category, error) {
 	return cats, nil
 }
 
-func (db *DB) CreateCategory(name, color string) (*models.Category, error) {
-	result, err := db.conn.Exec("INSERT INTO categories (name, color) VALUES (?, ?)", name, color)
+func (db *DB) CreateCategory(userID int64, name, color string) (*models.Category, error) {
+	result, err := db.conn.Exec("INSERT INTO categories (user_id, name, color) VALUES (?, ?, ?)", userID, name, color)
 	if err != nil {
 		return nil, err
 	}
@@ -390,43 +381,43 @@ func (db *DB) CreateCategory(name, color string) (*models.Category, error) {
 	return &models.Category{ID: id, Name: name, Color: color}, nil
 }
 
-func (db *DB) FindOrCreateCategory(name string) (*models.Category, error) {
+func (db *DB) FindOrCreateCategory(userID int64, name string) (*models.Category, error) {
 	var c models.Category
-	err := db.conn.QueryRow("SELECT id, name, color FROM categories WHERE name = ?", name).Scan(&c.ID, &c.Name, &c.Color)
+	err := db.conn.QueryRow("SELECT id, name, color FROM categories WHERE user_id = ? AND name = ?", userID, name).Scan(&c.ID, &c.Name, &c.Color)
 	if err == nil {
 		return &c, nil
 	}
 
 	colors := []string{"#E74C3C", "#9B59B6", "#E67E22", "#1ABC9C", "#34495E", "#2ECC71", "#3498DB"}
 	color := colors[len(name)%len(colors)]
-	return db.CreateCategory(name, color)
+	return db.CreateCategory(userID, name, color)
 }
 
-func (db *DB) UpdateCategory(id int64, name, color string) error {
-	_, err := db.conn.Exec("UPDATE categories SET name=?, color=? WHERE id=?", name, color, id)
+func (db *DB) UpdateCategory(userID, id int64, name, color string) error {
+	_, err := db.conn.Exec("UPDATE categories SET name=?, color=? WHERE user_id=? AND id=?", name, color, userID, id)
 	return err
 }
 
-func (db *DB) DeleteCategory(id int64) error {
-	_, err := db.conn.Exec("DELETE FROM categories WHERE id=?", id)
+func (db *DB) DeleteCategory(userID, id int64) error {
+	_, err := db.conn.Exec("DELETE FROM categories WHERE user_id=? AND id=?", userID, id)
 	return err
 }
 
-func (db *DB) UpdateCategorySort(ids []int64) error {
+func (db *DB) UpdateCategorySort(userID int64, ids []int64) error {
 	tx, err := db.conn.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.Prepare("UPDATE categories SET sort_order = ? WHERE id = ?")
+	stmt, err := tx.Prepare("UPDATE categories SET sort_order = ? WHERE user_id = ? AND id = ?")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
 	for i, id := range ids {
-		if _, err := stmt.Exec(i, id); err != nil {
+		if _, err := stmt.Exec(i, userID, id); err != nil {
 			return err
 		}
 	}
@@ -434,13 +425,14 @@ func (db *DB) UpdateCategorySort(ids []int64) error {
 	return tx.Commit()
 }
 
-func (db *DB) BatchUpdateShows(ids []int64, categoryID *int64, rating *int, status *string, ticketCost *float64) (int64, error) {
+func (db *DB) BatchUpdateShows(userID int64, ids []int64, categoryID *int64, rating *int, status *string, ticketCost *float64) (int64, error) {
 	if len(ids) == 0 {
 		return 0, nil
 	}
 
 	placeholders := make([]string, len(ids))
-	args := make([]interface{}, 0, len(ids))
+	args := make([]interface{}, 0, len(ids)+1)
+	args = append(args, userID)
 	for i, id := range ids {
 		placeholders[i] = "?"
 		args = append(args, id)
@@ -469,7 +461,7 @@ func (db *DB) BatchUpdateShows(ids []int64, categoryID *int64, rating *int, stat
 		return 0, nil
 	}
 
-	query := "UPDATE shows SET " + strings.Join(sets, ", ") + ", updated_at = CURRENT_TIMESTAMP WHERE id IN " + inClause
+	query := "UPDATE shows SET " + strings.Join(sets, ", ") + ", updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id IN " + inClause
 
 	result, err := db.conn.Exec(query, args...)
 	if err != nil {
@@ -478,28 +470,29 @@ func (db *DB) BatchUpdateShows(ids []int64, categoryID *int64, rating *int, stat
 	return result.RowsAffected()
 }
 
-func (db *DB) BatchDeleteShows(ids []int64) (int64, error) {
+func (db *DB) BatchDeleteShows(userID int64, ids []int64) (int64, error) {
 	if len(ids) == 0 {
 		return 0, nil
 	}
 
 	placeholders := make([]string, len(ids))
-	args := make([]interface{}, len(ids))
+	args := make([]interface{}, 0, len(ids)+1)
+	args = append(args, userID)
 	for i, id := range ids {
 		placeholders[i] = "?"
-		args[i] = id
+		args = append(args, id)
 	}
 	inClause := "(" + strings.Join(placeholders, ",") + ")"
 
-	result, err := db.conn.Exec("DELETE FROM shows WHERE id IN "+inClause, args...)
+	result, err := db.conn.Exec("DELETE FROM shows WHERE user_id = ? AND id IN "+inClause, args...)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected()
 }
 
-func (db *DB) GetCalendarEvents(year, month int) ([]models.CalendarEvent, error) {
-	shows, err := db.ListShows(year, month)
+func (db *DB) GetCalendarEvents(userID int64, year, month int) ([]models.CalendarEvent, error) {
+	shows, err := db.ListShows(userID, year, month)
 	if err != nil {
 		return nil, err
 	}
@@ -528,19 +521,19 @@ func (db *DB) GetCalendarEvents(year, month int) ([]models.CalendarEvent, error)
 	return events, nil
 }
 
-func (db *DB) GetStats() (*models.Stats, error) {
+func (db *DB) GetStats(userID int64) (*models.Stats, error) {
 	stats := &models.Stats{}
 
-	db.conn.QueryRow("SELECT COUNT(*) FROM shows").Scan(&stats.TotalShows)
-	db.conn.QueryRow("SELECT COALESCE(SUM(COALESCE(ticket_cost,0) + COALESCE(other_cost,0)), 0) FROM shows").Scan(&stats.TotalCost)
-	db.conn.QueryRow("SELECT COALESCE(AVG(CAST(rating AS REAL)), 0) FROM shows WHERE rating IS NOT NULL").Scan(&stats.AvgRating)
-	db.conn.QueryRow("SELECT COUNT(DISTINCT venue) FROM shows WHERE venue != ''").Scan(&stats.TotalVenues)
-	db.conn.QueryRow("SELECT COALESCE(SUM(duration), 0) / 60.0 FROM shows").Scan(&stats.TotalHours)
+	db.conn.QueryRow("SELECT COUNT(*) FROM shows WHERE user_id = ?", userID).Scan(&stats.TotalShows)
+	db.conn.QueryRow("SELECT COALESCE(SUM(COALESCE(ticket_cost,0) + COALESCE(other_cost,0)), 0) FROM shows WHERE user_id = ?", userID).Scan(&stats.TotalCost)
+	db.conn.QueryRow("SELECT COALESCE(AVG(CAST(rating AS REAL)), 0) FROM shows WHERE user_id = ? AND rating IS NOT NULL", userID).Scan(&stats.AvgRating)
+	db.conn.QueryRow("SELECT COUNT(DISTINCT venue) FROM shows WHERE user_id = ? AND venue != ''", userID).Scan(&stats.TotalVenues)
+	db.conn.QueryRow("SELECT COALESCE(SUM(duration), 0) / 60.0 FROM shows WHERE user_id = ?", userID).Scan(&stats.TotalHours)
 
 	return stats, nil
 }
 
-func (db *DB) GetUpcomingShows(limit int) ([]models.Show, error) {
+func (db *DB) GetUpcomingShows(userID int64, limit int) ([]models.Show, error) {
 	rows, err := db.conn.Query(`
 		SELECT s.id, s.name, s.venue, s.date, s.duration, s.status, s.category_id,
 		       s.poster_url, s.setlist, s.cast, s.company, s.friends, s.rating,
@@ -548,10 +541,10 @@ func (db *DB) GetUpcomingShows(limit int) ([]models.Show, error) {
 		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
 		FROM shows s
 		LEFT JOIN categories c ON s.category_id = c.id
-		WHERE s.date >= datetime('now') AND s.status IN ('normal', 'pending_tickets')
+		WHERE s.user_id = ? AND s.date >= datetime('now') AND s.status IN ('normal', 'pending_tickets')
 		ORDER BY s.date ASC
 		LIMIT ?
-	`, limit)
+	`, userID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -559,7 +552,7 @@ func (db *DB) GetUpcomingShows(limit int) ([]models.Show, error) {
 	return scanShows(rows)
 }
 
-func (db *DB) GetRecentShows(limit int) ([]models.Show, error) {
+func (db *DB) GetRecentShows(userID int64, limit int) ([]models.Show, error) {
 	rows, err := db.conn.Query(`
 		SELECT s.id, s.name, s.venue, s.date, s.duration, s.status, s.category_id,
 		       s.poster_url, s.setlist, s.cast, s.company, s.friends, s.rating,
@@ -567,10 +560,10 @@ func (db *DB) GetRecentShows(limit int) ([]models.Show, error) {
 		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
 		FROM shows s
 		LEFT JOIN categories c ON s.category_id = c.id
-		WHERE s.status = 'normal'
+		WHERE s.user_id = ? AND s.status = 'normal'
 		ORDER BY s.date DESC
 		LIMIT ?
-	`, limit)
+	`, userID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -578,14 +571,15 @@ func (db *DB) GetRecentShows(limit int) ([]models.Show, error) {
 	return scanShows(rows)
 }
 
-func (db *DB) SearchShows(query string) ([]models.Show, error) {
+func (db *DB) SearchShows(userID int64, query string) ([]models.Show, error) {
 	words := strings.Fields(strings.ToLower(query))
 	if len(words) == 0 {
 		return []models.Show{}, nil
 	}
 
 	where := make([]string, 0, len(words))
-	args := make([]interface{}, 0, len(words)*9)
+	args := make([]interface{}, 0, len(words)*9+1)
+	args = append(args, userID)
 	for _, w := range words {
 		like := "%" + w + "%"
 		where = append(where, `(LOWER(s.name) LIKE ? OR LOWER(s.venue) LIKE ? OR LOWER(s.company) LIKE ?
@@ -597,7 +591,7 @@ func (db *DB) SearchShows(query string) ([]models.Show, error) {
 		}
 	}
 
-	q := "WHERE " + strings.Join(where, " AND ")
+	q := "WHERE s.user_id = ? AND " + strings.Join(where, " AND ")
 
 	rows, err := db.conn.Query(`
 		SELECT s.id, s.name, s.venue, s.date, s.duration, s.status, s.category_id,
@@ -635,8 +629,8 @@ func scanShows(rows *sql.Rows) ([]models.Show, error) {
 	return shows, nil
 }
 
-func (db *DB) GetSceneSorts() ([]models.SceneSort, error) {
-	rows, err := db.conn.Query("SELECT id, play, scenes, updated_at FROM scene_sorts ORDER BY play")
+func (db *DB) GetSceneSorts(userID int64) ([]models.SceneSort, error) {
+	rows, err := db.conn.Query("SELECT id, play, scenes, updated_at FROM scene_sorts WHERE user_id = ? ORDER BY play", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -652,22 +646,22 @@ func (db *DB) GetSceneSorts() ([]models.SceneSort, error) {
 	return sorts, nil
 }
 
-func (db *DB) UpdateSceneSort(play, scenes string) error {
+func (db *DB) UpdateSceneSort(userID int64, play, scenes string) error {
 	_, err := db.conn.Exec(
-		`INSERT INTO scene_sorts (play, scenes, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
-		 ON CONFLICT(play) DO UPDATE SET scenes = excluded.scenes, updated_at = excluded.updated_at`,
-		play, scenes,
+		`INSERT INTO scene_sorts (user_id, play, scenes, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+		 ON CONFLICT(user_id, play) DO UPDATE SET scenes = excluded.scenes, updated_at = excluded.updated_at`,
+		userID, play, scenes,
 	)
 	return err
 }
 
-func (db *DB) DeleteSceneSort(play string) error {
-	_, err := db.conn.Exec("DELETE FROM scene_sorts WHERE play = ?", play)
+func (db *DB) DeleteSceneSort(userID int64, play string) error {
+	_, err := db.conn.Exec("DELETE FROM scene_sorts WHERE user_id = ? AND play = ?", userID, play)
 	return err
 }
 
-func (db *DB) ListActors() ([]models.Actor, error) {
-	shows, err := db.ListAllShows()
+func (db *DB) ListActors(userID int64) ([]models.Actor, error) {
+	shows, err := db.ListAllShows(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -699,7 +693,7 @@ func (db *DB) ListActors() ([]models.Actor, error) {
 	var actors []models.Actor
 	for _, info := range actorMap {
 		a := models.Actor{Name: info.name, ShowCount: info.showCount}
-		row := db.conn.QueryRow("SELECT id, bio, photo_url FROM actors WHERE name = ?", info.name)
+		row := db.conn.QueryRow("SELECT id, bio, photo_url FROM actors WHERE user_id = ? AND name = ?", userID, info.name)
 		row.Scan(&a.ID, &a.Bio, &a.PhotoURL)
 		actors = append(actors, a)
 	}
@@ -709,34 +703,34 @@ func (db *DB) ListActors() ([]models.Actor, error) {
 	return actors, nil
 }
 
-func (db *DB) GetActor(name string) (*models.Actor, error) {
+func (db *DB) GetActor(userID int64, name string) (*models.Actor, error) {
 	var a models.Actor
 	err := db.conn.QueryRow(`
 		SELECT a.id, a.name, a.bio, a.photo_url,
 			COUNT(DISTINCT s.id) as show_count
 		FROM actors a
-		LEFT JOIN shows s ON s.cast LIKE '%' || a.name || '%'
-		WHERE a.name = ?
+		LEFT JOIN shows s ON s.cast LIKE '%' || a.name || '%' AND s.user_id = a.user_id
+		WHERE a.user_id = ? AND a.name = ?
 		GROUP BY a.id
-	`, name).Scan(&a.ID, &a.Name, &a.Bio, &a.PhotoURL, &a.ShowCount)
+	`, userID, name).Scan(&a.ID, &a.Name, &a.Bio, &a.PhotoURL, &a.ShowCount)
 	if err != nil {
 		return nil, fmt.Errorf("actor not found: %w", err)
 	}
 	return &a, nil
 }
 
-func (db *DB) UpsertActor(req models.ActorRequest) (*models.Actor, error) {
+func (db *DB) UpsertActor(userID int64, req models.ActorRequest) (*models.Actor, error) {
 	_, err := db.conn.Exec(`
-		INSERT INTO actors (name, bio, photo_url, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-		ON CONFLICT(name) DO UPDATE SET bio = excluded.bio, photo_url = excluded.photo_url, updated_at = CURRENT_TIMESTAMP
-	`, req.Name, req.Bio, req.PhotoURL)
+		INSERT INTO actors (user_id, name, bio, photo_url, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(user_id, name) DO UPDATE SET bio = excluded.bio, photo_url = excluded.photo_url, updated_at = CURRENT_TIMESTAMP
+	`, userID, req.Name, req.Bio, req.PhotoURL)
 	if err != nil {
 		return nil, err
 	}
-	return db.GetActor(req.Name)
+	return db.GetActor(userID, req.Name)
 }
 
-func (db *DB) GetShowsByActor(name string) ([]models.Show, error) {
+func (db *DB) GetShowsByActor(userID int64, name string) ([]models.Show, error) {
 	rows, err := db.conn.Query(`
 		SELECT s.id, s.name, s.venue, s.date, s.duration, s.status, s.category_id,
 		       s.poster_url, s.setlist, s.cast, s.company, s.friends, s.rating,
@@ -744,12 +738,83 @@ func (db *DB) GetShowsByActor(name string) ([]models.Show, error) {
 		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
 		FROM shows s
 		LEFT JOIN categories c ON s.category_id = c.id
-		WHERE s.cast LIKE ?
+		WHERE s.user_id = ? AND s.cast LIKE ?
 		ORDER BY s.date DESC
-	`, "%"+name+"%")
+	`, userID, "%"+name+"%")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	return scanShows(rows)
+}
+
+func (db *DB) CreateUser(username, passwordHash string) (*models.User, error) {
+	result, err := db.conn.Exec(
+		"INSERT INTO users (username, password_hash) VALUES (?, ?)",
+		username, passwordHash,
+	)
+	if err != nil {
+		return nil, err
+	}
+	id, _ := result.LastInsertId()
+
+	db.conn.Exec(`INSERT INTO categories (user_id, name, color, sort_order) VALUES (?, '话剧', '#E74C3C', 0)`, id)
+	db.conn.Exec(`INSERT INTO categories (user_id, name, color, sort_order) VALUES (?, '音乐剧', '#9B59B6', 1)`, id)
+	db.conn.Exec(`INSERT INTO categories (user_id, name, color, sort_order) VALUES (?, '演唱会', '#E67E22', 2)`, id)
+	db.conn.Exec(`INSERT INTO categories (user_id, name, color, sort_order) VALUES (?, '舞蹈', '#1ABC9C', 3)`, id)
+	db.conn.Exec(`INSERT INTO categories (user_id, name, color, sort_order) VALUES (?, '相声', '#34495E', 4)`, id)
+	db.conn.Exec(`INSERT INTO categories (user_id, name, color, sort_order) VALUES (?, '脱口秀', '#2ECC71', 5)`, id)
+	db.conn.Exec(`INSERT INTO categories (user_id, name, color, sort_order) VALUES (?, '展览', '#3498DB', 6)`, id)
+	db.conn.Exec(`INSERT INTO categories (user_id, name, color, sort_order) VALUES (?, '其他', '#95A5A6', 7)`, id)
+
+	return db.GetUserByID(id)
+}
+
+func (db *DB) GetUserByID(id int64) (*models.User, error) {
+	var u models.User
+	err := db.conn.QueryRow(
+		"SELECT id, username, created_at FROM users WHERE id = ?", id,
+	).Scan(&u.ID, &u.Username, &u.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+func (db *DB) GetUserByUsername(username string) (*models.User, error) {
+	var u models.User
+	err := db.conn.QueryRow(
+		"SELECT id, username, password_hash, created_at FROM users WHERE username = ?", username,
+	).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+func (db *DB) GetPasswordHash(userID int64) (string, error) {
+	var hash string
+	err := db.conn.QueryRow("SELECT password_hash FROM users WHERE id = ?", userID).Scan(&hash)
+	return hash, err
+}
+
+func (db *DB) UpdatePassword(userID int64, hash string) error {
+	_, err := db.conn.Exec("UPDATE users SET password_hash = ? WHERE id = ?", hash, userID)
+	return err
+}
+
+func (db *DB) DeleteUser_data(userID int64) error {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	tx.Exec("DELETE FROM shows WHERE user_id = ?", userID)
+	tx.Exec("DELETE FROM categories WHERE user_id = ?", userID)
+	tx.Exec("DELETE FROM scene_sorts WHERE user_id = ?", userID)
+	tx.Exec("DELETE FROM actors WHERE user_id = ?", userID)
+	tx.Exec("DELETE FROM users WHERE id = ?", userID)
+
+	return tx.Commit()
 }

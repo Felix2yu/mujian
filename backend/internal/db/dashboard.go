@@ -43,23 +43,23 @@ type CostStat struct {
 	Cost  float64 `json:"cost"`
 }
 
-func (db *DB) GetDashboardStats() (*DashboardStats, error) {
+func (db *DB) GetDashboardStats(userID int64) (*DashboardStats, error) {
 	s := &DashboardStats{}
 
-	db.conn.QueryRow("SELECT COUNT(*) FROM shows").Scan(&s.TotalShows)
-	db.conn.QueryRow("SELECT COALESCE(SUM(COALESCE(ticket_cost,0) + COALESCE(other_cost,0)), 0) FROM shows").Scan(&s.TotalCost)
-	db.conn.QueryRow("SELECT COALESCE(AVG(CAST(rating AS REAL)), 0) FROM shows WHERE rating IS NOT NULL").Scan(&s.AvgRating)
-	db.conn.QueryRow("SELECT COUNT(DISTINCT venue) FROM shows WHERE venue != ''").Scan(&s.TotalVenues)
-	db.conn.QueryRow("SELECT COALESCE(SUM(duration), 0) / 60.0 FROM shows").Scan(&s.TotalHours)
+	db.conn.QueryRow("SELECT COUNT(*) FROM shows WHERE user_id = ?", userID).Scan(&s.TotalShows)
+	db.conn.QueryRow("SELECT COALESCE(SUM(COALESCE(ticket_cost,0) + COALESCE(other_cost,0)), 0) FROM shows WHERE user_id = ?", userID).Scan(&s.TotalCost)
+	db.conn.QueryRow("SELECT COALESCE(AVG(CAST(rating AS REAL)), 0) FROM shows WHERE user_id = ? AND rating IS NOT NULL", userID).Scan(&s.AvgRating)
+	db.conn.QueryRow("SELECT COUNT(DISTINCT venue) FROM shows WHERE user_id = ? AND venue != ''", userID).Scan(&s.TotalVenues)
+	db.conn.QueryRow("SELECT COALESCE(SUM(duration), 0) / 60.0 FROM shows WHERE user_id = ?", userID).Scan(&s.TotalHours)
 
 	// By month (last 12 months)
 	rows, err := db.conn.Query(`
 		SELECT strftime('%Y-%m', date) as month, COUNT(*) as cnt
 		FROM shows
-		WHERE date >= date('now', '-12 months')
+		WHERE user_id = ? AND date >= date('now', '-12 months')
 		GROUP BY month
 		ORDER BY month
-	`)
+	`, userID)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -73,11 +73,12 @@ func (db *DB) GetDashboardStats() (*DashboardStats, error) {
 	rows2, err := db.conn.Query(`
 		SELECT c.name, c.color, COUNT(s.id) as cnt
 		FROM categories c
-		LEFT JOIN shows s ON s.category_id = c.id
+		LEFT JOIN shows s ON s.category_id = c.id AND s.user_id = c.user_id
+		WHERE c.user_id = ?
 		GROUP BY c.id
 		HAVING cnt > 0
 		ORDER BY cnt DESC
-	`)
+	`, userID)
 	if err == nil {
 		defer rows2.Close()
 		for rows2.Next() {
@@ -91,11 +92,11 @@ func (db *DB) GetDashboardStats() (*DashboardStats, error) {
 	rows3, err := db.conn.Query(`
 		SELECT venue, COUNT(*) as cnt
 		FROM shows
-		WHERE venue != ''
+		WHERE user_id = ? AND venue != ''
 		GROUP BY venue
 		ORDER BY cnt DESC
 		LIMIT 10
-	`)
+	`, userID)
 	if err == nil {
 		defer rows3.Close()
 		for rows3.Next() {
@@ -109,8 +110,9 @@ func (db *DB) GetDashboardStats() (*DashboardStats, error) {
 	rows4, err := db.conn.Query(`
 		SELECT status, COUNT(*) as cnt
 		FROM shows
+		WHERE user_id = ?
 		GROUP BY status
-	`)
+	`, userID)
 	if err == nil {
 		defer rows4.Close()
 		for rows4.Next() {
@@ -124,11 +126,11 @@ func (db *DB) GetDashboardStats() (*DashboardStats, error) {
 	rows5, err := db.conn.Query(`
 		SELECT strftime('%Y-%m', date) as month, SUM(COALESCE(ticket_cost,0) + COALESCE(other_cost,0)) as cost
 		FROM shows
-		WHERE date >= date('now', '-12 months')
+		WHERE user_id = ? AND date >= date('now', '-12 months')
 		AND (ticket_cost IS NOT NULL OR other_cost IS NOT NULL)
 		GROUP BY month
 		ORDER BY month
-	`)
+	`, userID)
 	if err == nil {
 		defer rows5.Close()
 		for rows5.Next() {
@@ -146,10 +148,10 @@ func (db *DB) GetDashboardStats() (*DashboardStats, error) {
 		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
 		FROM shows s
 		LEFT JOIN categories c ON s.category_id = c.id
-		WHERE s.rating IS NOT NULL
+		WHERE s.user_id = ? AND s.rating IS NOT NULL
 		ORDER BY s.rating DESC, s.date DESC
 		LIMIT 5
-	`)
+	`, userID)
 	if err == nil {
 		defer topRows.Close()
 		s.TopRated, _ = scanShows(topRows)
@@ -163,10 +165,10 @@ func (db *DB) GetDashboardStats() (*DashboardStats, error) {
 		       s.created_at, s.updated_at, COALESCE(c.name, '') as category_name
 		FROM shows s
 		LEFT JOIN categories c ON s.category_id = c.id
-		WHERE s.status = 'normal'
+		WHERE s.user_id = ? AND s.status = 'normal'
 		ORDER BY s.date DESC
 		LIMIT 5
-	`)
+	`, userID)
 	if err == nil {
 		defer recentRows.Close()
 		s.RecentWatched, _ = scanShows(recentRows)

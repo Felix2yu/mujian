@@ -15,13 +15,13 @@ type BackupData struct {
 	Shows      []models.Show     `json:"shows"`
 }
 
-func (db *DB) Export() (*BackupData, error) {
-	cats, err := db.ListCategories()
+func (db *DB) Export(userID int64) (*BackupData, error) {
+	cats, err := db.ListCategories(userID)
 	if err != nil {
 		return nil, fmt.Errorf("export categories: %w", err)
 	}
 
-	shows, err := db.ListAllShows()
+	shows, err := db.ListAllShows(userID)
 	if err != nil {
 		return nil, fmt.Errorf("export shows: %w", err)
 	}
@@ -34,8 +34,8 @@ func (db *DB) Export() (*BackupData, error) {
 	}, nil
 }
 
-func (db *DB) ExportToFile(path string) error {
-	data, err := db.Export()
+func (db *DB) ExportToFile(userID int64, path string) error {
+	data, err := db.Export(userID)
 	if err != nil {
 		return err
 	}
@@ -54,7 +54,7 @@ type ImportResult struct {
 	Skipped    int
 }
 
-func (db *DB) Import(data *BackupData) (*ImportResult, error) {
+func (db *DB) Import(userID int64, data *BackupData) (*ImportResult, error) {
 	tx, err := db.conn.Begin()
 	if err != nil {
 		return nil, err
@@ -68,16 +68,16 @@ func (db *DB) Import(data *BackupData) (*ImportResult, error) {
 
 	for _, cat := range data.Categories {
 		var existingID int64
-		err := tx.QueryRow("SELECT id FROM categories WHERE name = ?", cat.Name).Scan(&existingID)
+		err := tx.QueryRow("SELECT id FROM categories WHERE user_id = ? AND name = ?", userID, cat.Name).Scan(&existingID)
 		if err == nil {
 			catMap[cat.ID] = existingID
-			tx.Exec("UPDATE categories SET color = ?, sort_order = ? WHERE id = ?", cat.Color, cat.SortOrder, existingID)
+			tx.Exec("UPDATE categories SET color = ?, sort_order = ? WHERE user_id = ? AND id = ?", cat.Color, cat.SortOrder, userID, existingID)
 			continue
 		}
 
 		execResult, err := tx.Exec(
-			"INSERT INTO categories (name, color, sort_order) VALUES (?, ?, ?)",
-			cat.Name, cat.Color, cat.SortOrder,
+			"INSERT INTO categories (user_id, name, color, sort_order) VALUES (?, ?, ?, ?)",
+			userID, cat.Name, cat.Color, cat.SortOrder,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("import category %s: %w", cat.Name, err)
@@ -91,7 +91,7 @@ func (db *DB) Import(data *BackupData) (*ImportResult, error) {
 		// deduplicate by name + date (use date-only format for matching)
 		dateOnly := show.Date.Format("2006-01-02")
 		var existingID int64
-		err := tx.QueryRow("SELECT id FROM shows WHERE name = ? AND date LIKE ?", show.Name, dateOnly+"%").Scan(&existingID)
+		err := tx.QueryRow("SELECT id FROM shows WHERE user_id = ? AND name = ? AND date LIKE ?", userID, show.Name, dateOnly+"%").Scan(&existingID)
 		if err == nil {
 			result.Skipped++
 			continue
@@ -105,12 +105,12 @@ func (db *DB) Import(data *BackupData) (*ImportResult, error) {
 		}
 
 		_, err = tx.Exec(`
-			INSERT INTO shows (name, venue, date, duration, status, category_id, poster_url,
+			INSERT INTO shows (user_id, name, venue, date, duration, status, category_id, poster_url,
 				setlist, cast, company, friends, rating, seat, notes, review, ticket_cost, other_cost,
 				created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`,
-			show.Name, show.Venue, show.Date, show.Duration, show.Status, newCatID,
+			userID, show.Name, show.Venue, show.Date, show.Duration, show.Status, newCatID,
 			show.PosterURL, show.Setlist, show.Cast, show.Company, show.Friends,
 			show.Rating, show.Seat, show.Notes, show.Review, show.TicketCost, show.OtherCost,
 			show.CreatedAt, show.UpdatedAt,
@@ -124,7 +124,7 @@ func (db *DB) Import(data *BackupData) (*ImportResult, error) {
 	return result, tx.Commit()
 }
 
-func (db *DB) ImportFromFile(path string) (*ImportResult, error) {
+func (db *DB) ImportFromFile(userID int64, path string) (*ImportResult, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -135,5 +135,5 @@ func (db *DB) ImportFromFile(path string) (*ImportResult, error) {
 		return nil, fmt.Errorf("invalid backup file: %w", err)
 	}
 
-	return db.Import(&data)
+	return db.Import(userID, &data)
 }

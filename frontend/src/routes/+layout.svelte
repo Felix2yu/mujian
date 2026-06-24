@@ -1,9 +1,13 @@
 <script>
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import { api } from '$lib/api';
   import { theme } from '$lib/stores';
   import { onMount } from 'svelte';
   import { requestPermission, startReminderCheck, checkUpcomingShows } from '$lib/notifications';
+
+  let { data } = $props();
+  let user = $state(data?.user);
 
   let searchQuery = $state('');
   let searchResults = $state([]);
@@ -77,6 +81,16 @@
       hasUpcoming = checkUpcomingShows(allShows).length > 0;
     } catch {}
   });
+
+  async function handleLogout() {
+    try {
+      await api.logout();
+      user = null;
+      goto('/login');
+    } catch (e) {
+      console.error('Logout failed:', e);
+    }
+  }
 
   async function installApp() {
     if (!deferredPrompt) return;
@@ -155,6 +169,12 @@
       </div>
 
       <div class="nav-right">
+        {#if user}
+          <a href="/settings/account" class="user-info">{user.username}</a>
+          <button class="icon-btn" onclick={handleLogout} title="退出登录">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>
+        {/if}
         {#if showInstall}
           <button class="icon-btn install-btn" onclick={installApp} title="安装应用">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -521,6 +541,22 @@
     align-items: center;
     gap: 8px;
     margin-left: auto;
+  }
+
+  .user-info {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+
+  .user-info:hover {
+    background: var(--bg-surface-hover);
+    color: var(--text-primary);
   }
 
   .icon-btn {

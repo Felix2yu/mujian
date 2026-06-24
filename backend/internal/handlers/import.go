@@ -20,6 +20,7 @@ type ImportResult struct {
 }
 
 func (h *Handler) importShows(w http.ResponseWriter, r *http.Request) {
+	userID := GetUserID(r)
 	r.ParseMultipartForm(32 << 20)
 	file, header, err := r.FormFile("file")
 	if err != nil {
@@ -68,14 +69,14 @@ func (h *Handler) importShows(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		show := h.parseRowToShow(row, colMap)
+		show := h.parseRowToShow(userID, row, colMap)
 		if show.Name == "" {
 			result.Failed++
 			result.Errors = append(result.Errors, fmt.Sprintf("Row %d: name is empty", i+2))
 			continue
 		}
 
-		if _, err := h.db.CreateShow(show); err != nil {
+		if _, err := h.db.CreateShow(userID, show); err != nil {
 			result.Failed++
 			result.Errors = append(result.Errors, fmt.Sprintf("Row %d: %s", i+2, err.Error()))
 			continue
@@ -121,7 +122,7 @@ func parseColumns(header []string) map[string]int {
 	return m
 }
 
-func (h *Handler) parseRowToShow(row []string, colMap map[string]int) models.ShowRequest {
+func (h *Handler) parseRowToShow(userID int64, row []string, colMap map[string]int) models.ShowRequest {
 	get := func(field string) string {
 		if idx, ok := colMap[field]; ok && idx < len(row) {
 			return strings.TrimSpace(row[idx])
@@ -191,7 +192,7 @@ func (h *Handler) parseRowToShow(row []string, colMap map[string]int) models.Sho
 		if id, err := strconv.ParseInt(c, 10, 64); err == nil {
 			show.CategoryID = &id
 		} else {
-			if cat, err := h.db.FindOrCreateCategory(c); err == nil {
+			if cat, err := h.db.FindOrCreateCategory(userID, c); err == nil {
 				show.CategoryID = &cat.ID
 			}
 		}
@@ -252,7 +253,8 @@ func (h *Handler) getImportTemplate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) exportShows(w http.ResponseWriter, r *http.Request) {
-	shows, err := h.db.ListAllShows()
+	userID := GetUserID(r)
+	shows, err := h.db.ListAllShows(userID)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
