@@ -283,6 +283,7 @@
     background: var(--bg-body);
     color: var(--text-primary);
     line-height: 1.6;
+    font-size: 17px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     transition: background 0.3s, color 0.3s;

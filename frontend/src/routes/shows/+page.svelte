@@ -9,7 +9,6 @@
   let categoryFilter = $state('');
   let ratingFilter = $state('');
   let searchQuery = $state('');
-  let sortBy = $state('date_asc');
   let selectedIds = $state(new Set());
   let batchMode = $state(false);
   let showBatchPanel = $state(false);
@@ -20,13 +19,27 @@
   let batchSaving = $state(false);
   let filtersExpanded = $state(false);
   let isMobile = $state(false);
+  let showCancelled = $state(false);
+  let showNoShow = $state(false);
 
   function checkMobile() { isMobile = window.innerWidth <= 768; }
 
-  let hasActiveFilters = $derived(searchQuery || categoryFilter || ratingFilter);
+  let hasActiveFilters = $derived(searchQuery || categoryFilter || ratingFilter || showCancelled || showNoShow);
 
   let filteredShows = $derived(shows.filter(s => {
-    if (activeTab === 'normal' && s.status !== 'normal' && s.status !== 'pending_tickets') return false;
+    const now = new Date();
+
+    if (activeTab === 'normal') {
+      const showDate = new Date(s.date);
+      if (showDate < now) return false;
+      if (s.status === 'cancelled' && !showCancelled) return false;
+      if (s.status === 'no_show' && !showNoShow) return false;
+      if (s.status !== 'normal' && s.status !== 'pending_tickets' && s.status !== 'cancelled' && s.status !== 'no_show') return false;
+    } else {
+      if (s.status === 'cancelled' && !showCancelled) return false;
+      if (s.status === 'no_show' && !showNoShow) return false;
+    }
+
     if (categoryFilter && s.category_name !== categoryFilter) return false;
     if (ratingFilter) {
       const r = parseInt(ratingFilter);
@@ -40,14 +53,10 @@
     }
     return true;
   }).sort((a, b) => {
-    switch (sortBy) {
-      case 'date_asc': return new Date(a.date) - new Date(b.date);
-      case 'date_desc': return new Date(b.date) - new Date(a.date);
-      case 'name': return a.name.localeCompare(b.name);
-      case 'rating_desc': return (b.rating || 0) - (a.rating || 0);
-      case 'rating_asc': return (a.rating || 0) - (b.rating || 0);
-      default: return 0;
+    if (activeTab === 'normal') {
+      return new Date(a.date) - new Date(b.date);
     }
+    return new Date(b.date) - new Date(a.date);
   }));
 
   let allSelected = $derived(filteredShows.length > 0 && filteredShows.every(s => selectedIds.has(s.id)));
@@ -73,7 +82,8 @@
     searchQuery = '';
     categoryFilter = '';
     ratingFilter = '';
-    sortBy = 'date_asc';
+    showCancelled = false;
+    showNoShow = false;
   }
 
   function toggleSelectAll() {
@@ -167,9 +177,7 @@
   <div class="tabs">
     <button class="tab" class:active={activeTab === 'normal'} onclick={() => { activeTab = 'normal'; clearFilters(); }}>
       待看列表
-      {#if shows.filter(s => s.status === 'normal' || s.status === 'pending_tickets').length > 0}
-        <span class="tab-count">{shows.filter(s => s.status === 'normal' || s.status === 'pending_tickets').length}</span>
-      {/if}
+      <span class="tab-count">{shows.filter(s => new Date(s.date) >= new Date() && (s.status === 'normal' || s.status === 'pending_tickets')).length}</span>
     </button>
     <button class="tab" class:active={activeTab === 'all'} onclick={() => { activeTab = 'all'; clearFilters(); }}>
       全部列表
@@ -265,13 +273,14 @@
           <option value="1">★</option>
           <option value="0">无评分</option>
         </select>
-        <select bind:value={sortBy}>
-          <option value="date_asc">时间 ↑</option>
-          <option value="date_desc">时间 ↓</option>
-          <option value="name">名称</option>
-          <option value="rating_desc">评分 ↓</option>
-          <option value="rating_asc">评分 ↑</option>
-        </select>
+        <label class="filter-checkbox">
+          <input type="checkbox" bind:checked={showCancelled} />
+          显示已取消
+        </label>
+        <label class="filter-checkbox">
+          <input type="checkbox" bind:checked={showNoShow} />
+          显示未赴约
+        </label>
       </div>
     </div>
 
@@ -444,6 +453,28 @@
   }
   .result-count { font-size: 13px; color: var(--text-muted); font-weight: 500; }
 
+  .filter-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    transition: background 0.15s;
+  }
+
+  .filter-checkbox:hover {
+    background: var(--bg-surface);
+  }
+
+  .filter-checkbox input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+  }
+
   .batch-bar {
     display: flex;
     align-items: center;
@@ -530,6 +561,7 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+    margin-top: 8px;
   }
 
   .show-item {
