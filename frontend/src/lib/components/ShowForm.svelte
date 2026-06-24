@@ -339,11 +339,16 @@
   .poster-upload {
     border: 2px dashed var(--border);
     border-radius: var(--radius-md);
-    padding: 40px 32px;
+    padding: 48px 32px;
     text-align: center;
     transition: all 0.2s ease;
     cursor: pointer;
     background: var(--bg-surface);
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
   }
 
   .poster-upload:hover { border-color: var(--accent); background: var(--accent-bg); }
@@ -365,8 +370,8 @@
   .btn-remove-poster:hover { background: var(--danger-bg-hover); }
 
   .poster-placeholder { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-  .poster-placeholder svg { color: var(--text-muted); opacity: 0.4; }
-  .poster-placeholder p { color: var(--text-muted); margin: 0; font-size: 14px; }
+  .poster-placeholder svg { color: var(--text-muted); opacity: 0.5; width: 48px; height: 48px; }
+  .poster-placeholder p { color: var(--text-secondary); margin: 0; font-size: 14px; }
 
   .btn-select-poster {
     display: inline-block;

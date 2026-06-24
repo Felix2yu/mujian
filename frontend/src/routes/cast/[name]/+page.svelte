@@ -11,6 +11,9 @@
   let editBio = $state('');
   let editPhoto = $state('');
   let saving = $state(false);
+  let photoFile = $state(null);
+  let photoPreview = $state('');
+  let dragover = $state(false);
 
   let name = $derived(decodeURIComponent($page.params.name));
 
@@ -24,6 +27,7 @@
       shows = showsData;
       editBio = actor?.bio || '';
       editPhoto = actor?.photo_url || '';
+      if (actor?.photo_url) photoPreview = actor.photo_url;
     } catch (e) {
       console.error('Failed to load actor:', e);
     } finally {
@@ -34,16 +38,57 @@
   function startEdit() {
     editBio = actor?.bio || '';
     editPhoto = actor?.photo_url || '';
+    photoFile = null;
+    photoPreview = actor?.photo_url || '';
     editing = true;
   }
 
   function cancelEdit() {
     editing = false;
+    photoFile = null;
+    photoPreview = actor?.photo_url || '';
+  }
+
+  function handleFileSelect(e) {
+    if (e.target.files[0]) processFile(e.target.files[0]);
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    dragover = false;
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) processFile(f);
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    dragover = true;
+  }
+
+  function handleDragLeave() {
+    dragover = false;
+  }
+
+  function processFile(file) {
+    photoFile = file;
+    const reader = new FileReader();
+    reader.onload = (e) => { photoPreview = e.target.result; };
+    reader.readAsDataURL(file);
+  }
+
+  function removePhoto() {
+    photoFile = null;
+    photoPreview = '';
+    editPhoto = '';
   }
 
   async function saveEdit() {
     saving = true;
     try {
+      if (photoFile) {
+        const res = await api.uploadFile(photoFile);
+        editPhoto = res.url;
+      }
       actor = await api.updateActor(name, { name, bio: editBio, photo_url: editPhoto });
       editing = false;
     } catch (e) {
@@ -65,11 +110,33 @@
 
     <div class="actor-card">
       <div class="actor-header">
-        {#if actor?.photo_url}
-          <img src={actor.photo_url} alt={name} class="actor-photo" />
-        {:else}
-          <div class="actor-avatar">{name.charAt(0)}</div>
-        {/if}
+        <div class="photo-section">
+          {#if editing}
+            <div
+              class="photo-upload"
+              class:dragover
+              ondrop={handleDrop}
+              ondragover={handleDragOver}
+              ondragleave={handleDragLeave}
+            >
+              {#if photoPreview}
+                <img src={photoPreview} alt="预览" class="photo-preview" />
+                <button type="button" class="btn-remove-photo" onclick={removePhoto}>移除</button>
+              {:else}
+                <div class="photo-placeholder">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <span>拖拽或选择照片</span>
+                  <label class="btn-select-photo">选择图片<input type="file" accept="image/*" onchange={handleFileSelect} hidden /></label>
+                </div>
+              {/if}
+            </div>
+          {:else if actor?.photo_url}
+            <img src={actor.photo_url} alt={name} class="actor-photo" />
+          {:else}
+            <div class="actor-avatar">{name.charAt(0)}</div>
+          {/if}
+        </div>
+
         <div class="actor-info">
           <h1>{name}</h1>
           {#if actor?.bio && !editing}
@@ -77,6 +144,7 @@
           {/if}
           <span class="actor-count">{shows.length} 场演出</span>
         </div>
+
         <div class="actor-actions">
           {#if editing}
             <button class="cancel-btn" onclick={cancelEdit}>取消</button>
@@ -95,12 +163,13 @@
       {#if editing}
         <div class="edit-form">
           <div class="form-group">
-            <label>简介</label>
-            <textarea bind:value={editBio} placeholder="添加演员简介..." rows="3"></textarea>
+            <label for="actor-bio">简介</label>
+            <textarea id="actor-bio" bind:value={editBio} placeholder="添加演员简介..." rows="4"></textarea>
           </div>
           <div class="form-group">
-            <label>照片URL</label>
-            <input type="text" bind:value={editPhoto} placeholder="https://..." />
+            <label for="actor-photo-url">照片URL</label>
+            <input id="actor-photo-url" type="url" bind:value={editPhoto} placeholder="或输入照片URL" />
+            <span class="field-hint">支持 JPG、PNG、WebP，或直接拖拽上传上方区域</span>
           </div>
         </div>
       {/if}
@@ -122,7 +191,7 @@
 </div>
 
 <style>
-  .actor-detail { max-width: 800px; margin: 0 auto; }
+  .actor-detail { max-width: 1000px; margin: 0 auto; }
 
   .back-link {
     display: inline-flex;
@@ -170,31 +239,96 @@
   .actor-header {
     display: flex;
     align-items: flex-start;
-    gap: 20px;
+    gap: 24px;
+  }
+
+  .photo-section {
+    flex-shrink: 0;
   }
 
   .actor-photo {
-    width: 80px;
-    height: 80px;
+    width: 100px;
+    height: 100px;
     border-radius: 50%;
     object-fit: cover;
-    flex-shrink: 0;
     border: 3px solid var(--bg-surface);
   }
 
   .actor-avatar {
-    width: 80px;
-    height: 80px;
+    width: 100px;
+    height: 100px;
     border-radius: 50%;
     background: var(--accent-bg);
     color: var(--accent);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 32px;
+    font-size: 40px;
     font-weight: 700;
-    flex-shrink: 0;
   }
+
+  .photo-upload {
+    width: 140px;
+    height: 140px;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--bg-surface);
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+
+  .photo-upload:hover { border-color: var(--accent); background: var(--accent-bg); }
+  .photo-upload.dragover { border-color: var(--accent); background: var(--accent-bg); }
+
+  .photo-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: calc(var(--radius-md) - 2px);
+  }
+
+  .btn-remove-photo {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 12px;
+    background: var(--danger-bg);
+    color: var(--danger-text);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .photo-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+  }
+
+  .photo-placeholder span {
+    font-size: 12px;
+  }
+
+  .btn-select-photo {
+    padding: 6px 14px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .btn-select-photo:hover { background: var(--accent-light); }
 
   .actor-info {
     flex: 1;
@@ -306,6 +440,11 @@
     outline: none;
   }
 
+  .field-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
   .shows-section {
     margin-top: 8px;
   }
@@ -339,5 +478,6 @@
     .actor-header { flex-direction: column; align-items: center; text-align: center; }
     .actor-info h1 { font-size: 22px; }
     .actor-bio { text-align: left; }
+    .photo-upload { width: 120px; height: 120px; }
   }
 </style>

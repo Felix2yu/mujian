@@ -324,7 +324,7 @@
 {/if}
 
 <style>
-  .show-detail { max-width: 800px; margin: 0 auto; }
+  .show-detail { max-width: 1000px; margin: 0 auto; }
   .back-link {
     display: inline-flex;
     align-items: center;
