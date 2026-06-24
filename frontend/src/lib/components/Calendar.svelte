@@ -173,31 +173,34 @@
               <span class="day-number">{cell.day}</span>
               <div class="day-events">
                 {#if cell.events.length > 0}
-                  {@const first = cell.events[0]}
                   {@const posterEvents = cell.events.filter(ev => ev.poster_url)}
                   {@const textEvents = cell.events.filter(ev => !ev.poster_url)}
 
                   {#if posterEvents.length > 0}
-                    <div class="poster-grid" class:grid-1={posterEvents.length === 1} class:grid-2={posterEvents.length === 2} class:grid-3={posterEvents.length >= 3}>
-                      {#each posterEvents.slice(0, 3) as ev}
+                    <div class="poster-grid" class:grid-1={posterEvents.length === 1}>
+                      {#each posterEvents.slice(0, 2) as ev}
                         <button class="poster-cell" onclick={(e) => showPopup(cell.events, e)}>
                           <img src={ev.poster_url} alt={ev.name} />
                           <span class="poster-cell-status" style="background: {getEventColor(ev)}"></span>
                         </button>
                       {/each}
-                      {#if posterEvents.length > 3}
+                      {#if posterEvents.length > 2}
                         <button class="poster-cell poster-cell-more" onclick={(e) => showPopup(cell.events, e)}>
-                          <span class="poster-more-num">+{posterEvents.length - 3}</span>
+                          <span class="poster-more-num">+{posterEvents.length - 2}</span>
                         </button>
                       {/if}
                     </div>
-                  {:else}
-                    <button class="event-text-btn" onclick={(e) => showPopup(cell.events, e)} style="background: {getEventColor(first)}">
-                      <span class="event-text">{first.name}</span>
-                      {#if cell.events.length > 1}
-                        <span class="text-count">{cell.events.length}</span>
-                      {/if}
-                    </button>
+                  {/if}
+
+                  {#if textEvents.length > 0}
+                    {#each textEvents.slice(0, 1) as ev}
+                      <button class="event-text-btn" onclick={(e) => showPopup(cell.events, e)} style="background: {getEventColor(ev)}">
+                        <span class="event-text">{ev.name}</span>
+                        {#if textEvents.length > 1}
+                          <span class="text-count">+{textEvents.length - 1}</span>
+                        {/if}
+                      </button>
+                    {/each}
                   {/if}
                 {/if}
               </div>
@@ -410,21 +413,13 @@
 
   .poster-grid {
     display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 2px;
     width: 100%;
   }
 
   .poster-grid.grid-1 {
     grid-template-columns: 1fr;
-  }
-
-  .poster-grid.grid-2 {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .poster-grid.grid-3 {
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 1fr 1fr;
   }
 
   .poster-cell {
@@ -438,22 +433,8 @@
     aspect-ratio: 2/3;
   }
 
-  .poster-grid.grid-2 .poster-cell {
-    aspect-ratio: auto;
-    height: 100%;
-  }
-
-  .poster-grid.grid-3 .poster-cell:first-child {
-    grid-row: 1 / 3;
-    aspect-ratio: auto;
-    height: 100%;
-  }
-
-  .poster-grid.grid-3 .poster-cell:nth-child(2),
-  .poster-grid.grid-3 .poster-cell:nth-child(3),
-  .poster-grid.grid-3 .poster-cell:nth-child(4) {
-    aspect-ratio: auto;
-    height: 100%;
+  .poster-grid.grid-1 .poster-cell {
+    aspect-ratio: 2/3;
   }
 
   .poster-cell img {
@@ -514,6 +495,12 @@
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .text-count {
+    margin-left: 4px;
+    opacity: 0.8;
+    font-size: 10px;
   }
 
   .calendar-legend {

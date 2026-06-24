@@ -18,7 +18,6 @@
   let currentYear = $state(stored ? stored.year : new Date().getFullYear());
   let currentMonth = $state(stored ? stored.month : new Date().getMonth() + 1);
   let events = $state([]);
-  let upcoming = $state([]);
   let recent = $state([]);
   let stats = $state(null);
 
@@ -28,14 +27,12 @@
 
   async function loadData() {
     try {
-      const [eventsRes, upcomingRes, recentRes, statsRes] = await Promise.all([
+      const [eventsRes, recentRes, statsRes] = await Promise.all([
         api.getCalendar(currentYear, currentMonth),
-        api.getUpcoming(5),
         api.getRecent(5),
         api.getStats()
       ]);
       events = eventsRes;
-      upcoming = upcomingRes;
       recent = recentRes;
       stats = statsRes;
     } catch (e) {
@@ -94,27 +91,6 @@
     </div>
 
     <div class="sidebar">
-      <div class="sidebar-section">
-        <div class="section-header">
-          <h3>即将到来</h3>
-          {#if upcoming.length > 0}
-            <span class="section-badge">{upcoming.length}</span>
-          {/if}
-        </div>
-        {#if upcoming.length === 0}
-          <div class="empty-state">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            <p>暂无即将进行的演出</p>
-          </div>
-        {:else}
-          <div class="card-list">
-            {#each upcoming as show}
-              <ShowCard {show} compact />
-            {/each}
-          </div>
-        {/if}
-      </div>
-
       <div class="sidebar-section">
         <div class="section-header">
           <h3>最近观看</h3>
