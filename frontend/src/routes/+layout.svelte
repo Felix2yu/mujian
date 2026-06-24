@@ -14,6 +14,7 @@
   let hasUpcoming = $state(false);
   let upcomingShows = $state([]);
   let showUpcomingPopup = $state(false);
+  let upcomingClosing = $state(false);
 
   function formatDateTime(dateStr) {
     const d = new Date(dateStr);
@@ -23,11 +24,23 @@
   }
 
   function toggleUpcoming() {
-    showUpcomingPopup = !showUpcomingPopup;
+    if (showUpcomingPopup) {
+      closeUpcoming();
+    } else {
+      upcomingClosing = false;
+      showUpcomingPopup = true;
+    }
   }
 
   function closeUpcoming() {
-    showUpcomingPopup = false;
+    upcomingClosing = true;
+  }
+
+  function onPopupAnimEnd() {
+    if (upcomingClosing) {
+      showUpcomingPopup = false;
+      upcomingClosing = false;
+    }
   }
 
   onMount(async () => {
@@ -145,7 +158,7 @@
           </button>
           {#if showUpcomingPopup}
             <div class="popup-overlay" onclick={closeUpcoming}></div>
-            <div class="upcoming-popup">
+            <div class="upcoming-popup" class:closing={upcomingClosing} onanimationend={onPopupAnimEnd}>
               <div class="popup-header">即将演出</div>
               {#if upcomingShows.length === 0}
                 <div class="popup-empty">暂无即将进行的演出</div>
@@ -532,6 +545,15 @@
     to { opacity: 1; transform: translateY(0); }
   }
 
+  .upcoming-popup.closing {
+    animation: slideUp 0.15s ease forwards;
+  }
+
+  @keyframes slideUp {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-8px); }
+  }
+
   .popup-header {
     padding: 14px 16px;
     font-size: 14px;
@@ -593,6 +615,10 @@
     font-weight: 500;
     white-space: nowrap;
     margin-left: 12px;
+  }
+
+  .mobile-menu-btn {
+    display: none;
   }
 
   @media (max-width: 768px) {
