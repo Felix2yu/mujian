@@ -327,6 +327,34 @@
     padding: 32px;
   }
 
+  .fab {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+    transition: all 0.2s ease;
+    z-index: 50;
+    text-decoration: none;
+  }
+
+  .fab:hover {
+    transform: scale(1.1) translateY(-2px);
+    box-shadow: 0 6px 24px rgba(99, 102, 241, 0.5);
+    background: var(--accent-light);
+  }
+
+  .fab:active {
+    transform: scale(0.95);
+  }
+
   .navbar {
     background: rgba(255,255,255,0.8);
     backdrop-filter: blur(20px) saturate(180%);
