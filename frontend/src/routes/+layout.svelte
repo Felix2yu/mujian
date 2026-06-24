@@ -156,27 +156,6 @@
           <button class="icon-btn notify-btn" class:has-upcoming={hasUpcoming} onclick={toggleUpcoming} title="即将演出">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
           </button>
-          {#if showUpcomingPopup}
-            <div class="popup-overlay" onclick={closeUpcoming}></div>
-            <div class="upcoming-popup" class:closing={upcomingClosing} onanimationend={onPopupAnimEnd}>
-              <div class="popup-header">即将演出</div>
-              {#if upcomingShows.length === 0}
-                <div class="popup-empty">暂无即将进行的演出</div>
-              {:else}
-                {#each upcomingShows as show}
-                  <a href="/shows/{show.id}" class="popup-item" onclick={closeUpcoming}>
-                    <div class="popup-item-info">
-                      <span class="popup-item-name">{show.name}</span>
-                      {#if show.venue}
-                        <span class="popup-item-venue">{show.venue}</span>
-                      {/if}
-                    </div>
-                    <span class="popup-item-date">{formatDateTime(show.date)}</span>
-                  </a>
-                {/each}
-              {/if}
-            </div>
-          {/if}
         </div>
         <a href="/settings" class="icon-btn" class:active={currentPath === '/settings'} title="设置">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -194,6 +173,28 @@
       </div>
     </div>
   </nav>
+
+  {#if showUpcomingPopup}
+    <div class="popup-overlay" onclick={closeUpcoming}></div>
+    <div class="upcoming-popup" class:closing={upcomingClosing} onanimationend={onPopupAnimEnd}>
+      <div class="popup-header">即将演出</div>
+      {#if upcomingShows.length === 0}
+        <div class="popup-empty">暂无即将进行的演出</div>
+      {:else}
+        {#each upcomingShows as show}
+          <a href="/shows/{show.id}" class="popup-item" onclick={closeUpcoming}>
+            <div class="popup-item-info">
+              <span class="popup-item-name">{show.name}</span>
+              {#if show.venue}
+                <span class="popup-item-venue">{show.venue}</span>
+              {/if}
+            </div>
+            <span class="popup-item-date">{formatDateTime(show.date)}</span>
+          </a>
+        {/each}
+      {/if}
+    </div>
+  {/if}
 
   <main>
     <slot />
@@ -557,19 +558,19 @@
   .popup-overlay {
     position: fixed;
     inset: 0;
-    z-index: 99;
+    z-index: 150;
   }
 
   .upcoming-popup {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
+    position: fixed;
+    top: 72px;
+    right: 32px;
     width: 300px;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-lg);
-    z-index: 100;
+    z-index: 200;
     overflow: hidden;
     animation: slideDown 0.2s ease;
   }
