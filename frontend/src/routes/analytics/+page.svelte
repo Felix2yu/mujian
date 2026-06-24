@@ -10,6 +10,11 @@
 
   let years = $state([]);
 
+  let showModal = $state(false);
+  let modalTitle = $state('');
+  let modalData = $state([]);
+  let modalType = $state('list');
+
   onMount(async () => {
     try {
       allShows = await api.listAllShows();
@@ -151,6 +156,24 @@
   ];
 
   const catColors = ['#6366f1', '#10b981', '#ef4444', '#8b5cf6', '#f97316', '#06b6d4', '#475569', '#f59e0b'];
+
+  function openModal(title, stats, type = 'list') {
+    modalTitle = title;
+    modalData = Object.entries(stats).sort((a, b) => b[1] - a[1]);
+    modalType = type;
+    showModal = true;
+  }
+
+  function openMonthlyModal() {
+    modalTitle = '月度趋势（全部）';
+    modalData = Object.entries(monthlyStats).sort((a, b) => a[0].localeCompare(b[0]));
+    modalType = 'monthly';
+    showModal = true;
+  }
+
+  function closeModal() {
+    showModal = false;
+  }
 </script>
 
 <div class="analytics-page">
@@ -281,8 +304,8 @@
         </div>
       </div>
 
-      <div class="chart-card">
-        <h3>分类统计</h3>
+      <div class="chart-card clickable" onclick={() => openModal('分类统计', categoryStats)}>
+        <h3>分类统计 <span class="click-hint">点击查看全部</span></h3>
         <div class="category-bars">
           {#each Object.entries(categoryStats).sort((a, b) => b[1] - a[1]).slice(0, 8) as [name, count], i}
             <div class="category-bar">
@@ -296,8 +319,8 @@
         </div>
       </div>
 
-      <div class="chart-card">
-        <h3>月度趋势</h3>
+      <div class="chart-card clickable" onclick={openMonthlyModal}>
+        <h3>月度趋势 <span class="click-hint">点击查看全部月份</span></h3>
         <div class="monthly-chart">
           {#each Object.entries(monthlyStats).sort((a, b) => a[0].localeCompare(b[0])).slice(-12) as [month, count]}
             <div class="month-bar">
@@ -310,8 +333,8 @@
         </div>
       </div>
 
-      <div class="chart-card full-width">
-        <h3>常去场馆 TOP 10</h3>
+      <div class="chart-card full-width clickable" onclick={() => openModal('场馆统计', venueStats)}>
+        <h3>常去场馆 TOP 10 <span class="click-hint">点击查看全部</span></h3>
         <div class="venue-list">
           {#each Object.entries(venueStats).sort((a, b) => b[1] - a[1]).slice(0, 10) as [venue, count], i}
             <div class="venue-item">
@@ -324,8 +347,8 @@
       </div>
 
       {#if Object.keys(playStats).length > 0}
-        <div class="chart-card full-width">
-          <h3>剧目统计</h3>
+        <div class="chart-card full-width clickable" onclick={() => openModal('剧目统计', playStats)}>
+          <h3>剧目统计 <span class="click-hint">点击查看全部</span></h3>
           <div class="venue-list">
             {#each Object.entries(playStats).sort((a, b) => b[1] - a[1]).slice(0, 10) as [play, count], i}
               <div class="venue-item">
@@ -339,8 +362,8 @@
       {/if}
 
       {#if Object.keys(sceneStats).length > 0}
-        <div class="chart-card full-width">
-          <h3>折子统计</h3>
+        <div class="chart-card full-width clickable" onclick={() => openModal('折子统计', sceneStats)}>
+          <h3>折子统计 <span class="click-hint">点击查看全部</span></h3>
           <div class="venue-list">
             {#each Object.entries(sceneStats).sort((a, b) => b[1] - a[1]).slice(0, 15) as [scene, count], i}
               <div class="venue-item">
@@ -354,8 +377,8 @@
       {/if}
 
       {#if Object.keys(companyStats).length > 0}
-        <div class="chart-card full-width">
-          <h3>剧团统计</h3>
+        <div class="chart-card full-width clickable" onclick={() => openModal('剧团统计', companyStats)}>
+          <h3>剧团统计 <span class="click-hint">点击查看全部</span></h3>
           <div class="venue-list">
             {#each Object.entries(companyStats).sort((a, b) => b[1] - a[1]).slice(0, 10) as [company, count], i}
               <div class="venue-item">
@@ -370,6 +393,45 @@
     </div>
   {/if}
 </div>
+
+{#if showModal}
+  <div class="modal-overlay" onclick={closeModal}>
+    <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+      <div class="modal-header">
+        <h2>{modalTitle}</h2>
+        <button class="modal-close" onclick={closeModal}>&times;</button>
+      </div>
+      <div class="modal-body">
+        {#if modalType === 'monthly'}
+          <div class="modal-monthly-chart">
+            {#each modalData as [month, count]}
+              <div class="modal-month-item">
+                <span class="modal-month-label">{month}</span>
+                <div class="modal-bar-track">
+                  <div class="modal-bar-fill" style="width: {getBarWidth(count, getMaxValue(monthlyStats))}%"></div>
+                </div>
+                <span class="modal-bar-value">{count}</span>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <div class="modal-list">
+            {#each modalData as [name, count], i}
+              <div class="modal-list-item">
+                <div class="modal-list-bar-bg">
+                  <div class="modal-list-bar-fill" style="width: {i === 0 ? 100 : (count / modalData[0][1]) * 100}%"></div>
+                </div>
+                <span class="modal-rank">#{i + 1}</span>
+                <span class="modal-name">{name}</span>
+                <span class="modal-count">{count}</span>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .analytics-page {
@@ -678,5 +740,190 @@
     .filters select {
       flex: 1;
     }
+  }
+
+  .clickable {
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .clickable:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+  }
+
+  .click-hint {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-left: 8px;
+  }
+
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+
+  .modal-content {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    width: 100%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .modal-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: var(--bg-surface);
+    border-radius: var(--radius-sm);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: all 0.15s;
+  }
+
+  .modal-close:hover {
+    background: var(--bg-surface-hover);
+    color: var(--text-primary);
+  }
+
+  .modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    max-height: calc(80vh - 80px);
+  }
+
+  .modal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .modal-list-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-sm);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .modal-list-bar-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--accent);
+    opacity: 0.1;
+    z-index: 0;
+  }
+
+  .modal-list-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    opacity: 0.3;
+    transition: width 0.3s ease;
+  }
+
+  .modal-rank {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    width: 32px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .modal-name {
+    flex: 1;
+    font-size: 14px;
+    color: var(--text-primary);
+    font-weight: 500;
+    position: relative;
+    z-index: 1;
+  }
+
+  .modal-count {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    position: relative;
+    z-index: 1;
+  }
+
+  .modal-monthly-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .modal-month-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .modal-month-label {
+    width: 70px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  .modal-bar-track {
+    flex: 1;
+    height: 24px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+
+  .modal-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: var(--radius-sm);
+    transition: width 0.3s ease;
+  }
+
+  .modal-bar-value {
+    width: 40px;
+    text-align: right;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
   }
 </style>
