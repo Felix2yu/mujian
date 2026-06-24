@@ -12,6 +12,23 @@
   let showInstall = $state(false);
   let mobileMenuOpen = $state(false);
   let hasUpcoming = $state(false);
+  let upcomingShows = $state([]);
+  let showUpcomingPopup = $state(false);
+
+  function formatDateTime(dateStr) {
+    const d = new Date(dateStr);
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    return `${d.getMonth() + 1}/${d.getDate()} ${h}:${m}`;
+  }
+
+  function toggleUpcoming() {
+    showUpcomingPopup = !showUpcomingPopup;
+  }
+
+  function closeUpcoming() {
+    showUpcomingPopup = false;
+  }
 
   onMount(async () => {
     try {
@@ -36,7 +53,8 @@
     });
 
     try {
-      const allShows = await api.listAllShows();
+      const [allShows, upcoming] = await Promise.all([api.listAllShows(), api.getUpcoming(10)]);
+      upcomingShows = upcoming;
       hasUpcoming = checkUpcomingShows(allShows).length > 0;
     } catch {}
   });
@@ -121,9 +139,32 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           </button>
         {/if}
-        <button class="icon-btn notify-btn" class:has-upcoming={hasUpcoming} onclick={requestPermission} title="通知">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-        </button>
+        <div class="notify-wrapper">
+          <button class="icon-btn notify-btn" class:has-upcoming={hasUpcoming} onclick={toggleUpcoming} title="即将演出">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+          </button>
+          {#if showUpcomingPopup}
+            <div class="popup-overlay" onclick={closeUpcoming}></div>
+            <div class="upcoming-popup">
+              <div class="popup-header">即将演出</div>
+              {#if upcomingShows.length === 0}
+                <div class="popup-empty">暂无即将进行的演出</div>
+              {:else}
+                {#each upcomingShows as show}
+                  <a href="/shows/{show.id}" class="popup-item" onclick={closeUpcoming}>
+                    <div class="popup-item-info">
+                      <span class="popup-item-name">{show.name}</span>
+                      {#if show.venue}
+                        <span class="popup-item-venue">{show.venue}</span>
+                      {/if}
+                    </div>
+                    <span class="popup-item-date">{formatDateTime(show.date)}</span>
+                  </a>
+                {/each}
+              {/if}
+            </div>
+          {/if}
+        </div>
         <a href="/settings" class="icon-btn" class:active={currentPath === '/settings'} title="设置">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </a>
@@ -462,63 +503,90 @@
     color: var(--accent);
   }
 
-  .install-btn {
-    width: auto;
-    padding: 6px 12px;
-    gap: 6px;
-    background: var(--accent-bg);
-    color: var(--accent);
-    font-size: 12px;
-    font-weight: 500;
+  .notify-wrapper {
+    position: relative;
   }
 
-  .install-btn:hover {
-    background: var(--accent);
-    color: #fff;
-  }
-
-  .mobile-menu-btn {
-    display: none;
-  }
-
-  main {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 32px;
-  }
-
-  .fab {
+  .popup-overlay {
     position: fixed;
-    bottom: 32px;
-    right: 32px;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: #fff;
+    inset: 0;
+    z-index: 99;
+  }
+
+  .upcoming-popup {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 300px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    overflow: hidden;
+  }
+
+  .popup-header {
+    padding: 14px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .popup-empty {
+    padding: 24px 16px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .popup-item {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
-    transition: all 0.2s ease;
-    z-index: 50;
+    padding: 12px 16px;
+    transition: background 0.15s;
+    border-bottom: 1px solid var(--border);
     text-decoration: none;
   }
 
-  .fab:hover {
-    transform: scale(1.1) translateY(-2px);
-    box-shadow: 0 6px 24px rgba(99, 102, 241, 0.5);
-    background: var(--accent-light);
+  .popup-item:last-child {
+    border-bottom: none;
   }
 
-  .fab:active {
-    transform: scale(0.95);
+  .popup-item:hover {
+    background: var(--bg-surface);
   }
 
-  @media (max-width: 1024px) {
-    main {
-      padding: 24px;
-    }
+  .popup-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .popup-item-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .popup-item-venue {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .popup-item-date {
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 500;
+    white-space: nowrap;
+    margin-left: 12px;
   }
 
   @media (max-width: 768px) {
