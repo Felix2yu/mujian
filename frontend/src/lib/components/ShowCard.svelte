@@ -201,6 +201,9 @@
     display: flex;
     align-items: center;
     gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -210,7 +213,6 @@
   }
 
   .venue-text {
-    max-width: 120px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -231,6 +233,9 @@
     display: flex;
     align-items: center;
     gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -240,7 +245,6 @@
   }
 
   .cast-text {
-    max-width: 150px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -256,16 +260,8 @@
       gap: 3px 10px;
     }
 
-    .venue-text {
-      max-width: 100px;
-    }
-
     .card-extra {
       gap: 3px 10px;
-    }
-
-    .cast-text {
-      max-width: 120px;
     }
   }
 
