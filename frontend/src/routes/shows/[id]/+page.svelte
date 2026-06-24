@@ -123,6 +123,11 @@
   {:else if error}
     <div class="error">{error}</div>
   {:else if show}
+    <a href="/shows" class="back-link">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回
+    </a>
+
     {#if show.poster_url}
       <div class="poster">
         <img src={show.poster_url} alt={show.name} />
@@ -259,6 +264,18 @@
 
 <style>
   .show-detail { max-width: 800px; margin: 0 auto; }
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 500;
+    margin-bottom: 16px;
+    transition: color 0.15s;
+  }
+  .back-link:hover { color: var(--accent); }
   .loading, .error { text-align: center; padding: 60px 20px; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; gap: 12px; }
   .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
