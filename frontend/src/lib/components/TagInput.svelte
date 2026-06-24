@@ -1,5 +1,5 @@
 <script>
-  let { value = $bindable(''), placeholder = '', suggestions = [], onchange } = $props();
+  let { value = $bindable(''), placeholder = '', suggestions = [], onchange, onflush } = $props();
 
   let inputValue = $state('');
   let inputEl;
@@ -46,6 +46,8 @@
   let filteredSuggestions = $derived(inputValue.length > 0
     ? suggestions.filter(s => s.toLowerCase().includes(inputValue.toLowerCase()) && !tags.includes(s))
     : []);
+
+  onflush?.(() => addTag());
 </script>
 
 <div class="tag-input-wrapper">

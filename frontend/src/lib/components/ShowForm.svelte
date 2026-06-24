@@ -75,8 +75,13 @@
 
   function setRating(val) { form.rating = form.rating === val ? null : val; }
 
+  let flushers = [];
+  function registerFlush(fn) { flushers.push(fn); }
+
   async function handleSubmit(e) {
     e.preventDefault();
+    flushers.forEach(fn => fn());
+    flushers = [];
     if (!form.name.trim()) { error = '请输入演出名称'; return; }
     if (!form.date) { error = '请选择演出时间'; return; }
     saving = true; error = '';
@@ -181,17 +186,17 @@
     <div class="form-row">
       <div class="form-group">
         <label>剧团</label>
-        <TagInput bind:value={form.company} placeholder="输入剧团名按回车" suggestions={companyList} />
+        <TagInput bind:value={form.company} placeholder="输入剧团名按回车" suggestions={companyList} onflush={registerFlush} />
       </div>
       <div class="form-group">
         <label>阵容</label>
-        <TagInput bind:value={form.cast} placeholder="输入演员名按回车" suggestions={castList} />
+        <TagInput bind:value={form.cast} placeholder="输入演员名按回车" suggestions={castList} onflush={registerFlush} />
       </div>
     </div>
     <div class="form-row">
       <div class="form-group">
         <label>同行好友</label>
-        <TagInput bind:value={form.friends} placeholder="输入好友名按回车" suggestions={friendsList} />
+        <TagInput bind:value={form.friends} placeholder="输入好友名按回车" suggestions={friendsList} onflush={registerFlush} />
       </div>
       <div class="form-group">
         <label for="seat">座位</label>
@@ -200,7 +205,7 @@
     </div>
     <div class="form-group">
       <label>剧目</label>
-      <TagInput bind:value={form.setlist} placeholder="输入剧目名按回车" suggestions={[]} />
+      <TagInput bind:value={form.setlist} placeholder="输入剧目名按回车" suggestions={[]} onflush={registerFlush} />
     </div>
   </div>
 
