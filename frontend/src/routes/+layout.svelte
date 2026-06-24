@@ -5,7 +5,6 @@
   import { onMount } from 'svelte';
   import { requestPermission, startReminderCheck } from '$lib/notifications';
 
-  let stats = $state(null);
   let searchQuery = $state('');
   let searchResults = $state([]);
   let showSearch = $state(false);
@@ -15,8 +14,7 @@
 
   onMount(async () => {
     try {
-      const [statsRes, settingsRes] = await Promise.all([api.getStats(), api.getSettings()]);
-      stats = statsRes;
+      const settingsRes = await api.getSettings();
       if (settingsRes.theme) {
         theme.set(settingsRes.theme);
       }
@@ -113,12 +111,6 @@
       </div>
 
       <div class="nav-right">
-        {#if stats}
-          <div class="nav-stats">
-            <span class="stat-pill">{stats.total_shows} 场</span>
-            <span class="stat-pill">{stats.total_hours.toFixed(0)}h</span>
-          </div>
-        {/if}
         {#if showInstall}
           <button class="icon-btn install-btn" onclick={installApp} title="安装应用">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -424,20 +416,6 @@
     margin-left: auto;
   }
 
-  .nav-stats {
-    display: flex;
-    gap: 6px;
-  }
-
-  .stat-pill {
-    font-size: 12px;
-    font-weight: 500;
-    padding: 4px 10px;
-    border-radius: 20px;
-    background: var(--accent-bg);
-    color: var(--accent);
-  }
-
   .icon-btn {
     width: 36px;
     height: 36px;
@@ -523,10 +501,6 @@
     }
 
     .nav-search {
-      display: none;
-    }
-
-    .nav-stats {
       display: none;
     }
 
