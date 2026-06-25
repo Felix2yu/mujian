@@ -18,7 +18,7 @@ RUN CGO_ENABLED=1 GOPROXY=https://goproxy.cn,direct go build -o /mujian .
 
 # Final image
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata libavif16 && rm -rf /var/lib/apt/lists/* \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata libavif-dev && rm -rf /var/lib/apt/lists/* \
     && useradd -u 1000 -m -s /sbin/nologin mujian \
     && mkdir -p /app/data/uploads \
     && chown -R mujian:mujian /app
