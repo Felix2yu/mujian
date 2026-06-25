@@ -1,9 +1,9 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"mujian/internal/config"
 	"mime/multipart"
 	"os"
@@ -43,30 +43,19 @@ func NewLocalStorage(uploadDir string) *LocalStorage {
 }
 
 func (s *LocalStorage) Save(file *multipart.FileHeader, filename string) (string, error) {
-	src, err := file.Open()
+	buf, ext, err := processImage(file)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("process image: %w", err)
 	}
-	defer src.Close()
 
 	day := time.Now().Format("2006/01/02")
 	dir := filepath.Join(s.uploadDir, day)
 	os.MkdirAll(dir, 0755)
 
-	ext := filepath.Ext(filename)
-	if ext == "" {
-		ext = filepath.Ext(file.Filename)
-	}
 	name := fmt.Sprintf("%s%s", filename, ext)
 	path := filepath.Join(dir, name)
 
-	dst, err := os.Create(path)
-	if err != nil {
-		return "", err
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, src); err != nil {
+	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
 		return "", err
 	}
 
@@ -102,29 +91,20 @@ func NewS3Storage(cfg *config.Config) *S3Storage {
 }
 
 func (s *S3Storage) Save(file *multipart.FileHeader, filename string) (string, error) {
-	src, err := file.Open()
+	buf, ext, err := processImage(file)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("process image: %w", err)
 	}
-	defer src.Close()
 
 	day := time.Now().Format("2006/01/02")
-	ext := filepath.Ext(filename)
-	if ext == "" {
-		ext = filepath.Ext(file.Filename)
-	}
 	key := fmt.Sprintf("posters/%s/%s%s", day, filename, ext)
 
-	contentType := file.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
-
 	_, err = s.client.PutObject(context.TODO(), &s3.PutObjectInput{
-		Bucket:      aws.String(s.bucket),
-		Key:         aws.String(key),
-		Body:        src,
-		ContentType: aws.String(contentType),
+		Bucket:       aws.String(s.bucket),
+		Key:          aws.String(key),
+		Body:         bytes.NewReader(buf.Bytes()),
+		ContentType:  aws.String("image/avif"),
+		CacheControl: aws.String("public, max-age=2592000, immutable"),
 	})
 	if err != nil {
 		return "", fmt.Errorf("s3 upload: %w", err)

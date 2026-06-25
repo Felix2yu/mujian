@@ -560,6 +560,11 @@ func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
+	if header.Size > 3<<20 {
+		jsonErr(w, 400, "file too large, max 3MB")
+		return
+	}
+
 	filename := filepath.Base(header.Filename)
 	url, err := h.storage.Save(header, filename)
 	if err != nil {

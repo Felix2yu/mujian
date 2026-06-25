@@ -292,7 +292,7 @@
         {#if show.poster_url}
           <div class="detail-poster">
             <button class="poster-btn" onclick={() => openLightbox(show.id)}>
-              <img src={show.poster_url} alt={show.name} />
+              <img src={show.poster_url} alt={show.name} loading="lazy" />
             </button>
           </div>
         {/if}

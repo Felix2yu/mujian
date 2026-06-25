@@ -71,7 +71,7 @@
 
     {#if show.poster_url && !compact}
       <div class="card-poster">
-        <img src={show.poster_url} alt={show.name} />
+        <img src={show.poster_url} alt={show.name} loading="lazy" />
       </div>
     {/if}
   </div>

@@ -8,16 +8,17 @@ RUN npm run build
 
 # Build backend (cached unless Go files change, frontend dist is now available)
 FROM golang:1.26-alpine AS backend
+RUN apk add --no-cache gcc musl-dev libavif-dev
 WORKDIR /app
 COPY backend/go.mod backend/go.sum ./
 RUN GOPROXY=https://goproxy.cn,direct go mod download
 COPY backend/ .
 COPY --from=frontend /app/dist ./dist
-RUN CGO_ENABLED=0 GOPROXY=https://goproxy.cn,direct go build -o /mujian .
+RUN CGO_ENABLED=1 GOPROXY=https://goproxy.cn,direct go build -o /mujian .
 
 # Final image
 FROM alpine:3.19
-RUN apk add --no-cache ca-certificates tzdata su-exec shadow \
+RUN apk add --no-cache ca-certificates tzdata su-exec shadow libavif \
     && useradd -u 1000 -m -s /sbin/nologin mujian \
     && mkdir -p /app/data/uploads \
     && chown -R mujian:mujian /app

@@ -41,7 +41,11 @@ func main() {
 	h := handlers.New(database, cfg, st)
 	r.Mount("/api", h.Routes())
 
-	r.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.UploadDir))))
+	uploadCache := http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.UploadDir)))
+	r.Handle("/uploads/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=2592000, immutable")
+		uploadCache.ServeHTTP(w, r)
+	}))
 
 	sub, err := fs.Sub(frontend, "dist")
 	if err != nil {
