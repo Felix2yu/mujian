@@ -7,8 +7,8 @@ COPY frontend/ .
 RUN npm run build
 
 # Build backend (cached unless Go files change, frontend dist is now available)
-FROM golang:1.26-alpine AS backend
-RUN apk add --no-cache gcc musl-dev libavif-dev
+FROM golang:1.26-bookworm AS backend
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libavif-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY backend/go.mod backend/go.sum ./
 RUN GOPROXY=https://goproxy.cn,direct go mod download
@@ -17,8 +17,8 @@ COPY --from=frontend /app/dist ./dist
 RUN CGO_ENABLED=1 GOPROXY=https://goproxy.cn,direct go build -o /mujian .
 
 # Final image
-FROM alpine:3.19
-RUN apk add --no-cache ca-certificates tzdata su-exec shadow libavif \
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata libavif16 && rm -rf /var/lib/apt/lists/* \
     && useradd -u 1000 -m -s /sbin/nologin mujian \
     && mkdir -p /app/data/uploads \
     && chown -R mujian:mujian /app
@@ -27,4 +27,4 @@ WORKDIR /app
 COPY --from=backend --chown=mujian:mujian /mujian .
 COPY --from=frontend --chown=mujian:mujian /app/dist ./dist
 EXPOSE 8080
-CMD ["sh", "-c", "su-exec ${PUID}:${PGID} ./mujian"]
+CMD ["sh", "-c", "su mujian -c './mujian'"]
