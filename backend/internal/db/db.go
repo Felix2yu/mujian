@@ -100,6 +100,24 @@ func (db *DB) migrate() error {
 		}
 	}
 
+	// Migrate: add user_id to existing tables if missing
+	for _, table := range []string{"shows", "categories", "scene_sorts", "actors"} {
+		var count int
+		db.conn.QueryRow("SELECT COUNT(*) FROM pragma_table_info('" + table + "') WHERE name = 'user_id'").Scan(&count)
+		if count == 0 {
+			db.conn.Exec("ALTER TABLE " + table + " ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0")
+		}
+	}
+
+	// Assign orphaned data (user_id=0) to first user
+	var firstUserID int64
+	err := db.conn.QueryRow("SELECT id FROM users ORDER BY id LIMIT 1").Scan(&firstUserID)
+	if err == nil && firstUserID > 0 {
+		for _, table := range []string{"shows", "categories", "scene_sorts", "actors"} {
+			db.conn.Exec("UPDATE "+table+" SET user_id = ? WHERE user_id = 0", firstUserID)
+		}
+	}
+
 	// scene sorts table
 	db.conn.Exec(`CREATE TABLE IF NOT EXISTS scene_sorts (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
