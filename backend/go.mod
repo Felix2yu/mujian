@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.30.1
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.58.0
-	github.com/go-chi/chi/v5 v5.1.0
+	github.com/go-chi/chi/v5 v5.2.4
 	github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5
 	github.com/xuri/excelize/v2 v2.10.1
 	golang.org/x/crypto v0.48.0
