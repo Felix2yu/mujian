@@ -27,4 +27,4 @@ WORKDIR /app
 COPY --from=backend --chown=mujian:mujian /mujian .
 COPY --from=frontend --chown=mujian:mujian /app/dist ./dist
 EXPOSE 8080
-CMD ["sh", "-c", "su mujian -c './mujian'"]
+CMD ["sh", "-c", "exec su -s /bin/sh mujian -c './mujian'"]
