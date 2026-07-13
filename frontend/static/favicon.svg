@@ -1,4 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <circle cx="50" cy="50" r="45" fill="#4A90D9"/>
-  <text x="50" y="65" font-size="50" text-anchor="middle" fill="white" font-family="sans-serif" font-weight="bold">幕</text>
+  <defs>
+    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFD700" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#FFD700" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="stage" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8B6914"/>
+      <stop offset="100%" stop-color="#A0734C"/>
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" fill="#0A0101"/>
+  <!-- Stage floor -->
+  <rect x="0" y="85" width="100" height="15" fill="url(#stage)"/>
+  <!-- Light beams from top -->
+  <polygon points="40,0 60,0 66,68 34,68" fill="url(#beam)" opacity="0.35"/>
+  <polygon points="45,0 55,0 60,68 40,68" fill="url(#beam)" opacity="0.25"/>
+  <!-- Left curtain -->
+  <path d="M0,0 L0,100 L30,100 C30,84 29,68 28,52 C27,36 28,20 29,6 L29,0 Z" fill="#B91C1C"/>
+  <path d="M0,0 L0,100 L22,100 C22,84 21,68 21,52 C21,36 22,20 22,6 L22,0 Z" fill="#991B1B"/>
+  <path d="M0,0 L0,100 L14,100 C14,84 13,68 13,52 C13,36 14,20 14,6 L14,0 Z" fill="#7F1D1D"/>
+  <path d="M0,0 L0,100 L7,100 C7,84 6,68 6,52 C6,36 7,20 7,6 L7,0 Z" fill="#5C1010"/>
+  <path d="M4,0 L4,100" fill="none" stroke="#3D0A0A" stroke-width="1" opacity="0.5"/>
+  <path d="M18,0 L18,100" fill="none" stroke="#D4736A" stroke-width="0.8" opacity="0.2"/>
+  <path d="M26,0 L26,100" fill="none" stroke="#3D0A0A" stroke-width="0.8" opacity="0.3"/>
+  <!-- Right curtain -->
+  <path d="M100,0 L100,100 L70,100 C70,84 71,68 72,52 C73,36 71,20 70,6 L70,0 Z" fill="#B91C1C"/>
+  <path d="M100,0 L100,100 L78,100 C78,84 79,68 79,52 C79,36 78,20 78,6 L78,0 Z" fill="#991B1B"/>
+  <path d="M100,0 L100,100 L86,100 C86,84 87,68 87,52 C87,36 86,20 86,6 L86,0 Z" fill="#7F1D1D"/>
+  <path d="M100,0 L100,100 L93,100 C93,84 94,68 94,52 C94,36 93,20 93,6 L93,0 Z" fill="#5C1010"/>
+  <path d="M96,0 L96,100" fill="none" stroke="#3D0A0A" stroke-width="1" opacity="0.5"/>
+  <path d="M82,0 L82,100" fill="none" stroke="#D4736A" stroke-width="0.8" opacity="0.2"/>
+  <path d="M74,0 L74,100" fill="none" stroke="#3D0A0A" stroke-width="0.8" opacity="0.3"/>
+  <!-- Valance at top -->
+  <rect x="0" y="0" width="100" height="6" fill="#5C1010"/>
+  <path d="M0,6 C8,12 16,6 24,12 C32,6 40,12 48,6 C56,12 64,6 72,12 C80,6 88,12 96,6 L100,6 L100,0 L0,0 Z" fill="#7F1D1D"/>
 </svg>
