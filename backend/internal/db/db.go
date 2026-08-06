@@ -46,6 +46,10 @@ func (db *DB) SetLocation(loc *time.Location) {
 	db.loc = loc
 }
 
+func (db *DB) Ping() error {
+	return db.conn.Ping()
+}
+
 func (db *DB) Close() {
 	db.conn.Close()
 }

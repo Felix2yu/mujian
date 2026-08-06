@@ -38,6 +38,16 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
 
+	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		if err := database.Ping(); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte("db unhealthy"))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+
 	h := handlers.New(database, cfg, st)
 	r.Mount("/api", h.Routes())
 
