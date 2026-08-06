@@ -12,7 +12,7 @@ services:
       - ALLOW_LOCAL_STORAGE=true
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/healthz"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
