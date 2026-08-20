@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"mujian/internal/config"
@@ -9,8 +11,8 @@ import (
 	"mujian/internal/models"
 	"mujian/internal/storage"
 	"net/http"
+	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,94 +21,58 @@ import (
 )
 
 type Handler struct {
-	db       *db.DB
-	cfg      *config.Config
-	storage  storage.Storage
-	sessions *db.SessionStore
+	db      *db.DB
+	cfg     *config.Config
+	storage storage.Storage
 }
 
 func New(database *db.DB, cfg *config.Config, st storage.Storage) *Handler {
-	return &Handler{db: database, cfg: cfg, storage: st, sessions: db.NewSessionStore()}
+	return &Handler{db: database, cfg: cfg, storage: st}
 }
 
 func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 
-	r.Route("/auth", func(r chi.Router) {
-		r.Post("/register", h.register)
-		r.Post("/login", h.login)
-		r.Post("/logout", h.logout)
-		r.Group(func(r chi.Router) {
-			r.Use(h.AuthMiddleware)
-			r.Get("/me", h.me)
-			r.Put("/password", h.changePassword)
-			r.Delete("/account", h.deleteAccount)
-		})
+	r.Get("/records", h.listRecords)
+	r.Get("/records/all", h.listAllRecords)
+	r.Get("/records/search", h.searchRecords)
+	r.Post("/records", h.createRecord)
+	r.Post("/records/import", h.importRecords)
+	r.Post("/records/batch", h.batchUpdate)
+	r.Post("/records/batch/delete", h.batchDelete)
+	r.Get("/records/{id}", h.getRecord)
+	r.Put("/records/{id}", h.updateRecord)
+	r.Delete("/records/{id}", h.deleteRecord)
+
+	r.Get("/categories", h.listCategories)
+	r.Post("/categories", h.createCategory)
+	r.Put("/categories/{id}", h.updateCategory)
+	r.Delete("/categories/{id}", h.deleteCategory)
+
+	r.Get("/stats", h.getStats)
+	r.Get("/dashboard", h.getDashboard)
+	r.Get("/calendar", h.getCalendar)
+	r.Get("/calendar.ics", h.getICS)
+
+	r.Route("/covers", func(r chi.Router) {
+		r.Get("/", h.listCovers)
+		r.Get("/duplicates", h.getCoverDuplicates)
+		r.Post("/merge", h.mergeCovers)
+		r.Get("/orphans", h.getCoverOrphans)
+		r.Post("/cleanup", h.cleanupCovers)
+		r.Post("/trash/purge", h.purgeTrash)
+		r.Post("/thumbs", h.regenerateThumbs)
 	})
 
-	r.Group(func(r chi.Router) {
-		r.Use(h.AuthMiddleware)
+	r.Get("/autocomplete/{field}", h.getAutocomplete)
+	r.Get("/field/{field}/{value}", h.getByField)
 
-		r.Get("/calendar", h.getCalendar)
-		r.Get("/calendar.ics", h.getICS)
-		r.Get("/stats", h.getStats)
-		r.Get("/dashboard", h.getDashboard)
+	r.Get("/settings", h.getSettings)
+	r.Put("/settings", h.updateSettings)
 
-		r.Route("/shows", func(r chi.Router) {
-			r.Get("/", h.listShows)
-			r.Get("/all", h.listAllShows)
-			r.Get("/search", h.searchShows)
-			r.Get("/upcoming", h.getUpcoming)
-			r.Get("/recent", h.getRecent)
-			r.Post("/", h.createShow)
-			r.Post("/import", h.importShows)
-			r.Post("/batch", h.batchUpdate)
-			r.Post("/batch/delete", h.batchDelete)
-			r.Get("/{id}", h.getShow)
-			r.Put("/{id}", h.updateShow)
-			r.Delete("/{id}", h.deleteShow)
-		})
-
-		r.Route("/categories", func(r chi.Router) {
-			r.Get("/", h.listCategories)
-			r.Post("/", h.createCategory)
-			r.Put("/{id}", h.updateCategory)
-			r.Delete("/{id}", h.deleteCategory)
-			r.Patch("/sort", h.updateCategorySort)
-		})
-
-		r.Get("/autocomplete/{field}", h.getAutocomplete)
-		r.Get("/field/{field}/{value}", h.getByField)
-
-		r.Route("/settings", func(r chi.Router) {
-			r.Get("/", h.getSettings)
-			r.Put("/", h.updateSettings)
-		})
-
-		r.Post("/upload", h.uploadFile)
-		r.Get("/import/template", h.getImportTemplate)
-		r.Get("/export", h.exportShows)
-
-		r.Route("/backup", func(r chi.Router) {
-			r.Get("/download", h.backupDownload)
-			r.Post("/restore", h.backupRestore)
-		})
-
-		r.Route("/scene-sorts", func(r chi.Router) {
-			r.Get("/", h.getSceneSorts)
-			r.Put("/", h.updateSceneSort)
-			r.Delete("/{play}", h.deleteSceneSort)
-		})
-
-		r.Route("/actors", func(r chi.Router) {
-			r.Get("/", h.listActors)
-			r.Get("/{name}", h.getActor)
-			r.Put("/{name}", h.updateActor)
-			r.Get("/{name}/shows", h.getActorShows)
-		})
-
-		r.Get("/plays", h.listPlays)
-	})
+	r.Post("/upload", h.uploadFile)
+	r.Get("/export", h.exportRecords)
+	r.Post("/backup/restore", h.backupRestore)
 
 	return r
 }
@@ -121,314 +87,142 @@ func jsonErr(w http.ResponseWriter, status int, msg string) {
 	jsonResp(w, status, map[string]string{"error": msg})
 }
 
-func (h *Handler) listShows(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	startDate := r.URL.Query().Get("start")
-	endDate := r.URL.Query().Get("end")
-
-	var shows []models.Show
-	var err error
-
-	if startDate != "" || endDate != "" {
-		shows, err = h.db.ListShowsByDateRange(userID, startDate, endDate)
-	} else {
-		year := r.URL.Query().Get("year")
-		month := r.URL.Query().Get("month")
-
-		if year != "" && month == "" {
-			startDate = year + "-01-01"
-			endDate = year + "-12-31"
-			shows, err = h.db.ListShowsByDateRange(userID, startDate, endDate)
-		} else {
-			y := time.Now().Year()
-			m := int(time.Now().Month())
-			if year != "" {
-				y, _ = strconv.Atoi(year)
+// normalizeRecord fills derived fields (id, date<->dateText) before persist.
+func normalizeRecord(r *models.RecordRequest) {
+	if r.Date == 0 && r.DateText != "" {
+		for _, f := range []string{"2006-01-02 15:04", "2006-01-02 15:04:05", "2006-01-02T15:04:05", "2006-01-02"} {
+			if t, err := time.ParseInLocation(f, r.DateText, time.Local); err == nil {
+				r.Date = t.Unix()
+				break
 			}
-			if month != "" {
-				m, _ = strconv.Atoi(month)
-			}
-			shows, err = h.db.ListShows(userID, y, m)
 		}
 	}
+	if r.Date != 0 && r.DateText == "" {
+		r.DateText = time.Unix(r.Date, 0).Format("2006-01-02 15:04")
+	}
+	if r.PriceCurrency == "" {
+		r.PriceCurrency = "CNY"
+	}
+	if r.PayPriceCurrency == "" {
+		r.PayPriceCurrency = "CNY"
+	}
+	if r.OtherCostCurrency == "" {
+		r.OtherCostCurrency = "CNY"
+	}
+}
 
+func (h *Handler) listRecords(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	f := db.RecordFilter{}
+	f.Query = q.Get("q")
+	f.Category = q.Get("category")
+	f.City = q.Get("city")
+	if y := q.Get("year"); y != "" {
+		f.Year, _ = strconv.Atoi(y)
+	}
+	if m := q.Get("month"); m != "" {
+		f.Month, _ = strconv.Atoi(m)
+	}
+	f.Start = q.Get("start")
+	f.End = q.Get("end")
+
+	if f.Query != "" && f.Category == "" && f.City == "" && f.Year == 0 && f.Start == "" && f.End == "" {
+		// pure search uses the dedicated search path but list supports it too
+	}
+
+	recs, err := h.db.ListRecords(f)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
-	if shows == nil {
-		shows = []models.Show{}
-	}
-	jsonResp(w, 200, shows)
+	jsonResp(w, 200, recs)
 }
 
-func (h *Handler) listAllShows(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	shows, err := h.db.ListAllShows(userID)
+func (h *Handler) listAllRecords(w http.ResponseWriter, r *http.Request) {
+	recs, err := h.db.ListRecords(db.RecordFilter{})
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
-	if shows == nil {
-		shows = []models.Show{}
-	}
-	jsonResp(w, 200, shows)
+	jsonResp(w, 200, recs)
 }
 
-func (h *Handler) getShow(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		jsonErr(w, 400, "invalid id")
-		return
-	}
-
-	show, err := h.db.GetShow(userID, id)
-	if err != nil {
-		jsonErr(w, 404, "show not found")
-		return
-	}
-	jsonResp(w, 200, show)
-}
-
-func (h *Handler) createShow(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	var req models.ShowRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonErr(w, 400, "invalid request body")
-		return
-	}
-
-	if req.Name == "" {
-		jsonErr(w, 400, "name is required")
-		return
-	}
-	req.Setlist = strings.ReplaceAll(strings.ReplaceAll(req.Setlist, "·", "•"), "*", "•")
-
-	show, err := h.db.CreateShow(userID, req)
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonResp(w, 201, show)
-}
-
-func (h *Handler) updateShow(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		jsonErr(w, 400, "invalid id")
-		return
-	}
-
-	var req models.ShowRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonErr(w, 400, "invalid request body")
-		return
-	}
-	req.Setlist = strings.ReplaceAll(strings.ReplaceAll(req.Setlist, "·", "•"), "*", "•")
-
-	show, err := h.db.UpdateShow(userID, id, req)
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonResp(w, 200, show)
-}
-
-func (h *Handler) deleteShow(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		jsonErr(w, 400, "invalid id")
-		return
-	}
-
-	show, _ := h.db.GetShow(userID, id)
-	if show != nil && show.PosterURL != "" {
-		h.storage.Delete(show.PosterURL)
-	}
-
-	if err := h.db.DeleteShow(userID, id); err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonResp(w, 200, map[string]string{"message": "deleted"})
-}
-
-func (h *Handler) getCalendar(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	year := time.Now().Year()
-	month := int(time.Now().Month())
-
-	if y := r.URL.Query().Get("year"); y != "" {
-		year, _ = strconv.Atoi(y)
-	}
-	if m := r.URL.Query().Get("month"); m != "" {
-		month, _ = strconv.Atoi(m)
-	}
-
-	events, err := h.db.GetCalendarEvents(userID, year, month)
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	if events == nil {
-		events = []models.CalendarEvent{}
-	}
-	jsonResp(w, 200, events)
-}
-
-func (h *Handler) getICS(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	shows, err := h.db.ListAllShows(userID)
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
-	w.Header().Set("Content-Disposition", "attachment; filename=mujian.ics")
-	w.Write([]byte(ics.GenerateCalendar(shows, h.cfg.Location())))
-}
-
-func (h *Handler) getStats(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	stats, err := h.db.GetStats(userID)
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonResp(w, 200, stats)
-}
-
-func (h *Handler) getDashboard(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	stats, err := h.db.GetDashboardStats(userID)
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonResp(w, 200, stats)
-}
-
-func (h *Handler) listCategories(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	cats, err := h.db.ListCategories(userID)
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonResp(w, 200, cats)
-}
-
-func (h *Handler) createCategory(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	var req struct {
-		Name  string `json:"name"`
-		Color string `json:"color"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonErr(w, 400, "invalid request body")
-		return
-	}
-	if req.Name == "" {
-		jsonErr(w, 400, "name is required")
-		return
-	}
-	if req.Color == "" {
-		req.Color = "#4A90D9"
-	}
-
-	cat, err := h.db.CreateCategory(userID, req.Name, req.Color)
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonResp(w, 201, cat)
-}
-
-func (h *Handler) updateCategory(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		jsonErr(w, 400, "invalid id")
-		return
-	}
-
-	var req struct {
-		Name  string `json:"name"`
-		Color string `json:"color"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonErr(w, 400, "invalid request body")
-		return
-	}
-
-	if err := h.db.UpdateCategory(userID, id, req.Name, req.Color); err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonResp(w, 200, map[string]string{"message": "updated"})
-}
-
-func (h *Handler) deleteCategory(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		jsonErr(w, 400, "invalid id")
-		return
-	}
-	if err := h.db.DeleteCategory(userID, id); err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonResp(w, 200, map[string]string{"message": "deleted"})
-}
-
-func (h *Handler) updateCategorySort(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	var req struct {
-		IDs []int64 `json:"ids"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonErr(w, 400, "invalid request body")
-		return
-	}
-	if err := h.db.UpdateCategorySort(userID, req.IDs); err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonResp(w, 200, map[string]string{"message": "updated"})
-}
-
-func (h *Handler) searchShows(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
+func (h *Handler) searchRecords(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	if q == "" {
-		jsonResp(w, 200, []models.Show{})
+		jsonResp(w, 200, []models.Record{})
 		return
 	}
-
-	shows, err := h.db.SearchShows(userID, q)
+	recs, err := h.db.ListRecords(db.RecordFilter{Query: q})
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
-	if shows == nil {
-		shows = []models.Show{}
+	jsonResp(w, 200, recs)
+}
+
+func (h *Handler) getRecord(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	rec, err := h.db.GetRecord(id)
+	if err != nil {
+		jsonErr(w, 404, "record not found")
+		return
 	}
-	jsonResp(w, 200, shows)
+	jsonResp(w, 200, rec)
+}
+
+func (h *Handler) createRecord(w http.ResponseWriter, r *http.Request) {
+	var req models.RecordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if req.Name == "" {
+		jsonErr(w, 400, "name is required")
+		return
+	}
+	normalizeRecord(&req)
+
+	rec, err := h.db.CreateRecord(req)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 201, rec)
+}
+
+func (h *Handler) updateRecord(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req models.RecordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	normalizeRecord(&req)
+
+	rec, err := h.db.UpdateRecord(id, req)
+	if err != nil {
+		jsonErr(w, 404, "record not found")
+		return
+	}
+	jsonResp(w, 200, rec)
+}
+
+func (h *Handler) deleteRecord(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.db.DeleteRecord(id); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "deleted"})
 }
 
 func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
 	var req struct {
-		IDs        []int64  `json:"ids"`
-		CategoryID *int64   `json:"category_id"`
-		Rating     *int     `json:"rating"`
-		Status     *string  `json:"status"`
-		TicketCost *float64 `json:"ticket_cost"`
+		IDs           []string `json:"ids"`
+		CategoryName  *string  `json:"category_name"`
+		Rating        *int     `json:"rating"`
+		ActiveStatus  *int     `json:"active_status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "invalid request body")
@@ -438,8 +232,7 @@ func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "no ids provided")
 		return
 	}
-
-	updated, err := h.db.BatchUpdateShows(userID, req.IDs, req.CategoryID, req.Rating, req.Status, req.TicketCost)
+	updated, err := h.db.BatchUpdateRecords(req.IDs, req.CategoryName, req.Rating, req.ActiveStatus)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -448,9 +241,8 @@ func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) batchDelete(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
 	var req struct {
-		IDs []int64 `json:"ids"`
+		IDs []string `json:"ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "invalid request body")
@@ -460,8 +252,7 @@ func (h *Handler) batchDelete(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "no ids provided")
 		return
 	}
-
-	deleted, err := h.db.BatchDeleteShows(userID, req.IDs)
+	deleted, err := h.db.BatchDeleteRecords(req.IDs)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -469,38 +260,137 @@ func (h *Handler) batchDelete(w http.ResponseWriter, r *http.Request) {
 	jsonResp(w, 200, map[string]interface{}{"deleted": deleted})
 }
 
-func (h *Handler) getUpcoming(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	limit := 10
-	if l := r.URL.Query().Get("limit"); l != "" {
-		limit, _ = strconv.Atoi(l)
-	}
-	shows, err := h.db.GetUpcomingShows(userID, limit)
+func (h *Handler) listCategories(w http.ResponseWriter, r *http.Request) {
+	cats, err := h.db.ListCategories()
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
-	if shows == nil {
-		shows = []models.Show{}
-	}
-	jsonResp(w, 200, shows)
+	jsonResp(w, 200, cats)
 }
 
-func (h *Handler) getRecent(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	limit := 10
-	if l := r.URL.Query().Get("limit"); l != "" {
-		limit, _ = strconv.Atoi(l)
+func (h *Handler) createCategory(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID    string   `json:"id"`
+		Name  string   `json:"name"`
+		ActiveIDs []string `json:"activeIds"`
+		RecordCount int  `json:"recordCount"`
 	}
-	shows, err := h.db.GetRecentShows(userID, limit)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if req.Name == "" {
+		jsonErr(w, 400, "name is required")
+		return
+	}
+	cat := models.Category{ID: req.ID, Name: req.Name, ActiveIDs: req.ActiveIDs, RecordCount: req.RecordCount}
+	if cat.ActiveIDs == nil {
+		cat.ActiveIDs = []string{}
+	}
+	if err := h.db.UpsertCategory(cat); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 201, cat)
+}
+
+func (h *Handler) updateCategory(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req struct {
+		Name       string   `json:"name"`
+		ActiveIDs  []string `json:"activeIds"`
+		RecordCount int     `json:"recordCount"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	cat := models.Category{ID: id, Name: req.Name, ActiveIDs: req.ActiveIDs, RecordCount: req.RecordCount}
+	if cat.ActiveIDs == nil {
+		cat.ActiveIDs = []string{}
+	}
+	if err := h.db.UpsertCategory(cat); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, cat)
+}
+
+func (h *Handler) deleteCategory(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.db.DeleteCategory(id); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "deleted"})
+}
+
+func (h *Handler) getStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.db.GetStats()
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
-	if shows == nil {
-		shows = []models.Show{}
+	jsonResp(w, 200, stats)
+}
+
+func (h *Handler) getDashboard(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.db.GetDashboardStats()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
 	}
-	jsonResp(w, 200, shows)
+	jsonResp(w, 200, stats)
+}
+
+func (h *Handler) getCalendar(w http.ResponseWriter, r *http.Request) {
+	year := time.Now().Year()
+	month := int(time.Now().Month())
+	if y := r.URL.Query().Get("year"); y != "" {
+		year, _ = strconv.Atoi(y)
+	}
+	if m := r.URL.Query().Get("month"); m != "" {
+		month, _ = strconv.Atoi(m)
+	}
+	events, err := h.db.GetCalendarEvents(year, month)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, events)
+}
+
+func (h *Handler) getICS(w http.ResponseWriter, r *http.Request) {
+	recs, err := h.db.ListRecords(db.RecordFilter{})
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
+	w.Header().Set("Content-Disposition", "attachment; filename=mujian.ics")
+	w.Write([]byte(ics.GenerateCalendar(recs, h.cfg.Location())))
+}
+
+func (h *Handler) getAutocomplete(w http.ResponseWriter, r *http.Request) {
+	field := chi.URLParam(r, "field")
+	values, err := h.db.GetAutocomplete(field)
+	if err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	jsonResp(w, 200, values)
+}
+
+func (h *Handler) getByField(w http.ResponseWriter, r *http.Request) {
+	field := chi.URLParam(r, "field")
+	value := chi.URLParam(r, "value")
+	recs, err := h.db.GetByField(field, value)
+	if err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	jsonResp(w, 200, recs)
 }
 
 func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
@@ -513,37 +403,9 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "invalid request body")
 		return
 	}
-
 	h.cfg.Update(&req)
 	h.cfg.SaveToFile(filepath.Join(h.cfg.DBPath, "..", "settings.json"))
-
 	jsonResp(w, 200, h.cfg.GetSettingsResponse())
-}
-
-func (h *Handler) getAutocomplete(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	field := chi.URLParam(r, "field")
-	values, err := h.db.GetAutocomplete(userID, field)
-	if err != nil {
-		jsonErr(w, 400, err.Error())
-		return
-	}
-	jsonResp(w, 200, values)
-}
-
-func (h *Handler) getByField(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	field := chi.URLParam(r, "field")
-	value := chi.URLParam(r, "value")
-	shows, err := h.db.GetShowsByField(userID, field, value)
-	if err != nil {
-		jsonErr(w, 400, err.Error())
-		return
-	}
-	if shows == nil {
-		shows = []models.Show{}
-	}
-	jsonResp(w, 200, shows)
 }
 
 func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {
@@ -551,52 +413,120 @@ func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 403, "local storage is disabled")
 		return
 	}
-
 	r.ParseMultipartForm(32 << 20)
-	file, header, err := r.FormFile("file")
+	_, header, err := r.FormFile("file")
 	if err != nil {
 		jsonErr(w, 400, "no file provided")
 		return
 	}
-	defer file.Close()
 
-	if header.Size > 3<<20 {
-		jsonErr(w, 400, "file too large, max 3MB")
+	if header.Size > 8<<20 {
+		jsonErr(w, 400, "file too large, max 8MB")
 		return
 	}
 
-	filename := filepath.Base(header.Filename)
-	url, err := h.storage.Save(header, filename)
+	key, thumb, created, err := h.storage.SaveUpload(header)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
-
-	jsonResp(w, 200, map[string]string{"url": url})
+	jsonResp(w, 200, map[string]interface{}{
+		"key":     key,
+		"thumb":   thumb,
+		"created": created,
+	})
 }
 
-func (h *Handler) backupDownload(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	data, err := h.db.Export(userID)
+func (h *Handler) exportRecords(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("format") == "zip" {
+		h.exportZIP(w, r)
+		return
+	}
+
+	data, err := h.db.Export()
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
-
 	b, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
-
-	filename := fmt.Sprintf("mujian_backup_%s.json", time.Now().Format("20060102_150405"))
+	filename := fmt.Sprintf("mujian_export_%s.json", time.Now().Format("20060102"))
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	w.Write(b)
 }
 
+// exportZIP downloads the converted-format archive: data.json + binary
+// covers/ (read from the uploads dir), ready to be re-imported directly.
+func (h *Handler) exportZIP(w http.ResponseWriter, r *http.Request) {
+	data, err := h.db.Export()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonBytes, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	if err := writeZipEntryBytes(zw, "data.json", jsonBytes); err != nil {
+		jsonErr(w, 500, "failed to write data.json: "+err.Error())
+		return
+	}
+
+	uploadRoot := filepath.Clean(h.cfg.UploadDir)
+	seen := map[string]bool{}
+	covers := 0
+	for _, rec := range data.Records {
+		if rec.CoverFile == "" {
+			continue
+		}
+		name := filepath.Base(rec.CoverFile)
+		if name == "." || seen[name] {
+			continue
+		}
+		path := filepath.Clean(filepath.Join(uploadRoot, rec.CoverFile))
+		if path != uploadRoot && !strings.HasPrefix(path, uploadRoot+string(filepath.Separator)) {
+			continue // path traversal guard
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		if err := writeZipEntryBytes(zw, "covers/"+name, b); err != nil {
+			jsonErr(w, 500, "failed to write cover: "+err.Error())
+			return
+		}
+		seen[name] = true
+		covers++
+	}
+	if err := zw.Close(); err != nil {
+		jsonErr(w, 500, "failed to finalize zip: "+err.Error())
+		return
+	}
+
+	filename := fmt.Sprintf("mujian_export_%s.zip", time.Now().Format("20060102"))
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	w.Write(buf.Bytes())
+}
+
+func writeZipEntryBytes(zw *zip.Writer, name string, data []byte) error {
+	f, err := zw.Create(name)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	return err
+}
+
 func (h *Handler) backupRestore(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
 	r.ParseMultipartForm(32 << 20)
 	file, _, err := r.FormFile("file")
 	if err != nil {
@@ -605,212 +535,20 @@ func (h *Handler) backupRestore(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	var data db.BackupData
+	var data models.ExportData
 	if err := json.NewDecoder(file).Decode(&data); err != nil {
-		jsonErr(w, 400, "invalid backup file: "+err.Error())
+		jsonErr(w, 400, "invalid export file: "+err.Error())
 		return
 	}
 
-	importResult, err := h.db.Import(userID, &data)
+	result, err := h.db.ImportData(&data)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
-
 	jsonResp(w, 200, map[string]interface{}{
 		"message":    "restore completed",
-		"categories": importResult.Categories,
-		"shows":      importResult.Shows,
-		"skipped":    importResult.Skipped,
+		"records":    result.Records,
+		"categories": result.Categories,
 	})
-}
-
-func (h *Handler) getSceneSorts(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	sorts, err := h.db.GetSceneSorts(userID)
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	if sorts == nil {
-		sorts = []models.SceneSort{}
-	}
-	jsonResp(w, 200, sorts)
-}
-
-func (h *Handler) updateSceneSort(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	var req struct {
-		Play   string `json:"play"`
-		Scenes string `json:"scenes"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonErr(w, 400, "invalid request body")
-		return
-	}
-	if req.Play == "" {
-		jsonErr(w, 400, "play is required")
-		return
-	}
-	if err := h.db.UpdateSceneSort(userID, req.Play, req.Scenes); err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonResp(w, 200, map[string]string{"message": "updated"})
-}
-
-func (h *Handler) deleteSceneSort(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	play := chi.URLParam(r, "play")
-	if play == "" {
-		jsonErr(w, 400, "play is required")
-		return
-	}
-	if err := h.db.DeleteSceneSort(userID, play); err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonResp(w, 200, map[string]string{"message": "deleted"})
-}
-
-func (h *Handler) listActors(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	actors, err := h.db.ListActors(userID)
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	if actors == nil {
-		actors = []models.Actor{}
-	}
-	jsonResp(w, 200, actors)
-}
-
-func (h *Handler) getActor(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	name := chi.URLParam(r, "name")
-	if name == "" {
-		jsonErr(w, 400, "name is required")
-		return
-	}
-	actor, err := h.db.GetActor(userID, name)
-	if err != nil {
-		jsonErr(w, 404, err.Error())
-		return
-	}
-	jsonResp(w, 200, actor)
-}
-
-func (h *Handler) updateActor(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	name := chi.URLParam(r, "name")
-	if name == "" {
-		jsonErr(w, 400, "name is required")
-		return
-	}
-
-	var req models.ActorRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonErr(w, 400, "invalid request body")
-		return
-	}
-	req.Name = name
-
-	actor, err := h.db.UpsertActor(userID, req)
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonResp(w, 200, actor)
-}
-
-func (h *Handler) getActorShows(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	name := chi.URLParam(r, "name")
-	if name == "" {
-		jsonErr(w, 400, "name is required")
-		return
-	}
-	shows, err := h.db.GetShowsByActor(userID, name)
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	if shows == nil {
-		shows = []models.Show{}
-	}
-	jsonResp(w, 200, shows)
-}
-
-func (h *Handler) listPlays(w http.ResponseWriter, r *http.Request) {
-	userID := GetUserID(r)
-	shows, err := h.db.ListAllShows(userID)
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-
-	type PlayInfo struct {
-		Name       string `json:"name"`
-		SceneCount int    `json:"scene_count"`
-		ShowCount  int    `json:"show_count"`
-	}
-
-	playMap := make(map[string]*PlayInfo)
-	for _, s := range shows {
-		if s.Setlist == "" {
-			continue
-		}
-		lines := strings.Split(s.Setlist, "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-			parts := strings.Split(line, ",")
-			for _, part := range parts {
-				part = strings.TrimSpace(part)
-				if part == "" {
-					continue
-				}
-				idx := strings.Index(part, "•")
-				var playName string
-				var sceneCount int
-				if idx == -1 {
-					playName = part
-					sceneCount = 0
-				} else {
-					playName = strings.TrimSpace(part[:idx])
-					scenes := strings.Split(part[idx+1:], "•")
-					seen := make(map[string]bool)
-					for _, sc := range scenes {
-						sc = strings.TrimSpace(sc)
-						if sc != "" && !seen[sc] {
-							seen[sc] = true
-							sceneCount++
-						}
-					}
-				}
-				if playName == "" {
-					continue
-				}
-				if _, exists := playMap[playName]; !exists {
-					playMap[playName] = &PlayInfo{Name: playName}
-				}
-				playMap[playName].ShowCount++
-				if sceneCount > playMap[playName].SceneCount {
-					playMap[playName].SceneCount = sceneCount
-				}
-			}
-		}
-	}
-
-	plays := make([]PlayInfo, 0, len(playMap))
-	for _, p := range playMap {
-		plays = append(plays, *p)
-	}
-	sort.Slice(plays, func(i, j int) bool {
-		return plays[i].Name < plays[j].Name
-	})
-	jsonResp(w, 200, plays)
 }

@@ -1,147 +1,228 @@
 package models
 
-import "time"
+import "encoding/json"
 
-type ShowStatus string
-
-const (
-	StatusNormal         ShowStatus = "normal"
-	StatusCancelled      ShowStatus = "cancelled"
-	StatusPendingTickets ShowStatus = "pending_tickets"
-	StatusNoShow         ShowStatus = "no_show"
-)
-
-type Show struct {
-	ID           int64      `json:"id"`
-	Name         string     `json:"name"`
-	Venue        string     `json:"venue"`
-	Date         time.Time  `json:"date"`
-	Duration     int        `json:"duration"`
-	Status       ShowStatus `json:"status"`
-	CategoryID   *int64     `json:"category_id"`
-	PosterURL    string     `json:"poster_url"`
-	Setlist      string     `json:"setlist"`
-	Cast         string     `json:"cast"`
-	Company      string     `json:"company"`
-	Friends      string     `json:"friends"`
-	Rating       *int       `json:"rating"`
-	Seat         string     `json:"seat"`
-	Notes        string     `json:"notes"`
-	Review       string     `json:"review"`
-	TicketCost   *float64   `json:"ticket_cost"`
-	OtherCost    *float64   `json:"other_cost"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
-	CategoryName string     `json:"category_name,omitempty"`
+// Coordinate mirrors the export's nested `coordinate` object.
+type Coordinate struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
 }
 
+// Record is the canonical data model. Its JSON tags match recordlive_export/
+// data.json exactly so records can be imported/exported with zero mapping.
+// Arrays (artist_names, guest, play, tagIds) and the nested coordinate are
+// stored as JSON text columns in the database.
+type Record struct {
+	ID                string      `json:"id"`
+	Name              string      `json:"name"`
+	Channel           string      `json:"channel"`
+	City              string      `json:"city"`
+	Address           string      `json:"address"`
+	Coordinate        *Coordinate `json:"coordinate"`
+	Cover             string      `json:"cover"`
+	CoverFile         string      `json:"coverFile"`
+	CoverThumb        string      `json:"coverThumb"`
+	CustomCategoryID  string      `json:"customCategoryId"`
+	CategoryName      string      `json:"categoryName"`
+	ArtistNames       []string    `json:"artist_names"`
+	Guest             []string    `json:"guest"`
+	Play              []string    `json:"play"`
+	TagIDs            []string    `json:"tagIds"`
+	Date              int64       `json:"date"` // unix seconds
+	DateText          string      `json:"dateText"`
+	Rating            int         `json:"rating"`
+	Seat              string      `json:"seat"`
+	Friends           string      `json:"friends"`
+	Company           string      `json:"company"`
+	Remark            string      `json:"remark"`
+	ActiveStatus      int         `json:"active_status"`
+	Price             float64     `json:"price"`
+	PriceCurrency     string      `json:"price_currency"`
+	PayPrice          float64     `json:"pay_price"`
+	PayPriceCurrency  string      `json:"pay_price_currency"`
+	OtherCost         float64     `json:"other_cost"`
+	OtherCostCurrency string      `json:"other_cost_currency"`
+}
+
+// Category mirrors the export's top-level `categories` array.
 type Category struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	Color     string `json:"color"`
-	SortOrder int    `json:"sort_order"`
-	ShowCount int    `json:"show_count"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	ActiveIDs   []string `json:"activeIds"`
+	RecordCount int      `json:"recordCount"`
 }
 
-type ShowRequest struct {
-	Name       string   `json:"name"`
-	Venue      string   `json:"venue"`
-	Date       string   `json:"date"`
-	Duration   int      `json:"duration"`
-	Status     string   `json:"status"`
-	CategoryID *int64   `json:"category_id"`
-	PosterURL  string   `json:"poster_url"`
-	Setlist    string   `json:"setlist"`
-	Cast       string   `json:"cast"`
-	Company    string   `json:"company"`
-	Friends    string   `json:"friends"`
-	Rating     *int     `json:"rating"`
-	Seat       string   `json:"seat"`
-	Notes      string   `json:"notes"`
-	Review     string   `json:"review"`
-	TicketCost *float64 `json:"ticket_cost"`
-	OtherCost  *float64 `json:"other_cost"`
+// Meta mirrors the export's `meta` object (song / tags / webdav_config).
+// Each value is kept as raw JSON so unknown/empty shapes are preserved
+// faithfully.
+type Meta struct {
+	Song         json.RawMessage `json:"song"`
+	Tags         json.RawMessage `json:"tags"`
+	WebdavConfig json.RawMessage `json:"webdav_config"`
+}
+
+// ExportData is the exact top-level shape of recordlive_export/data.json.
+// This is both the import format and the export/backup format, guaranteeing
+// the database fields stay in lock-step with the source file.
+type ExportData struct {
+	Source       string     `json:"source"`
+	ExportedAt   string     `json:"exportedAt"`
+	RecordCount   int        `json:"recordCount"`
+	CoverMissing int        `json:"coverMissing"`
+	CoverDir     string     `json:"coverDir"`
+	CoverNote    string     `json:"coverNote"`
+	Meta         Meta       `json:"meta"`
+	Records      []Record   `json:"records"`
+	Categories   []Category `json:"categories"`
+}
+
+// RecordRequest is the editable payload accepted by create/update endpoints.
+// It intentionally uses the same field names as Record.
+type RecordRequest struct {
+	Name              string      `json:"name"`
+	Channel           string      `json:"channel"`
+	City              string      `json:"city"`
+	Address           string      `json:"address"`
+	Coordinate        *Coordinate `json:"coordinate"`
+	Cover             string      `json:"cover"`
+	CoverFile         string      `json:"coverFile"`
+	CoverThumb        string      `json:"coverThumb"`
+	CustomCategoryID  string      `json:"customCategoryId"`
+	CategoryName      string      `json:"categoryName"`
+	ArtistNames       []string    `json:"artist_names"`
+	Guest             []string    `json:"guest"`
+	Play              []string    `json:"play"`
+	TagIDs            []string    `json:"tagIds"`
+	Date              int64       `json:"date"`
+	DateText          string      `json:"dateText"`
+	Rating            int         `json:"rating"`
+	Seat              string      `json:"seat"`
+	Friends           string      `json:"friends"`
+	Company           string      `json:"company"`
+	Remark            string      `json:"remark"`
+	ActiveStatus      int         `json:"active_status"`
+	Price             float64     `json:"price"`
+	PriceCurrency     string      `json:"price_currency"`
+	PayPrice          float64     `json:"pay_price"`
+	PayPriceCurrency  string      `json:"pay_price_currency"`
+	OtherCost         float64     `json:"other_cost"`
+	OtherCostCurrency string      `json:"other_cost_currency"`
 }
 
 type CalendarEvent struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	Venue     string `json:"venue"`
-	Date      string `json:"date"`
-	Duration  int    `json:"duration"`
-	Status    string `json:"status"`
-	Color     string `json:"color"`
-	PosterURL string `json:"poster_url"`
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Date         int64   `json:"date"`
+	City         string  `json:"city"`
+	Address      string  `json:"address"`
+	CoverFile    string  `json:"coverFile"`
+	Rating       int     `json:"rating"`
+	CategoryName string  `json:"categoryName"`
 }
 
 type Stats struct {
-	TotalShows  int     `json:"total_shows"`
-	TotalCost   float64 `json:"total_cost"`
-	AvgRating   float64 `json:"avg_rating"`
-	TotalVenues int     `json:"total_venues"`
-	TotalHours  float64 `json:"total_hours"`
+	TotalRecords int     `json:"total_records"`
+	TotalCost    float64 `json:"total_cost"`
+	AvgRating    float64 `json:"avg_rating"`
+	TotalCities  int     `json:"total_cities"`
 }
 
+type MonthStat struct {
+	Month string `json:"month"`
+	Count int    `json:"count"`
+}
+
+type CategoryStat struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+type CityStat struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+type CostStat struct {
+	Month string  `json:"month"`
+	Cost  float64 `json:"cost"`
+}
+
+type DashboardStats struct {
+	TotalRecords  int            `json:"total_records"`
+	TotalCost     float64        `json:"total_cost"`
+	AvgRating     float64        `json:"avg_rating"`
+	TotalCities   int            `json:"total_cities"`
+	ByMonth       []MonthStat    `json:"by_month"`
+	ByCategory    []CategoryStat `json:"by_category"`
+	ByCity        []CityStat     `json:"by_city"`
+	CostByMonth   []CostStat     `json:"cost_by_month"`
+	TopRated      []Record       `json:"top_rated"`
+	RecentRecords []Record       `json:"recent_records"`
+}
+
+// Settings / request structures are reused from config.
 type Settings struct {
-	Theme       string `json:"theme"`
-	StorageType string `json:"storage_type"`
-	S3Endpoint  string `json:"s3_endpoint"`
-	S3Bucket    string `json:"s3_bucket"`
-	S3Region    string `json:"s3_region"`
-	S3AccessKey string `json:"s3_access_key"`
-	S3SecretKey string `json:"s3_secret_key"`
-	S3PublicURL string `json:"s3_public_url"`
+	Theme              string `json:"theme"`
+	StorageType        string `json:"storage_type"`
+	S3Endpoint         string `json:"s3_endpoint"`
+	S3Bucket           string `json:"s3_bucket"`
+	S3Region           string `json:"s3_region"`
+	S3AccessKey        string `json:"s3_access_key"`
+	S3SecretKey        string `json:"s3_secret_key"`
+	S3PublicURL        string `json:"s3_public_url"`
 }
 
 type SettingsRequest struct {
-	Theme       *string `json:"theme"`
-	StorageType *string `json:"storage_type"`
-	S3Endpoint  *string `json:"s3_endpoint"`
-	S3Bucket    *string `json:"s3_bucket"`
-	S3Region    *string `json:"s3_region"`
-	S3AccessKey *string `json:"s3_access_key"`
-	S3SecretKey *string `json:"s3_secret_key"`
-	S3PublicURL *string `json:"s3_public_url"`
+	Theme          *string `json:"theme"`
+	StorageType    *string `json:"storage_type"`
+	S3Endpoint     *string `json:"s3_endpoint"`
+	S3Bucket       *string `json:"s3_bucket"`
+	S3Region       *string `json:"s3_region"`
+	S3AccessKey    *string `json:"s3_access_key"`
+	S3SecretKey    *string `json:"s3_secret_key"`
+	S3PublicURL    *string `json:"s3_public_url"`
 }
 
-type SceneSort struct {
-	ID        int64  `json:"id"`
-	Play      string `json:"play"`
-	Scenes    string `json:"scenes"`
-	UpdatedAt string `json:"updated_at"`
+// ---------- Cover management ----------
+
+// Cover is a row in the covers metadata table (content hash -> file).
+type Cover struct {
+	Hash      string `json:"hash"`
+	FileName  string `json:"file_name"`
+	Ext       string `json:"ext"`
+	Size      int64  `json:"size"`
+	CreatedAt string `json:"created_at"`
 }
 
-type Actor struct {
-	ID        int64  `json:"id"`
+// CoverRef is one distinct cover for the reuse picker.
+type CoverRef struct {
+	FileName   string `json:"file_name"`
+	Ext        string `json:"ext"`
+	Size       int64  `json:"size"`
+	RefCount   int    `json:"ref_count"`
+	SampleName string `json:"sample_name"`
+	Category   string `json:"category"`
+}
+
+// DupRecord is one record inside a duplicate group.
+type DupRecord struct {
+	ID        string `json:"id"`
 	Name      string `json:"name"`
-	Bio       string `json:"bio"`
-	PhotoURL  string `json:"photo_url"`
-	ShowCount int    `json:"show_count"`
+	CoverFile string `json:"cover_file"`
 }
 
-type ActorRequest struct {
-	Name     string `json:"name"`
-	Bio      string `json:"bio"`
-	PhotoURL string `json:"photo_url"`
+// DupGroup is a set of records whose covers share the same content hash.
+type DupGroup struct {
+	Hash      string      `json:"hash"`
+	Ext       string      `json:"ext"`
+	Size      int64       `json:"size"`
+	Count     int         `json:"count"`
+	Canonical string      `json:"canonical"`
+	Records   []DupRecord `json:"records"`
 }
 
-type User struct {
-	ID           int64     `json:"id"`
-	Username     string    `json:"username"`
-	PasswordHash string    `json:"-"`
-	CreatedAt    time.Time `json:"created_at"`
-}
-
-type RegisterRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-type LoginResponse struct {
-	User User `json:"user"`
+// OrphanItem is an unreferenced cover file.
+type OrphanItem struct {
+	FileName string `json:"file_name"`
+	Size     int64  `json:"size"`
 }

@@ -8,53 +8,50 @@ import (
 	"time"
 )
 
-type BackupData struct {
-	Version    string            `json:"version"`
-	ExportedAt time.Time         `json:"exported_at"`
-	Categories []models.Category `json:"categories"`
-	Shows      []models.Show     `json:"shows"`
-}
-
-func (db *DB) Export(userID int64) (*BackupData, error) {
-	cats, err := db.ListCategories(userID)
+// Export builds an ExportData that is byte-for-byte compatible with the
+// recordlive_export/data.json source format.
+func (db *DB) Export() (*models.ExportData, error) {
+	records, err := db.ListRecords(RecordFilter{})
+	if err != nil {
+		return nil, fmt.Errorf("export records: %w", err)
+	}
+	categories, err := db.ListCategories()
 	if err != nil {
 		return nil, fmt.Errorf("export categories: %w", err)
 	}
-
-	shows, err := db.ListAllShows(userID)
+	meta, err := db.GetMeta()
 	if err != nil {
-		return nil, fmt.Errorf("export shows: %w", err)
+		return nil, fmt.Errorf("export meta: %w", err)
 	}
 
-	return &BackupData{
-		Version:    "1.0",
-		ExportedAt: time.Now(),
-		Categories: cats,
-		Shows:      shows,
+	return &models.ExportData{
+		Source:       "mujian",
+		ExportedAt:   time.Now().Format("2006-01-02T15:04:05"),
+		RecordCount:  len(records),
+		CoverMissing: 0,
+		CoverDir:     "covers/",
+		CoverNote:    "每条记录的 coverFile 字段为封面图相对路径（covers/<uuid>.<ext>），ext 为 jpg/png/webp。",
+		Meta:         *meta,
+		Records:      records,
+		Categories:   categories,
 	}, nil
 }
 
-func (db *DB) ExportToFile(userID int64, path string) error {
-	data, err := db.Export(userID)
+func (db *DB) ExportToFile(path string) error {
+	data, err := db.Export()
 	if err != nil {
 		return err
 	}
-
 	b, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return err
 	}
-
 	return os.WriteFile(path, b, 0644)
 }
 
-type ImportResult struct {
-	Categories int
-	Shows      int
-	Skipped    int
-}
-
-func (db *DB) Import(userID int64, data *BackupData) (*ImportResult, error) {
+// ImportData loads an ExportData (the recordlive_export format) into the
+// database, replacing records/categories by their ids. Meta is also restored.
+func (db *DB) ImportData(data *models.ExportData) (*ImportResult, error) {
 	tx, err := db.conn.Begin()
 	if err != nil {
 		return nil, err
@@ -63,77 +60,40 @@ func (db *DB) Import(userID int64, data *BackupData) (*ImportResult, error) {
 
 	result := &ImportResult{}
 
-	// build category id mapping (old id -> new id)
-	catMap := make(map[int64]int64)
-
-	for _, cat := range data.Categories {
-		var existingID int64
-		err := tx.QueryRow("SELECT id FROM categories WHERE user_id = ? AND name = ?", userID, cat.Name).Scan(&existingID)
-		if err == nil {
-			catMap[cat.ID] = existingID
-			tx.Exec("UPDATE categories SET color = ?, sort_order = ? WHERE user_id = ? AND id = ?", cat.Color, cat.SortOrder, userID, existingID)
-			continue
+	for i := range data.Records {
+		if err := db.UpsertRecord(data.Records[i]); err != nil {
+			return nil, fmt.Errorf("import record %s: %w", data.Records[i].Name, err)
 		}
+		result.Records++
+	}
 
-		execResult, err := tx.Exec(
-			"INSERT INTO categories (user_id, name, color, sort_order) VALUES (?, ?, ?, ?)",
-			userID, cat.Name, cat.Color, cat.SortOrder,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("import category %s: %w", cat.Name, err)
+	for i := range data.Categories {
+		if err := db.UpsertCategory(data.Categories[i]); err != nil {
+			return nil, fmt.Errorf("import category %s: %w", data.Categories[i].Name, err)
 		}
-		newID, _ := execResult.LastInsertId()
-		catMap[cat.ID] = newID
 		result.Categories++
 	}
 
-	for _, show := range data.Shows {
-		// deduplicate by name + date (use date-only format for matching)
-		dateOnly := show.Date.Format("2006-01-02")
-		var existingID int64
-		err := tx.QueryRow("SELECT id FROM shows WHERE user_id = ? AND name = ? AND date LIKE ?", userID, show.Name, dateOnly+"%").Scan(&existingID)
-		if err == nil {
-			result.Skipped++
-			continue
-		}
-
-		var newCatID *int64
-		if show.CategoryID != nil {
-			if newID, ok := catMap[*show.CategoryID]; ok {
-				newCatID = &newID
-			}
-		}
-
-		_, err = tx.Exec(`
-			INSERT INTO shows (user_id, name, venue, date, duration, status, category_id, poster_url,
-				setlist, cast, company, friends, rating, seat, notes, review, ticket_cost, other_cost,
-				created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`,
-			userID, show.Name, show.Venue, show.Date, show.Duration, show.Status, newCatID,
-			show.PosterURL, show.Setlist, show.Cast, show.Company, show.Friends,
-			show.Rating, show.Seat, show.Notes, show.Review, show.TicketCost, show.OtherCost,
-			show.CreatedAt, show.UpdatedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("import show %s: %w", show.Name, err)
-		}
-		result.Shows++
+	if err := db.SetMeta(&data.Meta); err != nil {
+		return nil, fmt.Errorf("import meta: %w", err)
 	}
 
 	return result, tx.Commit()
 }
 
-func (db *DB) ImportFromFile(userID int64, path string) (*ImportResult, error) {
+func (db *DB) ImportFromFile(path string) (*ImportResult, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-
-	var data BackupData
+	var data models.ExportData
 	if err := json.Unmarshal(b, &data); err != nil {
-		return nil, fmt.Errorf("invalid backup file: %w", err)
+		return nil, fmt.Errorf("invalid export file: %w", err)
 	}
+	return db.ImportData(&data)
+}
 
-	return db.Import(userID, &data)
+type ImportResult struct {
+	Records    int `json:"records"`
+	Categories int `json:"categories"`
 }

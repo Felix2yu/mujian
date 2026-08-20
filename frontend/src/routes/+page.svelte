@@ -1,311 +1,236 @@
 <script>
   import { onMount } from 'svelte';
-  import { api } from '$lib/api';
-  import Calendar from '$lib/components/Calendar.svelte';
-  import ShowCard from '$lib/components/ShowCard.svelte';
+  import { page } from '$app/stores';
+  import { api } from '$lib/api.js';
+  import RecordCard from '$lib/components/RecordCard.svelte';
 
-  const stored = (() => {
+  let records = $state([]);
+  let categories = $state([]);
+  let cities = $state([]);
+  let loading = $state(true);
+  let error = $state('');
+  let filters = $state({ q: '', category: '', city: '', year: '', month: '' });
+  let searchTimer;
+
+  let activeChips = $derived(
+    [
+      filters.q ? { k: 'q', label: `搜索：${filters.q}` } : null,
+      filters.category ? { k: 'category', label: `分类：${filters.category}` } : null,
+      filters.city ? { k: 'city', label: `城市：${filters.city}` } : null,
+      filters.year ? { k: 'year', label: `年份：${filters.year}` } : null,
+      filters.month ? { k: 'month', label: `月份：${filters.month}` } : null
+    ].filter(Boolean)
+  );
+
+  async function load() {
+    loading = true;
+    error = '';
     try {
-      const v = localStorage.getItem('calendarMonth');
-      if (v) {
-        const [y, m] = JSON.parse(v);
-        if (y && m >= 1 && m <= 12) return { year: y, month: m };
-      }
-    } catch {}
-    return null;
-  })();
-
-  let currentYear = $state(stored ? stored.year : new Date().getFullYear());
-  let currentMonth = $state(stored ? stored.month : new Date().getMonth() + 1);
-  let events = $state([]);
-  let recent = $state([]);
-  let stats = $state(null);
-
-  onMount(async () => {
-    await loadData();
-  });
-
-  async function loadData() {
-    try {
-      const [eventsRes, recentRes, statsRes] = await Promise.all([
-        api.getCalendar(currentYear, currentMonth),
-        api.getRecent(5),
-        api.getStats()
-      ]);
-      events = eventsRes;
-      recent = recentRes;
-      stats = statsRes;
+      records = await api.listRecords(filters);
     } catch (e) {
-      console.error('Failed to load data:', e);
+      error = e.message;
+    } finally {
+      loading = false;
     }
   }
 
-  function handleMonthChange(year, month) {
-    currentYear = year;
-    currentMonth = month;
-    localStorage.setItem('calendarMonth', JSON.stringify([year, month]));
-    api.getCalendar(year, month).then(e => events = e);
+  async function loadMeta() {
+    try {
+      [categories, cities] = await Promise.all([api.listCategories(), api.getAutocomplete('city')]);
+    } catch (e) { /* 非关键，忽略 */ }
   }
+
+  function onSearchInput() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(load, 260);
+  }
+
+  function clearChip(k) {
+    filters = { ...filters, [k]: '' };
+    load();
+  }
+
+  function resetFilters() {
+    filters = { q: '', category: '', city: '', year: '', month: '' };
+    load();
+  }
+
+  onMount(() => {
+    const sp = new URLSearchParams($page.url.search);
+    filters = {
+      q: sp.get('q') || '',
+      category: sp.get('category') || '',
+      city: sp.get('city') || '',
+      year: sp.get('year') || '',
+      month: sp.get('month') || ''
+    };
+    loadMeta();
+    load();
+  });
 </script>
 
-<div class="home">
-  {#if stats && stats.total_shows > 0}
-    <div class="stats-bar">
-      <div class="stat-item">
-        <span class="stat-icon">🎭</span>
-        <div class="stat-info">
-          <span class="stat-value">{stats.total_shows}</span>
-          <span class="stat-label">场演出</span>
-        </div>
-      </div>
-      <div class="stat-divider"></div>
-      <div class="stat-item">
-        <span class="stat-icon">⏱️</span>
-        <div class="stat-info">
-          <span class="stat-value">{stats.total_hours.toFixed(0)}</span>
-          <span class="stat-label">小时</span>
-        </div>
-      </div>
-      <div class="stat-divider"></div>
-      <div class="stat-item">
-        <span class="stat-icon">🏛️</span>
-        <div class="stat-info">
-          <span class="stat-value">{stats.total_venues}</span>
-          <span class="stat-label">个场馆</span>
-        </div>
-      </div>
-      <div class="stat-divider"></div>
-      <div class="stat-item">
-        <span class="stat-icon">⭐</span>
-        <div class="stat-info">
-          <span class="stat-value">{stats.avg_rating > 0 ? stats.avg_rating.toFixed(1) : '-'}</span>
-          <span class="stat-label">平均评分</span>
-        </div>
-      </div>
+<div class="home fade-up">
+  <div class="hero">
+    <div class="search-wrap">
+      <span class="search-ico">⌕</span>
+      <input
+        class="search"
+        placeholder="搜索演出名称、演员、城市、剧团、备注…"
+        bind:value={filters.q}
+        on:input={onSearchInput}
+      />
+      {#if filters.q}<button class="search-clear" on:click={() => clearChip('q')}>✕</button>{/if}
+    </div>
+    <a class="btn primary" href="/records/new">＋ 新建记录</a>
+  </div>
+
+  <div class="filter-bar card">
+    <select class="input" bind:value={filters.category} on:change={load}>
+      <option value="">全部分类</option>
+      {#each categories as c}<option value={c.name}>{c.name}</option>{/each}
+    </select>
+    <select class="input" bind:value={filters.city} on:change={load}>
+      <option value="">全部城市</option>
+      {#each cities as c}<option value={c}>{c}</option>{/each}
+    </select>
+    <input class="input" type="number" placeholder="年份" bind:value={filters.year} on:change={load} />
+    <select class="input" bind:value={filters.month} on:change={load}>
+      <option value="">月份</option>
+      {#each Array(12) as _, i}<option value={i + 1}>{i + 1} 月</option>{/each}
+    </select>
+    {#if activeChips.length}
+      <button class="btn ghost sm" on:click={resetFilters}>清除全部</button>
+    {/if}
+  </div>
+
+  {#if activeChips.length}
+    <div class="chips">
+      {#each activeChips as chip}
+        <button class="chip" on:click={() => clearChip(chip.k)}>{chip.label} ✕</button>
+      {/each}
     </div>
   {/if}
 
-  <div class="main-content">
-    <div class="calendar-section">
-      <Calendar {events} initialYear={currentYear} initialMonth={currentMonth} onmonthchange={(e) => handleMonthChange(e.year, e.month)} />
-    </div>
-
-    <div class="sidebar">
-      <div class="sidebar-section">
-        <div class="section-header">
-          <h3>最近观看</h3>
-          {#if recent.length > 0}
-            <span class="section-badge">{recent.length}</span>
-          {/if}
-        </div>
-        {#if recent.length === 0}
-          <div class="empty-state">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            <p>暂无观看记录</p>
-          </div>
-        {:else}
-          <div class="card-list">
-            {#each recent as show}
-              <ShowCard {show} compact />
-            {/each}
-          </div>
-        {/if}
-      </div>
-    </div>
+  <div class="count-row">
+    <h2>记录 <span class="num">{records.length}</span></h2>
   </div>
+
+  {#if error}
+    <div class="banner error">⚠ {error}</div>
+  {/if}
+
+  {#if loading}
+    <div class="grid">
+      {#each Array(8) as _}
+        <div class="skel-card"><div class="skeleton skel-cover"></div><div class="skeleton skel-line"></div><div class="skeleton skel-line short"></div></div>
+      {/each}
+    </div>
+  {:else if records.length === 0}
+    <div class="empty card">
+      <div class="ico">🎭</div>
+      <div class="t">{activeChips.length ? '没有符合条件的记录' : '还没有记录'}</div>
+      <div class="h">{activeChips.length ? '试试调整筛选条件，或清除全部筛选' : '前往「导入」上传 recordlive_export 的 data.json，或点击右上角新建第一条记录'}</div>
+      {#if activeChips.length}<button class="btn sm" on:click={resetFilters}>清除筛选</button>{/if}
+    </div>
+  {:else}
+    <div class="grid stagger">
+      {#each records as r (r.id)}
+        <RecordCard record={r} />
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>
-  .home {
-    display: flex;
-    flex-direction: column;
-    gap: 28px;
-  }
+  .home { display: flex; flex-direction: column; gap: 14px; }
 
-  .stats-bar {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    padding: 24px 32px;
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .stat-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
+  .hero { display: flex; gap: 10px; align-items: center; }
+  .search-wrap {
+    position: relative;
     flex: 1;
-    justify-content: center;
-  }
-
-  .stat-icon {
-    font-size: 24px;
-    width: 48px;
-    height: 48px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    background: var(--accent-bg);
-    border-radius: var(--radius-md);
   }
-
-  .stat-info {
-    display: flex;
-    flex-direction: column;
+  .search-ico {
+    position: absolute;
+    left: 14px;
+    font-size: 18px;
+    color: var(--text-3);
+    pointer-events: none;
   }
-
-  .stat-value {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--text-primary);
-    line-height: 1.2;
-    letter-spacing: -0.02em;
+  .search {
+    width: 100%;
+    padding: 11px 40px 11px 40px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14.5px;
+    box-shadow: var(--shadow-xs);
+    transition: all var(--t-fast) var(--ease);
   }
-
-  .stat-label {
-    font-size: 13px;
+  .search:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-sm);
+  }
+  .search::placeholder { color: var(--text-3); }
+  .search-clear {
+    position: absolute;
+    right: 12px;
+    border: none;
+    background: var(--surface-3);
     color: var(--text-muted);
-    font-weight: 500;
-  }
-
-  .stat-divider {
-    width: 1px;
-    height: 40px;
-    background: var(--border);
-    margin: 0 8px;
-    flex-shrink: 0;
-  }
-
-  .main-content {
-    display: grid;
-    grid-template-columns: 1fr 360px;
-    gap: 28px;
-  }
-
-  .calendar-section {
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    padding: 28px;
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .sidebar-section {
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    padding: 20px;
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .section-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 16px;
-  }
-
-  .sidebar-section h3 {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .section-badge {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
     font-size: 11px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 20px;
-    background: var(--accent-bg);
-    color: var(--accent);
-  }
-
-  .card-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .empty-state {
-    display: flex;
-    flex-direction: column;
+    cursor: pointer;
+    display: inline-flex;
     align-items: center;
-    gap: 12px;
-    padding: 24px;
-    color: var(--text-muted);
+    justify-content: center;
+    transition: all var(--t-fast) var(--ease);
+  }
+  .search-clear:hover { background: var(--accent-soft); color: var(--accent); }
+
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .filter-bar .input { width: auto; flex: 1 1 130px; padding: 7px 10px; font-size: 13.5px; }
+
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    padding: 4px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: all var(--t-fast) var(--ease);
+  }
+  .chip:hover { background: var(--accent); color: #fff; }
+
+  .count-row h2 { font-size: 20px; margin: 4px 0 0; }
+  .count-row .num { color: var(--accent); font-family: var(--font-sans); font-weight: 700; font-size: 18px; margin-left: 4px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+    gap: 14px;
   }
 
-  .empty-state svg {
-    opacity: 0.4;
-  }
+  .skel-card { display: flex; flex-direction: column; gap: 8px; }
+  .skel-cover { aspect-ratio: 3 / 4; border-radius: var(--radius-lg); }
+  .skel-line { height: 14px; }
+  .skel-line.short { width: 60%; }
 
-  .empty-state p {
-    font-size: 14px;
-    text-align: center;
-  }
-
-  @media (max-width: 1024px) {
-    .main-content {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  @media (max-width: 768px) {
-    .stats-bar {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-      padding: 20px;
-    }
-
-    .stat-divider {
-      display: none;
-    }
-
-    .stat-item {
-      justify-content: flex-start;
-    }
-
-    .stat-value {
-      font-size: 20px;
-    }
-
-    .stat-icon {
-      width: 40px;
-      height: 40px;
-      font-size: 20px;
-    }
-
-    .calendar-section {
-      padding: 16px;
-    }
-
-    .sidebar-section {
-      padding: 16px;
-    }
-  }
-
-  @media (max-width: 480px) {
-    .stats-bar {
-      gap: 12px;
-      padding: 16px;
-    }
-
-    .stat-value {
-      font-size: 18px;
-    }
-
-    .stat-label {
-      font-size: 12px;
-    }
+  @media (max-width: 560px) {
+    .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+    .hero { flex-direction: column; align-items: stretch; }
   }
 </style>

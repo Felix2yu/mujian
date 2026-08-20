@@ -28,3 +28,9 @@ Thumbs.db
 
 # Reasonix
 reasonix.toml
+
+# WorkBuddy workspace metadata
+.workbuddy/
+
+# 记录现场 export (本地导出数据，含封面图片，不纳入仓库)
+recordlive_export/
