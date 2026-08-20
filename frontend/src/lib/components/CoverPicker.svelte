@@ -42,20 +42,20 @@
 </script>
 
 {#if open}
-  <div class="overlay" on:click={onClose}>
-    <div class="panel card" on:click|stopPropagation role="dialog" aria-modal="true">
+  <div class="overlay" onclick={onClose}>
+    <div class="panel card" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
       <div class="head">
         <h3>从已有演出引用封面</h3>
-        <button class="x" on:click={onClose} aria-label="关闭">✕</button>
+        <button class="x" onclick={onClose} aria-label="关闭">✕</button>
       </div>
       <div class="search-row">
         <input
           class="input"
           placeholder="搜索演出名称或分类…"
           bind:value={q}
-          on:keydown={(e) => e.key === 'Enter' && search()}
+          onkeydown={(e) => e.key === 'Enter' && search()}
         />
-        <button class="btn" on:click={search}>搜索</button>
+        <button class="btn" onclick={search}>搜索</button>
       </div>
 
       {#if loading}
@@ -71,7 +71,7 @@
       {:else}
         <div class="grid">
           {#each covers as c}
-            <button class="item" on:click={() => pick(c)} title={c.sample_name || c.file_name}>
+            <button class="item" onclick={() => pick(c)} title={c.sample_name || c.file_name}>
               <img src={coverUrl(c.file_name)} alt={c.sample_name} loading="lazy" />
               <span class="iname">{c.sample_name || c.file_name}</span>
               <span class="iref">{c.ref_count} 条引用</span>
@@ -82,9 +82,9 @@
 
       {#if total > limit}
         <div class="pager">
-          <button class="btn sm" disabled={page === 0} on:click={() => { page--; load(); }}>上一页</button>
+          <button class="btn sm" disabled={page === 0} onclick={() => { page--; load(); }}>上一页</button>
           <span class="tiny">{page + 1} / {Math.ceil(total / limit)}</span>
-          <button class="btn sm" disabled={(page + 1) * limit >= total} on:click={() => { page++; load(); }}>下一页</button>
+          <button class="btn sm" disabled={(page + 1) * limit >= total} onclick={() => { page++; load(); }}>下一页</button>
         </div>
       {/if}
     </div>

@@ -8,6 +8,29 @@
   let loading = $state(true);
   let error = $state('');
   let deleting = $state(false);
+  let dramaMap = $state(new Map());
+  let zheziMap = $state(new Map());
+
+  function dramaName(id) {
+    return dramaMap.get(id)?.name || '';
+  }
+
+  // 按剧名分组折子：[{ dramaName, dramaId, zhezis: [{id, name}] }]
+  const groupedZhezis = $derived.by(() => {
+    if (!rec?.zhezi_ids?.length) return [];
+    const groups = [];
+    for (const zid of rec.zhezi_ids) {
+      const z = zheziMap.get(zid);
+      if (!z) continue;
+      let g = groups.find((g) => g.dramaName === z.dramaName);
+      if (!g) {
+        g = { dramaName: z.dramaName, dramaId: z.dramaId, zhezis: [] };
+        groups.push(g);
+      }
+      g.zhezis.push({ id: z.id, name: z.name });
+    }
+    return groups;
+  });
 
   const statusLabel = { 0: '正常', 1: '想看', 2: '已取消', 3: '其他' };
 
@@ -15,7 +38,13 @@
     loading = true;
     error = '';
     try {
-      rec = await api.getRecord(id);
+      const [r, tree] = await Promise.all([api.getRecord(id), api.getDramaTree().catch(() => [])]);
+      rec = r;
+      dramaMap = new Map(tree.map((d) => [d.id, d]));
+      zheziMap = new Map();
+      for (const d of tree) {
+        for (const z of d.zhezis || []) zheziMap.set(z.id, { ...z, dramaId: d.id, dramaName: d.name });
+      }
     } catch (e) {
       error = e.message;
     } finally {
@@ -91,12 +120,12 @@
         {/if}
         <div class="actions">
           <a class="btn primary sm" href={`/records/${rec.id}/edit`}>编辑</a>
-          <button class="btn danger sm" on:click={remove} disabled={deleting}>{deleting ? '删除中…' : '删除'}</button>
+          <button class="btn danger sm" onclick={remove} disabled={deleting}>{deleting ? '删除中…' : '删除'}</button>
         </div>
       </div>
     </div>
 
-    {#if rec.artist_names?.length || rec.play?.length}
+    {#if rec.artist_names?.length || rec.drama_ids?.length || rec.play?.length || rec.zhezi_ids?.length}
       <div class="card section">
         {#if rec.artist_names?.length}
           <h3>演员阵容</h3>
@@ -106,12 +135,39 @@
             {/each}
           </div>
         {/if}
-        {#if rec.play?.length}
+
+        {#if groupedZhezis.length}
+          <h3>剧目、折子</h3>
+          <div class="zhezis-line">
+            {#each groupedZhezis as g, gi (g.dramaName)}
+              <!-- 这里 gi 是剧目组的索引，组间不需要分隔符 -->
+              <!-- 剧名：为非首个剧目添加左间距以区分 -->
+              {#if g.dramaId}
+                <a class="tag zhezi-tag zdrama {gi > 0 ? 'zdrama-gap' : ''}" href={`/dramas/${g.dramaId}`} title={`查看《${g.dramaName}》详情`}>
+                  {g.dramaName}
+                </a>
+              {:else}
+                <span class="tag zhezi-tag zdrama {gi > 0 ? 'zdrama-gap' : ''}">{g.dramaName}</span>
+              {/if}
+              <!-- 折子列表：内部用顿号分隔 -->
+              {#each g.zhezis as z, i (z.id)}
+                {#if i > 0}<span class="comma">、</span>{/if}
+                <a class="zlink" href={`/?zhezi=${encodeURIComponent(z.id)}`} title={`「${z.name}」演出列表`}>{z.name}</a>
+              {/each}
+            {/each}
+          </div>
+        {:else if rec.drama_ids?.length || rec.play?.length}
           <h3>剧目</h3>
           <div class="tags">
-            {#each rec.play as p}
-              <a class="tag" href={`/?q=${encodeURIComponent(p)}`}>{p}</a>
-            {/each}
+            {#if rec.drama_ids?.length}
+              {#each rec.drama_ids as did}
+                <a class="tag" href={`/dramas/${did}`} title="查看剧目详情">{dramaMap.get(did)?.name || '剧目'}</a>
+              {/each}
+            {:else}
+              {#each rec.play as p}
+                <a class="tag" href={`/?q=${encodeURIComponent(p)}`}>{p}</a>
+              {/each}
+            {/if}
           </div>
         {/if}
       </div>
@@ -212,8 +268,48 @@
   .section h3 { margin: 0 0 12px; font-size: 16px; }
   .section h3:not(:first-child) { margin-top: 18px; }
 
-  .tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .section .tiny { margin: 14px 0 0; }
+  .zhezi-tag { display: inline-flex; align-items: center; gap: 6px; }
+  .zt-drama { font-size: 10.5px; background: var(--surface-3); color: var(--text-muted); border-radius: 999px; padding: 1px 7px; }
+  .sep { color: var(--text-3); margin: 0 2px; font-size: 12px; }
+  .comma { color: var(--text-muted); margin: 0 3px; font-size: 12px; }
+
+  /* 折子行内布局：剧名是胶囊tag，折子是纯文字链接，间用居中的小点分隔 */
+  .zhezis-line { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 0; font-size: 14px; line-height: 1.6; }
+  .zhezis-line .tag.zdrama {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 1px 9px;
+    font-weight: 500;
+    margin-right: 4px;
+  }
+  .zhezis-line .zlink {
+    color: var(--text-2);
+    text-decoration: none;
+    border-bottom: 1px dashed transparent;
+    transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+    padding: 0 2px;
+  }
+  .zhezis-line .zlink:hover {
+    color: var(--accent);
+    border-bottom-color: currentColor;
+  }
+  .zhezis-line .zdrama-gap {
+    margin-left: 12px;
+  }
+  .zhezis-line .grp-sep {
+    color: var(--text-3);
+    margin: 0 4px;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .zhezis-line .comma {
+    color: var(--text-2);
+    margin: 0 4px;
+    font-size: 14px;
+  }
 
   .cards-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .cards-row .section { margin-top: 14px; }

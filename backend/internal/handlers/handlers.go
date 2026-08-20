@@ -49,6 +49,17 @@ func (h *Handler) Routes() chi.Router {
 	r.Put("/categories/{id}", h.updateCategory)
 	r.Delete("/categories/{id}", h.deleteCategory)
 
+	r.Get("/dramas", h.listDramas)
+	r.Get("/dramas/tree", h.listDramaTree)
+	r.Post("/dramas", h.createDrama)
+	r.Get("/dramas/{id}", h.getDramaDetail)
+	r.Put("/dramas/{id}", h.updateDrama)
+	r.Delete("/dramas/{id}", h.deleteDrama)
+	r.Post("/dramas/{id}/zhezis", h.createZhezi)
+	r.Post("/dramas/{id}/zhezis/reorder", h.reorderZhezis)
+	r.Put("/zhezis/{id}", h.updateZhezi)
+	r.Delete("/zhezis/{id}", h.deleteZhezi)
+
 	r.Get("/stats", h.getStats)
 	r.Get("/dashboard", h.getDashboard)
 	r.Get("/calendar", h.getCalendar)
@@ -125,6 +136,8 @@ func (h *Handler) listRecords(w http.ResponseWriter, r *http.Request) {
 	}
 	f.Start = q.Get("start")
 	f.End = q.Get("end")
+	f.DramaID = q.Get("drama")
+	f.ZheziID = q.Get("zhezi")
 
 	if f.Query != "" && f.Category == "" && f.City == "" && f.Year == 0 && f.Start == "" && f.End == "" {
 		// pure search uses the dedicated search path but list supports it too
@@ -324,6 +337,157 @@ func (h *Handler) deleteCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResp(w, 200, map[string]string{"message": "deleted"})
+}
+
+// ---------- Dramas & Zhezis ----------
+
+type dramaReq struct {
+	Name         string `json:"name"`
+	CategoryName string `json:"categoryName"`
+	Remark       string `json:"remark"`
+}
+
+type zheziReq struct {
+	Name    string   `json:"name"`
+	Aliases []string `json:"aliases"`
+	Remark  string   `json:"remark"`
+}
+
+func (h *Handler) listDramaTree(w http.ResponseWriter, r *http.Request) {
+	tree, err := h.db.ListDramaTree()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, tree)
+}
+
+func (h *Handler) listDramas(w http.ResponseWriter, r *http.Request) {
+	dramas, err := h.db.ListDramas()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, dramas)
+}
+
+func (h *Handler) createDrama(w http.ResponseWriter, r *http.Request) {
+	var req dramaReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		jsonErr(w, 400, "name is required")
+		return
+	}
+	d, err := h.db.SaveDrama(models.Drama{Name: strings.TrimSpace(req.Name), CategoryName: req.CategoryName, Remark: req.Remark})
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 201, d)
+}
+
+func (h *Handler) getDramaDetail(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	d, err := h.db.GetDramaDetail(id)
+	if err != nil {
+		jsonErr(w, 404, "drama not found")
+		return
+	}
+	jsonResp(w, 200, d)
+}
+
+func (h *Handler) updateDrama(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req dramaReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		jsonErr(w, 400, "name is required")
+		return
+	}
+	d, err := h.db.SaveDrama(models.Drama{ID: id, Name: strings.TrimSpace(req.Name), CategoryName: req.CategoryName, Remark: req.Remark})
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, d)
+}
+
+func (h *Handler) deleteDrama(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.db.DeleteDrama(id); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "deleted"})
+}
+
+func (h *Handler) createZhezi(w http.ResponseWriter, r *http.Request) {
+	dramaID := chi.URLParam(r, "id")
+	var req zheziReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		jsonErr(w, 400, "name is required")
+		return
+	}
+	z, err := h.db.CreateZhezi(models.Zhezi{DramaID: dramaID, Name: strings.TrimSpace(req.Name), Aliases: req.Aliases, Remark: req.Remark})
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 201, z)
+}
+
+func (h *Handler) updateZhezi(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req zheziReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		jsonErr(w, 400, "name is required")
+		return
+	}
+	z, err := h.db.UpdateZhezi(models.Zhezi{ID: id, Name: strings.TrimSpace(req.Name), Aliases: req.Aliases, Remark: req.Remark})
+	if err != nil {
+		jsonErr(w, 404, "zhezi not found")
+		return
+	}
+	jsonResp(w, 200, z)
+}
+
+func (h *Handler) deleteZhezi(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.db.DeleteZhezi(id); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "deleted"})
+}
+
+func (h *Handler) reorderZhezis(w http.ResponseWriter, r *http.Request) {
+	dramaID := chi.URLParam(r, "id")
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if err := h.db.ReorderZhezis(dramaID, req.IDs); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "reordered"})
 }
 
 func (h *Handler) getStats(w http.ResponseWriter, r *http.Request) {

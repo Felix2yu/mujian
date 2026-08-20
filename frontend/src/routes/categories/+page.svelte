@@ -57,8 +57,8 @@
   </div>
 
   <div class="card add-bar">
-    <input class="input" placeholder="新建分类名称，回车快速添加" bind:value={newName} on:keydown={(e) => e.key === 'Enter' && add()} />
-    <button class="btn primary" on:click={add} disabled={adding || !newName.trim()}>{adding ? '添加中…' : '＋ 添加'}</button>
+    <input class="input" placeholder="新建分类名称，回车快速添加" bind:value={newName} onkeydown={(e) => e.key === 'Enter' && add()} />
+    <button class="btn primary" onclick={add} disabled={adding || !newName.trim()}>{adding ? '添加中…' : '＋ 添加'}</button>
   </div>
 
   {#if error}<div class="banner error">⚠ {error}</div>{/if}
@@ -79,7 +79,7 @@
         <div class="card cat">
           <a class="cat-name" href={`/?category=${encodeURIComponent(c.name)}`}>{c.name}</a>
           <span class="cnt">{c.recordCount ?? 0} 条</span>
-          <button class="del" title="删除分类" on:click={() => remove(c.id, c.name)}>✕</button>
+          <button class="del" title="删除分类" onclick={() => remove(c.id, c.name)}>✕</button>
         </div>
       {/each}
     </div>

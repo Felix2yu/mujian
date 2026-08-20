@@ -47,6 +47,17 @@ export const api = {
   updateCategory: (id, data) => request(`/api/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCategory: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
 
+  listDramas: () => request('/api/dramas'),
+  getDramaTree: () => request('/api/dramas/tree'),
+  createDrama: (data) => request('/api/dramas', { method: 'POST', body: JSON.stringify(data) }),
+  getDrama: (id) => request(`/api/dramas/${id}`),
+  updateDrama: (id, data) => request(`/api/dramas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteDrama: (id) => request(`/api/dramas/${id}`, { method: 'DELETE' }),
+  createZhezi: (dramaId, data) => request(`/api/dramas/${dramaId}/zhezis`, { method: 'POST', body: JSON.stringify(data) }),
+  updateZhezi: (id, data) => request(`/api/zhezis/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteZhezi: (id) => request(`/api/zhezis/${id}`, { method: 'DELETE' }),
+  reorderZhezis: (dramaId, ids) => request(`/api/dramas/${dramaId}/zhezis/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
+
   getStats: () => request('/api/stats'),
   getDashboard: () => request('/api/dashboard'),
   getCalendar: (year, month) => request(`/api/calendar?year=${year}&month=${month}`),

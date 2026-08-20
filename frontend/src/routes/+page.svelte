@@ -9,8 +9,14 @@
   let cities = $state([]);
   let loading = $state(true);
   let error = $state('');
-  let filters = $state({ q: '', category: '', city: '', year: '', month: '' });
+  let filters = $state({ q: '', category: '', city: '', year: '', month: '', drama: '', zhezi: '' });
+  let zheziNames = $state(new Map());
   let searchTimer;
+
+  function zheziLabel(id) {
+    const z = zheziNames.get(id);
+    return z ? `${z.dramaName} · ${z.name}` : '折子';
+  }
 
   let activeChips = $derived(
     [
@@ -18,7 +24,9 @@
       filters.category ? { k: 'category', label: `分类：${filters.category}` } : null,
       filters.city ? { k: 'city', label: `城市：${filters.city}` } : null,
       filters.year ? { k: 'year', label: `年份：${filters.year}` } : null,
-      filters.month ? { k: 'month', label: `月份：${filters.month}` } : null
+      filters.month ? { k: 'month', label: `月份：${filters.month}` } : null,
+      filters.drama ? { k: 'drama', label: '剧目' } : null,
+      filters.zhezi ? { k: 'zhezi', label: `折子：${zheziLabel(filters.zhezi)}` } : null
     ].filter(Boolean)
   );
 
@@ -36,7 +44,16 @@
 
   async function loadMeta() {
     try {
-      [categories, cities] = await Promise.all([api.listCategories(), api.getAutocomplete('city')]);
+      const [cats, cityList, tree] = await Promise.all([
+        api.listCategories(),
+        api.getAutocomplete('city'),
+        api.getDramaTree().catch(() => [])
+      ]);
+      categories = cats;
+      cities = cityList;
+      const m = new Map();
+      for (const d of tree) for (const z of d.zhezis || []) m.set(z.id, { name: z.name, dramaName: d.name });
+      zheziNames = m;
     } catch (e) { /* 非关键，忽略 */ }
   }
 
@@ -51,7 +68,7 @@
   }
 
   function resetFilters() {
-    filters = { q: '', category: '', city: '', year: '', month: '' };
+    filters = { q: '', category: '', city: '', year: '', month: '', drama: '', zhezi: '' };
     load();
   }
 
@@ -62,7 +79,9 @@
       category: sp.get('category') || '',
       city: sp.get('city') || '',
       year: sp.get('year') || '',
-      month: sp.get('month') || ''
+      month: sp.get('month') || '',
+      drama: sp.get('drama') || '',
+      zhezi: sp.get('zhezi') || ''
     };
     loadMeta();
     load();
@@ -77,36 +96,36 @@
         class="search"
         placeholder="搜索演出名称、演员、城市、剧团、备注…"
         bind:value={filters.q}
-        on:input={onSearchInput}
+        oninput={onSearchInput}
       />
-      {#if filters.q}<button class="search-clear" on:click={() => clearChip('q')}>✕</button>{/if}
+      {#if filters.q}<button class="search-clear" onclick={() => clearChip('q')}>✕</button>{/if}
     </div>
     <a class="btn primary" href="/records/new">＋ 新建记录</a>
   </div>
 
   <div class="filter-bar card">
-    <select class="input" bind:value={filters.category} on:change={load}>
+    <select class="input" bind:value={filters.category} onchange={load}>
       <option value="">全部分类</option>
       {#each categories as c}<option value={c.name}>{c.name}</option>{/each}
     </select>
-    <select class="input" bind:value={filters.city} on:change={load}>
+    <select class="input" bind:value={filters.city} onchange={load}>
       <option value="">全部城市</option>
       {#each cities as c}<option value={c}>{c}</option>{/each}
     </select>
-    <input class="input" type="number" placeholder="年份" bind:value={filters.year} on:change={load} />
-    <select class="input" bind:value={filters.month} on:change={load}>
+    <input class="input" type="number" placeholder="年份" bind:value={filters.year} onchange={load} />
+    <select class="input" bind:value={filters.month} onchange={load}>
       <option value="">月份</option>
       {#each Array(12) as _, i}<option value={i + 1}>{i + 1} 月</option>{/each}
     </select>
     {#if activeChips.length}
-      <button class="btn ghost sm" on:click={resetFilters}>清除全部</button>
+      <button class="btn ghost sm" onclick={resetFilters}>清除全部</button>
     {/if}
   </div>
 
   {#if activeChips.length}
     <div class="chips">
       {#each activeChips as chip}
-        <button class="chip" on:click={() => clearChip(chip.k)}>{chip.label} ✕</button>
+        <button class="chip" onclick={() => clearChip(chip.k)}>{chip.label} ✕</button>
       {/each}
     </div>
   {/if}
@@ -130,7 +149,7 @@
       <div class="ico">🎭</div>
       <div class="t">{activeChips.length ? '没有符合条件的记录' : '还没有记录'}</div>
       <div class="h">{activeChips.length ? '试试调整筛选条件，或清除全部筛选' : '前往「导入」上传 recordlive_export 的 data.json，或点击右上角新建第一条记录'}</div>
-      {#if activeChips.length}<button class="btn sm" on:click={resetFilters}>清除筛选</button>{/if}
+      {#if activeChips.length}<button class="btn sm" onclick={resetFilters}>清除筛选</button>{/if}
     </div>
   {:else}
     <div class="grid stagger">

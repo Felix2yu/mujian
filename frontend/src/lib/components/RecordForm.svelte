@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from 'svelte';
   import { api, coverUrl } from '$lib/api.js';
   import CoverPicker from '$lib/components/CoverPicker.svelte';
 
@@ -14,7 +15,8 @@
       artist_names: '', play: '', guest: '',
       active_status: 0,
       date_local: '', coverFile: '', coverThumb: '',
-      lat: '', lng: ''
+      lat: '', lng: '',
+      drama_ids: [], zhezi_ids: []
     };
   }
 
@@ -40,6 +42,8 @@
     f.artist_names = (r.artist_names || []).join(', ');
     f.play = (r.play || []).join(', ');
     f.guest = (r.guest || []).join(', ');
+    f.drama_ids = (r.drama_ids || []).slice();
+    f.zhezi_ids = (r.zhezi_ids || []).slice();
     f.active_status = r.active_status || 0;
     f.coverFile = r.coverFile || '';
     f.coverThumb = r.coverThumb || '';
@@ -60,6 +64,69 @@
   let uploading = $state(false);
   let saving = $state(false);
   let pickerOpen = $state(false);
+
+  // 剧目 / 折子 picker state
+  let dramaTree = $state([]);
+  let pickAdd = $state('');
+  let newDrama = $state({ name: '', categoryName: '' });
+  let creatingDrama = $state(false);
+
+  const chosenDramas = $derived(
+    dramaTree.filter((d) => form.drama_ids.includes(d.id))
+  );
+
+  const addableDramas = $derived(
+    dramaTree.filter((d) => !form.drama_ids.includes(d.id))
+  );
+
+  function isZheziSelected(zid) {
+    return form.zhezi_ids.includes(zid);
+  }
+
+  function toggleZhezi(zid) {
+    form.zhezi_ids = isZheziSelected(zid)
+      ? form.zhezi_ids.filter((x) => x !== zid)
+      : [...form.zhezi_ids, zid];
+  }
+
+  function addDrama(did) {
+    if (!did || form.drama_ids.includes(did)) return;
+    form.drama_ids = [...form.drama_ids, did];
+    pickAdd = '';
+  }
+
+  function removeDrama(did) {
+    form.drama_ids = form.drama_ids.filter((x) => x !== did);
+    // 摘除该剧目下已选择的折子
+    const drama = dramaTree.find((d) => d.id === did);
+    const dramaZhezis = new Set((drama?.zhezis || []).map((z) => z.id));
+    form.zhezi_ids = form.zhezi_ids.filter((z) => !dramaZhezis.has(z));
+  }
+
+  async function createNewDrama() {
+    const name = newDrama.name.trim();
+    if (!name || creatingDrama) return;
+    creatingDrama = true;
+    error = '';
+    try {
+      const d = await api.createDrama({ name, categoryName: newDrama.categoryName.trim() });
+      await loadDramaTree();
+      form.drama_ids = [...form.drama_ids, d.id];
+      newDrama = { name: '', categoryName: '' };
+    } catch (e) {
+      error = e.message;
+    } finally {
+      creatingDrama = false;
+    }
+  }
+
+  async function loadDramaTree() {
+    try {
+      dramaTree = await api.getDramaTree();
+    } catch (e) { /* 非关键，忽略 */ }
+  }
+
+  onMount(loadDramaTree);
 
   async function handleUpload(e) {
     const file = e.target.files?.[0];
@@ -109,7 +176,10 @@
       other_cost: Number(form.other_cost) || 0,
       other_cost_currency: form.other_cost_currency || 'CNY',
       artist_names: splitList(form.artist_names),
-      play: splitList(form.play),
+      // 剧目字段由所关联的剧目档案推导，保证与档案一致
+      play: chosenDramas.map((d) => d.name),
+      drama_ids: form.drama_ids,
+      zhezi_ids: form.zhezi_ids,
       guest: splitList(form.guest),
       active_status: Number(form.active_status) || 0,
       coverFile: form.coverFile.trim(),
@@ -139,7 +209,7 @@
   }
 </script>
 
-<form class="form" on:submit|preventDefault={handleSubmit}>
+<form class="form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
   <div class="card section">
     <h3>基本信息</h3>
     <div class="row">
@@ -182,7 +252,7 @@
         <label>评分</label>
         <div class="star-row">
           {#each [1, 2, 3, 4, 5] as n}
-            <button type="button" class="star" class:on={form.rating >= n} on:click={() => setRating(n)} aria-label={`评分 ${n}`}>★</button>
+            <button type="button" class="star" class:on={form.rating >= n} onclick={() => setRating(n)} aria-label={`评分 ${n}`}>★</button>
           {/each}
           <span class="tiny rate-text">{form.rating ? `${form.rating} 分` : '未评分'}</span>
         </div>
@@ -212,8 +282,55 @@
     <h3>阵容与同行</h3>
     <label>演员 <span class="hint">逗号分隔</span></label>
     <input class="input" bind:value={form.artist_names} placeholder="沈昳丽, 张伟伟, 胡刚" />
-    <label>剧目 <span class="hint">逗号分隔</span></label>
-    <input class="input" bind:value={form.play} placeholder="蝴蝶梦, 邯郸记" />
+    <label>剧目</label>
+    <div class="ply">
+      {#if chosenDramas.length === 0}
+        <div class="ply-empty muted tiny">尚未关联剧目。从下方选择或新建一个剧目档案。</div>
+      {/if}
+      {#each chosenDramas as d (d.id)}
+        <div class="ply-item">
+          <div class="ply-head">
+            <span class="ply-name">
+              {d.name}{#if d.categoryName}<em class="ply-cat">{d.categoryName}</em>{/if}
+            </span>
+            <button type="button" class="ply-x" onclick={() => removeDrama(d.id)} title="移除该剧目">✕</button>
+          </div>
+          {#if d.zhezis && d.zhezis.length}
+            <div class="ply-zhezis">
+              <span class="small muted">折子（选中表示本次演出了该折戏）</span>
+              <div class="zhezi-grid">
+                {#each d.zhezis as z (z.id)}
+                  <label class="zhezi">
+                    <input type="checkbox" checked={isZheziSelected(z.id)} onchange={() => toggleZhezi(z.id)} />
+                    <span>{z.name}</span>
+                  </label>
+                {/each}
+              </div>
+            </div>
+          {:else}
+            <div class="small muted">该剧目暂无折子（可在剧目详情页添加）</div>
+          {/if}
+        </div>
+      {/each}
+    </div>
+    <div class="ply-add">
+      <select class="input" bind:value={pickAdd} onchange={(e) => addDrama(e.currentTarget.value)}>
+        <option value="">＋ 关联已有剧目…</option>
+        {#each addableDramas as d}
+          <option value={d.id}>{d.name}{d.categoryName ? `（${d.categoryName}）` : ''}</option>
+        {/each}
+      </select>
+      <details class="ply-new">
+        <summary class="small">＋ 新建剧目档案</summary>
+        <div class="ply-new-body">
+          <div class="row">
+            <input class="input" placeholder="剧目，如：牡丹亭" bind:value={newDrama.name} onkeydown={(e) => e.key === 'Enter' && createNewDrama()} />
+            <input class="input" placeholder="剧种，如：昆曲" bind:value={newDrama.categoryName} onkeydown={(e) => e.key === 'Enter' && createNewDrama()} />
+          </div>
+          <button type="button" class="btn sm" onclick={createNewDrama} disabled={creatingDrama || !newDrama.name.trim()}>{creatingDrama ? '创建中…' : '创建并关联'}</button>
+        </div>
+      </details>
+    </div>
     <div class="row">
       <div><label>同行</label><input class="input" bind:value={form.friends} /></div>
       <div><label>剧团</label><input class="input" bind:value={form.company} /></div>
@@ -235,9 +352,9 @@
         <div class="upload-row">
           <label class="btn sm upload-btn">
             {uploading ? '上传中…' : '⇪ 上传图片'}
-            <input type="file" accept="image/*" on:change={handleUpload} disabled={uploading} hidden />
+            <input type="file" accept="image/*" onchange={handleUpload} disabled={uploading} hidden />
           </label>
-          <button type="button" class="btn sm" on:click={() => (pickerOpen = true)}>▦ 从已有演出引用</button>
+          <button type="button" class="btn sm" onclick={() => (pickerOpen = true)}>▦ 从已有演出引用</button>
           {#if form.coverFile}
             <img class="preview" src={coverUrl(form.coverFile)} alt="封面预览" />
           {/if}
@@ -246,8 +363,8 @@
       <div>
         <label>坐标 <span class="hint">纬度 / 经度</span></label>
         <div class="money">
-          <input class="input" type="number" step="0.0001" bind:value={form.lat} placeholder="31.2304" />
-          <input class="input" type="number" step="0.0001" bind:value={form.lng} placeholder="121.4737" />
+          <input class="input" type="number" step="0.000001" bind:value={form.lat} placeholder="31.230416" />
+          <input class="input" type="number" step="0.000001" bind:value={form.lng} placeholder="121.473700" />
         </div>
       </div>
     </div>
@@ -257,7 +374,7 @@
 
   <div class="actions">
     <button type="submit" class="btn primary lg" disabled={saving}>{saving ? '保存中…' : '保存'}</button>
-    <button type="button" class="btn lg" on:click={onCancel}>取消</button>
+    <button type="button" class="btn lg" onclick={onCancel}>取消</button>
   </div>
 </form>
 
@@ -292,4 +409,30 @@
   .preview { width: 60px; height: 84px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); }
 
   .actions { display: flex; gap: 10px; margin-top: 4px; }
+
+  /* 剧目 / 折子 picker */
+  .ply { display: flex; flex-direction: column; gap: 10px; }
+  .ply-empty { padding: 8px 2px; }
+  .ply-item { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; background: var(--surface); }
+  .ply-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .ply-name { font-weight: 600; font-size: 14.5px; }
+  .ply-cat { font-style: normal; font-size: 12px; color: var(--text-muted); background: var(--surface-3); border-radius: 999px; padding: 2px 9px; margin-left: 8px; }
+  .ply-x { border: none; background: none; color: var(--text-3); width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 12px; }
+  .ply-x:hover { background: var(--danger-soft); color: var(--danger); }
+  .ply-zhezis { margin-top: 10px; }
+  .ply-zhezis .small { display: block; margin-bottom: 6px; }
+  .zhezi-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .zhezi {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px;
+    font-size: 13px; color: var(--text-2); transition: all var(--t-fast) var(--ease);
+    user-select: none;
+  }
+  .zhezi:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .zhezi input { accent-color: var(--accent); }
+  .ply-add { display: flex; gap: 10px; align-items: stretch; margin-top: 4px; flex-wrap: wrap; }
+  .ply-add .input { flex: 1; }
+  .ply-new { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; flex: 1; }
+  .ply-new summary { cursor: pointer; color: var(--accent); }
+  .ply-new-body { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
 </style>

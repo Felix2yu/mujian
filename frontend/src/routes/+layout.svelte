@@ -1,17 +1,18 @@
 <script>
   import { page } from '$app/stores';
-  import { theme } from '$lib/stores.js';
   import { initStorageInfo } from '$lib/api.js';
   import { onMount } from 'svelte';
   import '$lib/app.css';
 
   const nav = [
-    { href: '/', label: '记录', icon: '◎' },
-    { href: '/analytics', label: '分析', icon: '◫' },
-    { href: '/covers', label: '封面', icon: '▦' },
-    { href: '/categories', label: '分类', icon: '❏' },
-    { href: '/import', label: '导入', icon: '⇪' },
-    { href: '/settings', label: '设置', icon: '⚙' }
+    { href: '/', label: '记录' },
+    { href: '/dramas', label: '剧目' },
+    { href: '/map', label: '地图' },
+    { href: '/analytics', label: '分析' },
+    { href: '/covers', label: '封面' },
+    { href: '/categories', label: '分类' },
+    { href: '/import', label: '导入' },
+    { href: '/settings', label: '设置' }
   ];
 
   onMount(() => { initStorageInfo(); });
@@ -20,12 +21,6 @@
     const p = $page.url.pathname;
     if (href === '/') return p === '/';
     return p.startsWith(href);
-  }
-
-  function cycleTheme() {
-    const order = ['auto', 'light', 'dark'];
-    const cur = $theme || 'auto';
-    theme.set(order[(order.indexOf(cur) + 1) % order.length]);
   }
 </script>
 
@@ -39,13 +34,10 @@
       <nav class="nav">
         {#each nav as item}
           <a href={item.href} class="nav-link" class:active={isActive(item.href)}>
-            <span class="ni">{item.icon}</span>{item.label}
+            {item.label}
           </a>
         {/each}
       </nav>
-      <button class="theme-btn" on:click={cycleTheme} title="切换主题（自动 / 亮色 / 暗色）" aria-label="切换主题">
-        {#if $theme === 'dark'}🌙{:else if $theme === 'light'}☀️{:else}◐{/if}
-      </button>
     </div>
   </header>
   <main class="content">
@@ -127,23 +119,6 @@
     background: var(--accent-soft);
     font-weight: 600;
   }
-  .ni { font-size: 12px; opacity: 0.85; }
-
-  .theme-btn {
-    flex: 0 0 auto;
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    font-size: 15px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: all var(--t-fast) var(--ease);
-  }
-  .theme-btn:hover { border-color: var(--accent); transform: rotate(18deg); }
 
   .content {
     flex: 1;

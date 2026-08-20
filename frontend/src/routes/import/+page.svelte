@@ -50,9 +50,9 @@
   <div
     class="card dropzone"
     class:dragover
-    on:dragover|preventDefault={() => (dragover = true)}
-    on:dragleave={() => (dragover = false)}
-    on:drop={onDrop}
+    ondragover={(e) => { e.preventDefault(); dragover = true; }}
+    ondragleave={() => (dragover = false)}
+    ondrop={onDrop}
     role="button"
     tabindex="0"
   >
@@ -68,14 +68,14 @@
         <div class="h">或点击选择文件</div>
       </div>
     {/if}
-    <input class="dz-input" type="file" accept=".json,.zip" on:change={onFile} title="选择文件" />
+    <input class="dz-input" type="file" accept=".json,.zip" onchange={onFile} title="选择文件" />
   </div>
 
   <div class="btn-row">
-    <button class="btn primary lg" on:click={runImport} disabled={busy || !file}>
+    <button class="btn primary lg" onclick={runImport} disabled={busy || !file}>
       {busy ? '导入中…' : '开始导入'}
     </button>
-    {#if file}<button class="btn" on:click={() => (file = null)}>清除</button>{/if}
+    {#if file}<button class="btn" onclick={() => (file = null)}>清除</button>{/if}
   </div>
 
   {#if error}<div class="banner error">⚠ {error}</div>{/if}

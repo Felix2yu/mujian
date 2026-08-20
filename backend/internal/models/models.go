@@ -27,6 +27,8 @@ type Record struct {
 	ArtistNames       []string    `json:"artist_names"`
 	Guest             []string    `json:"guest"`
 	Play              []string    `json:"play"`
+	DramaIDs          []string    `json:"drama_ids"`
+	ZheziIDs          []string    `json:"zhezi_ids"`
 	TagIDs            []string    `json:"tagIds"`
 	Date              int64       `json:"date"` // unix seconds
 	DateText          string      `json:"dateText"`
@@ -50,6 +52,47 @@ type Category struct {
 	Name        string   `json:"name"`
 	ActiveIDs   []string `json:"activeIds"`
 	RecordCount int      `json:"recordCount"`
+}
+
+// Drama is a 剧目 (a play/drama), a first-class entity that owns an ordered
+// list of 折子 (zhezi / sub-scenes).
+type Drama struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	CategoryName string `json:"categoryName"` // 剧种, e.g. 昆曲 / 越剧
+	Remark       string `json:"remark"`
+	ZheziCount   int    `json:"zheziCount"`
+	RecordCount  int    `json:"recordCount"` // performances referencing this drama
+}
+
+// Zhezi is a 折子 (a sub-scene) belonging to exactly one drama. Because
+// different 剧种/剧团 name the same 折子 differently, each zhezi keeps an
+// ordered list of allowed aliases. SortOrder controls manual ordering within
+// the parent drama.
+type Zhezi struct {
+	ID        string   `json:"id"`
+	DramaID   string   `json:"dramaId"`
+	Name      string   `json:"name"`
+	Aliases   []string `json:"aliases"`
+	SortOrder int      `json:"sortOrder"`
+	Remark    string   `json:"remark"`
+}
+
+// DramaDetail is Drama plus its ordered zhezis and the performances that
+// reference the drama.
+type DramaDetail struct {
+	Drama
+	Zhezis  []Zhezi  `json:"zhezis"`
+	Records []Record `json:"records"`
+}
+
+// DramaTree is a lightweight drama + its zhezis, used by pickers that need the
+// full drama/zhezi structure in one request without performance records.
+type DramaTree struct {
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	CategoryName string  `json:"categoryName"`
+	Zhezis       []Zhezi `json:"zhezis"`
 }
 
 // Meta mirrors the export's `meta` object (song / tags / webdav_config).
@@ -92,6 +135,8 @@ type RecordRequest struct {
 	ArtistNames       []string    `json:"artist_names"`
 	Guest             []string    `json:"guest"`
 	Play              []string    `json:"play"`
+	DramaIDs          []string    `json:"drama_ids"`
+	ZheziIDs          []string    `json:"zhezi_ids"`
 	TagIDs            []string    `json:"tagIds"`
 	Date              int64       `json:"date"`
 	DateText          string      `json:"dateText"`

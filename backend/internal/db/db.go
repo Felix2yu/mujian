@@ -39,6 +39,11 @@ func New(dbPath string) (*DB, error) {
 	if err := db.migrate(); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+	// 剧名与剧目等价：从既有记录的剧名(play)补齐剧目档案并关联记录。
+	// 幂等，可安全地在每次启动时运行。
+	if err := db.BackfillDramasFromRecords(); err != nil {
+		return nil, fmt.Errorf("backfill dramas: %w", err)
+	}
 
 	return db, nil
 }
@@ -129,6 +134,24 @@ func (db *DB) migrate() error {
 			key TEXT PRIMARY KEY,
 			value TEXT NOT NULL DEFAULT '[]'
 		)`,
+		`CREATE TABLE IF NOT EXISTS dramas (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			category_name TEXT NOT NULL DEFAULT '',
+			remark TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_dramas_name ON dramas(name)`,
+		`CREATE TABLE IF NOT EXISTS zhezis (
+			id TEXT PRIMARY KEY,
+			drama_id TEXT NOT NULL,
+			name TEXT NOT NULL,
+			aliases TEXT NOT NULL DEFAULT '[]',
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			remark TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_zhezis_drama ON zhezis(drama_id)`,
 	}
 
 	for _, q := range queries {
@@ -137,6 +160,32 @@ func (db *DB) migrate() error {
 		}
 	}
 
+	// Add the drama/zhezi link columns to existing records tables that were
+	// created before this schema addition.
+	if err := db.addColumn("records", "drama_ids", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
+		return err
+	}
+	if err := db.addColumn("records", "zhezi_ids", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// addColumn adds a column to a table if it does not already exist. SQLite 3
+// versions bundled with modernc.org/sqlite support ADD COLUMN; we guard on
+// pragma_table_info to make migration idempotent.
+func (db *DB) addColumn(table, col, ddl string) error {
+	var cnt int
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?", table, col).Scan(&cnt); err != nil {
+		return fmt.Errorf("pragma %s.%s: %w", table, col, err)
+	}
+	if cnt > 0 {
+		return nil
+	}
+	if _, err := db.conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", table, col+" "+ddl)); err != nil {
+		return fmt.Errorf("add column %s.%s: %w", table, col, err)
+	}
 	return nil
 }
 
@@ -175,18 +224,18 @@ func unmarshalCoordinate(s string) *models.Coordinate {
 // ---------- Record queries ----------
 
 const recordColumns = `id, name, channel, city, address, coordinate, cover, cover_file,
-	cover_thumb, custom_category_id, category_name, artist_names, guest, play, tag_ids,
+	cover_thumb, custom_category_id, category_name, artist_names, guest, play, drama_ids, zhezi_ids, tag_ids,
 	date, date_text, rating, seat, friends, company, remark, active_status,
 	price, price_currency, pay_price, pay_price_currency, other_cost, other_cost_currency`
 
 func scanRecord(rows *sql.Rows) (*models.Record, error) {
 	var r models.Record
 	var (
-		coordinate, artistNames, guest, play, tagIDs string
+		coordinate, artistNames, guest, play, dramaIDs, zheziIDs, tagIDs string
 	)
 	err := rows.Scan(
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
-		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &artistNames, &guest, &play, &tagIDs,
+		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &artistNames, &guest, &play, &dramaIDs, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
 		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency,
 	)
@@ -197,6 +246,8 @@ func scanRecord(rows *sql.Rows) (*models.Record, error) {
 	r.ArtistNames = unmarshalStrings(artistNames)
 	r.Guest = unmarshalStrings(guest)
 	r.Play = unmarshalStrings(play)
+	r.DramaIDs = unmarshalStrings(dramaIDs)
+	r.ZheziIDs = unmarshalStrings(zheziIDs)
 	r.TagIDs = unmarshalStrings(tagIDs)
 	// List contexts don't carry the base64 thumbnail (payload bloat); the
 	// detail view (scanRecordRow) keeps it.
@@ -212,6 +263,8 @@ type RecordFilter struct {
 	Query    string
 	Category string
 	City     string
+	DramaID  string // a record whose drama_ids contains this id
+	ZheziID  string // a record whose zhezi_ids contains this id
 }
 
 func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
@@ -233,6 +286,14 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 	if f.City != "" {
 		where = append(where, "city = ?")
 		args = append(args, f.City)
+	}
+	if f.DramaID != "" {
+		where = append(where, "instr(drama_ids, ?) > 0")
+		args = append(args, `"`+f.DramaID+`"`)
+	}
+	if f.ZheziID != "" {
+		where = append(where, "instr(zhezi_ids, ?) > 0")
+		args = append(args, `"`+f.ZheziID+`"`)
 	}
 	if f.Year > 0 && f.Month > 0 {
 		// filter by calendar month of the unix `date`
@@ -310,11 +371,11 @@ func (db *DB) GetRecord(id string) (*models.Record, error) {
 func scanRecordRow(row *sql.Row) (*models.Record, error) {
 	var r models.Record
 	var (
-		coordinate, artistNames, guest, play, tagIDs string
+		coordinate, artistNames, guest, play, dramaIDs, zheziIDs, tagIDs string
 	)
 	err := row.Scan(
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
-		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &artistNames, &guest, &play, &tagIDs,
+		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &artistNames, &guest, &play, &dramaIDs, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
 		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency,
 	)
@@ -325,6 +386,8 @@ func scanRecordRow(row *sql.Row) (*models.Record, error) {
 	r.ArtistNames = unmarshalStrings(artistNames)
 	r.Guest = unmarshalStrings(guest)
 	r.Play = unmarshalStrings(play)
+	r.DramaIDs = unmarshalStrings(dramaIDs)
+	r.ZheziIDs = unmarshalStrings(zheziIDs)
 	r.TagIDs = unmarshalStrings(tagIDs)
 	return &r, nil
 }
@@ -346,31 +409,68 @@ func (db *DB) UpsertRecord(r models.Record) error {
 	_, err := db.conn.Exec(`
 		INSERT INTO records (
 			id, name, channel, city, address, coordinate, cover, cover_file, cover_thumb,
-			custom_category_id, category_name, artist_names, guest, play, tag_ids,
+			custom_category_id, category_name, artist_names, guest, play, drama_ids, zhezi_ids, tag_ids,
 			date, date_text, rating, seat, friends, company, remark, active_status,
 			price, price_currency, pay_price, pay_price_currency, other_cost, other_cost_currency
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name, channel=excluded.channel, city=excluded.city, address=excluded.address,
 			coordinate=excluded.coordinate, cover=excluded.cover, cover_file=excluded.cover_file, cover_thumb=excluded.cover_thumb,
 			custom_category_id=excluded.custom_category_id, category_name=excluded.category_name,
-			artist_names=excluded.artist_names, guest=excluded.guest, play=excluded.play, tag_ids=excluded.tag_ids,
+			artist_names=excluded.artist_names, guest=excluded.guest, play=excluded.play,
+			drama_ids=excluded.drama_ids, zhezi_ids=excluded.zhezi_ids, tag_ids=excluded.tag_ids,
 			date=excluded.date, date_text=excluded.date_text, rating=excluded.rating, seat=excluded.seat,
 			friends=excluded.friends, company=excluded.company, remark=excluded.remark, active_status=excluded.active_status,
 			price=excluded.price, price_currency=excluded.price_currency, pay_price=excluded.pay_price,
 			pay_price_currency=excluded.pay_price_currency, other_cost=excluded.other_cost, other_cost_currency=excluded.other_cost_currency
 	`,
-		r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
-		r.CustomCategoryID, r.CategoryName, marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play), marshalJSON(r.TagIDs),
-		r.Date, r.DateText, r.Rating, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
-		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency,
+	r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
+	r.CustomCategoryID, r.CategoryName, marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
+	marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
+	r.Date, r.DateText, r.Rating, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
+	r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency,
 	)
 	return err
+}
+
+// dramaNames resolves a list of drama ids to their names, preserving order.
+func (db *DB) dramaNames(ids []string) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, 0, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+	rows, err := db.conn.Query("SELECT id, name FROM dramas WHERE id IN ("+strings.Join(placeholders, ",")+")", args...)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	byID := map[string]string{}
+	for rows.Next() {
+		var id, name string
+		if err := rows.Scan(&id, &name); err == nil {
+			byID[id] = name
+		}
+	}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if name, ok := byID[id]; ok {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 func (db *DB) CreateRecord(r models.RecordRequest) (*models.Record, error) {
 	rec := requestToRecord(r)
 	rec.ID = newID()
+	if names := db.dramaNames(r.DramaIDs); names != nil {
+		rec.Play = names
+	}
 	if err := db.UpsertRecord(rec); err != nil {
 		return nil, err
 	}
@@ -392,6 +492,9 @@ func (db *DB) UpdateRecord(id string, r models.RecordRequest) (*models.Record, e
 	if r.CustomCategoryID != "" {
 		rec.CustomCategoryID = r.CustomCategoryID
 	}
+	if names := db.dramaNames(r.DramaIDs); names != nil {
+		rec.Play = names
+	}
 	if err := db.UpsertRecord(rec); err != nil {
 		return nil, err
 	}
@@ -411,6 +514,14 @@ func requestToRecord(r models.RecordRequest) models.Record {
 	if p == nil {
 		p = []string{}
 	}
+	d := r.DramaIDs
+	if d == nil {
+		d = []string{}
+	}
+	z := r.ZheziIDs
+	if z == nil {
+		z = []string{}
+	}
 	t := r.TagIDs
 	if t == nil {
 		t = []string{}
@@ -419,7 +530,7 @@ func requestToRecord(r models.RecordRequest) models.Record {
 		Name: r.Name, Channel: r.Channel, City: r.City, Address: r.Address,
 		Coordinate: r.Coordinate, Cover: r.Cover, CoverFile: r.CoverFile, CoverThumb: r.CoverThumb,
 		CustomCategoryID: r.CustomCategoryID, CategoryName: r.CategoryName,
-		ArtistNames: a, Guest: g, Play: p, TagIDs: t,
+		ArtistNames: a, Guest: g, Play: p, DramaIDs: d, ZheziIDs: z, TagIDs: t,
 		Date: r.Date, DateText: r.DateText, Rating: r.Rating, Seat: r.Seat,
 		Friends: r.Friends, Company: r.Company, Remark: r.Remark, ActiveStatus: r.ActiveStatus,
 		Price: r.Price, PriceCurrency: r.PriceCurrency, PayPrice: r.PayPrice,
@@ -523,6 +634,292 @@ func (db *DB) UpsertCategory(c models.Category) error {
 func (db *DB) DeleteCategory(id string) error {
 	_, err := db.conn.Exec("DELETE FROM categories WHERE id = ?", id)
 	return err
+}
+
+// ---------- Dramas & Zhezis ----------
+
+func (db *DB) ListDramas() ([]models.Drama, error) {
+	rows, err := db.conn.Query(`
+		SELECT d.id, d.name, d.category_name, d.remark,
+			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id) AS zhezi_count,
+			(SELECT COUNT(*) FROM records r WHERE instr(r.drama_ids, '"' || d.id || '"') > 0) AS record_count
+		FROM dramas d ORDER BY d.name COLLATE NOCASE`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.Drama
+	for rows.Next() {
+		var d models.Drama
+		if err := rows.Scan(&d.ID, &d.Name, &d.CategoryName, &d.Remark, &d.ZheziCount, &d.RecordCount); err != nil {
+			continue
+		}
+		out = append(out, d)
+	}
+	if out == nil {
+		out = []models.Drama{}
+	}
+	return out, nil
+}
+
+func (db *DB) GetDrama(id string) (*models.Drama, error) {
+	var d models.Drama
+	err := db.conn.QueryRow(`
+		SELECT d.id, d.name, d.category_name, d.remark,
+			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id),
+			(SELECT COUNT(*) FROM records r WHERE instr(r.drama_ids, '"' || d.id || '"') > 0)
+		FROM dramas d WHERE d.id = ?`, id).
+		Scan(&d.ID, &d.Name, &d.CategoryName, &d.Remark, &d.ZheziCount, &d.RecordCount)
+	if err != nil {
+		return nil, fmt.Errorf("drama not found: %w", err)
+	}
+	return &d, nil
+}
+
+func (db *DB) ListZhezisByDrama(dramaID string) ([]models.Zhezi, error) {
+	rows, err := db.conn.Query(
+		`SELECT id, drama_id, name, aliases, sort_order, remark FROM zhezis WHERE drama_id = ? ORDER BY sort_order ASC, created_at ASC`,
+		dramaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.Zhezi
+	for rows.Next() {
+		var z models.Zhezi
+		var aliases string
+		if err := rows.Scan(&z.ID, &z.DramaID, &z.Name, &aliases, &z.SortOrder, &z.Remark); err != nil {
+			continue
+		}
+		z.Aliases = unmarshalStrings(aliases)
+		out = append(out, z)
+	}
+	if out == nil {
+		out = []models.Zhezi{}
+	}
+	return out, nil
+}
+
+func (db *DB) ListDramaTree() ([]models.DramaTree, error) {
+	dramas, err := db.ListDramas()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.DramaTree, 0, len(dramas))
+	for _, d := range dramas {
+		zs, err := db.ListZhezisByDrama(d.ID)
+		if err != nil {
+			continue
+		}
+		out = append(out, models.DramaTree{ID: d.ID, Name: d.Name, CategoryName: d.CategoryName, Zhezis: zs})
+	}
+	if out == nil {
+		out = []models.DramaTree{}
+	}
+	return out, nil
+}
+
+func (db *DB) GetDramaDetail(id string) (*models.DramaDetail, error) {
+	d, err := db.GetDrama(id)
+	if err != nil {
+		return nil, err
+	}
+	zhezis, err := db.ListZhezisByDrama(id)
+	if err != nil {
+		return nil, err
+	}
+	records, err := db.ListRecords(RecordFilter{DramaID: id})
+	if err != nil {
+		return nil, err
+	}
+	return &models.DramaDetail{Drama: *d, Zhezis: zhezis, Records: records}, nil
+}
+
+func (db *DB) SaveDrama(d models.Drama) (*models.Drama, error) {
+	create := d.ID == ""
+	if create {
+		d.ID = newID()
+	}
+	_, err := db.conn.Exec(`
+		INSERT INTO dramas (id, name, category_name, remark) VALUES (?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET name=excluded.name, category_name=excluded.category_name, remark=excluded.remark`,
+		d.ID, d.Name, d.CategoryName, d.Remark)
+	if err != nil {
+		return nil, fmt.Errorf("save drama: %w", err)
+	}
+	return db.GetDrama(d.ID)
+}
+
+func (db *DB) DeleteDrama(id string) error {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("DELETE FROM zhezis WHERE drama_id = ?", id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM dramas WHERE id = ?", id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (db *DB) CreateZhezi(z models.Zhezi) (*models.Zhezi, error) {
+	z.ID = newID()
+	if z.Aliases == nil {
+		z.Aliases = []string{}
+	}
+	next := 0
+	db.conn.QueryRow("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM zhezis WHERE drama_id = ?", z.DramaID).Scan(&next)
+	z.SortOrder = next
+	_, err := db.conn.Exec(`
+		INSERT INTO zhezis (id, drama_id, name, aliases, sort_order, remark) VALUES (?, ?, ?, ?, ?, ?)`,
+		z.ID, z.DramaID, z.Name, marshalJSON(z.Aliases), z.SortOrder, z.Remark)
+	if err != nil {
+		return nil, fmt.Errorf("create zhezi: %w", err)
+	}
+	return db.zheziByID(z.ID)
+}
+
+func (db *DB) zheziByID(id string) (*models.Zhezi, error) {
+	var z models.Zhezi
+	var aliases string
+	err := db.conn.QueryRow(
+		`SELECT id, drama_id, name, aliases, sort_order, remark FROM zhezis WHERE id = ?`, id).
+		Scan(&z.ID, &z.DramaID, &z.Name, &aliases, &z.SortOrder, &z.Remark)
+	if err != nil {
+		return nil, fmt.Errorf("zhezi not found: %w", err)
+	}
+	z.Aliases = unmarshalStrings(aliases)
+	return &z, nil
+}
+
+func (db *DB) UpdateZhezi(z models.Zhezi) (*models.Zhezi, error) {
+	if z.Aliases == nil {
+		z.Aliases = []string{}
+	}
+	_, err := db.conn.Exec(`
+		UPDATE zhezis SET name = ?, aliases = ?, remark = ? WHERE id = ?`,
+		z.Name, marshalJSON(z.Aliases), z.Remark, z.ID)
+	if err != nil {
+		return nil, fmt.Errorf("update zhezi: %w", err)
+	}
+	return db.zheziByID(z.ID)
+}
+
+func (db *DB) DeleteZhezi(id string) error {
+	_, err := db.conn.Exec("DELETE FROM zhezis WHERE id = ?", id)
+	return err
+}
+
+// ReorderZhezis sets the manual order of a drama's zhezis from an explicit
+// ordered id list (first = top).
+func (db *DB) ReorderZhezis(dramaID string, orderedIDs []string) error {
+	for i, id := range orderedIDs {
+		if _, err := db.conn.Exec("UPDATE zhezis SET sort_order = ? WHERE id = ? AND drama_id = ?", i, id, dramaID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// dramaIDByName returns the id of a drama with the exact name, or "" if none.
+func (db *DB) dramaIDByName(name string) string {
+	var id string
+	if err := db.conn.QueryRow("SELECT id FROM dramas WHERE name = ? LIMIT 1", name).Scan(&id); err != nil {
+		return ""
+	}
+	return id
+}
+
+func (db *DB) recordDramaIDs(id string) ([]string, error) {
+	var s string
+	if err := db.conn.QueryRow("SELECT drama_ids FROM records WHERE id = ?", id).Scan(&s); err != nil {
+		return nil, err
+	}
+	return unmarshalStrings(s), nil
+}
+
+// BackfillDramasFromRecords derives 剧目 archives from the 剧名 (play) already
+// held in records — the two are equivalent — and links each record to the
+// matching drama. Idempotent: only creates dramas for names not yet present
+// and never drops existing links, so it is safe to run on every startup.
+func (db *DB) BackfillDramasFromRecords() error {
+	rows, err := db.conn.Query("SELECT id, play FROM records")
+	if err != nil {
+		return fmt.Errorf("backfill: query records: %w", err)
+	}
+	type rowRec struct {
+		id    string
+		plays []string
+	}
+	var recs []rowRec
+	seen := map[string]bool{}
+	for rows.Next() {
+		var id, play string
+		if err := rows.Scan(&id, &play); err != nil {
+			rows.Close()
+			return err
+		}
+		var plays []string
+		for _, p := range unmarshalStrings(play) {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				plays = append(plays, p)
+				seen[p] = true
+			}
+		}
+		recs = append(recs, rowRec{id: id, plays: plays})
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// Ensure a drama exists for every distinct 剧名 (name -> id).
+	dramaIDByPlay := map[string]string{}
+	for name := range seen {
+		if id := db.dramaIDByName(name); id != "" {
+			dramaIDByPlay[name] = id
+			continue
+		}
+		id := newID()
+		if _, err := db.conn.Exec("INSERT INTO dramas (id, name) VALUES (?, ?)", id, name); err != nil {
+			return err
+		}
+		dramaIDByPlay[name] = id
+	}
+
+	// Link each record's plays to the corresponding drama ids.
+	for _, r := range recs {
+		if len(r.plays) == 0 {
+			continue
+		}
+		current, err := db.recordDramaIDs(r.id)
+		if err != nil {
+			return err
+		}
+		set := map[string]bool{}
+		var merged []string
+		push := func(id string) {
+			if id == "" || set[id] {
+				return
+			}
+			set[id] = true
+			merged = append(merged, id)
+		}
+		for _, id := range current {
+			push(id)
+		}
+		for _, p := range r.plays {
+			push(dramaIDByPlay[p])
+		}
+		if _, err := db.conn.Exec("UPDATE records SET drama_ids = ? WHERE id = ?", marshalJSON(merged), r.id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ---------- Meta ----------

@@ -139,8 +139,8 @@
     <div class="sec-head">
       <h3>① 重复封面合并</h3>
       <div class="sec-actions">
-        {#if groups.length}<button class="btn ghost sm" on:click={() => (selectedHashes = new Set(groups.map((g) => g.hash)))}>全选</button>{/if}
-        <button class="btn sm" on:click={scanDuplicates} disabled={groupsLoading}>{groupsLoading ? '扫描中…' : (groups.length ? '重新扫描' : '扫描重复封面')}</button>
+        {#if groups.length}<button class="btn ghost sm" onclick={() => (selectedHashes = new Set(groups.map((g) => g.hash)))}>全选</button>{/if}
+        <button class="btn sm" onclick={scanDuplicates} disabled={groupsLoading}>{groupsLoading ? '扫描中…' : (groups.length ? '重新扫描' : '扫描重复封面')}</button>
       </div>
     </div>
 
@@ -149,7 +149,7 @@
       <div class="glist">
         {#each groups as g}
           <label class="grow card">
-            <input type="checkbox" checked={selectedHashes.has(g.hash)} on:change={() => toggleHash(g.hash)} />
+            <input type="checkbox" checked={selectedHashes.has(g.hash)} onchange={() => toggleHash(g.hash)} />
             <img src={coverUrl(g.records[0]?.cover_file)} alt="" loading="lazy" />
             <div class="ginfo">
               <div class="gname">共 {g.count} 条记录引用相同内容 · {fmtSize(g.size)}</div>
@@ -160,7 +160,7 @@
         {/each}
       </div>
       <div class="sec-actions">
-        <button class="btn primary" on:click={runMerge} disabled={merging || !selectedHashes.size}>
+        <button class="btn primary" onclick={runMerge} disabled={merging || !selectedHashes.size}>
           {merging ? '合并中…' : `合并选中（${selectedHashes.size} 组）`}
         </button>
       </div>
@@ -179,9 +179,9 @@
     <div class="sec-head">
       <h3>② 未引用封面清理</h3>
       <div class="sec-actions">
-        {#if orphans.length}<button class="btn ghost sm" on:click={() => (selectedOrphans = new Set(orphans.map((o) => o.file_name)))}>全选</button>{/if}
-        <button class="btn sm" on:click={scanOrphans} disabled={orphansLoading}>{orphansLoading ? '扫描中…' : (orphans.length ? '重新扫描' : '扫描未引用封面')}</button>
-        <button class="btn danger sm" on:click={runPurge} disabled={purging}>清空回收站</button>
+        {#if orphans.length}<button class="btn ghost sm" onclick={() => (selectedOrphans = new Set(orphans.map((o) => o.file_name)))}>全选</button>{/if}
+        <button class="btn sm" onclick={scanOrphans} disabled={orphansLoading}>{orphansLoading ? '扫描中…' : (orphans.length ? '重新扫描' : '扫描未引用封面')}</button>
+        <button class="btn danger sm" onclick={runPurge} disabled={purging}>清空回收站</button>
       </div>
     </div>
 
@@ -190,7 +190,7 @@
       <div class="olist">
         {#each orphans as o}
           <label class="orow">
-            <input type="checkbox" checked={selectedOrphans.has(o.file_name)} on:change={() => toggleOrphan(o.file_name)} />
+            <input type="checkbox" checked={selectedOrphans.has(o.file_name)} onchange={() => toggleOrphan(o.file_name)} />
             <img src={coverUrl(`covers/${o.file_name}`)} alt="" loading="lazy" />
             <span class="oname">{o.file_name}</span>
             <span class="osize tiny">{fmtSize(o.size)}</span>
@@ -198,7 +198,7 @@
         {/each}
       </div>
       <div class="sec-actions">
-        <button class="btn primary" on:click={runCleanup} disabled={cleaning || !selectedOrphans.size}>
+        <button class="btn primary" onclick={runCleanup} disabled={cleaning || !selectedOrphans.size}>
           {cleaning ? '清理中…' : `移入回收站（${selectedOrphans.size} 张）`}
         </button>
       </div>
@@ -216,7 +216,7 @@
   <div class="card sec">
     <div class="sec-head">
       <h3>③ 统一缩略图</h3>
-      <button class="btn sm" on:click={runThumbs} disabled={thumbsBusy}>{thumbsBusy ? '生成中…' : '重新生成缩略图'}</button>
+      <button class="btn sm" onclick={runThumbs} disabled={thumbsBusy}>{thumbsBusy ? '生成中…' : '重新生成缩略图'}</button>
     </div>
     <p class="tiny">为所有有封面的演出生成统一规格（宽 ≤400px JPEG）的缩略图，提升列表加载体验。</p>
   </div>
