@@ -1,6 +1,6 @@
 # 幕间 (MuJian)
 
-![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white) ![Svelte](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white) [![build](https://img.shields.io/github/actions/workflow/status/Felix2yu/mujian/build.yml?branch=main)](https://github.com/Felix2yu/mujian/actions) [![codecov](https://codecov.io/gh/Felix2yu/mujian/branch/main/graph/badge.svg)](https://codecov.io/gh/Felix2yu/mujian) [![last-commit](https://img.shields.io/github/last-commit/Felix2yu/mujian)](https://github.com/Felix2yu/mujian)
+![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white) ![Svelte](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white) [![build](https://img.shields.io/github/actions/workflow/status/Felix2yu/mujian/build.yml?branch=main)](https://github.com/Felix2yu/mujian/actions) [![codecov](https://codecov.io/gh/Felix2yu/mujian/branch/main/graph/badge.svg)](https://codecov.io/gh/Felix2yu/mujian) [![last-commit](https://img.shields.io/github/last-commit/Felix2yu/mujian)](https://github.com/Felix2yu/mujian) [![license](https://img.shields.io/github/license/Felix2yu/mujian)](https://github.com/Felix2yu/mujian/blob/main/LICENSE)
 
 现场演出记录管理应用。记录每一场演出，管理剧目与折子档案，支持日历、地图、数据分析、封面管理与 PWA 离线使用。
 
