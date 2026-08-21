@@ -9,7 +9,7 @@ dev-backend:
 build:
 	cd frontend && pnpm run build
 	cp -r frontend/dist backend/dist
-	cd backend && CGO_ENABLED=0 go build -o mujian .
+	cd backend && CGO_ENABLED=1 go build -o mujian .
 
 docker:
 	docker compose up -d
