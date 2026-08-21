@@ -9,7 +9,7 @@ RUN pnpm run build
 
 # Build backend (cached unless Go files change, frontend dist is now available)
 FROM golang:1.26-alpine AS backend
-RUN apk add --no-cache gcc libavif-dev
+RUN apk add --no-cache gcc musl-dev libavif-dev
 WORKDIR /app
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
