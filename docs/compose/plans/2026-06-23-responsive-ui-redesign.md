@@ -918,7 +918,7 @@ git commit -m "feat: calendar component responsive for mobile"
 - [ ] **Step 1: Build frontend**
 
 ```bash
-cd frontend && npm install && npm run build
+cd frontend && pnpm install && pnpm run build
 ```
 
 - [ ] **Step 2: Copy dist and build backend**

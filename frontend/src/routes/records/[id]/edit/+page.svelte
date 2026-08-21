@@ -46,6 +46,7 @@
 </div>
 
 <style>
+  .fade-up { max-width: 860px; margin: 0 auto; }
   .back { display: inline-flex; color: var(--text-muted); font-size: 13.5px; margin-bottom: 10px; }
   .back:hover { color: var(--accent); }
 </style>

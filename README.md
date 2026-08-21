@@ -31,10 +31,10 @@
 
 ```bash
 # 安装前端依赖
-cd frontend && npm install
+cd frontend && pnpm install
 
 # 启动前端 (端口 5173)
-npm run dev
+pnpm run dev
 
 # 启动后端 (端口 8080，支持热重载)
 cd .. && make dev-backend

@@ -65,6 +65,7 @@
   let uploading = $state(false);
   let saving = $state(false);
   let pickerOpen = $state(false);
+  let fileInput = $state(null);
 
   // 地址自动定位（高德地理编码）状态
   let geoStatus = $state('idle'); // idle | loading | ok | nokey | notfound | error
@@ -104,7 +105,8 @@
 
   // 剧目 / 折子 picker state
   let dramaTree = $state([]);
-  let pickAdd = $state('');
+  let dramaQuery = $state('');
+  let showDramaList = $state(false);
   let newDrama = $state({ name: '', categoryName: '' });
   let creatingDrama = $state(false);
 
@@ -114,6 +116,17 @@
 
   const addableDramas = $derived(
     dramaTree.filter((d) => !form.drama_ids.includes(d.id))
+  );
+
+  // 关联剧目下拉的可搜索过滤结果（按名称 / 剧种）
+  const filteredDramas = $derived(
+    dramaQuery.trim()
+      ? addableDramas.filter(
+          (d) =>
+            (d.name || '').toLowerCase().includes(dramaQuery.trim().toLowerCase()) ||
+            (d.categoryName || '').toLowerCase().includes(dramaQuery.trim().toLowerCase())
+        )
+      : addableDramas
   );
 
   function isZheziSelected(zid) {
@@ -129,7 +142,7 @@
   function addDrama(did) {
     if (!did || form.drama_ids.includes(did)) return;
     form.drama_ids = [...form.drama_ids, did];
-    pickAdd = '';
+    dramaQuery = '';
   }
 
   function removeDrama(did) {
@@ -164,6 +177,10 @@
   }
 
   onMount(loadDramaTree);
+
+  function triggerUpload() {
+    fileInput?.click();
+  }
 
   async function handleUpload(e) {
     const file = e.target.files?.[0];
@@ -263,7 +280,6 @@
       </div>
     </div>
     <div class="row">
-      <div><label>渠道 / 平台</label><input class="input" bind:value={form.channel} placeholder="如：大麦" /></div>
       <div><label>城市</label><input class="input" bind:value={form.city} placeholder="如：上海" /></div>
       <div class="grow2"><label>场馆 / 地址</label><input class="input" bind:value={form.address} placeholder="如：上海大剧院" /></div>
     </div>
@@ -323,7 +339,10 @@
   </div>
 
   <div class="card section">
-    <h3>费用</h3>
+    <h3>费用与渠道</h3>
+    <div class="row">
+      <div class="grow2"><label>购买渠道</label><input class="input" bind:value={form.channel} placeholder="如：大麦" /></div>
+    </div>
     <div class="row">
       <div>
         <label>票价</label>
@@ -376,12 +395,31 @@
       {/each}
     </div>
     <div class="ply-add">
-      <select class="input" bind:value={pickAdd} onchange={(e) => addDrama(e.currentTarget.value)}>
-        <option value="">＋ 关联已有剧目…</option>
-        {#each addableDramas as d}
-          <option value={d.id}>{d.name}{d.categoryName ? `（${d.categoryName}）` : ''}</option>
-        {/each}
-      </select>
+      <div class="combo">
+        <input
+          class="input"
+          placeholder="🔍 搜索并关联已有剧目…"
+          bind:value={dramaQuery}
+          onfocus={() => (showDramaList = true)}
+          onblur={() => setTimeout(() => (showDramaList = false), 120)}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              const first = filteredDramas[0];
+              if (first) addDrama(first.id);
+            }
+          }}
+        />
+        {#if showDramaList}
+          <div class="combo-list">
+            {#each filteredDramas as d (d.id)}
+              <button type="button" class="combo-item" onclick={() => addDrama(d.id)}>{d.name}{d.categoryName ? `（${d.categoryName}）` : ''}</button>
+            {:else}
+              <div class="combo-empty">无匹配剧目，可改用右侧新建</div>
+            {/each}
+          </div>
+        {/if}
+      </div>
       <details class="ply-new">
         <summary class="small">＋ 新建剧目档案</summary>
         <div class="ply-new-body">
@@ -402,24 +440,26 @@
 
   <div class="card section">
     <h3>备注</h3>
-    <textarea class="input" rows="4" bind:value={form.remark} placeholder="剧评、观感、备忘…"></textarea>
+    <textarea class="input" rows="10" bind:value={form.remark} placeholder="剧评、观感、备忘…"></textarea>
   </div>
 
   <div class="card section">
     <h3>封面</h3>
-    <div class="row">
-      <div class="grow2">
-        <label>封面</label>
-        <input class="input" bind:value={form.coverFile} placeholder="covers/xxx.jpg 或上传图片" />
+    <div class="cover-layout">
+      {#if form.coverFile}
+        <img class="preview" src={coverUrl(form.coverFile)} alt="封面预览" />
+      {/if}
+      <div class="cover-main">
         <div class="upload-row">
-          <label class="btn sm upload-btn">
+          <button type="button" class="btn sm" onclick={triggerUpload} disabled={uploading}>
             {uploading ? '上传中…' : '⇪ 上传图片'}
-            <input type="file" accept="image/*" onchange={handleUpload} disabled={uploading} hidden />
-          </label>
+          </button>
+          <input type="file" accept="image/*" onchange={handleUpload} disabled={uploading} hidden bind:this={fileInput} />
           <button type="button" class="btn sm" onclick={() => (pickerOpen = true)}>▦ 从已有演出引用</button>
-          {#if form.coverFile}
-            <img class="preview" src={coverUrl(form.coverFile)} alt="封面预览" />
-          {/if}
+        </div>
+        <div class="cover-url">
+          <label>封面 URL</label>
+          <input class="input" bind:value={form.coverFile} placeholder="covers/xxx.jpg 或上传图片" />
         </div>
       </div>
     </div>
@@ -436,7 +476,7 @@
 <CoverPicker open={pickerOpen} onSelect={pickCover} onClose={() => (pickerOpen = false)} />
 
 <style>
-  .form { display: flex; flex-direction: column; gap: 14px; max-width: 860px; }
+  .form { display: flex; flex-direction: column; gap: 14px; max-width: 860px; margin: 0 auto; }
   .section { padding: 18px 20px; }
   .section h3 { margin: 0 0 6px; font-size: 15.5px; color: var(--text-2); }
   .req { color: var(--accent); }
@@ -448,7 +488,7 @@
   .geo-manual { margin-top: 8px; }
   .geo-manual summary { cursor: pointer; color: var(--accent); }
 
-  .star-row { display: flex; align-items: center; gap: 2px; padding-top: 2px; }
+  .star-row { display: flex; align-items: center; gap: 2px; min-height: 40px; }
   .star {
     border: none;
     background: none;
@@ -462,9 +502,18 @@
   .star.on { color: var(--gold); }
   .rate-text { margin-left: 8px; }
 
-  .upload-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
-  .upload-btn { cursor: pointer; }
-  .preview { width: 60px; height: 84px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+  .cover-layout { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+  .cover-main { display: flex; flex-direction: column; gap: 14px; flex: 1; min-width: 220px; }
+  .upload-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+  .cover-url label { display: block; font-size: 13px; font-weight: 500; color: var(--text-2); margin: 0 0 6px; }
+  .preview {
+    width: 180px;
+    height: 240px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
 
   .actions { display: flex; gap: 10px; margin-top: 4px; }
 
@@ -490,6 +539,40 @@
   .zhezi input { accent-color: var(--accent); }
   .ply-add { display: flex; gap: 10px; align-items: stretch; margin-top: 4px; flex-wrap: wrap; }
   .ply-add .input { flex: 1; }
+
+  /* 可搜索的「关联已有剧目」下拉 */
+  .combo { position: relative; flex: 2; min-width: 200px; }
+  .combo-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 30;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+    max-height: 230px;
+    overflow-y: auto;
+    padding: 4px;
+  }
+  .combo-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: none;
+    padding: 9px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    color: var(--text-2);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .combo-item:hover { background: var(--accent-soft); color: var(--accent); }
+  .combo-empty { padding: 10px 12px; color: var(--text-3); font-size: 13px; }
   .ply-new { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; flex: 1; }
   .ply-new summary { cursor: pointer; color: var(--accent); }
   .ply-new-body { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
