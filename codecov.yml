@@ -1,0 +1,32 @@
+# Codecov configuration
+#
+# Project status gate: overall backend coverage must stay >= 85%.
+# The coverage profile is produced by the "Test backend with coverage" step
+# in .github/workflows/build.yml (go test -coverprofile=coverage.out).
+
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  precision: 1
+  round: down
+  status:
+    project:
+      default:
+        target: 85%
+        threshold: 1%
+        if_ci_failed: error
+    patch:
+      default:
+        target: 85%
+        threshold: 1%
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false
+
+ignore:
+  - "backend/main.go"
+  - "backend/debug_pprof.go"
+  - "backend/debug_disabled.go"

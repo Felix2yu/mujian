@@ -341,8 +341,13 @@ func parseTimeArg(s string, loc *time.Location) (time.Time, bool) {
 	if s == "" {
 		return time.Time{}, false
 	}
-	if n, err := parseInt64(s); err == nil {
-		return time.Unix(n, 0).In(loc), true
+	// Only treat the value as unix seconds when it is a pure integer; date
+	// strings like "2026-08-22" start with digits and must not be misread as
+	// an epoch timestamp.
+	if isAllDigits(s) {
+		if n, err := parseInt64(s); err == nil {
+			return time.Unix(n, 0).In(loc), true
+		}
 	}
 	for _, f := range []string{"2006-01-02", "2006-01-02 15:04:05", "2006-01-02T15:04:05"} {
 		if t, err := time.ParseInLocation(f, s, loc); err == nil {
@@ -350,6 +355,18 @@ func parseTimeArg(s string, loc *time.Location) (time.Time, bool) {
 		}
 	}
 	return time.Time{}, false
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func parseInt64(s string) (int64, error) {
@@ -863,7 +880,7 @@ func (db *DB) ListCategories() ([]models.Category, error) {
 	return out, nil
 }
 
-func (db *DB) UpsertCategory(c models.Category) error {
+func (db *DB) UpsertCategory(c *models.Category) error {
 	if c.ID == "" {
 		c.ID = newID()
 	}

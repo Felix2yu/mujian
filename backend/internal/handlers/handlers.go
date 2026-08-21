@@ -363,7 +363,7 @@ func (h *Handler) createCategory(w http.ResponseWriter, r *http.Request) {
 	if cat.ActiveIDs == nil {
 		cat.ActiveIDs = []string{}
 	}
-	if err := h.db.UpsertCategory(cat); err != nil {
+	if err := h.db.UpsertCategory(&cat); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
@@ -385,7 +385,7 @@ func (h *Handler) updateCategory(w http.ResponseWriter, r *http.Request) {
 	if cat.ActiveIDs == nil {
 		cat.ActiveIDs = []string{}
 	}
-	if err := h.db.UpsertCategory(cat); err != nil {
+	if err := h.db.UpsertCategory(&cat); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}

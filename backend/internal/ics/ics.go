@@ -79,7 +79,10 @@ func writeEvent(b *strings.Builder, rec models.Record, loc *time.Location) {
 	}
 
 	if len(desc) > 0 {
-		b.WriteString(fmt.Sprintf("DESCRIPTION:%s\r\n", escapeICS(strings.Join(desc, "\\n"))))
+		// Join with a real newline and let escapeICS turn it into the ICS "\n"
+		// escape. Escaping the joined string (rather than pre-escaping items)
+		// would double-escape the separator as "\\n".
+		b.WriteString(fmt.Sprintf("DESCRIPTION:%s\r\n", escapeICS(strings.Join(desc, "\n"))))
 	}
 
 	b.WriteString(fmt.Sprintf("CATEGORIES:%s\r\n", rec.CategoryName))

@@ -68,7 +68,7 @@ func (db *DB) ImportData(data *models.ExportData) (*ImportResult, error) {
 	}
 
 	for i := range data.Categories {
-		if err := db.UpsertCategory(data.Categories[i]); err != nil {
+		if err := db.UpsertCategory(&data.Categories[i]); err != nil {
 			return nil, fmt.Errorf("import category %s: %w", data.Categories[i].Name, err)
 		}
 		result.Categories++

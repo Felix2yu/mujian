@@ -49,6 +49,17 @@ jobs:
         run: CGO_ENABLED=1 go build -o mujian .
         working-directory: backend
 
+      - name: Test backend with coverage
+        run: CGO_ENABLED=1 go vet ./... && CGO_ENABLED=1 go test ./... -coverprofile=coverage.out
+        working-directory: backend
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: backend/coverage.out
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
       - name: Upload binary
         uses: actions/upload-artifact@v7
         with:
