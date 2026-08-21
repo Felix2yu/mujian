@@ -1141,6 +1141,13 @@ func (db *DB) GetStats() (*models.Stats, error) {
 
 func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 	s := &models.DashboardStats{}
+	// Initialize slices so empty results marshal as [] instead of null.
+	s.ByMonth = []models.MonthStat{}
+	s.ByCategory = []models.CategoryStat{}
+	s.ByCity = []models.CityStat{}
+	s.CostByMonth = []models.CostStat{}
+	s.TopRated = []models.Record{}
+	s.RecentRecords = []models.Record{}
 
 	db.conn.QueryRow("SELECT COUNT(*) FROM records").Scan(&s.TotalRecords)
 	db.conn.QueryRow("SELECT COALESCE(SUM(COALESCE(pay_price,0) + COALESCE(other_cost,0)), 0) FROM records").Scan(&s.TotalCost)

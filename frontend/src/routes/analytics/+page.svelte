@@ -10,7 +10,15 @@
     loading = true;
     error = '';
     try {
-      stats = await api.getDashboard();
+      const data = await api.getDashboard();
+      stats = {
+        ...data,
+        by_category: data.by_category ?? [],
+        by_city: data.by_city ?? [],
+        by_month: data.by_month ?? [],
+        top_rated: data.top_rated ?? [],
+        recent_records: data.recent_records ?? []
+      };
     } catch (e) {
       error = e.message;
     } finally {

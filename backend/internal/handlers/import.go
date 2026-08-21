@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // importRecords ingests:
@@ -47,8 +48,13 @@ func (h *Handler) importRecords(w http.ResponseWriter, r *http.Request) {
 
 // importJSON: plain data.json, no covers included.
 func (h *Handler) importJSON(w http.ResponseWriter, file io.Reader) {
-	var data models.ExportData
-	if err := json.NewDecoder(file).Decode(&data); err != nil {
+	raw, err := io.ReadAll(file)
+	if err != nil {
+		jsonErr(w, 400, "failed to read file: "+err.Error())
+		return
+	}
+	data, err := parseImport(raw)
+	if err != nil {
 		jsonErr(w, 400, "failed to parse export: "+err.Error())
 		return
 	}
@@ -57,7 +63,7 @@ func (h *Handler) importJSON(w http.ResponseWriter, file io.Reader) {
 		return
 	}
 
-	result, err := h.db.ImportData(&data)
+	result, err := h.db.ImportData(data)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -173,7 +179,71 @@ func readDecompressedJSON(f *zip.File, out *models.ExportData) error {
 	if !json.Valid(data) {
 		return fmt.Errorf("decompressed content is not valid JSON")
 	}
-	return json.Unmarshal(data, out)
+	parsed, err := parseImport(data)
+	if err != nil {
+		return err
+	}
+	*out = *parsed
+	return nil
+}
+
+// importBundle captures both the mujian export layout (records/categories) and
+// the original 记录现场 JI_LU_XIAN_CHANG layout (active/customCategory), whose
+// top-level array keys differ. Categories are linked to records by
+// customCategoryId, which we resolve into the categoryName field.
+type importBundle struct {
+	models.ExportData
+	Active         []models.Record   `json:"active"`
+	CustomCategory []models.Category `json:"customCategory"`
+}
+
+// parseImport decodes an export file into the canonical ExportData. It accepts
+// both the mujian data.json layout and the 记录现场 JI_LU_XIAN_CHANG.android
+// layout, and fills each record's categoryName from its customCategoryId.
+func parseImport(raw []byte) (*models.ExportData, error) {
+	if !json.Valid(raw) {
+		return nil, fmt.Errorf("invalid JSON")
+	}
+	var b importBundle
+	if err := json.Unmarshal(raw, &b); err != nil {
+		return nil, err
+	}
+	res := &models.ExportData{
+		Source:       b.Source,
+		ExportedAt:   b.ExportedAt,
+		RecordCount:  b.RecordCount,
+		CoverMissing: b.CoverMissing,
+		CoverDir:     b.CoverDir,
+		CoverNote:    b.CoverNote,
+		Meta:         b.Meta,
+		Records:      b.Records,
+		Categories:   b.Categories,
+	}
+	if len(res.Records) == 0 {
+		res.Records = b.Active
+	}
+	if len(res.Categories) == 0 {
+		res.Categories = b.CustomCategory
+	}
+	if len(res.Categories) > 0 {
+		nameOf := make(map[string]string, len(res.Categories))
+		for _, c := range res.Categories {
+			nameOf[c.ID] = c.Name
+		}
+		for i := range res.Records {
+			if res.Records[i].CategoryName == "" && res.Records[i].CustomCategoryID != "" {
+				if n, ok := nameOf[res.Records[i].CustomCategoryID]; ok {
+					res.Records[i].CategoryName = n
+				}
+			}
+			// 记录现场只给出 unix date，不给 dateText；列表/地图页依赖
+			// dateText 显示日期，缺失时从 date 推导（本地时区，与前端 formatDate 一致）。
+			if res.Records[i].DateText == "" && res.Records[i].Date != 0 {
+				res.Records[i].DateText = time.Unix(res.Records[i].Date, 0).Format("2006-01-02 15:04:05")
+			}
+		}
+	}
+	return res, nil
 }
 
 func inflate(b []byte, raw bool) ([]byte, error) {
