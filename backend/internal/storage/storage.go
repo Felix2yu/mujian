@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,7 +16,7 @@ import (
 	"mujian/internal/config"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -187,10 +188,7 @@ func NewLocalStorage(uploadDir string, cfgProvider func() string) *LocalStorage 
 }
 
 func (s *LocalStorage) imageFormat() string {
-	if f := s.cfgProvider(); f != "" {
-		return f
-	}
-	return "avif"
+	return cmp.Or(s.cfgProvider(), "avif")
 }
 
 func (s *LocalStorage) localPath(key string) string {
@@ -339,13 +337,7 @@ func (s *LocalStorage) ListCoverKeys() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := keys[:0]
-	for _, k := range keys {
-		if !isThumbKey(k) {
-			out = append(out, k)
-		}
-	}
-	return out, nil
+	return slices.DeleteFunc(keys, isThumbKey), nil
 }
 
 func (s *LocalStorage) ListTrashKeys() ([]string, error) {
@@ -368,7 +360,7 @@ func (s *LocalStorage) listKeys(sub string) ([]string, error) {
 		}
 		keys = append(keys, sub+"/"+e.Name())
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	return keys, nil
 }
 
@@ -448,10 +440,7 @@ func NewS3Storage(cfg *config.Config) *S3Storage {
 }
 
 func (s *S3Storage) imageFormat() string {
-	if f := s.cfgProvider(); f != "" {
-		return f
-	}
-	return "avif"
+	return cmp.Or(s.cfgProvider(), "avif")
 }
 
 func (s *S3Storage) SaveUpload(file *multipart.FileHeader) (string, string, bool, error) {
@@ -588,13 +577,7 @@ func (s *S3Storage) ListCoverKeys() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := keys[:0]
-	for _, k := range keys {
-		if !isThumbKey(k) {
-			out = append(out, k)
-		}
-	}
-	return out, nil
+	return slices.DeleteFunc(keys, isThumbKey), nil
 }
 
 func (s *S3Storage) MoveCoverToTrash(key string) error {

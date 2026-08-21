@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
+	"maps"
 	"mujian/internal/models"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -272,7 +274,7 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 	if f.Query != "" {
 		like := "%" + f.Query + "%"
 		where = append(where, `(name LIKE ? OR city LIKE ? OR address LIKE ? OR company LIKE ? OR channel LIKE ? OR remark LIKE ? OR friends LIKE ? OR category_name LIKE ? OR artist_names LIKE ? OR play LIKE ?)`)
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			args = append(args, like)
 		}
 	}
@@ -324,7 +326,7 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 	for rows.Next() {
 		r, err := scanRecord(rows)
 		if err != nil {
-			log.Printf("scan record: %v", err)
+			slog.Warn("scan record", "err", err)
 			continue
 		}
 		out = append(out, *r)
@@ -421,11 +423,11 @@ func (db *DB) UpsertRecord(r models.Record) error {
 			price=excluded.price, price_currency=excluded.price_currency, pay_price=excluded.pay_price,
 			pay_price_currency=excluded.pay_price_currency, other_cost=excluded.other_cost, other_cost_currency=excluded.other_cost_currency
 	`,
-	r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
-	r.CustomCategoryID, r.CategoryName, marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
-	marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
-	r.Date, r.DateText, r.Rating, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
-	r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency,
+		r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
+		r.CustomCategoryID, r.CategoryName, marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
+		marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
+		r.Date, r.DateText, r.Rating, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
+		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency,
 	)
 	return err
 }
@@ -804,23 +806,16 @@ func applyArrayOp(existing []string, op *models.BatchArrayOp) []string {
 		for _, v := range op.Value {
 			set[v] = struct{}{}
 		}
-		result := make([]string, 0, len(set))
-		for v := range set {
-			result = append(result, v)
-		}
-		return result
+		return slices.Collect(maps.Keys(set))
 	case "remove":
 		removeSet := make(map[string]struct{}, len(op.Value))
 		for _, v := range op.Value {
 			removeSet[v] = struct{}{}
 		}
-		result := make([]string, 0, len(existing))
-		for _, v := range existing {
-			if _, ok := removeSet[v]; !ok {
-				result = append(result, v)
-			}
-		}
-		return result
+		return slices.DeleteFunc(existing, func(v string) bool {
+			_, ok := removeSet[v]
+			return ok
+		})
 	default:
 		return existing
 	}
@@ -1285,7 +1280,7 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 		}
 	}
 
-	topRows, err := db.conn.Query(`SELECT `+recordColumns+` FROM records WHERE rating IS NOT NULL AND rating != 0 ORDER BY rating DESC, date DESC LIMIT 6`)
+	topRows, err := db.conn.Query(`SELECT ` + recordColumns + ` FROM records WHERE rating IS NOT NULL AND rating != 0 ORDER BY rating DESC, date DESC LIMIT 6`)
 	if err == nil {
 		defer topRows.Close()
 		for topRows.Next() {
@@ -1295,7 +1290,7 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 		}
 	}
 
-	recentRows, err := db.conn.Query(`SELECT `+recordColumns+` FROM records ORDER BY date DESC LIMIT 6`)
+	recentRows, err := db.conn.Query(`SELECT ` + recordColumns + ` FROM records ORDER BY date DESC LIMIT 6`)
 	if err == nil {
 		defer recentRows.Close()
 		for recentRows.Next() {
@@ -1346,7 +1341,7 @@ func (db *DB) GetAutocomplete(field string) ([]string, error) {
 	if !textFields[field] {
 		return nil, fmt.Errorf("invalid field: %s", field)
 	}
-	rows, err := db.conn.Query("SELECT DISTINCT "+field+" FROM records WHERE "+field+" != '' ORDER BY "+field)
+	rows, err := db.conn.Query("SELECT DISTINCT " + field + " FROM records WHERE " + field + " != '' ORDER BY " + field)
 	if err != nil {
 		return nil, err
 	}
@@ -1382,4 +1377,3 @@ func (db *DB) GetByField(field, value string) ([]models.Record, error) {
 	}
 	return out, nil
 }
-

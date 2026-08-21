@@ -5,6 +5,7 @@ import (
 	"mujian/internal/models"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -141,9 +142,9 @@ func (h *Handler) mergeCovers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResp(w, 200, map[string]interface{}{
-		"merged_groups": mergedGroups,
+		"merged_groups":   mergedGroups,
 		"updated_records": updated,
-		"freed_bytes":   freed,
+		"freed_bytes":     freed,
 	})
 }
 
@@ -201,17 +202,8 @@ func (h *Handler) cleanupCovers(w http.ResponseWriter, r *http.Request) {
 	freed := int64(0)
 	for _, k := range keys {
 		name := filepath.Base(k)
-		if !req.All {
-			matched := false
-			for _, n := range req.Files {
-				if n == name {
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				continue
-			}
+		if !req.All && !slices.Contains(req.Files, name) {
+			continue
 		}
 		cnt, err := h.db.CountCoverRefs(k)
 		if err != nil || cnt > 0 {
