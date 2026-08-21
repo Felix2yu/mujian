@@ -50,7 +50,16 @@ func (db *DB) DeleteCoverMeta(fileName string) error {
 // not yet in the covers table and upserts its metadata. Returns how many new
 // entries were computed.
 func (db *DB) SyncCovers(store storage.Storage) (int, error) {
-	rows, err := db.conn.Query(`SELECT DISTINCT cover_file FROM records WHERE cover_file != ''`)
+	// Run the whole sync inside one transaction. Under MaxOpenConns(1) this
+	// keeps a single connection busy for the entire operation and avoids the
+	// "acquire connection while one is held by live rows" deadlock.
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.Query(`SELECT DISTINCT cover_file FROM records WHERE cover_file != ''`)
 	if err != nil {
 		return 0, err
 	}
@@ -62,11 +71,17 @@ func (db *DB) SyncCovers(store storage.Storage) (int, error) {
 		}
 		files = append(files, f)
 	}
-	rows.Close()
+	if err := rows.Close(); err != nil {
+		return 0, err
+	}
 
 	added := 0
 	for _, f := range files {
-		if db.CoverMetaExists(f) {
+		var n int
+		if err := tx.QueryRow("SELECT COUNT(*) FROM covers WHERE file_name = ?", f).Scan(&n); err != nil {
+			continue
+		}
+		if n > 0 {
 			continue
 		}
 		data, err := store.ReadCover(f)
@@ -75,11 +90,14 @@ func (db *DB) SyncCovers(store storage.Storage) (int, error) {
 		}
 		hash := storage.HashBytes(data)
 		ext := storage.DetectExt(data)
-		if err := db.UpsertCoverMeta(hash, f, ext, int64(len(data))); err == nil {
+		if _, err := tx.Exec(`
+			INSERT INTO covers (hash, file_name, ext, size) VALUES (?, ?, ?, ?)
+			ON CONFLICT(file_name) DO UPDATE SET hash = excluded.hash, ext = excluded.ext, size = excluded.size
+		`, hash, f, ext, int64(len(data))); err == nil {
 			added++
 		}
 	}
-	return added, nil
+	return added, tx.Commit()
 }
 
 // ---------- duplicates ----------

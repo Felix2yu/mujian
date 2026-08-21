@@ -86,7 +86,7 @@ CI 中每次推送/PR 都会运行测试并上传 Codecov；`codecov.yml` 设定
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `PORT` | `8080` | HTTP 监听端口 |
-| `DB_PATH` | `./data/mujian.db` | SQLite 数据库路径 |
+| `DB_PATH` | `./data/mujian.db` | SQLite 数据库路径（WAL 模式 + `synchronous=NORMAL`，导入走单事务批量写入） |
 | `UPLOAD_DIR` | `./data/uploads` | 封面/缩略图存储目录 |
 | `TZ` | `Asia/Shanghai` | 时区 |
 | `IMAGE_FORMAT` | `avif` | 新上传封面编码格式（`avif`/`webp`/`jpeg`），可在设置页改，立即生效 |

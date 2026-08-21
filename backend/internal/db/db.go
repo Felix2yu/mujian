@@ -20,6 +20,9 @@ import (
 type DB struct {
 	conn *sql.DB
 	loc  *time.Location
+	// Prepared statements, prepared once at open time and reused for every
+	// execution (database/sql binds them to the right connection / tx).
+	stmtUpsertRecord *sql.Stmt
 }
 
 func New(dbPath string) (*DB, error) {
@@ -28,19 +31,46 @@ func New(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("create db dir: %w", err)
 	}
 
-	conn, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(0)")
+	// SQLite pragmas (WAL + safe performance tuning):
+	//  - journal_mode(WAL): concurrent readers while a writer is active
+	//  - busy_timeout(5000): wait instead of immediately erroring on lock
+	//  - foreign_keys(0): the schema uses JSON-in-TEXT links, not FK constraints
+	//  - synchronous(NORMAL): WAL already protects against corruption; avoids a
+	//    fsync per transaction while keeping crash safety (recommended for WAL)
+	//  - mmap_size / cache_size: keep more of the db in memory for read speed
+	conn, err := sql.Open("sqlite", dbPath+"?"+
+		"_pragma=journal_mode(WAL)"+
+		"&_pragma=busy_timeout(5000)"+
+		"&_pragma=foreign_keys(0)"+
+		"&_pragma=synchronous(NORMAL)"+
+		"&_pragma=cache_size(-8000)")
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
+
+	// SQLite is a single-writer database. busy_timeout (set in the DSN above)
+	// makes concurrent writers wait instead of erroring with "database is
+	// locked". We deliberately do NOT pin MaxOpenConns(1): with modernc.org/sqlite
+	// that can deadlock when successive calls briefly contend on the single
+	// pooled connection. The pool default is safe for this low-concurrency app.
 
 	if err := conn.Ping(); err != nil {
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
 
 	db := &DB{conn: conn, loc: time.UTC}
+
 	if err := db.migrate(); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+
+	// Prepare the hot upsert statement once; reused for every record write.
+	// Done after migrate() so the records table already exists.
+	stmt, err := conn.Prepare(recordUpsertSQL)
+	if err != nil {
+		return nil, fmt.Errorf("prepare record upsert: %w", err)
+	}
+	db.stmtUpsertRecord = stmt
 	// 剧名与剧目等价：从既有记录的剧名(play)补齐剧目档案并关联记录。
 	// 幂等，可安全地在每次启动时运行。
 	if err := db.BackfillDramasFromRecords(); err != nil {
@@ -118,6 +148,8 @@ func (db *DB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_records_category ON records(category_name)`,
 		`CREATE INDEX IF NOT EXISTS idx_records_city ON records(city)`,
 		`CREATE INDEX IF NOT EXISTS idx_records_cover_file ON records(cover_file)`,
+		`CREATE INDEX IF NOT EXISTS idx_records_active_status ON records(active_status)`,
+		`CREATE INDEX IF NOT EXISTS idx_records_name ON records(name)`,
 		`CREATE TABLE IF NOT EXISTS covers (
 			hash TEXT NOT NULL,
 			file_name TEXT PRIMARY KEY,
@@ -144,6 +176,7 @@ func (db *DB) migrate() error {
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_dramas_name ON dramas(name)`,
+		`CREATE INDEX IF NOT EXISTS idx_dramas_category ON dramas(category_name)`,
 		`CREATE TABLE IF NOT EXISTS zhezis (
 			id TEXT PRIMARY KEY,
 			drama_id TEXT NOT NULL,
@@ -425,28 +458,43 @@ func newID() string {
 	return fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
+// sqlExecutor abstracts *sql.DB and *sql.Tx so the same write logic can run in
+// a single statement or inside an explicit transaction (needed because we pin
+// MaxOpenConns(1): within a tx every write must go through the tx, never the
+// pool, or the only connection deadlocks).
+type sqlExecutor interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
+// recordUpsertSQL is the parameterized upsert statement for a single record.
+// Kept as a package var so it can be prepared once and reused (see stmt cache).
+const recordUpsertSQL = `
+	INSERT INTO records (
+		id, name, channel, city, address, coordinate, cover, cover_file, cover_thumb,
+		custom_category_id, category_name, artist_names, guest, play, drama_ids, zhezi_ids, tag_ids,
+		date, date_text, rating, seat, friends, company, remark, active_status,
+		price, price_currency, pay_price, pay_price_currency, other_cost, other_cost_currency
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+	ON CONFLICT(id) DO UPDATE SET
+		name=excluded.name, channel=excluded.channel, city=excluded.city, address=excluded.address,
+		coordinate=excluded.coordinate, cover=excluded.cover, cover_file=excluded.cover_file, cover_thumb=excluded.cover_thumb,
+		custom_category_id=excluded.custom_category_id, category_name=excluded.category_name,
+		artist_names=excluded.artist_names, guest=excluded.guest, play=excluded.play,
+		drama_ids=excluded.drama_ids, zhezi_ids=excluded.zhezi_ids, tag_ids=excluded.tag_ids,
+		date=excluded.date, date_text=excluded.date_text, rating=excluded.rating, seat=excluded.seat,
+		friends=excluded.friends, company=excluded.company, remark=excluded.remark, active_status=excluded.active_status,
+		price=excluded.price, price_currency=excluded.price_currency, pay_price=excluded.pay_price,
+		pay_price_currency=excluded.pay_price_currency, other_cost=excluded.other_cost, other_cost_currency=excluded.other_cost_currency
+`
+
+// UpsertRecord inserts or updates a single record. For bulk imports prefer
+// BulkUpsertRecords, which wraps all rows in one transaction (far fewer fsyncs).
 func (db *DB) UpsertRecord(r models.Record) error {
 	if r.ID == "" {
 		r.ID = newID()
 	}
-	_, err := db.conn.Exec(`
-		INSERT INTO records (
-			id, name, channel, city, address, coordinate, cover, cover_file, cover_thumb,
-			custom_category_id, category_name, artist_names, guest, play, drama_ids, zhezi_ids, tag_ids,
-			date, date_text, rating, seat, friends, company, remark, active_status,
-			price, price_currency, pay_price, pay_price_currency, other_cost, other_cost_currency
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-		ON CONFLICT(id) DO UPDATE SET
-			name=excluded.name, channel=excluded.channel, city=excluded.city, address=excluded.address,
-			coordinate=excluded.coordinate, cover=excluded.cover, cover_file=excluded.cover_file, cover_thumb=excluded.cover_thumb,
-			custom_category_id=excluded.custom_category_id, category_name=excluded.category_name,
-			artist_names=excluded.artist_names, guest=excluded.guest, play=excluded.play,
-			drama_ids=excluded.drama_ids, zhezi_ids=excluded.zhezi_ids, tag_ids=excluded.tag_ids,
-			date=excluded.date, date_text=excluded.date_text, rating=excluded.rating, seat=excluded.seat,
-			friends=excluded.friends, company=excluded.company, remark=excluded.remark, active_status=excluded.active_status,
-			price=excluded.price, price_currency=excluded.price_currency, pay_price=excluded.pay_price,
-			pay_price_currency=excluded.pay_price_currency, other_cost=excluded.other_cost, other_cost_currency=excluded.other_cost_currency
-	`,
+	_, err := db.stmtUpsertRecord.Exec(
 		r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
 		r.CustomCategoryID, r.CategoryName, marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
 		marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
@@ -454,6 +502,45 @@ func (db *DB) UpsertRecord(r models.Record) error {
 		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency,
 	)
 	return err
+}
+
+// UpsertRecordTx is like UpsertRecord but runs inside the supplied transaction.
+// Used by ImportData so the whole import shares one transaction. It executes the
+// raw SQL directly (not the pool-prepared statement) to avoid a connection-pool
+// deadlock when MaxOpenConns(1): binding a pool stmt into a tx would try to
+// re-acquire the only connection, which the tx already holds.
+func (db *DB) UpsertRecordTx(tx *sql.Tx, r models.Record) error {
+	if r.ID == "" {
+		r.ID = newID()
+	}
+	_, err := tx.Exec(recordUpsertSQL,
+		r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
+		r.CustomCategoryID, r.CategoryName, marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
+		marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
+		r.Date, r.DateText, r.Rating, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
+		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency,
+	)
+	return err
+}
+
+// BulkUpsertRecords inserts/updates many records inside a single transaction.
+// On SQLite this collapses N fsyncs into one, making imports orders of magnitude
+// faster than calling UpsertRecord in a loop.
+func (db *DB) BulkUpsertRecords(records []models.Record) error {
+	if len(records) == 0 {
+		return nil
+	}
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return fmt.Errorf("begin bulk upsert: %w", err)
+	}
+	defer tx.Rollback()
+	for i := range records {
+		if err := db.UpsertRecordTx(tx, records[i]); err != nil {
+			return fmt.Errorf("bulk upsert record %d: %w", i, err)
+		}
+	}
+	return tx.Commit()
 }
 
 // dramaNames resolves a list of drama ids to their names, preserving order.
@@ -887,17 +974,28 @@ func (db *DB) ListCategories() ([]models.Category, error) {
 	return out, nil
 }
 
-func (db *DB) UpsertCategory(c *models.Category) error {
+// upsertCategoryExec inserts/updates a category against the given executor.
+func upsertCategoryExec(exec sqlExecutor, c *models.Category) error {
 	if c.ID == "" {
 		c.ID = newID()
 		// New categories append after any manually ordered ones.
-		db.conn.QueryRow("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM categories").Scan(&c.SortOrder)
+		exec.QueryRow("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM categories").Scan(&c.SortOrder)
 	}
-	_, err := db.conn.Exec(`
+	_, err := exec.Exec(`
 		INSERT INTO categories (id, name, active_ids, record_count, sort_order) VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET name=excluded.name, active_ids=excluded.active_ids, record_count=excluded.record_count
 	`, c.ID, c.Name, marshalJSON(c.ActiveIDs), c.RecordCount, c.SortOrder)
 	return err
+}
+
+func (db *DB) UpsertCategory(c *models.Category) error {
+	return upsertCategoryExec(db.conn, c)
+}
+
+// UpsertCategoryTx runs inside the supplied transaction (used by ImportData so
+// the whole import shares one connection under MaxOpenConns(1)).
+func (db *DB) UpsertCategoryTx(tx *sql.Tx, c *models.Category) error {
+	return upsertCategoryExec(tx, c)
 }
 
 // ReorderCategories sets the manual sort order of categories from an explicit
@@ -1234,12 +1332,21 @@ func (db *DB) GetMeta() (*models.Meta, error) {
 }
 
 func (db *DB) SetMeta(m *models.Meta) error {
+	return setMetaExec(db.conn, m)
+}
+
+// SetMetaTx runs inside the supplied transaction (used by ImportData).
+func (db *DB) SetMetaTx(tx *sql.Tx, m *models.Meta) error {
+	return setMetaExec(tx, m)
+}
+
+func setMetaExec(exec sqlExecutor, m *models.Meta) error {
 	upsert := func(key string, raw json.RawMessage) error {
 		val := "[]"
 		if len(raw) > 0 {
 			val = string(raw)
 		}
-		_, err := db.conn.Exec(`INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, val)
+		_, err := exec.Exec(`INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, val)
 		return err
 	}
 	if err := upsert("song", m.Song); err != nil {

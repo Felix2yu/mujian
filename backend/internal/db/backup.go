@@ -61,20 +61,20 @@ func (db *DB) ImportData(data *models.ExportData) (*ImportResult, error) {
 	result := &ImportResult{}
 
 	for i := range data.Records {
-		if err := db.UpsertRecord(data.Records[i]); err != nil {
+		if err := db.UpsertRecordTx(tx, data.Records[i]); err != nil {
 			return nil, fmt.Errorf("import record %s: %w", data.Records[i].Name, err)
 		}
 		result.Records++
 	}
 
 	for i := range data.Categories {
-		if err := db.UpsertCategory(&data.Categories[i]); err != nil {
+		if err := db.UpsertCategoryTx(tx, &data.Categories[i]); err != nil {
 			return nil, fmt.Errorf("import category %s: %w", data.Categories[i].Name, err)
 		}
 		result.Categories++
 	}
 
-	if err := db.SetMeta(&data.Meta); err != nil {
+	if err := db.SetMetaTx(tx, &data.Meta); err != nil {
 		return nil, fmt.Errorf("import meta: %w", err)
 	}
 
