@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"mujian/internal/models"
 	"mujian/internal/storage"
 	"net/http"
@@ -411,63 +412,68 @@ func (h *Handler) runBatchConvert(r *http.Request, format string, emit func(map[
 		if r.Context().Err() != nil {
 			break
 		}
-		data, rerr := h.storage.ReadCover(k)
-		if rerr != nil {
-			if emit != nil {
-				emit(map[string]interface{}{
-					"phase": "item", "index": i, "total": total, "key": k,
-					"status": "error", "error": "read failed",
-					"converted": res.Converted, "skipped": res.Skipped, "freed_bytes": res.Freed,
-				})
-			}
-			continue
-		}
-		// Skip by actual encoded format, not the file extension, so a real
-		// AVIF saved under a wrong extension is not pointlessly re-encoded,
-		// and a misnamed non-AVIF file is still converted.
-		if storage.DetectImageFormat(data) == format {
-			res.Skipped++
-			if emit != nil {
-				emit(map[string]interface{}{
-					"phase": "item", "index": i, "total": total, "key": k,
-					"status": "skipped",
-					"converted": res.Converted, "skipped": res.Skipped, "freed_bytes": res.Freed,
-				})
-			}
-			continue
-		}
-		newKey, _, cerr := h.storage.ConvertCover(k, format)
-		if cerr != nil {
-			if emit != nil {
-				emit(map[string]interface{}{
-					"phase": "item", "index": i, "total": total, "key": k,
-					"status": "error", "error": cerr.Error(),
-					"converted": res.Converted, "skipped": res.Skipped, "freed_bytes": res.Freed,
-				})
-			}
-			continue
-		}
-		if newKey != k {
-			if err := h.db.RepointCoverRefs(k, newKey); err == nil {
-				h.regenerateThumbsForCover(k, newKey, format)
-				if cnt, _ := h.db.CountCoverRefs(k); cnt == 0 {
-					if sz, ok := h.db.CoverSize(k); ok {
-						res.Freed += sz
-						h.db.DeleteCoverMeta(k)
-					}
-				}
-			}
-		}
-		res.Converted++
+		status, perr := h.convertOneCover(k, format, &res)
 		if emit != nil {
-			emit(map[string]interface{}{
-				"phase": "item", "index": i, "total": total, "key": k,
-				"status": "converted",
-				"converted": res.Converted, "skipped": res.Skipped, "freed_bytes": res.Freed,
-			})
+			line := map[string]interface{}{
+				"phase":       "item",
+				"index":       i,
+				"total":       total,
+				"key":         k,
+				"status":      status,
+				"converted":   res.Converted,
+				"skipped":     res.Skipped,
+				"freed_bytes": res.Freed,
+			}
+			if perr != nil {
+				line["error"] = perr.Error()
+			}
+			emit(line)
 		}
 	}
 	return res, nil
+}
+
+// convertOneCover re-encodes a single cover to the target format, repointing
+// database references and refreshing thumbnails as needed. It recovers from
+// panics so one corrupt file can never crash the whole batch (and the server
+// with it). status is one of "converted", "skipped", "error".
+func (h *Handler) convertOneCover(k, format string, res *batchConvertResult) (status string, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			status = "error"
+			err = fmt.Errorf("panic converting cover %s: %v", k, p)
+			slog.Error("cover conversion panic", "key", k, "panic", p)
+		}
+	}()
+
+	data, rerr := h.storage.ReadCover(k)
+	if rerr != nil {
+		return "error", fmt.Errorf("read %s: %w", k, rerr)
+	}
+	// Skip by actual encoded format, not the file extension, so a real
+	// AVIF saved under a wrong extension is not pointlessly re-encoded,
+	// and a misnamed non-AVIF file is still converted.
+	if storage.DetectImageFormat(data) == format {
+		res.Skipped++
+		return "skipped", nil
+	}
+	newKey, _, cerr := h.storage.ConvertCover(k, format)
+	if cerr != nil {
+		return "error", fmt.Errorf("convert %s: %w", k, cerr)
+	}
+	if newKey != k {
+		if err := h.db.RepointCoverRefs(k, newKey); err == nil {
+			h.regenerateThumbsForCover(k, newKey, format)
+			if cnt, _ := h.db.CountCoverRefs(k); cnt == 0 {
+				if sz, ok := h.db.CoverSize(k); ok {
+					res.Freed += sz
+					h.db.DeleteCoverMeta(k)
+				}
+			}
+		}
+	}
+	res.Converted++
+	return "converted", nil
 }
 
 // regenerateThumbsForCover finds records referencing either the old or new key

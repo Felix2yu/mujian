@@ -32,10 +32,18 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   if (url.pathname.startsWith('/api/')) {
+    // Only GET API calls are worth intercepting (they get network-first
+    // caching). Non-GET requests (POST/PUT/DELETE) are passed straight through:
+    // they gain nothing from the service worker, and long-running streaming
+    // POSTs (e.g. batch cover conversion) are known to fail in Safari when
+    // routed through it ("FetchEvent.respondWith received an error: Load
+    // failed" after minutes of streaming).
+    if (request.method !== 'GET') return;
+
     event.respondWith(
       fetch(request)
         .then(response => {
-          if (request.method === 'GET' && response.ok) {
+          if (response.ok) {
             const clone = response.clone();
             caches.open(API_CACHE).then(cache => cache.put(request, clone));
           }
