@@ -14,6 +14,7 @@
   let purging = $state(false);
 
   let thumbsBusy = $state(false);
+  let thumbsProgress = $state({ processed: 0, total: 0, updated: 0 });
   let error = $state('');
   let info = $state('');
 
@@ -117,9 +118,17 @@
   async function runThumbs() {
     thumbsBusy = true;
     error = '';
+    info = '';
+    thumbsProgress = { processed: 0, total: 0, updated: 0 };
     try {
-      const res = await api.regenerateThumbs();
-      info = `已为 ${res.updated} 条记录生成统一缩略图`;
+      // Streams NDJSON progress from the server; each line updates the live
+      // counter below instead of waiting (and risking a timeout) for the end.
+      const res = await api.regenerateThumbs((p) => {
+        if (typeof p.total === 'number') thumbsProgress.total = p.total;
+        if (typeof p.updated === 'number') thumbsProgress.updated = p.updated;
+        if (p.phase === 'item') thumbsProgress.processed = p.index + 1;
+      });
+      info = `已为 ${res.updated} 条记录生成缩略图`;
     } catch (e) {
       error = e.message;
     } finally {
@@ -225,7 +234,10 @@
       <h3>③ 统一缩略图</h3>
       <button class="btn sm" onclick={runThumbs} disabled={thumbsBusy}>{thumbsBusy ? '生成中…' : '重新生成缩略图'}</button>
     </div>
-    <p class="tiny">为所有有封面的演出生成统一规格（宽 ≤400px JPEG）的缩略图，提升列表加载体验。</p>
+    {#if thumbsBusy && thumbsProgress.total > 0}
+      <p class="tiny">⏳ 已处理 {thumbsProgress.processed}/{thumbsProgress.total} 个封面，更新 {thumbsProgress.updated} 条记录</p>
+    {/if}
+    <p class="tiny">为所有有封面的演出按当前编码格式重新生成缩略图（宽 ≤400px），并清理旧格式缩略图文件。</p>
   </div>
 </div>
 

@@ -236,30 +236,117 @@ func (h *Handler) purgeTrash(w http.ResponseWriter, r *http.Request) {
 
 // POST /covers/thumbs — (re)generate unified JPEG thumbnails for all records
 // that have a cover file, storing base64 into records.cover_thumb.
+// POST /covers/thumbs — regenerate every record's thumbnail in the current
+// image format. Streams newline-delimited JSON progress (like convert-batch):
+// regenerating thumbnails for a large library can exceed client request
+// timeouts, and flushing after each cover keeps reverse-proxy idle timeouts
+// from killing the connection.
 func (h *Handler) regenerateThumbs(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		// Streaming unsupported by the ResponseWriter; fall back to a single
+		// JSON response (legacy behavior).
+		coverMu.Lock()
+		updated, lerr := h.runRegenerateThumbs(r, func(map[string]interface{}) {})
+		coverMu.Unlock()
+		if lerr != nil {
+			jsonErr(w, 500, lerr.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]interface{}{"updated": updated})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(200)
+	flusher.Flush()
+
 	coverMu.Lock()
 	defer coverMu.Unlock()
 
-	list, err := h.db.ListCoverFiles()
-	if err != nil {
-		jsonErr(w, 500, err.Error())
+	updated, lerr := h.runRegenerateThumbs(r, func(v map[string]interface{}) {
+		b, _ := json.Marshal(v)
+		fmt.Fprintf(w, "%s\n", b)
+		flusher.Flush()
+	})
+	if lerr != nil {
+		b, _ := json.Marshal(map[string]interface{}{"error": lerr.Error(), "done": true})
+		fmt.Fprintf(w, "%s\n", b)
+		flusher.Flush()
 		return
 	}
-	done := 0
+	b, _ := json.Marshal(map[string]interface{}{"done": true, "updated": updated})
+	fmt.Fprintf(w, "%s\n", b)
+	flusher.Flush()
+}
+
+// runRegenerateThumbs groups records by cover file (so a cover shared by many
+// records is only re-encoded once), regenerates each thumbnail in the current
+// image format, and repoints the records' cover_thumb. Returns the number of
+// records updated. The caller must hold coverMu.
+func (h *Handler) runRegenerateThumbs(r *http.Request, emit func(map[string]interface{})) (int, error) {
+	list, err := h.db.ListCoverFiles()
+	if err != nil {
+		return 0, err
+	}
+	byCover := make(map[string][]string) // coverFile -> record ids
 	for _, item := range list {
-		data, err := h.storage.ReadCover(item.CoverFile)
-		if err != nil {
+		byCover[item.CoverFile] = append(byCover[item.CoverFile], item.ID)
+	}
+	covers := make([]string, 0, len(byCover))
+	for k := range byCover {
+		covers = append(covers, k)
+	}
+	slices.Sort(covers)
+
+	total := len(covers)
+	if emit != nil {
+		emit(map[string]interface{}{"phase": "start", "total": total, "records": len(list)})
+	}
+
+	updated := 0
+	for i, key := range covers {
+		// Bail out if the client went away; no point burning CPU.
+		if r.Context().Err() != nil {
+			break
+		}
+		data, rerr := h.storage.ReadCover(key)
+		if rerr != nil {
+			if emit != nil {
+				emit(map[string]interface{}{
+					"phase": "item", "index": i, "total": total, "key": key,
+					"status": "error", "error": "read failed", "updated": updated,
+				})
+			}
 			continue
 		}
-		thumbKey, err := h.storage.MakeThumbnail(item.CoverFile, data, 400, h.cfg.ImageFormat)
-		if err != nil {
+		thumbKey, terr := h.storage.MakeThumbnail(key, data, 400, h.cfg.ImageFormat)
+		if terr != nil {
+			if emit != nil {
+				emit(map[string]interface{}{
+					"phase": "item", "index": i, "total": total, "key": key,
+					"status": "error", "error": terr.Error(), "updated": updated,
+				})
+			}
 			continue
 		}
-		if err := h.db.SetRecordThumb(item.ID, thumbKey); err == nil {
-			done++
+		okCount := 0
+		for _, id := range byCover[key] {
+			if err := h.db.SetRecordThumb(id, thumbKey); err == nil {
+				okCount++
+			}
+		}
+		updated += okCount
+		if emit != nil {
+			emit(map[string]interface{}{
+				"phase": "item", "index": i, "total": total, "key": key,
+				"status": "ok", "records": okCount, "updated": updated,
+			})
 		}
 	}
-	jsonResp(w, 200, map[string]interface{}{"updated": done})
+	return updated, nil
 }
 
 // POST /covers/convert {"key":"...", "format":"avif|webp|jpeg"}
