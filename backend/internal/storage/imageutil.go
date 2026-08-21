@@ -12,6 +12,50 @@ import (
 	xwebp "golang.org/x/image/webp"
 )
 
+// DetectImageFormat returns the underlying image format of the encoded bytes
+// ("avif", "webp", "jpeg", "png", "gif") by sniffing magic bytes. It does not
+// rely on the file extension, so a misnamed file (e.g. a real AVIF saved as
+// .jpg) is still classified correctly. Returns "" if undetermined.
+func DetectImageFormat(data []byte) string {
+	// JPEG
+	if len(data) >= 2 && data[0] == 0xFF && data[1] == 0xD8 {
+		return "jpeg"
+	}
+	// PNG
+	if len(data) >= 4 && bytes.Equal(data[0:4], []byte{0x89, 0x50, 0x4E, 0x47}) {
+		return "png"
+	}
+	// GIF
+	if len(data) >= 4 && bytes.Equal(data[0:4], []byte("GIF8")) {
+		return "gif"
+	}
+	// ISO BMFF / ftyp box (AVIF/HEIF) and WebP need at least 12 bytes.
+	if len(data) >= 12 {
+		// Container used by AVIF (and HEIF). Inspect the major brand and the
+		// compatible-brands list rather than the file extension.
+		if bytes.Equal(data[4:8], []byte("ftyp")) {
+			brand := data[8:12]
+			switch {
+			case bytes.Equal(brand, []byte("avif")),
+				bytes.Equal(brand, []byte("avis")),
+				bytes.Equal(brand, []byte("mif1")):
+				return "avif"
+			}
+			// Compatible brands (after the minor-version field) may carry "avif".
+			for i := 16; i+4 <= len(data) && i <= 40; i += 4 {
+				if bytes.Equal(data[i:i+4], []byte("avif")) {
+					return "avif"
+				}
+			}
+		}
+		// WebP: "RIFF" .... "WEBP"
+		if bytes.Equal(data[0:4], []byte("RIFF")) && bytes.Equal(data[8:12], []byte("WEBP")) {
+			return "webp"
+		}
+	}
+	return ""
+}
+
 // DecodeImage decodes jpeg/png/gif/webp/avif bytes into an image.Image.
 func DecodeImage(b []byte) (image.Image, error) {
 	img, _, err := image.Decode(bytes.NewReader(b))

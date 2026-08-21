@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"mujian/internal/models"
+	"mujian/internal/storage"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -334,8 +335,14 @@ func (h *Handler) convertBatchCovers(w http.ResponseWriter, r *http.Request) {
 	skipped := 0
 	freed := int64(0)
 	for _, k := range keys {
-		ext := strings.ToLower(filepath.Ext(k))
-		if ext == extForFormat(format) {
+		data, rerr := h.storage.ReadCover(k)
+		if rerr != nil {
+			continue
+		}
+		// Skip by actual encoded format, not the file extension, so a real
+		// AVIF saved under a wrong extension is not pointlessly re-encoded,
+		// and a misnamed non-AVIF file is still converted.
+		if storage.DetectImageFormat(data) == format {
 			skipped++
 			continue
 		}
@@ -406,15 +413,4 @@ func normalizeImageFormat(f string) string {
 		return "avif"
 	}
 	return f
-}
-
-func extForFormat(format string) string {
-	switch format {
-	case "webp":
-		return ".webp"
-	case "jpeg":
-		return ".jpg"
-	default:
-		return ".avif"
-	}
 }
