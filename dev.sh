@@ -7,7 +7,7 @@ PID_FILE="/tmp/mujian-backend.pid"
 build() {
     echo "Building..."
     cd "$BACKEND_DIR"
-    GOPROXY=direct go build -o mujian . 2>&1
+    go build -o mujian . 2>&1
     if [ $? -eq 0 ]; then
         echo "Build successful"
         return 0
