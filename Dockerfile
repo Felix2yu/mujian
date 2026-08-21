@@ -8,7 +8,7 @@ COPY frontend/ .
 RUN pnpm run build
 
 # Build backend (cached unless Go files change, frontend dist is now available)
-FROM golang:1.26-bookworm-slim AS backend
+FROM golang:1.26-trixie-slim AS backend
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libavif-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY backend/go.mod backend/go.sum ./
@@ -18,7 +18,7 @@ COPY --from=frontend /app/dist ./dist
 RUN CGO_ENABLED=1 go build -o /mujian .
 
 # Final image
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata libavif-dev curl && rm -rf /var/lib/apt/lists/* \
     && useradd -u 1000 -m -s /sbin/nologin mujian \
     && mkdir -p /app/data/uploads \
