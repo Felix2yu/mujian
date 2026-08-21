@@ -206,7 +206,7 @@
       <input class="input" type="text" bind:value={mapKey} placeholder="例如高德或腾讯 JS 应用的 key" style="max-width: 320px;" />
 
       <label style="margin-top: 12px;">自定义瓦片 URL（可选）</label>
-      <input class="input" type="text" bind:value={mapCustomUrl} placeholder="https://{s}.example.com/tiles/{z}/{x}/{y}.png" style="max-width: 420px;" />
+      <input class="input" type="text" bind:value={mapCustomUrl} placeholder={'https://{s}.example.com/tiles/{z}/{x}/{y}.png'} style="max-width: 420px;" />
     </div>
 
     {#if error}<div class="banner error">⚠ {error}</div>{/if}

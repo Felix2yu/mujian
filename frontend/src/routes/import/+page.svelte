@@ -44,7 +44,7 @@
 <div class="fade-up">
   <div class="page-head">
     <h1>导入 / 导出</h1>
-    <p class="sub">上传「记录现场」导出的压缩包（.zip，含 data.json 与 covers/），或单独的 data.json；记录按 id 覆盖更新</p>
+    <p class="sub">上传「记录现场」导出的 JI_LU_XIAN_CHANG.android.zip（内含数据与封面），或单独的 data.json；记录按 id 覆盖更新，重复导入不会产生重复</p>
   </div>
 
   <div
@@ -89,12 +89,20 @@
   {/if}
 
   <div class="card sec">
-    <h3>说明</h3>
+    <h3>支持的文件</h3>
     <ul class="tips">
-      <li><b>推荐</b>：直接上传「记录现场」导出的 <code>JI_LU_XIAN_CHANG.android.zip</code>，自动解压 <code>JI_LU_XIAN_CHANG.android</code>（raw-deflate JSON）并解码 <code>covers/</code> 里的 base64 封面，一键完成数据 + 封面关联</li>
-      <li>也支持已转换的 <code>data.json</code> 或含 <code>data.json + covers/</code> 的 zip</li>
-      <li>记录按 <code>id</code> 覆盖更新，重复导入不会产生重复数据</li>
-      <li>封面文件落盘在数据目录的 <code>uploads/covers/</code> 下，Docker 卷挂载后重启不丢失</li>
+      <li><b>记录现场备份（推荐）</b>：上传 <code>JI_LU_XIAN_CHANG.android.zip</code>，包内包含数据文件 <code>JI_LU_XIAN_CHANG.android</code> 与封面目录 <code>covers/</code>，一键还原数据与封面关联</li>
+      <li><b>纯数据</b>：单独的 <code>data.json</code>（不含封面）</li>
+      <li><b>数据 + 封面</b>：含 <code>data.json</code> 与 <code>covers/</code> 的压缩包</li>
+    </ul>
+  </div>
+
+  <div class="card sec">
+    <h3>关于去重</h3>
+    <ul class="tips">
+      <li><b>演出记录</b>：按 <code>id</code> 覆盖更新。导入自己导出的备份是幂等的——重复导入不会新增重复记录；但来自「记录现场」等外部源、且每条不含 <code>id</code> 的文件，重复导入会产生重复。</li>
+      <li><b>封面</b>：按图片内容哈希自动去重，字节完全相同的封面只保存一份，不重复占用空间。</li>
+      <li><b>注意</b>：导入是按 <code>id</code> 更新，会覆盖同 <code>id</code> 的已有数据；导入本质是“恢复”而非“追加”。</li>
     </ul>
   </div>
 

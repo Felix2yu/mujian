@@ -3,6 +3,7 @@
 
   let groups = $state([]);
   let groupsLoading = $state(false);
+  let dupScanned = $state(false);
   let selectedHashes = $state(new Set());
   let merging = $state(false);
 
@@ -29,6 +30,7 @@
     try {
       const res = await api.getCoverDuplicates();
       groups = res.groups || [];
+      dupScanned = true;
       selectedHashes = new Set(groups.map((g) => g.hash));
     } catch (e) {
       error = e.message;
@@ -140,7 +142,7 @@
       <h3>① 重复封面合并</h3>
       <div class="sec-actions">
         {#if groups.length}<button class="btn ghost sm" onclick={() => (selectedHashes = new Set(groups.map((g) => g.hash)))}>全选</button>{/if}
-        <button class="btn sm" onclick={scanDuplicates} disabled={groupsLoading}>{groupsLoading ? '扫描中…' : (groups.length ? '重新扫描' : '扫描重复封面')}</button>
+        <button class="btn sm" onclick={scanDuplicates} disabled={groupsLoading}>{groupsLoading ? '扫描中…' : (groups.length || dupScanned ? '重新扫描' : '扫描重复封面')}</button>
       </div>
     </div>
 
@@ -169,8 +171,13 @@
     {:else}
       <div class="empty">
         <div class="ico">🖼</div>
-        <div class="t">尚未扫描</div>
-        <div class="h">点击「扫描重复封面」检测内容相同的封面</div>
+        {#if dupScanned}
+          <div class="t">未找到重复封面</div>
+          <div class="h">当前没有内容相同且存为多个文件的封面</div>
+        {:else}
+          <div class="t">尚未扫描</div>
+          <div class="h">点击「扫描重复封面」检测内容相同的封面</div>
+        {/if}
       </div>
     {/if}
   </div>
