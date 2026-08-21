@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
   import RecordCard from '$lib/components/RecordCard.svelte';
+  import BatchEditModal from '$lib/components/BatchEditModal.svelte';
 
   let records = $state([]);
   let categories = $state([]);
@@ -12,6 +13,63 @@
   let filters = $state({ q: '', category: '', city: '', year: '', month: '', drama: '', zhezi: '' });
   let zheziNames = $state(new Map());
   let searchTimer;
+
+  // 批量操作状态
+  let selectionMode = $state(false);
+  let selectedIds = $state(new Set());
+  let showBatchEdit = $state(false);
+  let batchError = $state('');
+
+  const allSelected = $derived(records.length > 0 && selectedIds.size === records.length);
+
+  function toggleSelectMode() {
+    selectionMode = !selectionMode;
+    if (!selectionMode) {
+      selectedIds.clear();
+    }
+  }
+
+  function toggleSelect(id) {
+    if (selectedIds.has(id)) {
+      selectedIds.delete(id);
+    } else {
+      selectedIds.add(id);
+    }
+    selectedIds = new Set(selectedIds);
+  }
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      selectedIds.clear();
+    } else {
+      selectedIds = new Set(records.map((r) => r.id));
+    }
+  }
+
+  async function batchDelete() {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`确定删除 ${selectedIds.size} 条记录？此操作不可恢复。`)) return;
+    try {
+      await api.batchDelete([...selectedIds]);
+      selectedIds.clear();
+      selectionMode = false;
+      load();
+    } catch (e) {
+      batchError = e.message;
+    }
+  }
+
+  function openBatchEdit() {
+    if (selectedIds.size === 0) return;
+    showBatchEdit = true;
+  }
+
+  function onBatchSaved() {
+    showBatchEdit = false;
+    selectedIds.clear();
+    selectionMode = false;
+    load();
+  }
 
   function zheziLabel(id) {
     const z = zheziNames.get(id);
@@ -100,8 +158,27 @@
       />
       {#if filters.q}<button class="search-clear" onclick={() => clearChip('q')}>✕</button>{/if}
     </div>
-    <a class="btn primary" href="/records/new">＋ 新建记录</a>
+    {#if selectionMode}
+      <button class="btn" onclick={toggleSelectMode}>完成</button>
+    {:else}
+      <button class="btn ghost" onclick={toggleSelectMode}>批量</button>
+      <a class="btn primary" href="/records/new">＋ 新建记录</a>
+    {/if}
   </div>
+
+  {#if selectionMode}
+    <div class="batch-bar card">
+      <label class="select-all">
+        <input type="checkbox" checked={allSelected} onchange={toggleSelectAll} />
+        <span>{allSelected ? '取消全选' : '全选'}</span>
+      </label>
+      <span class="batch-count">已选 {selectedIds.size} 条</span>
+      <div class="batch-actions">
+        <button class="btn primary sm" onclick={openBatchEdit} disabled={selectedIds.size === 0}>批量编辑</button>
+        <button class="btn danger sm" onclick={batchDelete} disabled={selectedIds.size === 0}>批量删除</button>
+      </div>
+    </div>
+  {/if}
 
   <div class="filter-bar card">
     <select class="input" bind:value={filters.category} onchange={load}>
@@ -134,31 +211,47 @@
     <h2>记录 <span class="num">{records.length}</span></h2>
   </div>
 
-  {#if error}
-    <div class="banner error">⚠ {error}</div>
-  {/if}
+      {#if batchError}
+        <div class="banner error">⚠ {batchError}</div>
+      {/if}
 
-  {#if loading}
-    <div class="grid">
-      {#each Array(8) as _}
-        <div class="skel-card"><div class="skeleton skel-cover"></div><div class="skeleton skel-line"></div><div class="skeleton skel-line short"></div></div>
-      {/each}
-    </div>
-  {:else if records.length === 0}
-    <div class="empty card">
-      <div class="ico">🎭</div>
-      <div class="t">{activeChips.length ? '没有符合条件的记录' : '还没有记录'}</div>
-      <div class="h">{activeChips.length ? '试试调整筛选条件，或清除全部筛选' : '前往「导入」上传 recordlive_export 的 data.json，或点击右上角新建第一条记录'}</div>
-      {#if activeChips.length}<button class="btn sm" onclick={resetFilters}>清除筛选</button>{/if}
-    </div>
-  {:else}
-    <div class="grid stagger">
-      {#each records as r (r.id)}
-        <RecordCard record={r} />
-      {/each}
-    </div>
-  {/if}
+      {#if loading}
+        <div class="grid">
+          {#each Array(8) as _}
+            <div class="skel-card"><div class="skeleton skel-cover"></div><div class="skeleton skel-line"></div><div class="skeleton skel-line short"></div></div>
+          {/each}
+        </div>
+      {:else if records.length === 0}
+        <div class="empty card">
+          <div class="ico">🎭</div>
+          <div class="t">{activeChips.length ? '没有符合条件的记录' : '还没有记录'}</div>
+          <div class="h">{activeChips.length ? '试试调整筛选条件，或清除全部筛选' : '前往「导入」上传 recordlive_export 的 data.json，或点击右上角新建第一条记录'}</div>
+          {#if activeChips.length}<button class="btn sm" onclick={resetFilters}>清除筛选</button>{/if}
+        </div>
+      {:else}
+        <div class="grid stagger">
+          {#each records as r (r.id)}
+            <div class="record-card-wrapper" class:select-mode={selectionMode} class:selected={selectedIds.has(r.id)}>
+              {#if selectionMode}
+                <label class="record-check">
+                  <input type="checkbox" checked={selectedIds.has(r.id)} onchange={() => toggleSelect(r.id)} />
+                </label>
+              {/if}
+              <RecordCard record={r} />
+            </div>
+          {/each}
+        </div>
+      {/if}
 </div>
+
+{#if showBatchEdit}
+  <BatchEditModal
+    selectedIds={[...selectedIds]}
+    records={records}
+    onClose={() => showBatchEdit = false}
+    onSaved={onBatchSaved}
+  />
+{/if}
 
 <style>
   .home { display: flex; flex-direction: column; gap: 14px; }
@@ -236,6 +329,72 @@
 
   .count-row h2 { font-size: 20px; margin: 4px 0 0; }
   .count-row .num { color: var(--accent); font-family: var(--font-sans); font-weight: 700; font-size: 18px; margin-left: 4px; }
+
+  .batch-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    background: var(--accent-soft);
+    border-color: var(--accent);
+  }
+  .select-all {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 13.5px;
+    color: var(--text);
+    user-select: none;
+  }
+  .select-all input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+  }
+  .batch-count {
+    font-size: 13px;
+    color: var(--text-2);
+    flex: 1;
+  }
+  .batch-actions { display: flex; gap: 8px; }
+
+  .record-card-wrapper {
+    position: relative;
+    display: block;
+  }
+  .record-card-wrapper.select-mode {
+    padding-left: 36px;
+  }
+  .record-card-wrapper.selected::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    border: 2px solid var(--accent);
+    border-radius: var(--radius-lg);
+    pointer-events: none;
+    box-sizing: border-box;
+  }
+  .record-check {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    z-index: 10;
+    cursor: pointer;
+    background: var(--surface);
+    border-radius: 6px;
+    padding: 4px;
+    box-shadow: var(--shadow-sm);
+  }
+  .record-check input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
 
   .grid {
     display: grid;

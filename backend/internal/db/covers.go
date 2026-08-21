@@ -190,6 +190,33 @@ func (db *DB) CountCoverRefs(fileName string) (int, error) {
 	return n, err
 }
 
+// RepointCoverRefs updates all records that reference oldKey to point to newKey.
+func (db *DB) RepointCoverRefs(oldKey, newKey string) error {
+	_, err := db.conn.Exec(
+		"UPDATE records SET cover_file = ? WHERE cover_file = ?",
+		newKey, oldKey,
+	)
+	return err
+}
+
+// GetRecordsByCoverFile returns records whose cover_file equals the given key.
+func (db *DB) GetRecordsByCoverFile(coverFile string) ([]struct{ ID, CoverFile string }, error) {
+	rows, err := db.conn.Query("SELECT id, cover_file FROM records WHERE cover_file = ?", coverFile)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []struct{ ID, CoverFile string }
+	for rows.Next() {
+		var id, cf string
+		if err := rows.Scan(&id, &cf); err != nil {
+			continue
+		}
+		out = append(out, struct{ ID, CoverFile string }{id, cf})
+	}
+	return out, nil
+}
+
 func (db *DB) SetRecordThumb(id, thumb string) error {
 	_, err := db.conn.Exec("UPDATE records SET cover_thumb = ? WHERE id = ?", thumb, id)
 	return err

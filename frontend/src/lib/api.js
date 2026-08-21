@@ -94,7 +94,9 @@ export const api = {
   getCoverOrphans: () => request('/api/covers/orphans'),
   cleanupCovers: (payload) => request('/api/covers/cleanup', { method: 'POST', body: JSON.stringify(payload) }),
   purgeTrash: () => request('/api/covers/trash/purge', { method: 'POST' }),
-  regenerateThumbs: () => request('/api/covers/thumbs', { method: 'POST' })
+  regenerateThumbs: () => request('/api/covers/thumbs', { method: 'POST' }),
+  convertCover: (key, format) => request('/api/covers/convert', { method: 'POST', body: JSON.stringify({ key, format }) }),
+  convertBatchCovers: (format) => request('/api/covers/convert-batch', { method: 'POST', body: JSON.stringify({ format }) })
 };
 
 // ---- S3-aware cover URL resolution ----

@@ -22,15 +22,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/vegidio/avif-go"
 	"golang.org/x/image/draw"
-	"golang.org/x/image/webp"
 )
 
 // Storage abstracts the cover-file backend (local disk or S3). All cover keys
 // are relative storage paths under the "covers/" prefix, named by content
 // hash ("covers/<sha256>.<ext>") so identical content is stored once.
-type Storage interface {	// SaveUpload processes an uploaded image (resize + AVIF), computes its
+type Storage interface {
+	// SaveUpload processes an uploaded image (resize + encode), computes its
 	// content hash, dedupes against existing covers, writes the file if new,
 	// and returns the storage key, a base64 JPEG thumbnail, and whether a new
 	// file was created.
@@ -60,6 +59,10 @@ type Storage interface {	// SaveUpload processes an uploaded image (resize + AVI
 
 	// PurgeTrash permanently deletes all trash contents.
 	PurgeTrash() (int, error)
+
+	// ConvertCover reads a cover, re-encodes it to the target format, and
+	// writes the new file. Returns the new key and whether the file changed.
+	ConvertCover(key string, targetFormat string) (newKey string, converted bool, err error)
 }
 
 // ---------- shared helpers ----------
@@ -83,14 +86,7 @@ func DetectExt(b []byte) string {
 }
 
 func decodeImage(b []byte) (image.Image, error) {
-	img, _, err := image.Decode(bytes.NewReader(b))
-	if err == nil {
-		return img, nil
-	}
-	if img, err := webp.Decode(bytes.NewReader(b)); err == nil {
-		return img, nil
-	}
-	return nil, fmt.Errorf("unsupported image format")
+	return DecodeImage(b)
 }
 
 // ThumbJPEG renders a ≤maxW-wide JPEG thumbnail (quality 60) of img.
@@ -128,18 +124,6 @@ func ThumbBase64FromBytes(data []byte, maxW int) (string, error) {
 	return ThumbBase64(img, maxW)
 }
 
-func encodeAVIF(img image.Image) ([]byte, error) {
-	var buf bytes.Buffer
-	if err := avif.Encode(&buf, img, &avif.Options{
-		Speed:        6,
-		ColorQuality: 65,
-		AlphaQuality: 60,
-	}); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
 var catmullRom = &draw.Kernel{
 	Support: 2,
 	At: func(t float64) float64 {
@@ -162,14 +146,25 @@ func trashKey(name string) string {
 // ---------- Local storage ----------
 
 type LocalStorage struct {
-	uploadDir string
+	uploadDir   string
+	cfgProvider func() string
 }
 
-func NewLocalStorage(uploadDir string) *LocalStorage {
+func NewLocalStorage(uploadDir string, cfgProvider func() string) *LocalStorage {
 	os.MkdirAll(uploadDir, 0755)
 	os.MkdirAll(filepath.Join(uploadDir, "covers"), 0755)
 	os.MkdirAll(filepath.Join(uploadDir, "covers_trash"), 0755)
-	return &LocalStorage{uploadDir: uploadDir}
+	if cfgProvider == nil {
+		cfgProvider = func() string { return "avif" }
+	}
+	return &LocalStorage{uploadDir: uploadDir, cfgProvider: cfgProvider}
+}
+
+func (s *LocalStorage) imageFormat() string {
+	if f := s.cfgProvider(); f != "" {
+		return f
+	}
+	return "avif"
 }
 
 func (s *LocalStorage) localPath(key string) string {
@@ -206,12 +201,13 @@ func (s *LocalStorage) SaveUpload(file *multipart.FileHeader) (string, string, b
 		return "", "", false, fmt.Errorf("thumbnail: %w", err)
 	}
 
-	avifBytes, err := encodeAVIF(img)
+	format := s.imageFormat()
+	encodedBytes, ext, err := EncodeImage(img, format)
 	if err != nil {
-		return "", "", false, fmt.Errorf("encode avif: %w", err)
+		return "", "", false, fmt.Errorf("encode %s: %w", format, err)
 	}
 
-	key, created, err := s.SaveCoverBytes(avifBytes, ".avif")
+	key, created, err := s.SaveCoverBytes(encodedBytes, ext)
 	if err != nil {
 		return "", "", false, err
 	}
@@ -311,13 +307,43 @@ func (s *LocalStorage) PurgeTrash() (int, error) {
 	return n, nil
 }
 
+func (s *LocalStorage) ConvertCover(key string, targetFormat string) (string, bool, error) {
+	data, err := s.ReadCover(key)
+	if err != nil {
+		return "", false, err
+	}
+
+	img, err := decodeImage(data)
+	if err != nil {
+		return "", false, err
+	}
+
+	encodedBytes, ext, err := EncodeImage(img, targetFormat)
+	if err != nil {
+		return "", false, err
+	}
+
+	newKey, created, err := s.SaveCoverBytes(encodedBytes, ext)
+	if err != nil {
+		return "", false, err
+	}
+
+	// Delete old file if it's different from the new one
+	if newKey != key {
+		s.DeleteCover(key)
+	}
+
+	return newKey, created, nil
+}
+
 // ---------- S3 storage ----------
 
 type S3Storage struct {
-	client    *s3.Client
-	bucket    string
-	publicURL string
-	baseKey   string
+	client      *s3.Client
+	bucket      string
+	publicURL   string
+	baseKey     string
+	cfgProvider func() string
 }
 
 func NewS3Storage(cfg *config.Config) *S3Storage {
@@ -328,10 +354,18 @@ func NewS3Storage(cfg *config.Config) *S3Storage {
 		Credentials:  creds,
 	})
 	return &S3Storage{
-		client:    client,
-		bucket:    cfg.S3Bucket,
-		publicURL: cfg.S3PublicURL,
+		client:      client,
+		bucket:      cfg.S3Bucket,
+		publicURL:   cfg.S3PublicURL,
+		cfgProvider: func() string { return cfg.ImageFormat },
 	}
+}
+
+func (s *S3Storage) imageFormat() string {
+	if f := s.cfgProvider(); f != "" {
+		return f
+	}
+	return "avif"
 }
 
 func (s *S3Storage) SaveUpload(file *multipart.FileHeader) (string, string, bool, error) {
@@ -356,11 +390,11 @@ func (s *S3Storage) SaveUpload(file *multipart.FileHeader) (string, string, bool
 	if err != nil {
 		return "", "", false, err
 	}
-	avifBytes, err := encodeAVIF(img)
+	encodedBytes, ext, err := EncodeImage(img, s.imageFormat())
 	if err != nil {
 		return "", "", false, err
 	}
-	key, created, err := s.SaveCoverBytes(avifBytes, ".avif")
+	key, created, err := s.SaveCoverBytes(encodedBytes, ext)
 	if err != nil {
 		return "", "", false, err
 	}
@@ -475,10 +509,39 @@ func (s *S3Storage) PurgeTrash() (int, error) {
 	return n, nil
 }
 
+func (s *S3Storage) ConvertCover(key string, targetFormat string) (string, bool, error) {
+	data, err := s.ReadCover(key)
+	if err != nil {
+		return "", false, err
+	}
+
+	img, err := decodeImage(data)
+	if err != nil {
+		return "", false, err
+	}
+
+	encodedBytes, ext, err := EncodeImage(img, targetFormat)
+	if err != nil {
+		return "", false, err
+	}
+
+	newKey, created, err := s.SaveCoverBytes(encodedBytes, ext)
+	if err != nil {
+		return "", false, err
+	}
+
+	// Delete old file if it's different from the new one
+	if newKey != key {
+		s.DeleteCover(key)
+	}
+
+	return newKey, created, nil
+}
+
 // New returns the storage backend selected by the configuration.
 func New(cfg *config.Config) Storage {
 	if cfg.StorageType == "s3" && cfg.S3Bucket != "" && cfg.S3AccessKey != "" {
 		return NewS3Storage(cfg)
 	}
-	return NewLocalStorage(cfg.UploadDir)
+	return NewLocalStorage(cfg.UploadDir, func() string { return cfg.ImageFormat })
 }

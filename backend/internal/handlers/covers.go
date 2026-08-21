@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -265,4 +266,164 @@ func (h *Handler) regenerateThumbs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	jsonResp(w, 200, map[string]interface{}{"updated": done})
+}
+
+// POST /covers/convert {"key":"...", "format":"avif|webp|jpeg"}
+// Re-encode a single cover file to the target format and repoint all referencing records.
+func (h *Handler) convertCover(w http.ResponseWriter, r *http.Request) {
+	coverMu.Lock()
+	defer coverMu.Unlock()
+
+	var req struct {
+		Key    string `json:"key"`
+		Format string `json:"format"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if req.Key == "" {
+		jsonErr(w, 400, "key is required")
+		return
+	}
+	format := normalizeImageFormat(req.Format)
+	if !isSupportedImageFormat(format) {
+		jsonErr(w, 400, "unsupported format")
+		return
+	}
+
+	newKey, converted, err := h.storage.ConvertCover(req.Key, format)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+
+	if newKey != req.Key {
+		if err := h.db.RepointCoverRefs(req.Key, newKey); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		// regenerate thumbnails for affected records
+		h.regenerateThumbsForCover(req.Key, newKey)
+	}
+
+	jsonResp(w, 200, map[string]interface{}{
+		"key":       newKey,
+		"converted": converted,
+	})
+}
+
+// POST /covers/convert-batch {"format":"avif|webp|jpeg"}
+// Re-encode every cover in storage to the target format, repoint records, and
+// regenerate thumbnails. Skips files already in the target format.
+func (h *Handler) convertBatchCovers(w http.ResponseWriter, r *http.Request) {
+	coverMu.Lock()
+	defer coverMu.Unlock()
+
+	var req struct {
+		Format string `json:"format"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	format := normalizeImageFormat(req.Format)
+	if !isSupportedImageFormat(format) {
+		jsonErr(w, 400, "unsupported format")
+		return
+	}
+
+	keys, err := h.storage.ListCoverKeys()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+
+	converted := 0
+	skipped := 0
+	freed := int64(0)
+	for _, k := range keys {
+		ext := strings.ToLower(filepath.Ext(k))
+		if ext == extForFormat(format) {
+			skipped++
+			continue
+		}
+		newKey, _, err := h.storage.ConvertCover(k, format)
+		if err != nil {
+			continue
+		}
+		if newKey != k {
+			if err := h.db.RepointCoverRefs(k, newKey); err == nil {
+				h.regenerateThumbsForCover(k, newKey)
+				if cnt, _ := h.db.CountCoverRefs(k); cnt == 0 {
+					if sz, ok := h.db.CoverSize(k); ok {
+						freed += sz
+						h.db.DeleteCoverMeta(k)
+					}
+				}
+			}
+		}
+		converted++
+	}
+
+	jsonResp(w, 200, map[string]interface{}{
+		"converted":     converted,
+		"skipped":       skipped,
+		"freed_bytes":   freed,
+		"target_format": format,
+	})
+}
+
+// regenerateThumbsForCover finds records referencing either the old or new key
+// and refreshes their cover_thumb from the current cover file.
+func (h *Handler) regenerateThumbsForCover(oldKey, newKey string) {
+	for _, k := range []string{oldKey, newKey} {
+		data, err := h.storage.ReadCover(k)
+		if err != nil {
+			continue
+		}
+		thumb, err := storage.ThumbBase64FromBytes(data, 400)
+		if err != nil {
+			continue
+		}
+		recs, err := h.db.GetRecordsByCoverFile(k)
+		if err != nil {
+			continue
+		}
+		for _, rec := range recs {
+			_ = h.db.SetRecordThumb(rec.ID, thumb)
+		}
+	}
+}
+
+func isSupportedImageFormat(f string) bool {
+	switch f {
+	case "avif", "webp", "jpeg":
+		return true
+	}
+	return false
+}
+
+func normalizeImageFormat(f string) string {
+	f = strings.ToLower(strings.TrimSpace(f))
+	switch f {
+	case "jpg":
+		return "jpeg"
+	case "png":
+		return "jpeg"
+	case "":
+		return "avif"
+	}
+	return f
+}
+
+func extForFormat(format string) string {
+	switch format {
+	case "webp":
+		return ".webp"
+	case "jpeg":
+		return ".jpg"
+	default:
+		return ".avif"
+	}
 }

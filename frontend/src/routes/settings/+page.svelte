@@ -3,17 +3,27 @@
   import { api } from '$lib/api.js';
   import { theme } from '$lib/stores.js';
 
-  let settings = $state({ storage_type: 'local', theme: 'auto' });
+  let settings = $state({ storage_type: 'local', theme: 'auto', image_format: 'avif' });
   let error = $state('');
   let saved = $state(false);
   let loading = $state(true);
   let currentTheme = $state('auto');
+
+  let converting = $state(false);
+  let convertResult = $state(null);
+  let convertError = $state('');
 
   const MAP_SOURCES = [
     { k: 'osm', label: '标准' },
     { k: 'gaode', label: '高德' },
     { k: 'tencent', label: '腾讯' },
     { k: 'custom', label: '自定义瓦片' }
+  ];
+
+  const IMAGE_FORMATS = [
+    { k: 'avif', label: 'AVIF', hint: '体积最小，现代浏览器原生支持（推荐）' },
+    { k: 'webp', label: 'WebP', hint: '兼容性最好的现代格式' },
+    { k: 'jpeg', label: 'JPEG', hint: '兼容性最广，体积相对较大' }
   ];
 
   let mapSource = $state('osm');
@@ -41,10 +51,9 @@
     error = '';
     try {
       settings = await api.getSettings();
-      // 确保 settings 有完整的默认值
       if (!settings.storage_type) settings.storage_type = 'local';
       if (!settings.theme) settings.theme = 'auto';
-      // 加载地图偏好
+      if (!settings.image_format) settings.image_format = 'avif';
       mapSource = loadPref('mujian:map_source', 'osm');
       mapKey = loadPref('mujian:map_custom_key', '');
       mapCustomUrl = loadPref('mujian:map_custom_url', '');
@@ -60,7 +69,11 @@
     error = '';
     saveMapPrefs();
     try {
-      await api.updateSettings({ theme: currentTheme, storage_type: settings.storage_type });
+      await api.updateSettings({
+        theme: currentTheme,
+        storage_type: settings.storage_type,
+        image_format: settings.image_format
+      });
       saved = true;
       setTimeout(() => (saved = false), 2400);
     } catch (e) {
@@ -73,6 +86,20 @@
     theme.set(v);
   }
 
+  async function runBatchConvert(format) {
+    converting = true;
+    convertError = '';
+    convertResult = null;
+    try {
+      const r = await api.convertBatchCovers(format);
+      convertResult = r;
+    } catch (e) {
+      convertError = e.message;
+    } finally {
+      converting = false;
+    }
+  }
+
   const themes = [
     { v: 'auto', label: '跟随系统', ico: '◐' },
     { v: 'light', label: '亮色', ico: '☀️' },
@@ -80,7 +107,6 @@
   ];
 
   onMount(() => {
-    // 订阅 theme store
     const unsub = theme.subscribe((val) => {
       currentTheme = val;
     });
@@ -120,6 +146,48 @@
         <option value="local">本地存储</option>
         <option value="s3">S3 对象存储</option>
       </select>
+    </div>
+
+    <div class="card sec">
+      <h3>封面编码</h3>
+      <label>默认编码格式
+        <span class="hint">新上传海报会使用所选格式保存；更改后立即生效，无需重启</span>
+      </label>
+      <select class="input" bind:value={settings.image_format} style="max-width: 280px;">
+        {#each IMAGE_FORMATS as f}
+          <option value={f.k}>{f.label}</option>
+        {/each}
+      </select>
+      {#each IMAGE_FORMATS as f}
+        {#if settings.image_format === f.k}
+          <div class="hint-row">💡 {f.hint}</div>
+        {/if}
+      {/each}
+
+      <div class="convert-actions">
+        <button
+          class="btn"
+          class:disabled={converting}
+          onclick={() => runBatchConvert(settings.image_format)}
+          disabled={converting}
+        >
+          {#if converting}
+            转换中…
+          {:else}
+            批量转换已有海报为 {settings.image_format.toUpperCase()}
+          {/if}
+        </button>
+        <span class="hint">会重新编码所有历史海报文件并自动更新数据库引用，此操作不可撤销</span>
+      </div>
+
+      {#if convertResult}
+        <div class="banner success">
+          ✓ 已转换 {convertResult.converted} 个文件，跳过 {convertResult.skipped} 个（已是目标格式），释放 {Math.round(convertResult.freed_bytes / 1024)} KB
+        </div>
+      {/if}
+      {#if convertError}
+        <div class="banner error">⚠ {convertError}</div>
+      {/if}
     </div>
 
     <div class="card sec">
@@ -177,4 +245,16 @@
   }
   .tico { font-size: 18px; }
   .hint { font-weight: 400; color: var(--text-3); font-size: 12px; display: block; margin-top: 4px; }
+  .hint-row { margin-top: 8px; font-size: 12.5px; color: var(--text-3); }
+
+  .convert-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border);
+  }
+  .convert-actions .btn { width: fit-content; }
+  .btn.disabled, .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>

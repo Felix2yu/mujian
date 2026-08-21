@@ -73,6 +73,8 @@ func (h *Handler) Routes() chi.Router {
 		r.Post("/cleanup", h.cleanupCovers)
 		r.Post("/trash/purge", h.purgeTrash)
 		r.Post("/thumbs", h.regenerateThumbs)
+		r.Post("/convert", h.convertCover)
+		r.Post("/convert-batch", h.convertBatchCovers)
 	})
 
 	r.Get("/autocomplete/{field}", h.getAutocomplete)
@@ -232,10 +234,34 @@ func (h *Handler) deleteRecord(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		IDs           []string `json:"ids"`
-		CategoryName  *string  `json:"category_name"`
-		Rating        *int     `json:"rating"`
-		ActiveStatus  *int     `json:"active_status"`
+		IDs []string `json:"ids"`
+
+		// 每个字段为 nil 表示不修改；非 nil 则按指定操作更新
+		CategoryName  *string `json:"category_name,omitempty"`
+		Rating        *int    `json:"rating,omitempty"`
+		ActiveStatus  *int    `json:"active_status,omitempty"`
+		City          *string `json:"city,omitempty"`
+		Address       *string `json:"address,omitempty"`
+		Channel       *string `json:"channel,omitempty"`
+		Company       *string `json:"company,omitempty"`
+		Friends       *string `json:"friends,omitempty"`
+		Remark        *string `json:"remark,omitempty"`
+		Seat          *string `json:"seat,omitempty"`
+
+		Price            *float64 `json:"price,omitempty"`
+		PriceCurrency    *string  `json:"price_currency,omitempty"`
+		PayPrice         *float64 `json:"pay_price,omitempty"`
+		PayPriceCurrency *string  `json:"pay_price_currency,omitempty"`
+		OtherCost        *float64 `json:"other_cost,omitempty"`
+		OtherCostCurrency *string `json:"other_cost_currency,omitempty"`
+
+		// 数组字段支持三种操作：set(替换)、append(追加)、remove(移除)
+		DramaIDs   *models.BatchArrayOp `json:"drama_ids,omitempty"`
+		ZheziIDs   *models.BatchArrayOp `json:"zhezi_ids,omitempty"`
+		Play       *models.BatchArrayOp `json:"play,omitempty"`
+		Guest      *models.BatchArrayOp `json:"guest,omitempty"`
+		ArtistNames *models.BatchArrayOp `json:"artist_names,omitempty"`
+		TagIDs     *models.BatchArrayOp `json:"tag_ids,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "invalid request body")
@@ -245,7 +271,31 @@ func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "no ids provided")
 		return
 	}
-	updated, err := h.db.BatchUpdateRecords(req.IDs, req.CategoryName, req.Rating, req.ActiveStatus)
+	updated, err := h.db.BatchUpdateRecords(models.BatchUpdateParams{
+		IDs:              req.IDs,
+		CategoryName:     req.CategoryName,
+		Rating:           req.Rating,
+		ActiveStatus:     req.ActiveStatus,
+		City:             req.City,
+		Address:          req.Address,
+		Channel:          req.Channel,
+		Company:          req.Company,
+		Friends:          req.Friends,
+		Remark:           req.Remark,
+		Seat:             req.Seat,
+		Price:            req.Price,
+		PriceCurrency:    req.PriceCurrency,
+		PayPrice:         req.PayPrice,
+		PayPriceCurrency: req.PayPriceCurrency,
+		OtherCost:        req.OtherCost,
+		OtherCostCurrency: req.OtherCostCurrency,
+		DramaIDs:         req.DramaIDs,
+		ZheziIDs:         req.ZheziIDs,
+		Play:             req.Play,
+		Guest:            req.Guest,
+		ArtistNames:      req.ArtistNames,
+		TagIDs:           req.TagIDs,
+	})
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return

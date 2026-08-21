@@ -15,6 +15,7 @@ type Config struct {
 	Timezone          string `json:"-"`
 	Theme             string `json:"theme"`
 	StorageType       string `json:"storage_type"`
+	ImageFormat       string `json:"image_format"` // avif | webp | jpeg
 	S3Endpoint        string `json:"s3_endpoint"`
 	S3Bucket          string `json:"s3_bucket"`
 	S3Region          string `json:"s3_region"`
@@ -38,6 +39,7 @@ func Load() *Config {
 		Timezone:          loc.String(),
 		Theme:             getEnv("THEME", "auto"),
 		StorageType:       getEnv("STORAGE_TYPE", "local"),
+		ImageFormat:       getEnv("IMAGE_FORMAT", "avif"),
 		S3Endpoint:        os.Getenv("S3_ENDPOINT"),
 		S3Bucket:          os.Getenv("S3_BUCKET"),
 		S3Region:          getEnv("S3_REGION", "us-east-1"),
@@ -74,6 +76,9 @@ func (c *Config) Update(s *SettingsUpdate) {
 	if s.StorageType != nil && c.AllowLocalStorage || *s.StorageType == "s3" {
 		c.StorageType = *s.StorageType
 	}
+	if s.ImageFormat != nil {
+		c.ImageFormat = *s.ImageFormat
+	}
 	if s.S3Endpoint != nil {
 		c.S3Endpoint = *s.S3Endpoint
 	}
@@ -97,6 +102,7 @@ func (c *Config) Update(s *SettingsUpdate) {
 type SettingsUpdate struct {
 	Theme       *string `json:"theme"`
 	StorageType *string `json:"storage_type"`
+	ImageFormat *string `json:"image_format"`
 	S3Endpoint  *string `json:"s3_endpoint"`
 	S3Bucket    *string `json:"s3_bucket"`
 	S3Region    *string `json:"s3_region"`
@@ -117,6 +123,7 @@ func (c *Config) GetSettingsResponse() map[string]interface{} {
 	return map[string]interface{}{
 		"theme":              c.Theme,
 		"storage_type":       c.StorageType,
+		"image_format":       c.ImageFormat,
 		"allow_local_storage": c.AllowLocalStorage,
 		"s3_endpoint":        c.S3Endpoint,
 		"s3_bucket":          c.S3Bucket,
@@ -134,6 +141,7 @@ func (c *Config) SaveToFile(path string) error {
 	data := map[string]string{
 		"theme":        c.Theme,
 		"storage_type": c.StorageType,
+		"image_format": c.ImageFormat,
 		"s3_endpoint":  c.S3Endpoint,
 		"s3_bucket":    c.S3Bucket,
 		"s3_region":    c.S3Region,
@@ -173,6 +181,9 @@ func (c *Config) LoadFromFile(path string) error {
 		if c.AllowLocalStorage || v == "s3" {
 			c.StorageType = v
 		}
+	}
+	if v, ok := data["image_format"]; ok {
+		c.ImageFormat = v
 	}
 	if v, ok := data["s3_endpoint"]; ok {
 		c.S3Endpoint = v

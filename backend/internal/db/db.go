@@ -543,39 +543,209 @@ func (db *DB) DeleteRecord(id string) error {
 	return err
 }
 
-func (db *DB) BatchUpdateRecords(ids []string, categoryName *string, rating *int, activeStatus *int) (int64, error) {
-	if len(ids) == 0 {
+// BatchUpdateRecords accepts models.BatchUpdateParams for batch field updates.
+// All scalar fields are applied in a single UPDATE ... WHERE id IN (...) query;
+// JSON-array fields (drama_ids / zhezi_ids / play / guest / artist_names /
+// tag_ids) are processed row-by-row so each record's existing values are
+// combined correctly (set / append / remove).
+func (db *DB) BatchUpdateRecords(params models.BatchUpdateParams) (int64, error) {
+	if len(params.IDs) == 0 {
 		return 0, nil
 	}
-	placeholders := make([]string, len(ids))
-	args := make([]interface{}, 0, len(ids))
-	for i, id := range ids {
-		placeholders[i] = "?"
-		args = append(args, id)
-	}
-	inClause := "(" + strings.Join(placeholders, ",") + ")"
 
-	sets := []string{}
-	if categoryName != nil {
-		sets = append(sets, "category_name = ?")
-		args = append(args, *categoryName)
+	// 1. Build simple (scalar) SET clause — can update in one SQL
+	simpleSets := []string{}
+	simpleArgs := []interface{}{}
+
+	if params.CategoryName != nil {
+		simpleSets = append(simpleSets, "category_name = ?")
+		simpleArgs = append(simpleArgs, *params.CategoryName)
 	}
-	if rating != nil {
-		sets = append(sets, "rating = ?")
-		args = append(args, *rating)
+	if params.Rating != nil {
+		simpleSets = append(simpleSets, "rating = ?")
+		simpleArgs = append(simpleArgs, *params.Rating)
 	}
-	if activeStatus != nil {
-		sets = append(sets, "active_status = ?")
-		args = append(args, *activeStatus)
+	if params.ActiveStatus != nil {
+		simpleSets = append(simpleSets, "active_status = ?")
+		simpleArgs = append(simpleArgs, *params.ActiveStatus)
 	}
-	if len(sets) == 0 {
-		return 0, nil
+	if params.City != nil {
+		simpleSets = append(simpleSets, "city = ?")
+		simpleArgs = append(simpleArgs, *params.City)
 	}
-	res, err := db.conn.Exec("UPDATE records SET "+strings.Join(sets, ", ")+" WHERE id IN "+inClause, args...)
-	if err != nil {
-		return 0, err
+	if params.Address != nil {
+		simpleSets = append(simpleSets, "address = ?")
+		simpleArgs = append(simpleArgs, *params.Address)
 	}
-	return res.RowsAffected()
+	if params.Channel != nil {
+		simpleSets = append(simpleSets, "channel = ?")
+		simpleArgs = append(simpleArgs, *params.Channel)
+	}
+	if params.Company != nil {
+		simpleSets = append(simpleSets, "company = ?")
+		simpleArgs = append(simpleArgs, *params.Company)
+	}
+	if params.Friends != nil {
+		simpleSets = append(simpleSets, "friends = ?")
+		simpleArgs = append(simpleArgs, *params.Friends)
+	}
+	if params.Remark != nil {
+		simpleSets = append(simpleSets, "remark = ?")
+		simpleArgs = append(simpleArgs, *params.Remark)
+	}
+	if params.Seat != nil {
+		simpleSets = append(simpleSets, "seat = ?")
+		simpleArgs = append(simpleArgs, *params.Seat)
+	}
+	if params.Price != nil {
+		simpleSets = append(simpleSets, "price = ?")
+		simpleArgs = append(simpleArgs, *params.Price)
+	}
+	if params.PriceCurrency != nil {
+		simpleSets = append(simpleSets, "price_currency = ?")
+		simpleArgs = append(simpleArgs, *params.PriceCurrency)
+	}
+	if params.PayPrice != nil {
+		simpleSets = append(simpleSets, "pay_price = ?")
+		simpleArgs = append(simpleArgs, *params.PayPrice)
+	}
+	if params.PayPriceCurrency != nil {
+		simpleSets = append(simpleSets, "pay_price_currency = ?")
+		simpleArgs = append(simpleArgs, *params.PayPriceCurrency)
+	}
+	if params.OtherCost != nil {
+		simpleSets = append(simpleSets, "other_cost = ?")
+		simpleArgs = append(simpleArgs, *params.OtherCost)
+	}
+	if params.OtherCostCurrency != nil {
+		simpleSets = append(simpleSets, "other_cost_currency = ?")
+		simpleArgs = append(simpleArgs, *params.OtherCostCurrency)
+	}
+
+	hasArrayOps := params.DramaIDs != nil || params.ZheziIDs != nil ||
+		params.Play != nil || params.Guest != nil ||
+		params.ArtistNames != nil || params.TagIDs != nil
+
+	// 2. Apply simple scalar updates (one SQL for all)
+	if len(simpleSets) > 0 {
+		placeholders := make([]string, len(params.IDs))
+		inArgs := make([]interface{}, len(params.IDs))
+		for i, id := range params.IDs {
+			placeholders[i] = "?"
+			inArgs[i] = id
+		}
+		sql := "UPDATE records SET " + strings.Join(simpleSets, ", ") + " WHERE id IN (" + strings.Join(placeholders, ",") + ")"
+		args := append(simpleArgs, inArgs...)
+		if _, err := db.conn.Exec(sql, args...); err != nil {
+			return 0, err
+		}
+	}
+
+	// 3. Handle array ops row-by-row (each row may have different existing values)
+	if hasArrayOps {
+		updated, err := db.applyArrayOps(params)
+		if err != nil {
+			return 0, err
+		}
+		return updated, nil
+	}
+
+	return int64(len(params.IDs)), nil
+}
+
+// applyArrayOps applies set/append/remove operations on JSON-array columns
+// for each affected record.
+func (db *DB) applyArrayOps(params models.BatchUpdateParams) (int64, error) {
+	arrayCols := map[string]*models.BatchArrayOp{}
+	if params.DramaIDs != nil {
+		arrayCols["drama_ids"] = params.DramaIDs
+	}
+	if params.ZheziIDs != nil {
+		arrayCols["zhezi_ids"] = params.ZheziIDs
+	}
+	if params.Play != nil {
+		arrayCols["play"] = params.Play
+	}
+	if params.Guest != nil {
+		arrayCols["guest"] = params.Guest
+	}
+	if params.ArtistNames != nil {
+		arrayCols["artist_names"] = params.ArtistNames
+	}
+	if params.TagIDs != nil {
+		arrayCols["tag_ids"] = params.TagIDs
+	}
+
+	var total int64
+	for _, id := range params.IDs {
+		colUpdates := []string{}
+		colArgs := []interface{}{}
+
+		for col, op := range arrayCols {
+			var existing []string
+			row := db.conn.QueryRow("SELECT "+col+" FROM records WHERE id = ?", id)
+			var raw string
+			if err := row.Scan(&raw); err != nil {
+				continue
+			}
+			if raw != "" && raw != "[]" {
+				_ = json.Unmarshal([]byte(raw), &existing)
+			}
+
+			newVal := applyArrayOp(existing, op)
+			newRaw, _ := json.Marshal(newVal)
+			colUpdates = append(colUpdates, col+" = ?")
+			colArgs = append(colArgs, string(newRaw))
+		}
+
+		if len(colUpdates) > 0 {
+			colArgs = append(colArgs, id)
+			sql := "UPDATE records SET " + strings.Join(colUpdates, ", ") + " WHERE id = ?"
+			if _, err := db.conn.Exec(sql, colArgs...); err != nil {
+				return total, err
+			}
+			total++
+		}
+	}
+	return total, nil
+}
+
+// applyArrayOp applies the op (set/append/remove) to existing values.
+func applyArrayOp(existing []string, op *models.BatchArrayOp) []string {
+	if op == nil {
+		return existing
+	}
+	switch op.Op {
+	case "set":
+		return op.Value
+	case "append":
+		set := make(map[string]struct{}, len(existing)+len(op.Value))
+		for _, v := range existing {
+			set[v] = struct{}{}
+		}
+		for _, v := range op.Value {
+			set[v] = struct{}{}
+		}
+		result := make([]string, 0, len(set))
+		for v := range set {
+			result = append(result, v)
+		}
+		return result
+	case "remove":
+		removeSet := make(map[string]struct{}, len(op.Value))
+		for _, v := range op.Value {
+			removeSet[v] = struct{}{}
+		}
+		result := make([]string, 0, len(existing))
+		for _, v := range existing {
+			if _, ok := removeSet[v]; !ok {
+				result = append(result, v)
+			}
+		}
+		return result
+	default:
+		return existing
+	}
 }
 
 func (db *DB) BatchDeleteRecords(ids []string) (int64, error) {

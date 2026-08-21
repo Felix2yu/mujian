@@ -271,3 +271,39 @@ type OrphanItem struct {
 	FileName string `json:"file_name"`
 	Size     int64  `json:"size"`
 }
+
+// ---------- Batch update ----------
+
+// BatchArrayOp specifies how to modify a JSON-array column.
+// Op: "set" (replace), "append" (union), "remove" (difference).
+type BatchArrayOp struct {
+	Op    string   `json:"op"`    // set | append | remove
+	Value []string `json:"value"` // ids or names
+}
+
+// BatchUpdateParams holds all possible fields for batch update.
+type BatchUpdateParams struct {
+	IDs               []string
+	CategoryName      *string
+	Rating            *int
+	ActiveStatus      *int
+	City              *string
+	Address           *string
+	Channel           *string
+	Company           *string
+	Friends           *string
+	Remark            *string
+	Seat              *string
+	Price             *float64
+	PriceCurrency     *string
+	PayPrice          *float64
+	PayPriceCurrency  *string
+	OtherCost         *float64
+	OtherCostCurrency *string
+	DramaIDs          *BatchArrayOp
+	ZheziIDs          *BatchArrayOp
+	Play              *BatchArrayOp
+	Guest             *BatchArrayOp
+	ArtistNames       *BatchArrayOp
+	TagIDs            *BatchArrayOp
+}
