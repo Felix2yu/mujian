@@ -8,7 +8,7 @@ COPY frontend/ .
 RUN pnpm run build
 
 # Build backend (cached unless Go files change, frontend dist is now available)
-FROM golang:1.26-trixie-slim AS backend
+FROM golang:1.26-trixie AS backend
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libavif-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY backend/go.mod backend/go.sum ./
