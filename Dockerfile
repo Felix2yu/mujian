@@ -1,10 +1,11 @@
 # Build frontend (cached unless frontend files change)
 FROM node:24-alpine AS frontend
+RUN npm install -g pnpm
 WORKDIR /app
-COPY frontend/package*.json ./
-RUN npm ci
+COPY frontend/package*.json frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY frontend/ .
-RUN npm run build
+RUN pnpm run build
 
 # Build backend (cached unless Go files change, frontend dist is now available)
 FROM golang:1.26-bookworm AS backend
