@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bytes"
+	"encoding/binary"
 	"image"
 	"image/jpeg"
 	"io"
@@ -31,26 +32,34 @@ func DetectImageFormat(data []byte) string {
 	}
 	// ISO BMFF / ftyp box (AVIF/HEIF) and WebP need at least 12 bytes.
 	if len(data) >= 12 {
-		// Container used by AVIF (and HEIF). Inspect the major brand and the
-		// compatible-brands list rather than the file extension.
-		if bytes.Equal(data[4:8], []byte("ftyp")) {
-			brand := data[8:12]
-			switch {
-			case bytes.Equal(brand, []byte("avif")),
-				bytes.Equal(brand, []byte("avis")),
-				bytes.Equal(brand, []byte("mif1")):
-				return "avif"
-			}
-			// Compatible brands (after the minor-version field) may carry "avif".
-			for i := 16; i+4 <= len(data) && i <= 40; i += 4 {
-				if bytes.Equal(data[i:i+4], []byte("avif")) {
-					return "avif"
-				}
-			}
-		}
 		// WebP: "RIFF" .... "WEBP"
 		if bytes.Equal(data[0:4], []byte("RIFF")) && bytes.Equal(data[8:12], []byte("WEBP")) {
 			return "webp"
+		}
+		// AVIF/HEIF: ftyp box whose major brand or compatible-brand list carries
+		// "avif"/"avis". Only those brands indicate AV1 encoding; "mif1" alone is
+		// the generic HEIF brand and must NOT be treated as AVIF (it may be
+		// HEVC). Some encoders write long compatible-brand lists, so scan the
+		// whole list as bounded by the ftyp box size rather than a fixed window.
+		if bytes.Equal(data[4:8], []byte("ftyp")) {
+			if major := string(data[8:12]); major == "avif" || major == "avis" {
+				return "avif"
+			}
+			end := int(binary.BigEndian.Uint32(data[0:4]))
+			if end < 16 || end > len(data) {
+				// Malformed or size-0 box ("extends to EOF"): scan a generous
+				// window instead.
+				end = len(data)
+				if end > 128 {
+					end = 128
+				}
+			}
+			for i := 16; i+4 <= end; i += 4 {
+				switch string(data[i : i+4]) {
+				case "avif", "avis":
+					return "avif"
+				}
+			}
 		}
 	}
 	return ""
