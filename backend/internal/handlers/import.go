@@ -326,18 +326,31 @@ func (h *Handler) extractCovers(zr *zip.Reader, records []models.Record) (int, i
 			missing++
 			continue
 		}
-		ext := storage.DetectExt(data)
 
-		key, _, err := h.storage.SaveCoverBytes(data, ext)
+		format := h.cfg.ImageFormat
+		if !isSupportedImageFormat(format) {
+			format = "avif"
+		}
+
+		// Re-encode the cover to the chosen format so imported libraries honor
+		// the user's encoding preference, then store it content-addressed.
+		storeData, ext := data, storage.DetectExt(data)
+		if img, derr := storage.DecodeImage(data); derr == nil {
+			if enc, eext, eerr := storage.EncodeImage(img, format); eerr == nil {
+				storeData, ext = enc, eext
+			}
+		}
+
+		key, _, err := h.storage.SaveCoverBytes(storeData, ext)
 		if err != nil {
 			missing++
 			continue
 		}
 		rec.CoverFile = key
-		if thumb, err := storage.ThumbBase64FromBytes(data, 400); err == nil {
-			rec.CoverThumb = thumb
+		if tk, terr := h.storage.MakeThumbnail(key, storeData, 400, format); terr == nil {
+			rec.CoverThumb = tk
 		}
-		h.db.UpsertCoverMeta(storage.HashBytes(data), key, ext, int64(len(data)))
+		h.db.UpsertCoverMeta(storage.HashBytes(storeData), key, ext, int64(len(storeData)))
 		imported++
 	}
 	return imported, missing

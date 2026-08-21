@@ -9,10 +9,10 @@
 
 <a class="card card-hover rec" href={`/records/${record.id}`}>
   <div class="cover">
-    {#if record.coverFile}
+    {#if record.coverThumb}
+      <img src={coverUrl(record.coverThumb)} alt={record.name} loading="lazy" />
+    {:else if record.coverFile}
       <img src={coverUrl(record.coverFile)} alt={record.name} loading="lazy" />
-    {:else if record.coverThumb}
-      <img src={record.coverThumb} alt={record.name} loading="lazy" />
     {:else}
       <div class="no-cover"><span>{(record.name || '?').slice(0, 1)}</span></div>
     {/if}

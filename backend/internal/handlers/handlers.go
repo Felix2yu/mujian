@@ -38,6 +38,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/records/search", h.searchRecords)
 	r.Post("/records", h.createRecord)
 	r.Post("/records/import", h.importRecords)
+	r.Post("/records/align-venues", h.alignVenues)
 	r.Post("/records/batch", h.batchUpdate)
 	r.Post("/records/batch/delete", h.batchDelete)
 	r.Get("/records/{id}", h.getRecord)
@@ -230,6 +231,17 @@ func (h *Handler) deleteRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResp(w, 200, map[string]string{"message": "deleted"})
+}
+
+// POST /records/align-venues — 存量对齐：按地址分组，用各组里已有的坐标
+// 回填同地址的其他记录，保证「同场馆唯一经纬度」。
+func (h *Handler) alignVenues(w http.ResponseWriter, r *http.Request) {
+	res, err := h.db.AlignVenueCoordinates()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, res)
 }
 
 func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {

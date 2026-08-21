@@ -37,6 +37,7 @@ export const api = {
   deleteRecord: (id) => request(`/api/records/${id}`, { method: 'DELETE' }),
   batchUpdate: (ids, data) => request('/api/records/batch', { method: 'POST', body: JSON.stringify({ ids, ...data }) }),
   batchDelete: (ids) => request('/api/records/batch/delete', { method: 'POST', body: JSON.stringify({ ids }) }),
+  alignVenues: () => request('/api/records/align-venues', { method: 'POST' }),
 
   importRecords: async (file) => {
     const form = new FormData();

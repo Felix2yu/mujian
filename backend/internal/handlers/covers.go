@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"mujian/internal/models"
-	"mujian/internal/storage"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -257,11 +256,11 @@ func (h *Handler) regenerateThumbs(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		thumb, err := storage.ThumbBase64FromBytes(data, 400)
+		thumbKey, err := h.storage.MakeThumbnail(item.CoverFile, data, 400, h.cfg.ImageFormat)
 		if err != nil {
 			continue
 		}
-		if err := h.db.SetRecordThumb(item.ID, thumb); err == nil {
+		if err := h.db.SetRecordThumb(item.ID, thumbKey); err == nil {
 			done++
 		}
 	}
@@ -304,7 +303,7 @@ func (h *Handler) convertCover(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// regenerate thumbnails for affected records
-		h.regenerateThumbsForCover(req.Key, newKey)
+		h.regenerateThumbsForCover(req.Key, newKey, format)
 	}
 
 	jsonResp(w, 200, map[string]interface{}{
@@ -354,7 +353,7 @@ func (h *Handler) convertBatchCovers(w http.ResponseWriter, r *http.Request) {
 		}
 		if newKey != k {
 			if err := h.db.RepointCoverRefs(k, newKey); err == nil {
-				h.regenerateThumbsForCover(k, newKey)
+				h.regenerateThumbsForCover(k, newKey, format)
 				if cnt, _ := h.db.CountCoverRefs(k); cnt == 0 {
 					if sz, ok := h.db.CoverSize(k); ok {
 						freed += sz
@@ -376,13 +375,13 @@ func (h *Handler) convertBatchCovers(w http.ResponseWriter, r *http.Request) {
 
 // regenerateThumbsForCover finds records referencing either the old or new key
 // and refreshes their cover_thumb from the current cover file.
-func (h *Handler) regenerateThumbsForCover(oldKey, newKey string) {
+func (h *Handler) regenerateThumbsForCover(oldKey, newKey string, format string) {
 	for _, k := range []string{oldKey, newKey} {
 		data, err := h.storage.ReadCover(k)
 		if err != nil {
 			continue
 		}
-		thumb, err := storage.ThumbBase64FromBytes(data, 400)
+		thumbKey, err := h.storage.MakeThumbnail(k, data, 400, format)
 		if err != nil {
 			continue
 		}
@@ -391,7 +390,7 @@ func (h *Handler) regenerateThumbsForCover(oldKey, newKey string) {
 			continue
 		}
 		for _, rec := range recs {
-			_ = h.db.SetRecordThumb(rec.ID, thumb)
+			_ = h.db.SetRecordThumb(rec.ID, thumbKey)
 		}
 	}
 }

@@ -249,9 +249,6 @@ func scanRecord(rows *sql.Rows) (*models.Record, error) {
 	r.DramaIDs = unmarshalStrings(dramaIDs)
 	r.ZheziIDs = unmarshalStrings(zheziIDs)
 	r.TagIDs = unmarshalStrings(tagIDs)
-	// List contexts don't carry the base64 thumbnail (payload bloat); the
-	// detail view (scanRecordRow) keeps it.
-	r.CoverThumb = ""
 	return &r, nil
 }
 
@@ -474,6 +471,8 @@ func (db *DB) CreateRecord(r models.RecordRequest) (*models.Record, error) {
 	if err := db.UpsertRecord(rec); err != nil {
 		return nil, err
 	}
+	// 同场馆（同地址）坐标保持一致：把其他同地址演出的坐标同步为本次值
+	db.SyncVenueCoordinates(rec.Address, rec.Coordinate, rec.ID)
 	return db.GetRecord(rec.ID)
 }
 
@@ -498,7 +497,86 @@ func (db *DB) UpdateRecord(id string, r models.RecordRequest) (*models.Record, e
 	if err := db.UpsertRecord(rec); err != nil {
 		return nil, err
 	}
+	// 同场馆（同地址）坐标保持一致：把其他同地址演出的坐标同步为本次值
+	db.SyncVenueCoordinates(rec.Address, rec.Coordinate, rec.ID)
 	return db.GetRecord(id)
+}
+
+// SyncVenueCoordinates 将同一 address 下（排除 excludeID）的所有演出坐标
+// 同步为 coord。addr 为空或 coord 为空时不操作（避免把其他记录错误清空）。
+func (db *DB) SyncVenueCoordinates(addr string, coord *models.Coordinate, excludeID string) (int64, error) {
+	if addr == "" || coord == nil {
+		return 0, nil
+	}
+	res, err := db.conn.Exec(
+		"UPDATE records SET coordinate = ? WHERE address = ? AND id != ?",
+		marshalJSON(coord), addr, excludeID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// AlignVenueResult 统计批量对齐的结果。
+type AlignVenueResult struct {
+	GroupsTotal    int   `json:"groups_total"`
+	GroupsAligned  int   `json:"groups_aligned"`
+	RecordsUpdated int64 `json:"records_updated"`
+}
+
+// AlignVenueCoordinates 存量对齐：按 address 分组，用各组里第一个已有坐标
+// 回填同地址下坐标不同的其他记录。整组都无坐标的地址跳过。
+func (db *DB) AlignVenueCoordinates() (*AlignVenueResult, error) {
+	res := &AlignVenueResult{}
+	rows, err := db.conn.Query("SELECT DISTINCT address FROM records WHERE address != ''")
+	if err != nil {
+		return nil, err
+	}
+	var addrs []string
+	for rows.Next() {
+		var a string
+		if err := rows.Scan(&a); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		addrs = append(addrs, a)
+	}
+	rows.Close()
+
+	for _, addr := range addrs {
+		res.GroupsTotal++
+		var rep string
+		gr, err := db.conn.Query("SELECT coordinate FROM records WHERE address = ?", addr)
+		if err != nil {
+			return nil, err
+		}
+		for gr.Next() {
+			var c string
+			if err := gr.Scan(&c); err != nil {
+				gr.Close()
+				return nil, err
+			}
+			if rep == "" && c != "" && c != "null" {
+				rep = c
+			}
+		}
+		gr.Close()
+		if rep == "" {
+			continue // 整组都无坐标，跳过
+		}
+		res.GroupsAligned++
+		upd, err := db.conn.Exec(
+			"UPDATE records SET coordinate = ? WHERE address = ? AND coordinate != ?",
+			rep, addr, rep,
+		)
+		if err != nil {
+			return nil, err
+		}
+		n, _ := upd.RowsAffected()
+		res.RecordsUpdated += n
+	}
+	return res, nil
 }
 
 func requestToRecord(r models.RecordRequest) models.Record {

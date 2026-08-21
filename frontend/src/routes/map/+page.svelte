@@ -168,7 +168,7 @@
         .slice(0, 8)
         .map(
           (r) => {
-            const cov = r.coverFile ? coverUrl(r.coverFile) : (r.coverThumb || '');
+            const cov = r.coverFile ? coverUrl(r.coverFile) : coverUrl(r.coverThumb);
             const dateStr = r.dateText ? r.dateText.split(' ')[0].replace('年', '.').replace('月', '.').replace('日', '') : '';
             const catStr = r.categoryName ? ' · ' + r.categoryName : '';
             return `
@@ -196,7 +196,7 @@
   }
 
   function createPopup(first, cityText, count, list, more) {
-    const cover = first.coverFile ? coverUrl(first.coverFile) : (first.coverThumb || '');
+    const cover = first.coverFile ? coverUrl(first.coverFile) : coverUrl(first.coverThumb);
     const titleHtml = count > 1
       ? `<b>${cityText}</b> · ${count} 场`
       : `<b>${first.name}</b>`;

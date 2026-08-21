@@ -103,7 +103,7 @@
           {#each stats.top_rated ?? [] as r}
             <a class="rec-row" href={`/records/${r.id}`}>
               <span class="thumb">
-                {#if r.coverFile}<img src={coverUrl(r.coverFile)} alt="" />{:else}<span class="no-img">{(r.name || '?').slice(0, 1)}</span>{/if}
+                {#if r.coverThumb}<img src={coverUrl(r.coverThumb)} alt="" />{:else if r.coverFile}<img src={coverUrl(r.coverFile)} alt="" />{:else}<span class="no-img">{(r.name || '?').slice(0, 1)}</span>{/if}
               </span>
               <span class="rr-main">
                 <span class="rt">{r.name}</span>
@@ -121,7 +121,7 @@
           {#each stats.recent_records ?? [] as r}
             <a class="rec-row" href={`/records/${r.id}`}>
               <span class="thumb">
-                {#if r.coverFile}<img src={coverUrl(r.coverFile)} alt="" />{:else}<span class="no-img">{(r.name || '?').slice(0, 1)}</span>{/if}
+                {#if r.coverThumb}<img src={coverUrl(r.coverThumb)} alt="" />{:else if r.coverFile}<img src={coverUrl(r.coverFile)} alt="" />{:else}<span class="no-img">{(r.name || '?').slice(0, 1)}</span>{/if}
               </span>
               <span class="rr-main">
                 <span class="rt">{r.name}</span>

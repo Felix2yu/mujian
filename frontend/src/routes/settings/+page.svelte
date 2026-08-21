@@ -13,6 +13,10 @@
   let convertResult = $state(null);
   let convertError = $state('');
 
+  let aligning = $state(false);
+  let alignResult = $state(null);
+  let alignError = $state('');
+
   const MAP_SOURCES = [
     { k: 'osm', label: '标准' },
     { k: 'gaode', label: '高德' },
@@ -97,6 +101,19 @@
       convertError = e.message;
     } finally {
       converting = false;
+    }
+  }
+
+  async function runAlignVenues() {
+    aligning = true;
+    alignError = '';
+    alignResult = null;
+    try {
+      alignResult = await api.alignVenues();
+    } catch (e) {
+      alignError = e.message;
+    } finally {
+      aligning = false;
     }
   }
 
@@ -207,6 +224,31 @@
 
       <label style="margin-top: 12px;">自定义瓦片 URL（可选）</label>
       <input class="input" type="text" bind:value={mapCustomUrl} placeholder={'https://{s}.example.com/tiles/{z}/{x}/{y}.png'} style="max-width: 420px;" />
+
+      <div class="convert-actions">
+        <button
+          class="btn"
+          class:disabled={aligning}
+          onclick={() => runAlignVenues()}
+          disabled={aligning}
+        >
+          {#if aligning}
+            对齐中…
+          {:else}
+            对齐同场馆坐标
+          {/if}
+        </button>
+        <span class="hint">按地址分组，用每组已有坐标回填同场馆其他演出，统一历史数据</span>
+      </div>
+
+      {#if alignResult}
+        <div class="banner success">
+          ✓ 已对齐 {alignResult.groups_aligned}/{alignResult.groups_total} 组场馆，更新 {alignResult.records_updated} 条记录
+        </div>
+      {/if}
+      {#if alignError}
+        <div class="banner error">⚠ {alignError}</div>
+      {/if}
     </div>
 
     {#if error}<div class="banner error">⚠ {error}</div>{/if}

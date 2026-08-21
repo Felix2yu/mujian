@@ -73,8 +73,10 @@ func (c *Config) Update(s *SettingsUpdate) {
 	if s.Theme != nil {
 		c.Theme = *s.Theme
 	}
-	if s.StorageType != nil && c.AllowLocalStorage || *s.StorageType == "s3" {
-		c.StorageType = *s.StorageType
+	if s.StorageType != nil {
+		if *s.StorageType == "s3" || c.AllowLocalStorage {
+			c.StorageType = *s.StorageType
+		}
 	}
 	if s.ImageFormat != nil {
 		c.ImageFormat = *s.ImageFormat

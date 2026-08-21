@@ -88,7 +88,7 @@
         {#if rec.coverFile}
           <img src={coverUrl(rec.coverFile)} alt={rec.name} />
         {:else if rec.coverThumb}
-          <img src={rec.coverThumb} alt={rec.name} />
+          <img src={coverUrl(rec.coverThumb)} alt={rec.name} />
         {:else}
           <div class="no-cover"><span>{(rec.name || '?').slice(0, 1)}</span></div>
         {/if}

@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api, coverUrl } from '$lib/api.js';
+  import { geocodeAddress } from '$lib/geocode.js';
   import CoverPicker from '$lib/components/CoverPicker.svelte';
 
   let { record = null, categories = [], onSubmit, onCancel } = $props();
@@ -64,6 +65,42 @@
   let uploading = $state(false);
   let saving = $state(false);
   let pickerOpen = $state(false);
+
+  // 地址自动定位（高德地理编码）状态
+  let geoStatus = $state('idle'); // idle | loading | ok | nokey | notfound | error
+  let lastGeocoded = $state('');
+  let manualOverride = $state(false);
+  let geoTimer = null;
+
+  // 已有记录载入后，不立即重新解析其原始地址
+  lastGeocoded = form.address || '';
+  if (form.lat && form.lng) geoStatus = 'ok';
+
+  $effect(() => {
+    const addr = form.address;
+    const city = form.city;
+    if (!addr || addr.trim() === '') {
+      lastGeocoded = '';
+      geoStatus = 'idle';
+      return;
+    }
+    if (addr === lastGeocoded) return; // 地址未变：保留现有（含手动校正）值
+    manualOverride = false;
+    clearTimeout(geoTimer);
+    geoStatus = 'loading';
+    geoTimer = setTimeout(async () => {
+      try {
+        const c = await geocodeAddress(addr, city || '');
+        form.lat = String(c.lat);
+        form.lng = String(c.lng);
+        geoStatus = 'ok';
+        lastGeocoded = addr;
+      } catch (e) {
+        geoStatus = (e && e.code) || 'error';
+        lastGeocoded = addr; // 标记已尝试，避免对同地址反复请求
+      }
+    }, 600);
+  });
 
   // 剧目 / 折子 picker state
   let dramaTree = $state([]);
@@ -230,6 +267,31 @@
       <div><label>城市</label><input class="input" bind:value={form.city} placeholder="如：上海" /></div>
       <div class="grow2"><label>场馆 / 地址</label><input class="input" bind:value={form.address} placeholder="如：上海大剧院" /></div>
     </div>
+    <div class="row">
+      <div class="grow2">
+        <label>坐标 <span class="hint">地址自动定位，同场馆演出将同步该坐标</span></label>
+        {#if geoStatus === 'ok' && form.lat && form.lng}
+          <div class="geo-line">📍 {form.lat}, {form.lng}</div>
+        {:else if geoStatus === 'loading'}
+          <div class="geo-line muted">定位中…</div>
+        {:else if geoStatus === 'nokey'}
+          <div class="geo-line muted">未配置高德 Key，请在「设置」填写后自动定位</div>
+        {:else if geoStatus === 'notfound'}
+          <div class="geo-line muted">未找到该地址，可手动校正</div>
+        {:else if geoStatus === 'error'}
+          <div class="geo-line muted">定位失败（网络/密钥），可手动校正</div>
+        {:else}
+          <div class="geo-line muted">填写地址后自动定位</div>
+        {/if}
+        <details class="geo-manual" open={geoStatus === 'nokey' || geoStatus === 'notfound' || geoStatus === 'error' || manualOverride}>
+          <summary class="small">手动校正</summary>
+          <div class="money" style="margin-top:6px;">
+            <input class="input" type="number" step="0.000001" bind:value={form.lat} placeholder="纬度 31.230416" oninput={() => { manualOverride = true; geoStatus = 'ok'; }} />
+            <input class="input" type="number" step="0.000001" bind:value={form.lng} placeholder="经度 121.473700" oninput={() => { manualOverride = true; geoStatus = 'ok'; }} />
+          </div>
+        </details>
+      </div>
+    </div>
   </div>
 
   <div class="card section">
@@ -344,7 +406,7 @@
   </div>
 
   <div class="card section">
-    <h3>封面与位置</h3>
+    <h3>封面</h3>
     <div class="row">
       <div class="grow2">
         <label>封面</label>
@@ -358,13 +420,6 @@
           {#if form.coverFile}
             <img class="preview" src={coverUrl(form.coverFile)} alt="封面预览" />
           {/if}
-        </div>
-      </div>
-      <div>
-        <label>坐标 <span class="hint">纬度 / 经度</span></label>
-        <div class="money">
-          <input class="input" type="number" step="0.000001" bind:value={form.lat} placeholder="31.230416" />
-          <input class="input" type="number" step="0.000001" bind:value={form.lng} placeholder="121.473700" />
         </div>
       </div>
     </div>
@@ -389,6 +444,9 @@
   .grow2 { flex: 2 !important; }
   .money { display: flex; gap: 6px; }
   .money .cur { max-width: 76px; }
+  .geo-line { padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); font-size: 13.5px; }
+  .geo-manual { margin-top: 8px; }
+  .geo-manual summary { cursor: pointer; color: var(--accent); }
 
   .star-row { display: flex; align-items: center; gap: 2px; padding-top: 2px; }
   .star {

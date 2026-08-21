@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"image"
@@ -31,7 +30,7 @@ import (
 type Storage interface {
 	// SaveUpload processes an uploaded image (resize + encode), computes its
 	// content hash, dedupes against existing covers, writes the file if new,
-	// and returns the storage key, a base64 JPEG thumbnail, and whether a new
+	// and returns the storage key, the thumbnail storage key, and whether a new
 	// file was created.
 	SaveUpload(file *multipart.FileHeader) (key, thumb string, created bool, err error)
 
@@ -63,6 +62,11 @@ type Storage interface {
 	// ConvertCover reads a cover, re-encodes it to the target format, and
 	// writes the new file. Returns the new key and whether the file changed.
 	ConvertCover(key string, targetFormat string) (newKey string, converted bool, err error)
+
+	// MakeThumbnail generates a thumbnail of the cover referenced by coverKey
+	// from srcData, writes it as an independent file in the given format, and
+	// returns the thumbnail storage key (to be stored in records.cover_thumb).
+	MakeThumbnail(coverKey string, srcData []byte, maxW int, format string) (string, error)
 }
 
 // ---------- shared helpers ----------
@@ -106,22 +110,44 @@ func ThumbJPEG(img image.Image, maxW int) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func ThumbBase64(img image.Image, maxW int) (string, error) {
-	b, err := ThumbJPEG(img, maxW)
-	if err != nil {
-		return "", err
+// encodeThumb scales img down to at most maxW wide and encodes it in the
+// requested format (avif/webp/jpeg), returning the raw encoded bytes.
+func encodeThumb(img image.Image, maxW int, format string) ([]byte, error) {
+	img = ResizeToWidth(img, maxW)
+	switch format {
+	case "webp":
+		b, _, err := EncodeImage(img, "webp")
+		return b, err
+	case "avif":
+		b, _, err := EncodeImage(img, "avif")
+		return b, err
+	default:
+		return ThumbJPEG(img, maxW)
 	}
-	return base64.StdEncoding.EncodeToString(b), nil
 }
 
-// ThumbBase64FromBytes decodes jpeg/png/webp bytes and returns a base64 JPEG
-// thumbnail (≤maxW wide).
-func ThumbBase64FromBytes(data []byte, maxW int) (string, error) {
-	img, err := decodeImage(data)
-	if err != nil {
-		return "", err
+// extForImageFormat returns the file extension for the given cover format.
+func extForImageFormat(format string) string {
+	switch format {
+	case "webp":
+		return ".webp"
+	case "jpeg":
+		return ".jpg"
+	default:
+		return ".avif"
 	}
-	return ThumbBase64(img, maxW)
+}
+
+// thumbKeyFor derives the thumbnail storage key for a cover key in the given
+// format, e.g. "covers/<hash>.thumb.webp".
+func thumbKeyFor(coverKey, format string) string {
+	base := strings.TrimSuffix(coverKey, filepath.Ext(coverKey))
+	return base + ".thumb" + extForImageFormat(format)
+}
+
+// isThumbKey reports whether a storage key is a generated thumbnail file.
+func isThumbKey(key string) bool {
+	return strings.Contains(filepath.Base(key), ".thumb.")
 }
 
 var catmullRom = &draw.Kernel{
@@ -196,11 +222,6 @@ func (s *LocalStorage) SaveUpload(file *multipart.FileHeader) (string, string, b
 		img = dst
 	}
 
-	thumb, err := ThumbBase64(img, 400)
-	if err != nil {
-		return "", "", false, fmt.Errorf("thumbnail: %w", err)
-	}
-
 	format := s.imageFormat()
 	encodedBytes, ext, err := EncodeImage(img, format)
 	if err != nil {
@@ -211,7 +232,56 @@ func (s *LocalStorage) SaveUpload(file *multipart.FileHeader) (string, string, b
 	if err != nil {
 		return "", "", false, err
 	}
-	return key, thumb, created, nil
+
+	thumbKey, err := s.MakeThumbnail(key, encodedBytes, 400, format)
+	if err != nil {
+		return "", "", false, fmt.Errorf("thumbnail: %w", err)
+	}
+	return key, thumbKey, created, nil
+}
+
+func (s *LocalStorage) MakeThumbnail(coverKey string, srcData []byte, maxW int, format string) (string, error) {
+	img, err := DecodeImage(srcData)
+	if err != nil {
+		return "", err
+	}
+	b, err := encodeThumb(img, maxW, format)
+	if err != nil {
+		return "", err
+	}
+	return s.saveThumb(coverKey, b, format)
+}
+
+func (s *LocalStorage) saveThumb(coverKey string, data []byte, format string) (string, error) {
+	key := thumbKeyFor(coverKey, format)
+	for _, old := range s.thumbKeysFor(coverKey) {
+		if old != key {
+			_ = os.Remove(s.localPath(old))
+		}
+	}
+	path := s.localPath(key)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return "", err
+	}
+	return key, nil
+}
+
+// thumbKeysFor returns the thumbnail keys (any format) for a given cover key.
+func (s *LocalStorage) thumbKeysFor(coverKey string) []string {
+	base := strings.TrimSuffix(coverKey, filepath.Ext(coverKey))
+	prefix := filepath.Base(base) + ".thumb."
+	dir := filepath.Join(s.uploadDir, "covers")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), prefix) {
+			out = append(out, "covers/"+e.Name())
+		}
+	}
+	return out
 }
 
 func (s *LocalStorage) SaveCoverBytes(data []byte, ext string) (string, bool, error) {
@@ -240,6 +310,9 @@ func (s *LocalStorage) CoverExists(key string) bool {
 }
 
 func (s *LocalStorage) DeleteCover(key string) error {
+	for _, t := range s.thumbKeysFor(key) {
+		_ = os.Remove(s.localPath(t))
+	}
 	err := os.Remove(s.localPath(key))
 	if os.IsNotExist(err) {
 		return nil
@@ -248,6 +321,9 @@ func (s *LocalStorage) DeleteCover(key string) error {
 }
 
 func (s *LocalStorage) MoveCoverToTrash(key string) error {
+	for _, t := range s.thumbKeysFor(key) {
+		_ = os.Remove(s.localPath(t))
+	}
 	from := s.localPath(key)
 	to := filepath.Join(s.uploadDir, trashKey(filepath.Base(key)))
 	os.MkdirAll(filepath.Dir(to), 0755)
@@ -259,7 +335,17 @@ func (s *LocalStorage) MoveCoverToTrash(key string) error {
 }
 
 func (s *LocalStorage) ListCoverKeys() ([]string, error) {
-	return s.listKeys("covers")
+	keys, err := s.listKeys("covers")
+	if err != nil {
+		return nil, err
+	}
+	out := keys[:0]
+	for _, k := range keys {
+		if !isThumbKey(k) {
+			out = append(out, k)
+		}
+	}
+	return out, nil
 }
 
 func (s *LocalStorage) ListTrashKeys() ([]string, error) {
@@ -386,11 +472,8 @@ func (s *S3Storage) SaveUpload(file *multipart.FileHeader) (string, string, bool
 		catmullRom.Scale(dst, dst.Bounds(), img, bounds, draw.Over, nil)
 		img = dst
 	}
-	thumb, err := ThumbBase64(img, 400)
-	if err != nil {
-		return "", "", false, err
-	}
-	encodedBytes, ext, err := EncodeImage(img, s.imageFormat())
+	format := s.imageFormat()
+	encodedBytes, ext, err := EncodeImage(img, format)
 	if err != nil {
 		return "", "", false, err
 	}
@@ -398,7 +481,48 @@ func (s *S3Storage) SaveUpload(file *multipart.FileHeader) (string, string, bool
 	if err != nil {
 		return "", "", false, err
 	}
-	return key, thumb, created, nil
+	thumbKey, err := s.MakeThumbnail(key, encodedBytes, 400, format)
+	if err != nil {
+		return "", "", false, err
+	}
+	return key, thumbKey, created, nil
+}
+
+func (s *S3Storage) MakeThumbnail(coverKey string, srcData []byte, maxW int, format string) (string, error) {
+	img, err := DecodeImage(srcData)
+	if err != nil {
+		return "", err
+	}
+	b, err := encodeThumb(img, maxW, format)
+	if err != nil {
+		return "", err
+	}
+	return s.saveThumb(coverKey, b, format)
+}
+
+func (s *S3Storage) saveThumb(coverKey string, data []byte, format string) (string, error) {
+	key := thumbKeyFor(coverKey, format)
+	base := strings.TrimSuffix(coverKey, filepath.Ext(coverKey))
+	prefix := "covers/" + filepath.Base(base) + ".thumb."
+	if keys, err := s.listKeys(prefix); err == nil {
+		for _, k := range keys {
+			if k != key {
+				_, _ = s.client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+					Bucket: aws.String(s.bucket), Key: aws.String(k),
+				})
+			}
+		}
+	}
+	_, err := s.client.PutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket:       aws.String(s.bucket),
+		Key:          aws.String(key),
+		Body:         bytes.NewReader(data),
+		CacheControl: aws.String("public, max-age=2592000, immutable"),
+	})
+	if err != nil {
+		return "", err
+	}
+	return key, nil
 }
 
 func (s *S3Storage) SaveCoverBytes(data []byte, ext string) (string, bool, error) {
@@ -443,11 +567,34 @@ func (s *S3Storage) CoverExists(key string) bool {
 }
 
 func (s *S3Storage) DeleteCover(key string) error {
+	base := strings.TrimSuffix(key, filepath.Ext(key))
+	prefix := "covers/" + filepath.Base(base) + ".thumb."
+	if keys, err := s.listKeys(prefix); err == nil {
+		for _, k := range keys {
+			_, _ = s.client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+				Bucket: aws.String(s.bucket), Key: aws.String(k),
+			})
+		}
+	}
 	_, err := s.client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 	})
 	return err
+}
+
+func (s *S3Storage) ListCoverKeys() ([]string, error) {
+	keys, err := s.listKeys("covers/")
+	if err != nil {
+		return nil, err
+	}
+	out := keys[:0]
+	for _, k := range keys {
+		if !isThumbKey(k) {
+			out = append(out, k)
+		}
+	}
+	return out, nil
 }
 
 func (s *S3Storage) MoveCoverToTrash(key string) error {
@@ -460,10 +607,6 @@ func (s *S3Storage) MoveCoverToTrash(key string) error {
 		return err
 	}
 	return s.DeleteCover(key)
-}
-
-func (s *S3Storage) ListCoverKeys() ([]string, error) {
-	return s.listKeys("covers/")
 }
 
 func (s *S3Storage) ListTrashKeys() ([]string, error) {
