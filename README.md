@@ -145,8 +145,10 @@ mujian/
 | POST | `/records/align-venues` | 同场馆坐标对齐 |
 | POST | `/records/import` | 导入（JSON / 记录现场 ZIP） |
 | GET/POST | `/categories`；PUT/DELETE `/categories/{id}` | 分类管理 |
+| POST | `/categories/reorder` | 分类手动排序（`{"ids":[...]}`） |
 | GET/POST | `/dramas` | 剧目列表 / 创建 |
 | GET/PUT/DELETE | `/dramas/{id}` | 剧目详情（含折子与关联演出）/ 更新 / 删除 |
+| POST | `/dramas/reorder` | 剧目手动排序（`{"ids":[...]}`，首个为最前） |
 | POST | `/dramas/{id}/zhezis` | 新建折子 |
 | PUT/DELETE | `/zhezis/{id}` | 更新 / 删除折子 |
 | POST | `/dramas/{id}/zhezis/reorder` | 折子排序 |

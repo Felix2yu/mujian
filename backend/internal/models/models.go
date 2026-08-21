@@ -52,6 +52,7 @@ type Category struct {
 	Name        string   `json:"name"`
 	ActiveIDs   []string `json:"activeIds"`
 	RecordCount int      `json:"recordCount"`
+	SortOrder   int      `json:"sortOrder"` // manual ordering, 0 = alphabetical
 }
 
 // Drama is a 剧目 (a play/drama), a first-class entity that owns an ordered
@@ -61,6 +62,7 @@ type Drama struct {
 	Name         string `json:"name"`
 	CategoryName string `json:"categoryName"` // 剧种, e.g. 昆曲 / 越剧
 	Remark       string `json:"remark"`
+	SortOrder    int    `json:"sortOrder"` // manual ordering, 0 = alphabetical
 	ZheziCount   int    `json:"zheziCount"`
 	RecordCount  int    `json:"recordCount"` // performances referencing this drama
 }

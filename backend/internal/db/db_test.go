@@ -237,6 +237,85 @@ func TestBatchUpdateAndDelete(t *testing.T) {
 	}
 }
 
+func TestReorderDramasAndCategories(t *testing.T) {
+	db := newTestDB(t)
+
+	// Fresh DB: dramas keep creation order (sort_order = MAX+1 on create;
+	// migrated databases keep sort_order 0, so they fall back to alphabetical).
+	d1, _ := db.SaveDrama(models.Drama{Name: "霸王别姬"})
+	d2, _ := db.SaveDrama(models.Drama{Name: "牡丹亭"})
+	d3, _ := db.SaveDrama(models.Drama{Name: "白蛇传"})
+	list, _ := db.ListDramas()
+	if len(list) != 3 || list[0].Name != "霸王别姬" || list[2].Name != "白蛇传" {
+		t.Fatalf("fresh drama order should be creation order: %+v", list)
+	}
+
+	// Manual reorder (first = top).
+	if err := db.ReorderDramas([]string{d2.ID, d1.ID, d3.ID}); err != nil {
+		t.Fatal(err)
+	}
+	list, _ = db.ListDramas()
+	got := []string{list[0].ID, list[1].ID, list[2].ID}
+	want := []string{d2.ID, d1.ID, d3.ID}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("drama reorder: got %v want %v", got, want)
+		}
+	}
+	// GetDrama reflects sort order.
+	d, _ := db.GetDrama(d2.ID)
+	if d.SortOrder != 0 {
+		t.Errorf("GetDrama sortOrder: %d", d.SortOrder)
+	}
+
+	// New drama appends after manually ordered ones.
+	d4, _ := db.SaveDrama(models.Drama{Name: "长生殿"})
+	if d4.SortOrder != 3 {
+		t.Errorf("new drama should append with sort_order 3, got %d", d4.SortOrder)
+	}
+	list, _ = db.ListDramas()
+	if list[len(list)-1].ID != d4.ID {
+		t.Errorf("new drama should be last: %+v", list)
+	}
+
+	// Categories: fresh DB keeps creation order, then manual reorder applies.
+	c1 := models.Category{Name: "昆曲"}
+	c2 := models.Category{Name: "越剧"}
+	c3 := models.Category{Name: "京剧"}
+	if err := db.UpsertCategory(&c1); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.UpsertCategory(&c2); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.UpsertCategory(&c3); err != nil {
+		t.Fatal(err)
+	}
+	cats, _ := db.ListCategories()
+	if len(cats) != 3 || cats[0].Name != "昆曲" || cats[2].Name != "京剧" {
+		t.Fatalf("fresh category order should be creation order: %+v", cats)
+	}
+	if err := db.ReorderCategories([]string{c2.ID, c3.ID, c1.ID}); err != nil {
+		t.Fatal(err)
+	}
+	cats, _ = db.ListCategories()
+	if cats[0].Name != "越剧" || cats[1].Name != "京剧" || cats[2].Name != "昆曲" {
+		t.Fatalf("category reorder failed: %+v", cats)
+	}
+	// New category appends at the end.
+	c4 := models.Category{Name: "话剧"}
+	if err := db.UpsertCategory(&c4); err != nil {
+		t.Fatal(err)
+	}
+	if c4.SortOrder != 3 {
+		t.Errorf("new category should append with sort_order 3, got %d", c4.SortOrder)
+	}
+	cats, _ = db.ListCategories()
+	if cats[len(cats)-1].Name != "话剧" {
+		t.Errorf("new category should be last: %+v", cats)
+	}
+}
+
 func TestCategories(t *testing.T) {
 	db := newTestDB(t)
 	if err := db.UpsertCategory(&models.Category{Name: "昆曲", ActiveIDs: []string{"a1"}}); err != nil {

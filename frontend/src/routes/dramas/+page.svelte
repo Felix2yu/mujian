@@ -45,13 +45,43 @@
     }
   }
 
+  // 拖拽排序状态（与折子页一致）
+  let dragIdx = $state(-1);
+  let overIdx = $state(-1);
+
+  function onDragStart(i) {
+    dragIdx = i;
+  }
+
+  function onDrop(targetIdx) {
+    if (dragIdx < 0 || dragIdx === targetIdx) {
+      resetDrag();
+      return;
+    }
+    const next = dramas.slice();
+    const [moved] = next.splice(dragIdx, 1);
+    next.splice(targetIdx, 0, moved);
+    resetDrag();
+    error = '';
+    api.reorderDramas(next.map((x) => x.id))
+      .then(() => {
+        dramas = next;
+      })
+      .catch((e) => (error = e.message));
+  }
+
+  function resetDrag() {
+    dragIdx = -1;
+    overIdx = -1;
+  }
+
   onMount(load);
 </script>
 
 <div class="fade-up">
   <div class="page-head">
     <h1>剧目</h1>
-    <p class="sub">管理剧目档案与折子。点击剧目进入详情，可添加、排序并设置折子别名</p>
+    <p class="sub">管理剧目档案与折子。点击剧目进入详情，可添加、排序并设置折子别名；拖动卡片可调整剧目显示顺序</p>
   </div>
 
   <div class="card add-bar">
@@ -75,8 +105,17 @@
     </div>
   {:else}
     <div class="grid stagger">
-      {#each dramas as d (d.id)}
-        <div class="card drama">
+      {#each dramas as d, i (d.id)}
+        <div
+          class="card drama"
+          draggable="true"
+          class:dragging={dragIdx === i}
+          ondragstart={(e) => { onDragStart(i); e.dataTransfer.effectAllowed = 'move'; }}
+          ondragover={(e) => { e.preventDefault(); overIdx = i; }}
+          ondragleave={() => { if (overIdx === i) overIdx = -1; }}
+          ondrop={() => onDrop(i)}
+          ondragend={() => resetDrag()}
+        >
           <a class="drama-main" href={`/dramas/${d.id}`}>
             <div class="d-title">{d.name}</div>
             <div class="d-meta">
@@ -114,6 +153,8 @@
     transition: all var(--t-fast) var(--ease); flex: 0 0 auto;
   }
   .del:hover { background: var(--danger-soft); color: var(--danger); }
+  .drama.dragging { opacity: 0.4; cursor: grabbing; }
+  .drama { cursor: grab; }
 
   @media (max-width: 560px) {
     .grid { grid-template-columns: 1fr; }

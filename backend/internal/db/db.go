@@ -170,6 +170,13 @@ func (db *DB) migrate() error {
 	if err := db.addColumn("records", "zhezi_ids", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
 		return err
 	}
+	// Manual ordering for dramas/categories (0 = alphabetical).
+	if err := db.addColumn("dramas", "sort_order", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := db.addColumn("categories", "sort_order", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -859,7 +866,7 @@ func (db *DB) BatchDeleteRecords(ids []string) (int64, error) {
 // ---------- Categories ----------
 
 func (db *DB) ListCategories() ([]models.Category, error) {
-	rows, err := db.conn.Query(`SELECT id, name, active_ids, record_count FROM categories ORDER BY name`)
+	rows, err := db.conn.Query(`SELECT id, name, active_ids, record_count, sort_order FROM categories ORDER BY sort_order ASC, name`)
 	if err != nil {
 		return nil, err
 	}
@@ -868,7 +875,7 @@ func (db *DB) ListCategories() ([]models.Category, error) {
 	for rows.Next() {
 		var c models.Category
 		var activeIDs string
-		if err := rows.Scan(&c.ID, &c.Name, &activeIDs, &c.RecordCount); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &activeIDs, &c.RecordCount, &c.SortOrder); err != nil {
 			continue
 		}
 		c.ActiveIDs = unmarshalStrings(activeIDs)
@@ -883,12 +890,25 @@ func (db *DB) ListCategories() ([]models.Category, error) {
 func (db *DB) UpsertCategory(c *models.Category) error {
 	if c.ID == "" {
 		c.ID = newID()
+		// New categories append after any manually ordered ones.
+		db.conn.QueryRow("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM categories").Scan(&c.SortOrder)
 	}
 	_, err := db.conn.Exec(`
-		INSERT INTO categories (id, name, active_ids, record_count) VALUES (?, ?, ?, ?)
+		INSERT INTO categories (id, name, active_ids, record_count, sort_order) VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET name=excluded.name, active_ids=excluded.active_ids, record_count=excluded.record_count
-	`, c.ID, c.Name, marshalJSON(c.ActiveIDs), c.RecordCount)
+	`, c.ID, c.Name, marshalJSON(c.ActiveIDs), c.RecordCount, c.SortOrder)
 	return err
+}
+
+// ReorderCategories sets the manual sort order of categories from an explicit
+// ordered id list (first = top). Categories not in the list keep their order.
+func (db *DB) ReorderCategories(orderedIDs []string) error {
+	for i, id := range orderedIDs {
+		if _, err := db.conn.Exec("UPDATE categories SET sort_order = ? WHERE id = ?", i, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (db *DB) DeleteCategory(id string) error {
@@ -900,10 +920,10 @@ func (db *DB) DeleteCategory(id string) error {
 
 func (db *DB) ListDramas() ([]models.Drama, error) {
 	rows, err := db.conn.Query(`
-		SELECT d.id, d.name, d.category_name, d.remark,
+		SELECT d.id, d.name, d.category_name, d.remark, d.sort_order,
 			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id) AS zhezi_count,
 			(SELECT COUNT(*) FROM records r WHERE instr(r.drama_ids, '"' || d.id || '"') > 0) AS record_count
-		FROM dramas d ORDER BY d.name COLLATE NOCASE`)
+		FROM dramas d ORDER BY d.sort_order ASC, d.name COLLATE NOCASE`)
 	if err != nil {
 		return nil, err
 	}
@@ -911,7 +931,7 @@ func (db *DB) ListDramas() ([]models.Drama, error) {
 	var out []models.Drama
 	for rows.Next() {
 		var d models.Drama
-		if err := rows.Scan(&d.ID, &d.Name, &d.CategoryName, &d.Remark, &d.ZheziCount, &d.RecordCount); err != nil {
+		if err := rows.Scan(&d.ID, &d.Name, &d.CategoryName, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount); err != nil {
 			continue
 		}
 		out = append(out, d)
@@ -925,15 +945,26 @@ func (db *DB) ListDramas() ([]models.Drama, error) {
 func (db *DB) GetDrama(id string) (*models.Drama, error) {
 	var d models.Drama
 	err := db.conn.QueryRow(`
-		SELECT d.id, d.name, d.category_name, d.remark,
+		SELECT d.id, d.name, d.category_name, d.remark, d.sort_order,
 			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id),
 			(SELECT COUNT(*) FROM records r WHERE instr(r.drama_ids, '"' || d.id || '"') > 0)
 		FROM dramas d WHERE d.id = ?`, id).
-		Scan(&d.ID, &d.Name, &d.CategoryName, &d.Remark, &d.ZheziCount, &d.RecordCount)
+		Scan(&d.ID, &d.Name, &d.CategoryName, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount)
 	if err != nil {
 		return nil, fmt.Errorf("drama not found: %w", err)
 	}
 	return &d, nil
+}
+
+// ReorderDramas sets the manual sort order of dramas from an explicit ordered
+// id list (first = top). Dramas not in the list keep their previous order.
+func (db *DB) ReorderDramas(orderedIDs []string) error {
+	for i, id := range orderedIDs {
+		if _, err := db.conn.Exec("UPDATE dramas SET sort_order = ? WHERE id = ?", i, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (db *DB) ListZhezisByDrama(dramaID string) ([]models.Zhezi, error) {
@@ -999,11 +1030,13 @@ func (db *DB) SaveDrama(d models.Drama) (*models.Drama, error) {
 	create := d.ID == ""
 	if create {
 		d.ID = newID()
+		// New dramas append after any manually ordered ones.
+		db.conn.QueryRow("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM dramas").Scan(&d.SortOrder)
 	}
 	_, err := db.conn.Exec(`
-		INSERT INTO dramas (id, name, category_name, remark) VALUES (?, ?, ?, ?)
+		INSERT INTO dramas (id, name, category_name, remark, sort_order) VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET name=excluded.name, category_name=excluded.category_name, remark=excluded.remark`,
-		d.ID, d.Name, d.CategoryName, d.Remark)
+		d.ID, d.Name, d.CategoryName, d.Remark, d.SortOrder)
 	if err != nil {
 		return nil, fmt.Errorf("save drama: %w", err)
 	}

@@ -47,13 +47,43 @@
     }
   }
 
+  // 拖拽排序状态
+  let dragIdx = $state(-1);
+  let overIdx = $state(-1);
+
+  function onDragStart(i) {
+    dragIdx = i;
+  }
+
+  function onDrop(targetIdx) {
+    if (dragIdx < 0 || dragIdx === targetIdx) {
+      resetDrag();
+      return;
+    }
+    const next = categories.slice();
+    const [moved] = next.splice(dragIdx, 1);
+    next.splice(targetIdx, 0, moved);
+    resetDrag();
+    error = '';
+    api.reorderCategories(next.map((x) => x.id))
+      .then(() => {
+        categories = next;
+      })
+      .catch((e) => (error = e.message));
+  }
+
+  function resetDrag() {
+    dragIdx = -1;
+    overIdx = -1;
+  }
+
   onMount(load);
 </script>
 
 <div class="fade-up">
   <div class="page-head">
     <h1>分类</h1>
-    <p class="sub">管理演出分类，点击分类名可查看该类目下的记录</p>
+    <p class="sub">管理演出分类，点击分类名可查看该类目下的记录；拖动卡片可调整显示顺序</p>
   </div>
 
   <div class="card add-bar">
@@ -75,8 +105,17 @@
     </div>
   {:else}
     <div class="grid stagger">
-      {#each categories as c (c.id)}
-        <div class="card cat">
+      {#each categories as c, i (c.id)}
+        <div
+          class="card cat"
+          draggable="true"
+          class:dragging={dragIdx === i}
+          ondragstart={(e) => { onDragStart(i); e.dataTransfer.effectAllowed = 'move'; }}
+          ondragover={(e) => { e.preventDefault(); overIdx = i; }}
+          ondragleave={() => { if (overIdx === i) overIdx = -1; }}
+          ondrop={() => onDrop(i)}
+          ondragend={() => resetDrag()}
+        >
           <a class="cat-name" href={`/?category=${encodeURIComponent(c.name)}`}>{c.name}</a>
           <span class="cnt">{c.recordCount ?? 0} 条</span>
           <button class="del" title="删除分类" onclick={() => remove(c.id, c.name)}>✕</button>
@@ -123,4 +162,6 @@
     flex: 0 0 auto;
   }
   .del:hover { background: var(--danger-soft); color: var(--danger); }
+  .cat { cursor: grab; }
+  .cat.dragging { opacity: 0.4; cursor: grabbing; }
 </style>

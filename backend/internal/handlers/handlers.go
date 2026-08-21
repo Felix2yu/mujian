@@ -47,6 +47,7 @@ func (h *Handler) Routes() chi.Router {
 
 	r.Get("/categories", h.listCategories)
 	r.Post("/categories", h.createCategory)
+	r.Post("/categories/reorder", h.reorderCategories)
 	r.Put("/categories/{id}", h.updateCategory)
 	r.Delete("/categories/{id}", h.deleteCategory)
 
@@ -56,6 +57,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/dramas/{id}", h.getDramaDetail)
 	r.Put("/dramas/{id}", h.updateDrama)
 	r.Delete("/dramas/{id}", h.deleteDrama)
+	r.Post("/dramas/reorder", h.reorderDramas)
 	r.Post("/dramas/{id}/zhezis", h.createZhezi)
 	r.Post("/dramas/{id}/zhezis/reorder", h.reorderZhezis)
 	r.Put("/zhezis/{id}", h.updateZhezi)
@@ -546,6 +548,38 @@ func (h *Handler) reorderZhezis(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.db.ReorderZhezis(dramaID, req.IDs); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "reordered"})
+}
+
+// POST /dramas/reorder {"ids":[...]} — manual ordering of dramas (first = top).
+func (h *Handler) reorderDramas(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if err := h.db.ReorderDramas(req.IDs); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "reordered"})
+}
+
+// POST /categories/reorder {"ids":[...]} — manual ordering of categories.
+func (h *Handler) reorderCategories(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if err := h.db.ReorderCategories(req.IDs); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}

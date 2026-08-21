@@ -110,6 +110,7 @@ export const api = {
   createCategory: (data) => request('/api/categories', { method: 'POST', body: JSON.stringify(data) }),
   updateCategory: (id, data) => request(`/api/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCategory: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
+  reorderCategories: (ids) => request('/api/categories/reorder', { method: 'POST', body: JSON.stringify({ ids }) }),
 
   listDramas: () => request('/api/dramas'),
   getDramaTree: () => request('/api/dramas/tree'),
@@ -117,6 +118,7 @@ export const api = {
   getDrama: (id) => request(`/api/dramas/${id}`),
   updateDrama: (id, data) => request(`/api/dramas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteDrama: (id) => request(`/api/dramas/${id}`, { method: 'DELETE' }),
+  reorderDramas: (ids) => request('/api/dramas/reorder', { method: 'POST', body: JSON.stringify({ ids }) }),
   createZhezi: (dramaId, data) => request(`/api/dramas/${dramaId}/zhezis`, { method: 'POST', body: JSON.stringify(data) }),
   updateZhezi: (id, data) => request(`/api/zhezis/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteZhezi: (id) => request(`/api/zhezis/${id}`, { method: 'DELETE' }),

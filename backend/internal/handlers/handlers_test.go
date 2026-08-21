@@ -249,6 +249,12 @@ func TestCategoriesEndpoints(t *testing.T) {
 
 	res, _ = doJSON(t, "DELETE", ts.URL+"/api/categories/"+cat.ID, nil)
 	expectStatus(t, res, 200, "delete category")
+
+	// Manual reorder.
+	res, _ = doJSON(t, "POST", ts.URL+"/api/categories/reorder", map[string]interface{}{"ids": []string{"x", cat.ID}})
+	expectStatus(t, res, 200, "reorder categories")
+	res, _ = doJSON(t, "POST", ts.URL+"/api/categories/reorder", []byte("{"))
+	expectStatus(t, res, 400, "reorder categories invalid body")
 }
 
 func TestDramasAndZhezisEndpoints(t *testing.T) {
@@ -297,6 +303,11 @@ func TestDramasAndZhezisEndpoints(t *testing.T) {
 	expectStatus(t, res, 200, "reorder zhezis")
 	res, _ = doJSON(t, "POST", ts.URL+"/api/dramas/"+d.ID+"/zhezis/reorder", []byte("{"))
 	expectStatus(t, res, 400, "reorder invalid body")
+
+	res, _ = doJSON(t, "POST", ts.URL+"/api/dramas/reorder", map[string]interface{}{"ids": []string{d.ID}})
+	expectStatus(t, res, 200, "reorder dramas")
+	res, _ = doJSON(t, "POST", ts.URL+"/api/dramas/reorder", []byte("{"))
+	expectStatus(t, res, 400, "reorder dramas invalid body")
 
 	res, _ = doJSON(t, "DELETE", ts.URL+"/api/zhezis/"+z.ID, nil)
 	expectStatus(t, res, 200, "delete zhezi")
