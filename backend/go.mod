@@ -9,7 +9,7 @@ require (
 	github.com/chai2010/webp v1.4.0
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5
-	golang.org/x/image v0.43.0
+	golang.org/x/image v0.45.0
 	modernc.org/sqlite v1.57.0
 )
 
