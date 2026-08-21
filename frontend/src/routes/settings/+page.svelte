@@ -12,6 +12,7 @@
   let converting = $state(false);
   let convertResult = $state(null);
   let convertError = $state('');
+  let convertProgress = $state({ processed: 0, total: 0, converted: 0, skipped: 0, freed_bytes: 0 });
 
   let aligning = $state(false);
   let alignResult = $state(null);
@@ -94,8 +95,17 @@
     converting = true;
     convertError = '';
     convertResult = null;
+    convertProgress = { processed: 0, total: 0, converted: 0, skipped: 0, freed_bytes: 0 };
     try {
-      const r = await api.convertBatchCovers(format);
+      // Batch conversion streams NDJSON progress lines from the server; each
+      // line updates the live counter below instead of waiting for the end.
+      const r = await api.convertBatchCovers(format, (p) => {
+        if (typeof p.total === 'number') convertProgress.total = p.total;
+        if (typeof p.converted === 'number') convertProgress.converted = p.converted;
+        if (typeof p.skipped === 'number') convertProgress.skipped = p.skipped;
+        if (typeof p.freed_bytes === 'number') convertProgress.freed_bytes = p.freed_bytes;
+        if (p.phase === 'item') convertProgress.processed = p.index + 1;
+      });
       convertResult = r;
     } catch (e) {
       convertError = e.message;
@@ -196,6 +206,13 @@
         </button>
         <span class="hint">会重新编码所有历史海报文件并自动更新数据库引用，此操作不可撤销</span>
       </div>
+
+      {#if converting && convertProgress.total > 0}
+        <div class="banner info">
+          <span>⏳ 转换中… {convertProgress.processed}/{convertProgress.total}</span>
+          <span class="hint" style="margin: 0;">已转换 {convertProgress.converted}，跳过 {convertProgress.skipped}，释放 {Math.round(convertProgress.freed_bytes / 1024)} KB</span>
+        </div>
+      {/if}
 
       {#if convertResult}
         <div class="banner success">

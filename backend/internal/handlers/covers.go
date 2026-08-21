@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"mujian/internal/models"
 	"mujian/internal/storage"
 	"net/http"
@@ -308,10 +309,13 @@ func (h *Handler) convertCover(w http.ResponseWriter, r *http.Request) {
 // POST /covers/convert-batch {"format":"avif|webp|jpeg"}
 // Re-encode every cover in storage to the target format, repoint records, and
 // regenerate thumbnails. Skips files already in the target format.
+//
+// The work is CPU-heavy and can run far longer than a client's request timeout,
+// so progress is streamed as newline-delimited JSON (one object per line, each
+// flushed immediately). That (a) keeps reverse-proxy idle timeouts from
+// killing the connection and (b) lets the UI show live progress. The final
+// line carries "done": true with the overall summary.
 func (h *Handler) convertBatchCovers(w http.ResponseWriter, r *http.Request) {
-	coverMu.Lock()
-	defer coverMu.Unlock()
-
 	var req struct {
 		Format string `json:"format"`
 	}
@@ -325,29 +329,122 @@ func (h *Handler) convertBatchCovers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	keys, err := h.storage.ListCoverKeys()
-	if err != nil {
-		jsonErr(w, 500, err.Error())
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		// Streaming unsupported by the ResponseWriter; fall back to a single
+		// JSON response (legacy behavior, requires the client to wait).
+		coverMu.Lock()
+		res, lerr := h.runBatchConvert(r, format, func(map[string]interface{}) {})
+		coverMu.Unlock()
+		if lerr != nil {
+			jsonErr(w, 500, lerr.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]interface{}{
+			"converted":     res.Converted,
+			"skipped":       res.Skipped,
+			"freed_bytes":   res.Freed,
+			"target_format": format,
+		})
 		return
 	}
 
-	converted := 0
-	skipped := 0
-	freed := int64(0)
-	for _, k := range keys {
+	// Establish the streaming response up front so the client and any
+	// reverse proxy see activity immediately, then flush after every line.
+	w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no") // disable nginx proxy buffering
+	w.WriteHeader(200)
+	flusher.Flush()
+
+	coverMu.Lock()
+	defer coverMu.Unlock()
+
+	res, lerr := h.runBatchConvert(r, format, func(v map[string]interface{}) {
+		b, _ := json.Marshal(v)
+		fmt.Fprintf(w, "%s\n", b)
+		flusher.Flush()
+	})
+	if lerr != nil {
+		b, _ := json.Marshal(map[string]interface{}{"error": lerr.Error(), "done": true})
+		fmt.Fprintf(w, "%s\n", b)
+		flusher.Flush()
+		return
+	}
+	b, _ := json.Marshal(map[string]interface{}{
+		"done":          true,
+		"converted":     res.Converted,
+		"skipped":       res.Skipped,
+		"freed_bytes":   res.Freed,
+		"total":         res.Total,
+		"target_format": format,
+	})
+	fmt.Fprintf(w, "%s\n", b)
+	flusher.Flush()
+}
+
+// batchConvertResult aggregates the outcome of a batch conversion run.
+type batchConvertResult struct {
+	Converted int
+	Skipped   int
+	Freed     int64
+	Total     int
+}
+
+// runBatchConvert performs the batch re-encode, invoking emit (if non-nil)
+// with a progress object after each cover and at the start. It stops early if
+// the client disconnects (r.Context() cancelled). The caller must hold
+// coverMu. The emit callback is invoked synchronously on the serving goroutine.
+func (h *Handler) runBatchConvert(r *http.Request, format string, emit func(map[string]interface{})) (batchConvertResult, error) {
+	keys, err := h.storage.ListCoverKeys()
+	if err != nil {
+		return batchConvertResult{}, err
+	}
+	total := len(keys)
+	if emit != nil {
+		emit(map[string]interface{}{"phase": "start", "total": total, "format": format})
+	}
+
+	res := batchConvertResult{Total: total}
+	for i, k := range keys {
+		// Bail out if the client went away; no point burning CPU.
+		if r.Context().Err() != nil {
+			break
+		}
 		data, rerr := h.storage.ReadCover(k)
 		if rerr != nil {
+			if emit != nil {
+				emit(map[string]interface{}{
+					"phase": "item", "index": i, "total": total, "key": k,
+					"status": "error", "error": "read failed",
+					"converted": res.Converted, "skipped": res.Skipped, "freed_bytes": res.Freed,
+				})
+			}
 			continue
 		}
 		// Skip by actual encoded format, not the file extension, so a real
 		// AVIF saved under a wrong extension is not pointlessly re-encoded,
 		// and a misnamed non-AVIF file is still converted.
 		if storage.DetectImageFormat(data) == format {
-			skipped++
+			res.Skipped++
+			if emit != nil {
+				emit(map[string]interface{}{
+					"phase": "item", "index": i, "total": total, "key": k,
+					"status": "skipped",
+					"converted": res.Converted, "skipped": res.Skipped, "freed_bytes": res.Freed,
+				})
+			}
 			continue
 		}
-		newKey, _, err := h.storage.ConvertCover(k, format)
-		if err != nil {
+		newKey, _, cerr := h.storage.ConvertCover(k, format)
+		if cerr != nil {
+			if emit != nil {
+				emit(map[string]interface{}{
+					"phase": "item", "index": i, "total": total, "key": k,
+					"status": "error", "error": cerr.Error(),
+					"converted": res.Converted, "skipped": res.Skipped, "freed_bytes": res.Freed,
+				})
+			}
 			continue
 		}
 		if newKey != k {
@@ -355,21 +452,22 @@ func (h *Handler) convertBatchCovers(w http.ResponseWriter, r *http.Request) {
 				h.regenerateThumbsForCover(k, newKey, format)
 				if cnt, _ := h.db.CountCoverRefs(k); cnt == 0 {
 					if sz, ok := h.db.CoverSize(k); ok {
-						freed += sz
+						res.Freed += sz
 						h.db.DeleteCoverMeta(k)
 					}
 				}
 			}
 		}
-		converted++
+		res.Converted++
+		if emit != nil {
+			emit(map[string]interface{}{
+				"phase": "item", "index": i, "total": total, "key": k,
+				"status": "converted",
+				"converted": res.Converted, "skipped": res.Skipped, "freed_bytes": res.Freed,
+			})
+		}
 	}
-
-	jsonResp(w, 200, map[string]interface{}{
-		"converted":     converted,
-		"skipped":       skipped,
-		"freed_bytes":   freed,
-		"target_format": format,
-	})
+	return res, nil
 }
 
 // regenerateThumbsForCover finds records referencing either the old or new key

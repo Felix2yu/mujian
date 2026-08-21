@@ -23,6 +23,62 @@ async function request(path, options = {}) {
   }
 }
 
+// Stream a request whose body is newline-delimited JSON (NDJSON). Each line is
+// parsed and handed to onLine as soon as it arrives, so callers can render
+// live progress. Resolves with the object carrying "done": true, or — for a
+// legacy server that returns a single JSON object — with that object. Unlike
+// request(), this does NOT impose a fixed client-side timeout, because the
+// operations that use it (e.g. batch AVIF conversion) can legitimately run for
+// minutes; the server flushes progress lines to keep the connection alive.
+export async function streamRequest(path, options = {}, onLine) {
+  const url = `${API_BASE}${path}`;
+  const res = await fetch(url, {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    ...options
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Request failed' }));
+    throw new Error(err.error || 'Request failed');
+  }
+  // No streaming support (very old browser): fall back to a single JSON body.
+  if (!res.body || typeof res.body.getReader !== 'function') {
+    return res.json();
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let lastObj = null;
+  let finalResult = null;
+  const handleLine = (raw) => {
+    const line = raw.trim();
+    if (!line) return;
+    let obj;
+    try {
+      obj = JSON.parse(line);
+    } catch {
+      return;
+    }
+    lastObj = obj;
+    if (onLine) onLine(obj);
+    if (obj.done) finalResult = obj;
+  };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buffer.indexOf('\n')) >= 0) {
+      handleLine(buffer.slice(0, nl));
+      buffer = buffer.slice(nl + 1);
+    }
+  }
+  if (buffer.trim()) handleLine(buffer);
+  return finalResult || lastObj;
+}
+
 export const api = {
   listRecords: (params = {}) => {
     const q = new URLSearchParams();
@@ -104,7 +160,8 @@ export const api = {
   purgeTrash: () => request('/api/covers/trash/purge', { method: 'POST' }),
   regenerateThumbs: () => request('/api/covers/thumbs', { method: 'POST' }),
   convertCover: (key, format) => request('/api/covers/convert', { method: 'POST', body: JSON.stringify({ key, format }) }),
-  convertBatchCovers: (format) => request('/api/covers/convert-batch', { method: 'POST', body: JSON.stringify({ format }) })
+  convertBatchCovers: (format, onProgress) =>
+    streamRequest('/api/covers/convert-batch', { method: 'POST', body: JSON.stringify({ format }) }, onProgress)
 };
 
 // ---- S3-aware cover URL resolution ----

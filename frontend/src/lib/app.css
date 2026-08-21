@@ -274,6 +274,7 @@ a.tag:hover { background: var(--accent-soft); color: var(--accent); }
 }
 .banner.error { background: var(--danger-soft); color: var(--danger); }
 .banner.success { background: var(--success-soft); color: var(--success); }
+.banner.info { background: var(--accent-softer); color: var(--accent); }
 
 /* ============ 入场动画 ============ */
 @keyframes fadeUp {
