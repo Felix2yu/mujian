@@ -967,3 +967,84 @@ func TestExportImportRoundTripsDramaLinks(t *testing.T) {
 		t.Errorf("imported record should link drama: %+v", r.DramaIDs)
 	}
 }
+
+// countZheziLinks returns the number of rows in the record_zhezis relation
+// table for a given record.
+func (db *DB) countZheziLinks(t *testing.T, recordID string) int {
+	t.Helper()
+	var n int
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM record_zhezis WHERE record_id = ?", recordID).Scan(&n); err != nil {
+		t.Fatalf("count zhezi links: %v", err)
+	}
+	return n
+}
+
+func TestRecordZhezisRelation(t *testing.T) {
+	db := newTestDB(t)
+	z, err := db.CreateZhezi(models.Zhezi{Name: "游园", DramaID: "d-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := time.Now().Unix()
+
+	// Upsert writes links into the relation table.
+	_ = db.UpsertRecord(models.Record{ID: "r1", Name: "演出1", ZheziIDs: []string{z.ID, "z-x"}, Date: ts})
+	if n := db.countZheziLinks(t, "r1"); n != 2 {
+		t.Fatalf("expected 2 zhezi links, got %d", n)
+	}
+	// Read path backfills ZheziIDs from the relation table.
+	r1, err := db.GetRecord("r1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r1.ZheziIDs) != 2 {
+		t.Errorf("GetRecord should backfill ZheziIDs: %+v", r1.ZheziIDs)
+	}
+	// Re-upsert with fewer links should replace, not append.
+	_ = db.UpsertRecord(models.Record{ID: "r1", Name: "演出1", ZheziIDs: []string{z.ID}, Date: ts})
+	if n := db.countZheziLinks(t, "r1"); n != 1 {
+		t.Fatalf("re-upsert should replace zhezi links, got %d", n)
+	}
+
+	// ListRecords(ZheziID) uses the indexed relation table.
+	matched, err := db.ListRecords(RecordFilter{ZheziID: z.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matched) != 1 || matched[0].ID != "r1" {
+		t.Errorf("ListRecords(ZheziID) mismatch: %+v", matched)
+	}
+
+	// DeleteZhezi cascades to the relation table.
+	if err := db.DeleteZhezi(z.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n := db.countZheziLinks(t, "r1"); n != 0 {
+		t.Errorf("DeleteZhezi should cascade links, got %d", n)
+	}
+}
+
+func TestMigrateZheziRelationsIdempotent(t *testing.T) {
+	db := newTestDB(t)
+	z, _ := db.CreateZhezi(models.Zhezi{Name: "惊梦", DramaID: "d-1"})
+	// Simulate an old database: write the legacy zhezi_ids JSON column only
+	// (bypassing the relation table).
+	if _, err := db.conn.Exec("INSERT INTO records (id, name, zhezi_ids, date) VALUES (?, ?, ?, ?)",
+		"old1", "老数据", marshalJSON([]string{z.ID}), time.Now().Unix()); err != nil {
+		t.Fatal(err)
+	}
+	// Re-run the migration manually (it also runs on New()).
+	if err := db.migrateZheziRelations(); err != nil {
+		t.Fatal(err)
+	}
+	if n := db.countZheziLinks(t, "old1"); n != 1 {
+		t.Fatalf("migration should expand legacy zhezi_ids, got %d", n)
+	}
+	// Idempotent: running again must not duplicate.
+	if err := db.migrateZheziRelations(); err != nil {
+		t.Fatal(err)
+	}
+	if n := db.countZheziLinks(t, "old1"); n != 1 {
+		t.Fatalf("migration should be idempotent, got %d", n)
+	}
+}

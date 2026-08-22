@@ -197,9 +197,21 @@ func (db *DB) migrate() error {
 			sort_order INTEGER NOT NULL DEFAULT 0,
 			PRIMARY KEY (record_id, drama_id)
 		)`,
-		`CREATE INDEX IF NOT EXISTS idx_record_dramas_drama ON record_dramas(drama_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_record_dramas_record ON record_dramas(record_id)`,
-	}
+	`CREATE INDEX IF NOT EXISTS idx_record_dramas_drama ON record_dramas(drama_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_record_dramas_record ON record_dramas(record_id)`,
+	// Relation table: record <-> zhezi. Same rationale as record_dramas:
+	// replaces the JSON-in-TEXT zhezi_ids column so cross-table lookups use
+	// real indexes instead of instr() scans. records.zhezi_ids is kept only as
+	// a legacy fallback for reading old backups; the relation table is truth.
+	`CREATE TABLE IF NOT EXISTS record_zhezis (
+		record_id TEXT NOT NULL,
+		zhezi_id TEXT NOT NULL,
+		sort_order INTEGER NOT NULL DEFAULT 0,
+		PRIMARY KEY (record_id, zhezi_id)
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_record_zhezis_zhezi ON record_zhezis(zhezi_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_record_zhezis_record ON record_zhezis(record_id)`,
+}
 
 	for _, q := range queries {
 		if _, err := db.conn.Exec(q); err != nil {
@@ -227,6 +239,10 @@ func (db *DB) migrate() error {
 	// record_dramas relation table. Idempotent — existing relation rows are
 	// preserved and only missing links are inserted.
 	if err := db.migrateDramaRelations(); err != nil {
+		return err
+	}
+	// Same expansion for legacy records.zhezi_ids JSON into record_zhezis.
+	if err := db.migrateZheziRelations(); err != nil {
 		return err
 	}
 
@@ -286,6 +302,63 @@ func (db *DB) migrateDramaRelations() error {
 		for i, id := range ids {
 			if _, err := db.conn.Exec(
 				"INSERT OR IGNORE INTO record_dramas (record_id, drama_id, sort_order) VALUES (?, ?, ?)",
+				r.id, id, i,
+			); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (db *DB) migrateZheziRelations() error {
+	rows, err := db.conn.Query("SELECT id, zhezi_ids FROM records WHERE zhezi_ids IS NOT NULL AND zhezi_ids != '' AND zhezi_ids != '[]'")
+	if err != nil {
+		return fmt.Errorf("migrate zhezi relations: %w", err)
+	}
+	type rec struct {
+		id   string
+		json string
+	}
+	var recs []rec
+	for rows.Next() {
+		var r rec
+		if err := rows.Scan(&r.id, &r.json); err != nil {
+			rows.Close()
+			return err
+		}
+		recs = append(recs, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, r := range recs {
+		ids := unmarshalStrings(r.json)
+		if len(ids) == 0 {
+			continue
+		}
+		placeholders := make([]string, len(ids))
+		args := make([]interface{}, 0, len(ids)+1)
+		args = append(args, r.id)
+		for i, id := range ids {
+			placeholders[i] = "?"
+			args = append(args, id)
+		}
+		var existing int
+		if err := db.conn.QueryRow(
+			"SELECT COUNT(*) FROM record_zhezis WHERE record_id = ? AND zhezi_id IN ("+strings.Join(placeholders, ",")+")",
+			args...,
+		).Scan(&existing); err != nil {
+			return err
+		}
+		if existing == len(ids) {
+			continue
+		}
+		for i, id := range ids {
+			if _, err := db.conn.Exec(
+				"INSERT OR IGNORE INTO record_zhezis (record_id, zhezi_id, sort_order) VALUES (?, ?, ?)",
 				r.id, id, i,
 			); err != nil {
 				return err
@@ -419,8 +492,11 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 		args = append(args, f.DramaID)
 	}
 	if f.ZheziID != "" {
-		where = append(where, "instr(zhezi_ids, ?) > 0")
-		args = append(args, `"`+f.ZheziID+`"`)
+		// Use the relation table (indexed) instead of instr() over the JSON
+		// text column.
+		query += " JOIN record_zhezis rz ON rz.record_id = records.id"
+		where = append(where, "rz.zhezi_id = ?")
+		args = append(args, f.ZheziID)
 	}
 	if f.Year > 0 && f.Month > 0 {
 		// filter by calendar month of the unix `date`
@@ -464,6 +540,9 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 	}
 	if err := db.backfillDramaIDs(out); err != nil {
 		slog.Warn("backfill drama ids", "err", err)
+	}
+	if err := db.backfillZheziIDs(out); err != nil {
+		slog.Warn("backfill zhezi ids", "err", err)
 	}
 	return out, nil
 }
@@ -515,6 +594,9 @@ func (db *DB) GetRecord(id string) (*models.Record, error) {
 	rs := []models.Record{*r}
 	if err := db.backfillDramaIDs(rs); err != nil {
 		slog.Warn("backfill drama ids", "err", err)
+	}
+	if err := db.backfillZheziIDs(rs); err != nil {
+		slog.Warn("backfill zhezi ids", "err", err)
 	}
 	return &rs[0], nil
 }
@@ -597,8 +679,11 @@ func (db *DB) UpsertRecord(r models.Record) error {
 	); err != nil {
 		return err
 	}
-	// Keep the drama relation table in sync with the upserted record.
-	return db.setRecordDramas(db.conn, r.ID, r.DramaIDs)
+	// Keep the drama/zhezi relation tables in sync with the upserted record.
+	if err := db.setRecordDramas(db.conn, r.ID, r.DramaIDs); err != nil {
+		return err
+	}
+	return db.setRecordZhezis(db.conn, r.ID, r.ZheziIDs)
 }
 
 // UpsertRecordTx is like UpsertRecord but runs inside the supplied transaction.
@@ -619,8 +704,11 @@ func (db *DB) UpsertRecordTx(tx *sql.Tx, r models.Record) error {
 	); err != nil {
 		return err
 	}
-	// Keep the drama relation table in sync within the same transaction.
-	return db.setRecordDramas(tx, r.ID, r.DramaIDs)
+	// Keep the drama/zhezi relation tables in sync within the same transaction.
+	if err := db.setRecordDramas(tx, r.ID, r.DramaIDs); err != nil {
+		return err
+	}
+	return db.setRecordZhezis(tx, r.ID, r.ZheziIDs)
 }
 
 // BulkUpsertRecords inserts/updates many records inside a single transaction.
@@ -696,6 +784,25 @@ func (db *DB) setRecordDramas(exec sqlExecutor, recordID string, ids []string) e
 	return nil
 }
 
+// setRecordZhezis mirrors setRecordDramas for the zhezi relation table.
+func (db *DB) setRecordZhezis(exec sqlExecutor, recordID string, ids []string) error {
+	if _, err := exec.Exec("DELETE FROM record_zhezis WHERE record_id = ?", recordID); err != nil {
+		return err
+	}
+	for i, id := range ids {
+		if id == "" {
+			continue
+		}
+		if _, err := exec.Exec(
+			"INSERT OR IGNORE INTO record_zhezis (record_id, zhezi_id, sort_order) VALUES (?, ?, ?)",
+			recordID, id, i,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // backfillDramaIDs loads drama ids for the given records from the relation
 // table in a single batched query and fills models.Record.DramaIDs.
 func (db *DB) backfillDramaIDs(records []models.Record) error {
@@ -738,6 +845,52 @@ func (db *DB) backfillDramaIDs(records []models.Record) error {
 			records[i].DramaIDs = links
 		} else {
 			records[i].DramaIDs = []string{}
+		}
+	}
+	return nil
+}
+
+// backfillZheziIDs mirrors backfillDramaIDs for the zhezi relation table.
+func (db *DB) backfillZheziIDs(records []models.Record) error {
+	if len(records) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(records))
+	for _, r := range records {
+		if r.ID != "" {
+			ids = append(ids, r.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	ph := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		ph[i] = "?"
+		args[i] = id
+	}
+	rows, err := db.conn.Query(
+		"SELECT record_id, zhezi_id FROM record_zhezis WHERE record_id IN ("+strings.Join(ph, ",")+") ORDER BY record_id, sort_order",
+		args...,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	byRecord := map[string][]string{}
+	for rows.Next() {
+		var recordID, zheziID string
+		if err := rows.Scan(&recordID, &zheziID); err != nil {
+			continue
+		}
+		byRecord[recordID] = append(byRecord[recordID], zheziID)
+	}
+	for i := range records {
+		if links, ok := byRecord[records[i].ID]; ok {
+			records[i].ZheziIDs = links
+		} else {
+			records[i].ZheziIDs = []string{}
 		}
 	}
 	return nil
@@ -1115,9 +1268,12 @@ func (db *DB) BatchDeleteRecords(ids []string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	// Cascade: drop drama links for the deleted records.
+	// Cascade: drop drama/zhezi links for the deleted records.
 	if _, err := db.conn.Exec("DELETE FROM record_dramas WHERE record_id IN "+inClause, args...); err != nil {
 		slog.Warn("delete record drama links", "err", err)
+	}
+	if _, err := db.conn.Exec("DELETE FROM record_zhezis WHERE record_id IN "+inClause, args...); err != nil {
+		slog.Warn("delete record zhezi links", "err", err)
 	}
 	return res.RowsAffected()
 }
@@ -1376,6 +1532,10 @@ func (db *DB) UpdateZhezi(z models.Zhezi) (*models.Zhezi, error) {
 }
 
 func (db *DB) DeleteZhezi(id string) error {
+	// Cascade: drop any record<->zhezi links so the relation table stays clean.
+	if _, err := db.conn.Exec("DELETE FROM record_zhezis WHERE zhezi_id = ?", id); err != nil {
+		return err
+	}
 	_, err := db.conn.Exec("DELETE FROM zhezis WHERE id = ?", id)
 	return err
 }
@@ -1656,8 +1816,14 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 	if err := db.backfillDramaIDs(s.TopRated); err != nil {
 		slog.Warn("backfill top rated drama ids", "err", err)
 	}
+	if err := db.backfillZheziIDs(s.TopRated); err != nil {
+		slog.Warn("backfill top rated zhezi ids", "err", err)
+	}
 	if err := db.backfillDramaIDs(s.RecentRecords); err != nil {
 		slog.Warn("backfill recent drama ids", "err", err)
+	}
+	if err := db.backfillZheziIDs(s.RecentRecords); err != nil {
+		slog.Warn("backfill recent zhezi ids", "err", err)
 	}
 
 	return s, nil
@@ -1737,6 +1903,9 @@ func (db *DB) GetByField(field, value string) ([]models.Record, error) {
 	}
 	if err := db.backfillDramaIDs(out); err != nil {
 		slog.Warn("backfill by-field drama ids", "err", err)
+	}
+	if err := db.backfillZheziIDs(out); err != nil {
+		slog.Warn("backfill by-field zhezi ids", "err", err)
 	}
 	return out, nil
 }
