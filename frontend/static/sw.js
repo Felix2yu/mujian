@@ -1,6 +1,6 @@
-const CACHE_NAME = 'mujian-v1';
-const STATIC_CACHE = 'mujian-static-v1';
-const API_CACHE = 'mujian-api-v1';
+const CACHE_NAME = 'mujian-v2';
+const STATIC_CACHE = 'mujian-static-v2';
+const API_CACHE = 'mujian-api-v2';
 
 const STATIC_ASSETS = [
   '/',
@@ -55,24 +55,17 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(request)
-      .then(cached => {
-        if (cached) {
-          fetch(request).then(response => {
-            if (response.ok) {
-              caches.open(STATIC_CACHE).then(cache => cache.put(request, response));
-            }
-          }).catch(() => {});
-          return cached;
+    fetch(request)
+      .then(response => {
+        // Network-first: always try the network so new deployments reach the
+        // browser immediately. Only fall back to cache when offline.
+        if (response.ok && request.method === 'GET') {
+          const clone = response.clone();
+          caches.open(STATIC_CACHE).then(cache => cache.put(request, clone));
         }
-        return fetch(request).then(response => {
-          if (response.ok && request.method === 'GET') {
-            const clone = response.clone();
-            caches.open(STATIC_CACHE).then(cache => cache.put(request, clone));
-          }
-          return response;
-        });
+        return response;
       })
+      .catch(() => caches.match(request))
   );
 });
 
