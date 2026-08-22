@@ -1068,6 +1068,54 @@ func TestRecordZhezisRelation(t *testing.T) {
 	}
 }
 
+// TestRecordDramaRelation mirrors TestRecordZhezisRelation for the drama side:
+// it guards the record_dramas relation table keeps the same write/backfill/
+// replace/cascade semantics as zhezi and artist relations.
+func TestRecordDramaRelation(t *testing.T) {
+	db := newTestDB(t)
+	d, err := db.SaveDrama(models.Drama{Name: "长生殿", CategoryName: "昆曲"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := time.Now().Unix()
+
+	// Upsert writes links into the relation table.
+	_ = db.UpsertRecord(models.Record{ID: "rd1", Name: "演出D", DramaIDs: []string{d.ID, "d-x"}, Date: ts})
+	if n := db.countDramaLinks(t, "rd1"); n != 2 {
+		t.Fatalf("expected 2 drama links, got %d", n)
+	}
+	// Read path backfills DramaIDs from the relation table.
+	r1, err := db.GetRecord("rd1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r1.DramaIDs) != 2 {
+		t.Errorf("GetRecord should backfill DramaIDs: %+v", r1.DramaIDs)
+	}
+	// Re-upsert with fewer links should replace, not append.
+	_ = db.UpsertRecord(models.Record{ID: "rd1", Name: "演出D", DramaIDs: []string{d.ID}, Date: ts})
+	if n := db.countDramaLinks(t, "rd1"); n != 1 {
+		t.Fatalf("re-upsert should replace drama links, got %d", n)
+	}
+
+	// ListRecords(DramaID) uses the indexed relation table.
+	matched, err := db.ListRecords(RecordFilter{DramaID: d.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matched) != 1 || matched[0].ID != "rd1" {
+		t.Errorf("ListRecords(DramaID) mismatch: %+v", matched)
+	}
+
+	// DeleteRecord cascades to the relation table (FK constraints disabled).
+	if err := db.DeleteRecord("rd1"); err != nil {
+		t.Fatal(err)
+	}
+	if n := db.countDramaLinks(t, "rd1"); n != 0 {
+		t.Errorf("DeleteRecord should cascade drama links, got %d", n)
+	}
+}
+
 func TestMigrateZheziRelationsIdempotent(t *testing.T) {
 	db := newTestDB(t)
 	z, _ := db.CreateZhezi(models.Zhezi{Name: "惊梦", DramaID: "d-1"})
