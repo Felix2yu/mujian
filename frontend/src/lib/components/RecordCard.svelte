@@ -1,6 +1,7 @@
 <script>
   import { coverUrl, formatCurrency } from '$lib/api.js';
   let { record } = $props();
+  let coverFailed = $state(false);
 
   function stars(n) {
     return '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
@@ -9,10 +10,10 @@
 
 <a class="card card-hover rec" href={`/records/${record.id}`}>
   <div class="cover">
-    {#if record.coverThumb}
-      <img src={coverUrl(record.coverThumb)} alt={record.name} loading="lazy" />
-    {:else if record.coverFile}
-      <img src={coverUrl(record.coverFile)} alt={record.name} loading="lazy" />
+    {#if record.coverThumb && !coverFailed}
+      <img src={coverUrl(record.coverThumb)} alt={record.name} loading="lazy" onerror={() => (coverFailed = true)} />
+    {:else if record.coverFile && !coverFailed}
+      <img src={coverUrl(record.coverFile)} alt={record.name} loading="lazy" onerror={() => (coverFailed = true)} />
     {:else}
       <div class="no-cover"><span>{(record.name || '?').slice(0, 1)}</span></div>
     {/if}
@@ -48,10 +49,13 @@
     aspect-ratio: 3 / 4;
     background: var(--surface-3);
     overflow: hidden;
+    min-width: 0;
   }
   .cover img {
     width: 100%;
     height: 100%;
+    max-width: 100%;
+    max-height: 100%;
     object-fit: cover;
     display: block;
     transition: transform 0.5s var(--ease);
