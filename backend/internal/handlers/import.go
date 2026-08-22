@@ -334,8 +334,13 @@ func (h *Handler) extractCovers(zr *zip.Reader, records []models.Record) (int, i
 
 		// Re-encode the cover to the chosen format so imported libraries honor
 		// the user's encoding preference, then store it content-addressed.
+		// Skip the costly re-encode when the source is already in the target
+		// format — e.g. a library pre-converted to AVIF on a faster machine —
+		// so import is a no-op re-encode and just preserves the original bytes.
 		storeData, ext := data, storage.DetectExt(data)
-		if img, derr := storage.DecodeImage(data); derr == nil {
+		if srcFmt := storage.DetectImageFormat(data); srcFmt == format {
+			ext = storage.ExtForImageFormat(format)
+		} else if img, derr := storage.DecodeImage(data); derr == nil {
 			if enc, eext, eerr := storage.EncodeImage(img, format); eerr == nil {
 				storeData, ext = enc, eext
 			}

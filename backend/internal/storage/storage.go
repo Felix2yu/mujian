@@ -127,8 +127,8 @@ func encodeThumb(img image.Image, maxW int, format string) ([]byte, error) {
 	}
 }
 
-// extForImageFormat returns the file extension for the given cover format.
-func extForImageFormat(format string) string {
+// ExtForImageFormat returns the file extension for the given cover format.
+func ExtForImageFormat(format string) string {
 	switch format {
 	case "webp":
 		return ".webp"
@@ -143,7 +143,7 @@ func extForImageFormat(format string) string {
 // format, e.g. "covers/<hash>.thumb.webp".
 func thumbKeyFor(coverKey, format string) string {
 	base := strings.TrimSuffix(coverKey, filepath.Ext(coverKey))
-	return base + ".thumb" + extForImageFormat(format)
+	return base + ".thumb" + ExtForImageFormat(format)
 }
 
 // isThumbKey reports whether a storage key is a generated thumbnail file.

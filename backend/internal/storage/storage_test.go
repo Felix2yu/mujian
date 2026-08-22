@@ -315,8 +315,8 @@ func TestHashBytesAndHelpers(t *testing.T) {
 	if got := thumbKeyFor("covers/abc.jpg", "webp"); got != "covers/abc.thumb.webp" {
 		t.Errorf("thumbKeyFor: %q", got)
 	}
-	if got := extForImageFormat("webp"); got != ".webp" {
-		t.Errorf("extForImageFormat webp: %q", got)
+	if got := ExtForImageFormat("webp"); got != ".webp" {
+		t.Errorf("ExtForImageFormat webp: %q", got)
 	}
 }
 
