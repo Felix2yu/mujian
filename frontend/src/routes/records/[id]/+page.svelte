@@ -130,8 +130,13 @@
         {#if rec.artist_names?.length}
           <h3>演员阵容</h3>
           <div class="tags">
-            {#each rec.artist_names as a}
-              <a class="tag" href={`/?q=${encodeURIComponent(a)}`}>{a}</a>
+            {#each rec.artist_names as a, i}
+              {@const aid = rec.artist_ids?.[i]}
+              {#if aid}
+                <a class="tag" href={`/artists/${aid}`}>{a}</a>
+              {:else}
+                <span class="tag">{a}</span>
+              {/if}
             {/each}
           </div>
         {/if}
