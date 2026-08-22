@@ -1154,6 +1154,118 @@ func TestArtists(t *testing.T) {
 	}
 }
 
+// TestRecordArtistIDsRelation covers the record-form path that links a record
+// to artists by *entity id* (artist_ids picked from the tree), not by name.
+// Regression test for the bug where RecordRequest had no ArtistIDs field and
+// the links were silently dropped on create/update.
+func TestRecordArtistIDsRelation(t *testing.T) {
+	db := newTestDB(t)
+	a1, _ := db.SaveArtist(models.Artist{Name: "单雯"})
+	a2, _ := db.SaveArtist(models.Artist{Name: "施夏明"})
+
+	r := sampleRecord("rec-by-id", time.Date(2026, 8, 22, 19, 30, 0, 0, time.UTC).Unix())
+	r.ArtistIDs = []string{a1.ID, a2.ID}
+	r.ArtistNames = nil // pure id path, no legacy names
+	if err := db.UpsertRecord(r); err != nil {
+		t.Fatal(err)
+	}
+	// Both ids should be linked in the relation table.
+	if n := db.countArtistLinks(t, r.ID); n != 2 {
+		t.Fatalf("expected 2 artist links via ids, got %d", n)
+	}
+	// Read path backfills ArtistIDs.
+	got, err := db.GetRecord(r.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.ArtistIDs) != 2 {
+		t.Errorf("GetRecord should backfill ArtistIDs: %+v", got.ArtistIDs)
+	}
+	// Reverse lookup: each artist's recordCount is 1 and the record appears.
+	for _, aid := range []string{a1.ID, a2.ID} {
+		detail, err := db.GetArtistDetail(aid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if detail.RecordCount != 1 {
+			t.Errorf("artist %s recordCount should be 1, got %d", aid, detail.RecordCount)
+		}
+		if len(detail.Records) != 1 || detail.Records[0].ID != r.ID {
+			t.Errorf("artist %s reverse lookup wrong: %+v", aid, detail.Records)
+		}
+	}
+	// ListRecords(ArtistID) uses the indexed relation table.
+	for _, aid := range []string{a1.ID, a2.ID} {
+		matched, err := db.ListRecords(RecordFilter{ArtistID: aid})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(matched) != 1 || matched[0].ID != r.ID {
+			t.Errorf("ListRecords(ArtistID=%s) mismatch: %+v", aid, matched)
+		}
+	}
+	// Re-upsert with fewer ids should REPLACE, not append (drop a2).
+	r.ArtistIDs = []string{a1.ID}
+	if err := db.UpsertRecord(r); err != nil {
+		t.Fatal(err)
+	}
+	if n := db.countArtistLinks(t, r.ID); n != 1 {
+		t.Fatalf("re-upsert should replace artist links, got %d", n)
+	}
+	if detail, _ := db.GetArtistDetail(a2.ID); detail.RecordCount != 0 {
+		t.Errorf("dropped artist recordCount should be 0, got %d", detail.RecordCount)
+	}
+}
+
+// TestDeleteRecordCascadesRelations covers DeleteRecord clearing the
+// record_artists / record_dramas / record_zhezis relation rows so that
+// artist/drama/zhezi record counts stay accurate after a record is removed
+// (the schema has FK constraints disabled, so this is manual cascade).
+func TestDeleteRecordCascadesRelations(t *testing.T) {
+	db := newTestDB(t)
+	artist, _ := db.SaveArtist(models.Artist{Name: "黎安"})
+	drama, _ := db.SaveDrama(models.Drama{Name: "长生殿", CategoryName: "昆曲"})
+	zhezi, _ := db.CreateZhezi(models.Zhezi{Name: "小宴", DramaID: drama.ID})
+
+	r := sampleRecord("rec-cascade", time.Date(2026, 8, 22, 19, 30, 0, 0, time.UTC).Unix())
+	r.ArtistIDs = []string{artist.ID}
+	r.ArtistNames = nil // use the id path only; sampleRecord seeds a legacy name
+	r.DramaIDs = []string{drama.ID}
+	r.ZheziIDs = []string{zhezi.ID}
+	if err := db.UpsertRecord(r); err != nil {
+		t.Fatal(err)
+	}
+	if n := db.countArtistLinks(t, r.ID); n != 1 {
+		t.Fatalf("artist link not written: %d", n)
+	}
+
+	// Sanity: artist count is 1 before delete.
+	if detail, _ := db.GetArtistDetail(artist.ID); detail.RecordCount != 1 {
+		t.Fatalf("pre-delete recordCount should be 1, got %d", detail.RecordCount)
+	}
+
+	// Delete the record; all three relation tables must be cleared.
+	if err := db.DeleteRecord(r.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.GetRecord(r.ID); err == nil {
+		t.Error("deleted record should be gone")
+	}
+	if n := db.countArtistLinks(t, r.ID); n != 0 {
+		t.Errorf("DeleteRecord should clear record_artists, got %d", n)
+	}
+	if n := db.countDramaLinks(t, r.ID); n != 0 {
+		t.Errorf("DeleteRecord should clear record_dramas, got %d", n)
+	}
+	if n := db.countZheziLinks(t, r.ID); n != 0 {
+		t.Errorf("DeleteRecord should clear record_zhezis, got %d", n)
+	}
+	// And the artist recordCount must drop back to 0.
+	if detail, _ := db.GetArtistDetail(artist.ID); detail.RecordCount != 0 {
+		t.Errorf("post-delete artist recordCount should be 0, got %d", detail.RecordCount)
+	}
+}
+
 func TestArtistResolutionAndMigration(t *testing.T) {
 	db := newTestDB(t)
 

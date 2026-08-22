@@ -827,6 +827,84 @@ func TestArtistsEndpoints(t *testing.T) {
 	expectStatus(t, res, 404, "deleted artist gone")
 }
 
+// TestRecordArtistIDsViaAPI covers the exact record-form path: the frontend
+// sends artist_ids (entity ids picked from the tree), NOT artist_names. This
+// is the regression test for the bug where RecordRequest dropped artist_ids on
+// create and the links never reached the relation table.
+func TestRecordArtistIDsViaAPI(t *testing.T) {
+	ts, _, _, _ := newTestServer(t, nil)
+
+	// Create two artists to link by id.
+	res, b := doJSON(t, "POST", ts.URL+"/api/artists", map[string]interface{}{"name": "单雯"})
+	expectStatus(t, res, 201, "create artist 1")
+	var a1 models.Artist
+	decodeResp(t, b, &a1)
+
+	res, b = doJSON(t, "POST", ts.URL+"/api/artists", map[string]interface{}{"name": "施夏明"})
+	expectStatus(t, res, 201, "create artist 2")
+	var a2 models.Artist
+	decodeResp(t, b, &a2)
+
+	// Create a record linking both artists BY ID (no artist_names).
+	res, b = doJSON(t, "POST", ts.URL+"/api/records", map[string]interface{}{
+		"name":       "长生殿",
+		"date":       time.Date(2026, 8, 22, 19, 30, 0, 0, time.UTC).Unix(),
+		"artist_ids": []string{a1.ID, a2.ID},
+	})
+	expectStatus(t, res, 201, "create record by artist_ids")
+	var rec models.Record
+	decodeResp(t, b, &rec)
+	if len(rec.ArtistIDs) != 2 {
+		t.Fatalf("created record should echo artist_ids, got %+v", rec.ArtistIDs)
+	}
+
+	// Reverse lookup: each artist counts the record.
+	res, b = doJSON(t, "GET", ts.URL+"/api/artists/"+a1.ID, nil)
+	expectStatus(t, res, 200, "artist1 detail")
+	var d1 models.ArtistDetail
+	decodeResp(t, b, &d1)
+	if d1.RecordCount != 1 || len(d1.Records) != 1 {
+		t.Fatalf("artist1 reverse lookup wrong: count=%d recs=%+v", d1.RecordCount, d1.Records)
+	}
+	res, b = doJSON(t, "GET", ts.URL+"/api/artists/"+a2.ID, nil)
+	expectStatus(t, res, 200, "artist2 detail")
+	var d2 models.ArtistDetail
+	decodeResp(t, b, &d2)
+	if d2.RecordCount != 1 {
+		t.Fatalf("artist2 recordCount should be 1, got %d", d2.RecordCount)
+	}
+
+	// Update the record: drop a2, keep a1 — links must be replaced, not appended.
+	res, b = doJSON(t, "PUT", ts.URL+"/api/records/"+rec.ID, map[string]interface{}{
+		"name":       "长生殿(改)",
+		"artist_ids": []string{a1.ID},
+	})
+	expectStatus(t, res, 200, "update record artist_ids")
+	var upd models.Record
+	decodeResp(t, b, &upd)
+	if len(upd.ArtistIDs) != 1 || upd.ArtistIDs[0] != a1.ID {
+		t.Fatalf("updated artist_ids wrong: %+v", upd.ArtistIDs)
+	}
+	res, b = doJSON(t, "GET", ts.URL+"/api/artists/"+a2.ID, nil)
+	expectStatus(t, res, 200, "artist2 detail after update")
+	var d2u models.ArtistDetail
+	decodeResp(t, b, &d2u)
+	if d2u.RecordCount != 0 {
+		t.Fatalf("dropped artist recordCount should be 0, got %d", d2u.RecordCount)
+	}
+
+	// Delete the record: artist recordCount must cascade to 0.
+	res, _ = doJSON(t, "DELETE", ts.URL+"/api/records/"+rec.ID, nil)
+	expectStatus(t, res, 200, "delete record")
+	res, b = doJSON(t, "GET", ts.URL+"/api/artists/"+a1.ID, nil)
+	expectStatus(t, res, 200, "artist1 detail after delete")
+	var d1u models.ArtistDetail
+	decodeResp(t, b, &d1u)
+	if d1u.RecordCount != 0 {
+		t.Fatalf("post-delete artist recordCount should be 0, got %d", d1u.RecordCount)
+	}
+}
+
 // TestRecordsAggregationCoverage exercises the stats/dashboard/calendar/ICS and
 // venue-alignment code paths with multiple records of varying city/rating/month
 // so the aggregation branches get covered (pushes handlers coverage past 85%).
