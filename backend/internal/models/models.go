@@ -164,6 +164,7 @@ type RecordRequest struct {
 	CoverThumb        string      `json:"coverThumb"`
 	CustomCategoryID  string      `json:"customCategoryId"`
 	CategoryName      string      `json:"categoryName"`
+	ArtistIDs         []string    `json:"artist_ids"`
 	ArtistNames       []string    `json:"artist_names"`
 	Guest             []string    `json:"guest"`
 	Play              []string    `json:"play"`

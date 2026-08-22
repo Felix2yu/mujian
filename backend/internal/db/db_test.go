@@ -1219,8 +1219,8 @@ func TestArtistResolutionAndMigration(t *testing.T) {
 		t.Fatalf("bulk upsert should link artist, got %d", n)
 	}
 
-	// setRecordArtists with empty names clears existing links.
-	if err := db.setRecordArtists(db.conn, "b1", []string{}); err != nil {
+	// setRecordArtists with empty ids+names clears existing links.
+	if err := db.setRecordArtists(db.conn, "b1", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if n := db.countArtistLinks(t, "b1"); n != 0 {

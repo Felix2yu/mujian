@@ -851,7 +851,7 @@ func (db *DB) UpsertRecord(r models.Record) error {
 	if err := db.setRecordZhezis(db.conn, r.ID, r.ZheziIDs); err != nil {
 		return err
 	}
-	return db.setRecordArtists(db.conn, r.ID, r.ArtistNames)
+	return db.setRecordArtists(db.conn, r.ID, r.ArtistIDs, r.ArtistNames)
 }
 
 // UpsertRecordTx is like UpsertRecord but runs inside the supplied transaction.
@@ -879,7 +879,7 @@ func (db *DB) UpsertRecordTx(tx *sql.Tx, r models.Record) error {
 	if err := db.setRecordZhezis(tx, r.ID, r.ZheziIDs); err != nil {
 		return err
 	}
-	return db.setRecordArtists(tx, r.ID, r.ArtistNames)
+	return db.setRecordArtists(tx, r.ID, r.ArtistIDs, r.ArtistNames)
 }
 
 // BulkUpsertRecords inserts/updates many records inside a single transaction.
@@ -974,17 +974,38 @@ func (db *DB) setRecordZhezis(exec sqlExecutor, recordID string, ids []string) e
 	return nil
 }
 
-// setRecordArtists mirrors setRecordDramas but works on actor *names* rather
-// than ids: each name is resolved to an artists entity (matched by name/alias
-// or created on demand) and linked via the record_artists relation table.
-// resolveArtistByName uses the pool connection; within a transaction the caller
-// passes the tx only for the actual link writes, so this is safe under the
-// default (non-pinned) connection pool.
-func (db *DB) setRecordArtists(exec sqlExecutor, recordID string, names []string) error {
+// setRecordArtists mirrors setRecordDramas but links actor entities via the
+// record_artists relation table. It accepts both artist IDs (preferred, linked
+// directly) and actor names (resolved to an entity by name/alias, created on
+// demand). The IDs path is what the new record form sends (artist_ids picked
+// from the tree); the names path preserves backward compatibility with legacy
+// artist_names text. resolveArtistByName uses the pool connection; within a
+// transaction the caller passes the tx only for the actual link writes, so this
+// is safe under the default (non-pinned) connection pool.
+func (db *DB) setRecordArtists(exec sqlExecutor, recordID string, ids, names []string) error {
 	if _, err := exec.Exec("DELETE FROM record_artists WHERE record_id = ?", recordID); err != nil {
 		return err
 	}
-	for i, name := range names {
+	order := 0
+	// 1) Link by IDs first (these are the canonical entities from the picker).
+	seen := map[string]bool{}
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		if _, err := exec.Exec(
+			"INSERT OR IGNORE INTO record_artists (record_id, artist_id, sort_order) VALUES (?, ?, ?)",
+			recordID, id, order,
+		); err != nil {
+			return err
+		}
+		order++
+	}
+	// 2) Fall back to names: resolve to an entity (create if missing). Skip any
+	// name already represented by an ID we just linked.
+	for _, name := range names {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
@@ -993,12 +1014,17 @@ func (db *DB) setRecordArtists(exec sqlExecutor, recordID string, names []string
 		if err != nil {
 			return err
 		}
+		if seen[aid] {
+			continue
+		}
+		seen[aid] = true
 		if _, err := exec.Exec(
 			"INSERT OR IGNORE INTO record_artists (record_id, artist_id, sort_order) VALUES (?, ?, ?)",
-			recordID, aid, i,
+			recordID, aid, order,
 		); err != nil {
 			return err
 		}
+		order++
 	}
 	return nil
 }
@@ -1276,6 +1302,10 @@ func requestToRecord(r models.RecordRequest) models.Record {
 	if a == nil {
 		a = []string{}
 	}
+	aid := r.ArtistIDs
+	if aid == nil {
+		aid = []string{}
+	}
 	g := r.Guest
 	if g == nil {
 		g = []string{}
@@ -1300,7 +1330,7 @@ func requestToRecord(r models.RecordRequest) models.Record {
 		Name: r.Name, Channel: r.Channel, City: r.City, Address: r.Address,
 		Coordinate: r.Coordinate, Cover: r.Cover, CoverFile: r.CoverFile, CoverThumb: r.CoverThumb,
 		CustomCategoryID: r.CustomCategoryID, CategoryName: r.CategoryName,
-		ArtistNames: a, Guest: g, Play: p, DramaIDs: d, ZheziIDs: z, TagIDs: t,
+		ArtistIDs: aid, ArtistNames: a, Guest: g, Play: p, DramaIDs: d, ZheziIDs: z, TagIDs: t,
 		Date: r.Date, DateText: r.DateText, Rating: r.Rating, Seat: r.Seat,
 		Friends: r.Friends, Company: r.Company, Remark: r.Remark, ActiveStatus: r.ActiveStatus,
 		Price: r.Price, PriceCurrency: r.PriceCurrency, PayPrice: r.PayPrice,
@@ -1309,6 +1339,14 @@ func requestToRecord(r models.RecordRequest) models.Record {
 }
 
 func (db *DB) DeleteRecord(id string) error {
+	// Cascade-clear relation tables so artist/drama/zhezi record counts stay
+	// accurate after a record is removed (these are NOT covered by SQLite
+	// foreign keys, which are disabled for this schema).
+	for _, tbl := range []string{"record_artists", "record_dramas", "record_zhezis"} {
+		if _, err := db.conn.Exec("DELETE FROM "+tbl+" WHERE record_id = ?", id); err != nil {
+			return err
+		}
+	}
 	_, err := db.conn.Exec("DELETE FROM records WHERE id = ?", id)
 	return err
 }
