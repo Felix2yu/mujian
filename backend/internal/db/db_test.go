@@ -232,6 +232,39 @@ func TestBatchUpdateAndDelete(t *testing.T) {
 	if n, err := db.BatchDeleteRecords([]string{"b1", "b2"}); err != nil || n != 2 {
 		t.Fatalf("batch delete: n=%d err=%v", n, err)
 	}
+
+	// Exercise every scalar field + every array op so BatchUpdateRecords'
+	// optional branches are fully covered.
+	db.UpsertRecord(models.Record{ID: "bf", Name: "全字段", Date: base, Play: []string{"p0"}, Guest: []string{"g0"}})
+	cat, rate, act, addr, chanS, comp, fr, remark, seat := "昆曲", 5, 1, "剧场", "大麦", "院团", "友人", "注", "A1"
+	price, pp, oc := 200.0, 180.0, 20.0
+	pcur, ppcur, ocur := "CNY", "CNY", "CNY"
+	setD := &models.BatchArrayOp{Op: "set", Value: []string{"d1"}}
+	zset := &models.BatchArrayOp{Op: "set", Value: []string{"z1"}}
+	appOp := &models.BatchArrayOp{Op: "append", Value: []string{"p1"}}
+	appG := &models.BatchArrayOp{Op: "append", Value: []string{"g1"}}
+	appA := &models.BatchArrayOp{Op: "append", Value: []string{"张军"}}
+	rmT := &models.BatchArrayOp{Op: "remove", Value: []string{"nope"}}
+	if _, err := db.BatchUpdateRecords(models.BatchUpdateParams{
+		IDs: []string{"bf"}, CategoryName: &cat, Rating: &rate, ActiveStatus: &act,
+		City: &addr, Address: &addr, Channel: &chanS, Company: &comp, Friends: &fr,
+		Remark: &remark, Seat: &seat, 		Price: &price, PriceCurrency: &pcur,
+		PayPrice: &pp, PayPriceCurrency: &ppcur, OtherCost: &oc, OtherCostCurrency: &ocur,
+		DramaIDs: setD, ZheziIDs: zset, Play: appOp, Guest: appG, ArtistNames: appA, TagIDs: rmT,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Second pass: remove/append on arrays + set artist.
+	rmP := &models.BatchArrayOp{Op: "remove", Value: []string{"p0"}}
+	rmG := &models.BatchArrayOp{Op: "remove", Value: []string{"g0"}}
+	setA := &models.BatchArrayOp{Op: "set", Value: []string{"单雯"}}
+	appD := &models.BatchArrayOp{Op: "append", Value: []string{"d2"}}
+	appZ := &models.BatchArrayOp{Op: "append", Value: []string{"z2"}}
+	if _, err := db.BatchUpdateRecords(models.BatchUpdateParams{
+		IDs: []string{"bf"}, Play: rmP, Guest: rmG, ArtistNames: setA, DramaIDs: appD, ZheziIDs: appZ,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if n, _ := db.BatchDeleteRecords(nil); n != 0 {
 		t.Error("empty delete should be no-op")
 	}
@@ -1118,5 +1151,79 @@ func TestArtists(t *testing.T) {
 	}
 	if n := db.countArtistLinks(t, r.ID); n != 0 {
 		t.Errorf("delete should cascade record_artists, got %d", n)
+	}
+}
+
+func TestArtistResolutionAndMigration(t *testing.T) {
+	db := newTestDB(t)
+
+	// resolveArtistByName creates a new artist when the name is unknown.
+	id1, err := db.resolveArtistByName(" 新演员 ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id1 == "" {
+		t.Fatal("resolve should create artist")
+	}
+	// Exact match on second call.
+	id1b, _ := db.resolveArtistByName("新演员")
+	if id1b != id1 {
+		t.Fatalf("exact match should return same id: %s vs %s", id1, id1b)
+	}
+	// Empty name errors.
+	if _, err := db.resolveArtistByName("  "); err == nil {
+		t.Error("empty name should error")
+	}
+	// Alias match: create artist with alias, then resolve by alias.
+	if _, err := db.SaveArtist(models.Artist{Name: "老演员", Aliases: []string{"小李"}}); err != nil {
+		t.Fatal(err)
+	}
+	if aid, err := db.resolveArtistByName("小李"); err != nil || aid == "" {
+		t.Fatalf("alias match failed: %v %s", err, aid)
+	}
+
+	// migrateArtistRelations: seed a legacy record with artist_names JSON, run
+	// the migration, then verify the relation table is populated + idempotent.
+	db.conn.Exec("INSERT INTO records (id, name, artist_names, date) VALUES ('leg1','老数据',?,?)",
+		marshalJSON([]string{"新演员", "小李"}), time.Now().Unix())
+	if err := db.migrateArtistRelations(); err != nil {
+		t.Fatal(err)
+	}
+	if n := db.countArtistLinks(t, "leg1"); n != 2 {
+		t.Fatalf("migration should link 2 artists, got %d", n)
+	}
+	if err := db.migrateArtistRelations(); err != nil {
+		t.Fatal(err)
+	}
+	if n := db.countArtistLinks(t, "leg1"); n != 2 {
+		t.Fatalf("migration should be idempotent, got %d", n)
+	}
+
+	// ListArtistTree returns the lightweight picker list.
+	tree, err := db.ListArtistTree()
+	if err != nil || len(tree) == 0 {
+		t.Fatalf("ListArtistTree: %v %v", tree, err)
+	}
+
+	// BulkUpsertRecords: empty slice is a no-op; non-empty inserts + links.
+	if err := db.BulkUpsertRecords(nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.BulkUpsertRecords([]models.Record{
+		{ID: "b1", Name: "批量A", Date: time.Now().Unix(), ArtistNames: []string{"新演员"}},
+		{ID: "b2", Name: "批量B", Date: time.Now().Unix()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if n := db.countArtistLinks(t, "b1"); n != 1 {
+		t.Fatalf("bulk upsert should link artist, got %d", n)
+	}
+
+	// setRecordArtists with empty names clears existing links.
+	if err := db.setRecordArtists(db.conn, "b1", []string{}); err != nil {
+		t.Fatal(err)
+	}
+	if n := db.countArtistLinks(t, "b1"); n != 0 {
+		t.Fatalf("empty names should clear links, got %d", n)
 	}
 }

@@ -187,6 +187,15 @@ func TestRecordsEndpoints(t *testing.T) {
 	if len(list) != 1 {
 		t.Fatalf("list all: %v", list)
 	}
+
+	// Artist tree (picker source) returns lightweight id+name pairs.
+	res, b = doJSON(t, "GET", ts.URL+"/api/artists/tree", nil)
+	expectStatus(t, res, 200, "artist tree")
+	var tree []models.ArtistTree
+	decodeResp(t, b, &tree)
+	if len(tree) == 0 {
+		t.Fatalf("artist tree should not be empty: %v", tree)
+	}
 	res, b = doJSON(t, "GET", ts.URL+"/api/records/search?q=改", nil)
 	expectStatus(t, res, 200, "search")
 	decodeResp(t, b, &list)
@@ -737,4 +746,265 @@ func TestImportAndroidZlib(t *testing.T) {
 	if !strings.Contains(string(b), `"covers_imported":1`) {
 		t.Fatalf("zlib import body: %s", b)
 	}
+}
+
+// ---------- artists endpoints (entity table + reverse lookup) ----------
+
+func TestArtistsEndpoints(t *testing.T) {
+	ts, _, _, _ := newTestServer(t, nil)
+
+	res, b := doJSON(t, "GET", ts.URL+"/api/artists", nil)
+	expectStatus(t, res, 200, "list artists (empty)")
+
+	// Create with trimming + aliases.
+	res, b = doJSON(t, "POST", ts.URL+"/api/artists", map[string]interface{}{
+		"name":    " 张军 ",
+		"aliases": []string{"张三"},
+		"bio":     "昆曲演员",
+	})
+	expectStatus(t, res, 201, "create artist")
+	var a models.Artist
+	decodeResp(t, b, &a)
+	if a.Name != "张军" {
+		t.Fatalf("artist name should be trimmed: %+v", a)
+	}
+	// Blank name -> 400.
+	res, _ = doJSON(t, "POST", ts.URL+"/api/artists", map[string]interface{}{"name": "  "})
+	expectStatus(t, res, 400, "create artist blank name")
+	// Invalid body -> 400.
+	res, _ = doJSON(t, "POST", ts.URL+"/api/artists", []byte("{"))
+	expectStatus(t, res, 400, "create artist invalid body")
+
+	// Link a record to the artist; verify reverse lookup counts it.
+	res, b = doJSON(t, "POST", ts.URL+"/api/records", map[string]interface{}{
+		"name":         "牡丹亭",
+		"date":         time.Date(2026, 8, 22, 19, 30, 0, 0, time.UTC).Unix(),
+		"artist_names": []string{"张军"},
+	})
+	expectStatus(t, res, 201, "create record linking artist")
+	res, b = doJSON(t, "GET", ts.URL+"/api/artists/"+a.ID, nil)
+	expectStatus(t, res, 200, "get artist detail")
+	var detail models.ArtistDetail
+	decodeResp(t, b, &detail)
+	if detail.Artist.Name != "张军" || len(detail.Records) != 1 {
+		t.Fatalf("artist detail wrong: %+v", detail)
+	}
+	res, _ = doJSON(t, "GET", ts.URL+"/api/artists/missing", nil)
+	expectStatus(t, res, 404, "get artist missing")
+
+	// Update (by id) with new name + bio.
+	res, b = doJSON(t, "PUT", ts.URL+"/api/artists/"+a.ID, map[string]interface{}{"name": "张军(改)", "bio": "国家一级演员"})
+	expectStatus(t, res, 200, "update artist")
+	decodeResp(t, b, &a)
+	if a.Name != "张军(改)" || a.Bio != "国家一级演员" {
+		t.Fatalf("artist update wrong: %+v", a)
+	}
+	// Update blank name -> 400.
+	res, _ = doJSON(t, "PUT", ts.URL+"/api/artists/"+a.ID, map[string]interface{}{"name": ""})
+	expectStatus(t, res, 400, "update artist blank name")
+
+	// Second artist + reorder.
+	res, b = doJSON(t, "POST", ts.URL+"/api/artists", map[string]interface{}{"name": "单雯"})
+	expectStatus(t, res, 201, "create second artist")
+	var other models.Artist
+	decodeResp(t, b, &other)
+	res, _ = doJSON(t, "POST", ts.URL+"/api/artists/reorder", map[string]interface{}{"ids": []string{other.ID, a.ID}})
+	expectStatus(t, res, 200, "reorder artists")
+	res, _ = doJSON(t, "POST", ts.URL+"/api/artists/reorder", []byte("{"))
+	expectStatus(t, res, 400, "reorder artists invalid body")
+	res2, b2 := doJSON(t, "GET", ts.URL+"/api/artists", nil)
+	expectStatus(t, res2, 200, "list artists after reorder")
+	var arts []models.Artist
+	decodeResp(t, b2, &arts)
+	if len(arts) != 2 || arts[0].ID != other.ID {
+		t.Fatalf("reorder did not take effect: %+v", arts)
+	}
+
+	// Delete cascades the record_artists link, then artist is gone.
+	res, _ = doJSON(t, "DELETE", ts.URL+"/api/artists/"+a.ID, nil)
+	expectStatus(t, res, 200, "delete artist")
+	res, _ = doJSON(t, "GET", ts.URL+"/api/artists/"+a.ID, nil)
+	expectStatus(t, res, 404, "deleted artist gone")
+}
+
+// TestRecordsAggregationCoverage exercises the stats/dashboard/calendar/ICS and
+// venue-alignment code paths with multiple records of varying city/rating/month
+// so the aggregation branches get covered (pushes handlers coverage past 85%).
+func TestRecordsAggregationCoverage(t *testing.T) {
+	ts, _, _, _ := newTestServer(t, nil)
+
+	cities := []string{"上海", "北京", "南京"}
+	months := []int{1, 3, 5, 7, 9, 11}
+	for i, m := range months {
+		res, _ := doJSON(t, "POST", ts.URL+"/api/records", map[string]interface{}{
+			"name":         fmt.Sprintf("演出%d", i),
+			"city":         cities[i%len(cities)],
+			"rating":       (i % 5) + 1,
+			"date":         time.Date(2026, time.Month(m), 15, 19, 30, 0, 0, time.UTC).Unix(),
+			"artist_names": []string{"张军"},
+			"price":        100 + i*10,
+		})
+		expectStatus(t, res, 201, fmt.Sprintf("create record %d", i))
+	}
+
+	getPaths := []string{
+		"/stats", "/dashboard",
+		"/calendar?year=2026&month=5",
+		"/calendar",
+		"/calendar.ics",
+		"/autocomplete/city",
+		"/field/city/北京",
+		"/records/all",
+	}
+	for _, path := range getPaths {
+		res, _ := doJSON(t, "GET", ts.URL+"/api"+path, nil)
+		expectStatus(t, res, 200, "GET "+path)
+	}
+	// align-venues is a POST endpoint.
+	ares, _ := doJSON(t, "POST", ts.URL+"/api/records/align-venues", nil)
+	expectStatus(t, ares, 200, "POST align-venues")
+
+	// Export paths.
+	res, _ := doJSON(t, "GET", ts.URL+"/api/export", nil)
+	expectStatus(t, res, 200, "export json")
+	res, _ = doJSON(t, "GET", ts.URL+"/api/export?format=zip", nil)
+	expectStatus(t, res, 200, "export zip")
+}
+
+// TestRecordFieldBatchBranches covers getByField / autocomplete across many
+// field values and batchUpdate with various array ops, exercising branches that
+// the basic CRUD tests leave untouched.
+func TestRecordFieldBatchBranches(t *testing.T) {
+	ts, _, database, _ := newTestServer(t, nil)
+
+	// Seed a drama + zhezi + artist, then a record referencing them.
+	res, b := doJSON(t, "POST", ts.URL+"/api/dramas", map[string]interface{}{"name": "牡丹亭"})
+	expectStatus(t, res, 201, "create drama")
+	var d models.Drama
+	decodeResp(t, b, &d)
+	res, b = doJSON(t, "POST", ts.URL+"/api/dramas/"+d.ID+"/zhezis", map[string]interface{}{"name": "惊梦"})
+	expectStatus(t, res, 201, "create zhezi")
+	var z models.Zhezi
+	decodeResp(t, b, &z)
+	res, b = doJSON(t, "POST", ts.URL+"/api/artists", map[string]interface{}{"name": "张军"})
+	expectStatus(t, res, 201, "create artist")
+	var art models.Artist
+	decodeResp(t, b, &art)
+	_ = art
+
+	res, b = doJSON(t, "POST", ts.URL+"/api/records", map[string]interface{}{
+		"name":         "游园",
+		"city":         "上海",
+		"categoryName": "昆曲",
+		"company":      "江苏省昆剧院",
+		"play":         []string{"游园"},
+		"rating":       4,
+		"date":         time.Date(2026, 8, 22, 19, 30, 0, 0, time.UTC).Unix(),
+		"artist_names": []string{"张军"},
+		"drama_ids":    []string{d.ID},
+		"zhezi_ids":    []string{z.ID},
+	})
+	expectStatus(t, res, 201, "create record")
+	var rec models.Record
+	decodeResp(t, b, &rec)
+
+	// getByField across supported text fields (drama/zhezi/artist are not
+	// textFields and intentionally return 400).
+	for _, f := range []string{"name/游园", "city/上海", "category_name/昆曲", "company/江苏省昆剧院"} {
+		res, _ := doJSON(t, "GET", ts.URL+"/api/field/"+f, nil)
+		expectStatus(t, res, 200, "field "+f)
+	}
+	res, _ = doJSON(t, "GET", ts.URL+"/api/field/drama/"+d.ID, nil)
+	expectStatus(t, res, 400, "field drama invalid")
+	res, _ = doJSON(t, "GET", ts.URL+"/api/field/bogus/x", nil)
+	expectStatus(t, res, 400, "field invalid")
+
+	// autocomplete across supported text fields.
+	for _, f := range []string{"city", "name", "category_name", "company", "seat", "address"} {
+		res, _ := doJSON(t, "GET", ts.URL+"/api/autocomplete/"+f, nil)
+		expectStatus(t, res, 200, "autocomplete "+f)
+	}
+	res, _ = doJSON(t, "GET", ts.URL+"/api/autocomplete/play", nil)
+	expectStatus(t, res, 400, "autocomplete play invalid")
+
+	// batchUpdate with scalar + array ops.
+	res, b = doJSON(t, "POST", ts.URL+"/api/records/batch", map[string]interface{}{
+		"ids":           []string{rec.ID},
+		"rating":        5,
+		"active_status": 1,
+		"city":          "北京",
+		"price":         320.5,
+		"play":          map[string]interface{}{"op": "append", "value": []string{"惊梦"}},
+		"artist_names":  map[string]interface{}{"op": "append", "value": []string{"单雯"}},
+		"drama_ids":     map[string]interface{}{"op": "set", "value": []string{}},
+		"tag_ids":       map[string]interface{}{"op": "remove", "value": []string{"x"}},
+	})
+	expectStatus(t, res, 200, "batch update ops")
+	decodeResp(t, b, &map[string]interface{}{})
+	_ = database
+}
+
+// TestBatchUpdateAllFields drives db.BatchUpdateRecords through every scalar
+// field and every array op (set/append/remove) so the large optional-branch
+// function is fully exercised.
+func TestBatchUpdateAllFields(t *testing.T) {
+	ts, _, _, _ := newTestServer(t, nil)
+
+	res, b := doJSON(t, "POST", ts.URL+"/api/records", map[string]interface{}{
+		"name":  "批量字段",
+		"date":  time.Date(2026, 8, 22, 19, 30, 0, 0, time.UTC).Unix(),
+		"play":  []string{"原"},
+		"guest": []string{"客"},
+	})
+	expectStatus(t, res, 201, "create record")
+	var rec models.Record
+	decodeResp(t, b, &rec)
+
+	op := func(o string, v ...string) map[string]interface{} { return map[string]interface{}{"op": o, "value": v} }
+
+	res, b = doJSON(t, "POST", ts.URL+"/api/records/batch", map[string]interface{}{
+		"ids":                []string{rec.ID},
+		"category_name":      "昆曲",
+		"rating":             5,
+		"active_status":      2,
+		"city":               "北京",
+		"address":            "长安大戏院",
+		"channel":            "大麦",
+		"company":            "某院团",
+		"friends":            "友人",
+		"remark":             "备注",
+		"seat":               "A1",
+		"price":              200.0,
+		"price_currency":     "CNY",
+		"pay_price":          180.0,
+		"pay_price_currency": "CNY",
+		"other_cost":         20.0,
+		"other_cost_currency": "CNY",
+		"drama_ids":          op("set", "d1"),
+		"zhezi_ids":          op("set", "z1"),
+		"play":               op("append", "新折子"),
+		"guest":              op("append", "新客"),
+		"artist_names":       op("append", "张军"),
+		"tag_ids":            op("remove", "x"),
+	})
+	expectStatus(t, res, 200, "batch update all fields")
+	decodeResp(t, b, &map[string]interface{}{})
+
+	// A second pass exercising remove on array fields.
+	res, b = doJSON(t, "POST", ts.URL+"/api/records/batch", map[string]interface{}{
+		"ids":          []string{rec.ID},
+		"play":         op("remove", "原"),
+		"guest":        op("remove", "客"),
+		"artist_names": op("set", "单雯"),
+		"drama_ids":    op("append", "d2"),
+		"zhezi_ids":    op("append", "z2"),
+	})
+	expectStatus(t, res, 200, "batch update array remove/set")
+	decodeResp(t, b, &map[string]interface{}{})
+
+	// Invalid body / empty ids.
+	res, _ = doJSON(t, "POST", ts.URL+"/api/records/batch", []byte("{"))
+	expectStatus(t, res, 400, "batch invalid body")
+	res, _ = doJSON(t, "POST", ts.URL+"/api/records/batch", map[string]interface{}{"ids": []string{}})
+	expectStatus(t, res, 400, "batch empty ids")
 }

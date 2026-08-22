@@ -69,6 +69,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Put("/artists/{id}", h.updateArtist)
 	r.Delete("/artists/{id}", h.deleteArtist)
 	r.Post("/artists/reorder", h.reorderArtists)
+	r.Get("/artists/tree", h.listArtistTree)
 
 	r.Get("/stats", h.getStats)
 	r.Get("/dashboard", h.getDashboard)
@@ -691,6 +692,16 @@ func (h *Handler) reorderArtists(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResp(w, 200, map[string]string{"message": "reordered"})
+}
+
+// GET /artists/tree — lightweight id+name pairs for the record-form picker.
+func (h *Handler) listArtistTree(w http.ResponseWriter, r *http.Request) {
+	tree, err := h.db.ListArtistTree()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, tree)
 }
 
 // POST /categories/reorder {"ids":[...]} — manual ordering of categories.

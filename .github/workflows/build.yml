@@ -49,6 +49,30 @@ jobs:
         run: CGO_ENABLED=1 go build -o mujian .
         working-directory: backend
 
+      - name: Upload binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: mujian
+          path: backend/mujian
+          retention-days: 7
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    # Run coverage in its own job so `go test -coverprofile` does not slow down
+    # the build/binary job.
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.27"
+          cache-dependency-path: backend/go.sum
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libavif-dev
+
       - name: Test backend with coverage
         run: CGO_ENABLED=1 go vet ./... && CGO_ENABLED=1 go test ./... -coverprofile=coverage.out
         working-directory: backend
@@ -59,13 +83,6 @@ jobs:
           files: backend/coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
-
-      - name: Upload binary
-        uses: actions/upload-artifact@v7
-        with:
-          name: mujian
-          path: backend/mujian
-          retention-days: 7
 
   docker:
     runs-on: ${{ matrix.runner }}
