@@ -193,12 +193,26 @@ export async function initStorageInfo() {
 
 export function coverUrl(coverFile) {
   if (!coverFile) return '';
+  // A data: URI (or raw base64, e.g. "/9j/...") is already renderable by the
+  // browser; never prepend /uploads/ to it (that yields a bogus URL + 500).
+  if (coverFile.startsWith('data:')) return coverFile;
+  if (isRawBase64(coverFile)) return `data:image/jpeg;base64,${coverFile.replace(/^\//, '')}`;
   if (coverFile.startsWith('http')) return coverFile;
   if (coverFile.startsWith('/uploads/')) return `${API_BASE}${coverFile}`;
   if (storageInfo.storage_type === 's3' && storageInfo.s3_public_url) {
     return `${storageInfo.s3_public_url}/${coverFile}`;
   }
   return `${API_BASE}/uploads/${coverFile}`;
+}
+
+// isRawBase64 reports whether the value looks like a bare base64-encoded image
+// (legacy data where the whole cover was stored in the field instead of a
+// storage key). Such values are long, contain only base64 alphabet chars, and
+// are not a storage key (no "covers/" prefix, no dot+extension segment).
+function isRawBase64(v) {
+  if (v.length < 200) return false;
+  if (v.startsWith('/uploads/') || v.startsWith('covers/') || v.includes('/')) return false;
+  return /^[A-Za-z0-9+/=]+\/?[A-Za-z0-9+/=]*$/.test(v);
 }
 
 export function formatCurrency(amount, currency) {

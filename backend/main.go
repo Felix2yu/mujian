@@ -32,7 +32,12 @@ func fatal(format string, args ...any) {
 type rootFileSystem struct{ root *os.Root }
 
 func (r rootFileSystem) Open(name string) (http.File, error) {
-	return r.root.Open(name)
+	// http.FileServer passes a leading-slash path (e.g. "/covers/x.jpg").
+	// os.Root.Open treats a leading slash as an absolute path and rejects it
+	// ("path escapes from parent"), which surfaces as a 500 for every upload.
+	// Strip the leading slash so the path resolves relative to the root;
+	// os.Root still rejects ".." segments, keeping traversal protection.
+	return r.root.Open(strings.TrimPrefix(name, "/"))
 }
 
 //go:embed all:dist
