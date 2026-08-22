@@ -117,6 +117,17 @@ func main() {
 			return
 		}
 		f.Close()
+
+		// SvelteKit emits content-hashed assets under /_app/immutable; those
+		// are safe to cache forever. Everything else (the HTML shell, entry
+		// chunks) must be revalidated on every load so a redeploy reaches the
+		// browser immediately instead of serving a stale cached page whose
+		// referenced chunks no longer exist.
+		if strings.HasPrefix(path, "_app/immutable/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
 		fileServer.ServeHTTP(w, r)
 	})
 
