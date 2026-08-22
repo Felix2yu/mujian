@@ -231,11 +231,20 @@
       {:else}
         <div class="grid stagger">
           {#each records as r (r.id)}
-            <div class="record-card-wrapper" class:select-mode={selectionMode} class:selected={selectedIds.has(r.id)}>
+            <div
+              class="record-card-wrapper"
+              class:select-mode={selectionMode}
+              class:selected={selectedIds.has(r.id)}
+              role={selectionMode ? 'button' : undefined}
+              tabindex={selectionMode ? 0 : undefined}
+              aria-pressed={selectionMode ? selectedIds.has(r.id) : undefined}
+              onclick={(e) => { if (selectionMode) { e.preventDefault(); toggleSelect(r.id); } }}
+              onkeydown={(e) => { if (selectionMode && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleSelect(r.id); } }}
+            >
               {#if selectionMode}
-                <label class="record-check">
-                  <input type="checkbox" checked={selectedIds.has(r.id)} onchange={() => toggleSelect(r.id)} />
-                </label>
+                <span class="record-check" class:checked={selectedIds.has(r.id)} aria-hidden="true">
+                  {#if selectedIds.has(r.id)}✓{/if}
+                </span>
               {/if}
               <RecordCard record={r} />
             </div>
@@ -339,25 +348,31 @@
     border-color: var(--accent);
   }
   .select-all {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
     cursor: pointer;
     font-size: 13.5px;
+    line-height: 1;
     color: var(--text);
     user-select: none;
+    white-space: nowrap;
+    margin: 0;
   }
   .select-all input[type="checkbox"] {
     width: 16px;
     height: 16px;
+    margin: 0;
     accent-color: var(--accent);
   }
   .batch-count {
     font-size: 13px;
+    line-height: 1;
     color: var(--text-2);
     flex: 1;
+    white-space: nowrap;
   }
-  .batch-actions { display: flex; gap: 8px; }
+  .batch-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
   .record-card-wrapper {
     position: relative;
@@ -365,7 +380,15 @@
   }
   .record-card-wrapper.select-mode {
     padding-left: 36px;
+    cursor: pointer;
   }
+  .record-card-wrapper[role='button']:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-lg);
+  }
+  /* 批量模式下整卡可点选，悬停不再放大海报 */
+  .record-card-wrapper.select-mode:hover .cover img { transform: none; }
   .record-card-wrapper.selected::before {
     content: '';
     position: absolute;
@@ -383,17 +406,23 @@
     left: 8px;
     top: 8px;
     z-index: 10;
-    cursor: pointer;
-    background: var(--surface);
+    width: 20px;
+    height: 20px;
     border-radius: 6px;
-    padding: 4px;
+    background: var(--surface);
+    border: 2px solid var(--border-strong, #c9c2b8);
     box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
   }
-  .record-check input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    accent-color: var(--accent);
-    cursor: pointer;
+  .record-check.checked {
+    background: var(--accent);
+    border-color: var(--accent);
   }
 
   .grid {
