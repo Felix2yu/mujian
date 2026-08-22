@@ -1,6 +1,6 @@
 <script>
   import { coverUrl, formatCurrency } from '$lib/api.js';
-  let { record } = $props();
+  let { record, selectionMode = false, selected = false } = $props();
   let coverFailed = $state(false);
 
   function stars(n) {
@@ -21,6 +21,11 @@
     {#if record.rating}
       <span class="rate-badge">★ {record.rating}</span>
     {/if}
+    {#if selectionMode}
+      <span class="record-check" class:checked={selected} aria-hidden="true">
+        {#if selected}✓{/if}
+      </span>
+    {/if}
   </div>
   <div class="info">
     <div class="title" title={record.name}>{record.name}</div>
@@ -28,13 +33,20 @@
       {#if record.dateText}<span>{record.dateText.split(' ')[0]}</span>{/if}
       {#if record.city}<span class="dot">·</span><span>{record.city}</span>{/if}
     </div>
-    {#if record.artist_names && record.artist_names.length}
-      <div class="artists">
+    <div class="artists">
+      {#if record.artist_names && record.artist_names.length}
         {#each record.artist_names.slice(0, 3) as name, i}
           <a class="artist-link" href={`/artists/${record.artist_ids?.[i] || ''}`} onclick={(e) => { if (!record.artist_ids?.[i]) e.preventDefault(); }}>{name}</a>{i < Math.min(record.artist_names.length, 3) - 1 ? ' / ' : ''}
         {/each}{record.artist_names.length > 3 ? ' 等' : ''}
-      </div>
-    {/if}
+      {/if}
+    </div>
+    <div class="troupes">
+      {#if record.company}
+        {#each record.company.split(/[,，]/).map((s) => s.trim()).filter(Boolean) as t}
+          <span class="troupe-tag">{t}</span>
+        {/each}
+      {/if}
+    </div>
     <div class="bottom">
       {#if record.address}<span class="tag venue" title={record.address}>{record.address}</span>{/if}
       {#if record.price}<span class="price">{formatCurrency(record.price, record.price_currency)}</span>{/if}
@@ -108,6 +120,31 @@
     font-size: 11px;
     font-weight: 700;
   }
+  /* 批量选择框：嵌入封面右下角，避开左上角标(剧种)与右上角标(评分) */
+  .record-check {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    z-index: 10;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(20, 17, 15, 0.55);
+    border: 2px solid #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    transition: background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+  }
+  .record-check.checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
   .info { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 5px; flex: 1; }
   .title {
     font-family: var(--font-serif);
@@ -121,7 +158,7 @@
     -webkit-box-orient: vertical;
     min-height: 2.7em;
   }
-  .meta { font-size: 12.5px; color: var(--text-muted); display: flex; gap: 5px; align-items: center; }
+  .meta { font-size: 12.5px; color: var(--text-muted); display: flex; gap: 5px; align-items: center; min-height: 1.45em; }
   .dot { opacity: 0.5; }
   .artists {
     font-size: 12.5px;
@@ -129,9 +166,21 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-height: 1.45em;
   }
   .artist-link { color: var(--text-2); text-decoration: none; }
   .artist-link:hover { color: var(--accent); text-decoration: underline; }
+  .troupes { display: flex; flex-wrap: wrap; gap: 4px; min-height: 1.45em; }
+  .troupe-tag {
+    font-size: 11px;
+    color: var(--text-2);
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+    white-space: nowrap;
+    line-height: 1.6;
+  }
   .bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 6px; }
   .bottom .venue {
     flex: 1;

@@ -241,12 +241,7 @@
               onclick={(e) => { if (selectionMode) { e.preventDefault(); toggleSelect(r.id); } }}
               onkeydown={(e) => { if (selectionMode && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleSelect(r.id); } }}
             >
-              {#if selectionMode}
-                <span class="record-check" class:checked={selectedIds.has(r.id)} aria-hidden="true">
-                  {#if selectedIds.has(r.id)}✓{/if}
-                </span>
-              {/if}
-              <RecordCard record={r} />
+              <RecordCard record={r} selectionMode={selectionMode} selected={selectedIds.has(r.id)} />
             </div>
           {/each}
         </div>
@@ -379,7 +374,6 @@
     display: block;
   }
   .record-card-wrapper.select-mode {
-    padding-left: 36px;
     cursor: pointer;
   }
   .record-card-wrapper[role='button']:focus-visible {
@@ -401,29 +395,7 @@
     pointer-events: none;
     box-sizing: border-box;
   }
-  .record-check {
-    position: absolute;
-    left: 8px;
-    top: 8px;
-    z-index: 10;
-    width: 20px;
-    height: 20px;
-    border-radius: 6px;
-    background: var(--surface);
-    border: 2px solid var(--border-strong, #c9c2b8);
-    box-shadow: var(--shadow-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 13px;
-    font-weight: 700;
-    line-height: 1;
-  }
-  .record-check.checked {
-    background: var(--accent);
-    border-color: var(--accent);
-  }
+  /* 选择框已移入 RecordCard 封面右下角（避开左上剧种角标/右上评分角标），样式见组件内部 */
 
   .grid {
     display: grid;

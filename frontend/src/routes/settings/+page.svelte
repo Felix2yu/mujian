@@ -59,6 +59,9 @@
       if (!settings.storage_type) settings.storage_type = 'local';
       if (!settings.theme) settings.theme = 'auto';
       if (!settings.image_format) settings.image_format = 'avif';
+      if (typeof settings.show_friends !== 'boolean') settings.show_friends = true;
+      if (typeof settings.show_pay_price !== 'boolean') settings.show_pay_price = true;
+      if (typeof settings.show_other_cost !== 'boolean') settings.show_other_cost = true;
       mapSource = loadPref('mujian:map_source', 'osm');
       mapKey = loadPref('mujian:map_custom_key', '');
       mapCustomUrl = loadPref('mujian:map_custom_url', '');
@@ -77,7 +80,10 @@
       await api.updateSettings({
         theme: currentTheme,
         storage_type: settings.storage_type,
-        image_format: settings.image_format
+        image_format: settings.image_format,
+        show_friends: settings.show_friends,
+        show_pay_price: settings.show_pay_price,
+        show_other_cost: settings.show_other_cost
       });
       saved = true;
       setTimeout(() => (saved = false), 2400);
@@ -128,9 +134,9 @@
   }
 
   const themes = [
-    { v: 'auto', label: '跟随系统', ico: '◐' },
-    { v: 'light', label: '亮色', ico: '☀️' },
-    { v: 'dark', label: '暗色', ico: '🌙' }
+    { v: 'auto', label: '跟随系统' },
+    { v: 'light', label: '亮色' },
+    { v: 'dark', label: '暗色' }
   ];
 
   onMount(() => {
@@ -159,7 +165,26 @@
             class:on={currentTheme === t.v}
             onclick={() => setTheme(t.v)}
           >
-            <span class="tico">{t.ico}</span>
+            <span class="tico">
+              {#if t.v === 'light'}
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="4" />
+                  <line x1="12" y1="2" x2="12" y2="4.5" /><line x1="12" y1="19.5" x2="12" y2="22" />
+                  <line x1="2" y1="12" x2="4.5" y2="12" /><line x1="19.5" y1="12" x2="22" y2="12" />
+                  <line x1="4.6" y1="4.6" x2="6.3" y2="6.3" /><line x1="17.7" y1="17.7" x2="19.4" y2="19.4" />
+                  <line x1="4.6" y1="19.4" x2="6.3" y2="17.7" /><line x1="17.7" y1="6.3" x2="19.4" y2="4.6" />
+                </svg>
+              {:else if t.v === 'dark'}
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8z" />
+                </svg>
+              {:else}
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
+                </svg>
+              {/if}
+            </span>
             <span>{t.label}</span>
           </button>
         {/each}
@@ -222,6 +247,23 @@
       {#if convertError}
         <div class="banner error">⚠ {convertError}</div>
       {/if}
+    </div>
+
+    <div class="card sec">
+      <h3>记录字段</h3>
+      <p class="hint" style="margin-bottom: 12px;">控制新建 / 编辑演出时是否显示以下字段，不常用的可按需隐藏</p>
+      <label class="switch-row">
+        <span>显示「同行人」</span>
+        <input type="checkbox" bind:checked={settings.show_friends} />
+      </label>
+      <label class="switch-row">
+        <span>显示「实付金额」</span>
+        <input type="checkbox" bind:checked={settings.show_pay_price} />
+      </label>
+      <label class="switch-row">
+        <span>显示「其他花费」</span>
+        <input type="checkbox" bind:checked={settings.show_other_cost} />
+      </label>
     </div>
 
     <div class="card sec">
@@ -302,7 +344,7 @@
     color: var(--accent);
     font-weight: 600;
   }
-  .tico { font-size: 18px; }
+  .tico { font-size: 18px; display: inline-flex; align-items: center; justify-content: center; }
   .hint { font-weight: 400; color: var(--text-3); font-size: 12px; display: block; margin-top: 4px; }
   .hint-row { margin-top: 8px; font-size: 12.5px; color: var(--text-3); }
 
@@ -316,4 +358,16 @@
   }
   .convert-actions .btn { width: fit-content; }
   .btn.disabled, .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    font-size: 14px;
+    color: var(--text-2);
+    border-top: 1px solid var(--border);
+  }
+  .switch-row:first-of-type { border-top: none; }
+  .switch-row input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
 </style>

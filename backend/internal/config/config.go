@@ -22,6 +22,9 @@ type Config struct {
 	S3AccessKey       string `json:"s3_access_key"`
 	S3SecretKey       string `json:"s3_secret_key"`
 	S3PublicURL       string `json:"s3_public_url"`
+	ShowFriends       bool   `json:"show_friends"`
+	ShowPayPrice      bool   `json:"show_pay_price"`
+	ShowOtherCost     bool   `json:"show_other_cost"`
 	mu                sync.RWMutex
 }
 
@@ -46,6 +49,9 @@ func Load() *Config {
 		S3AccessKey:       os.Getenv("S3_ACCESS_KEY"),
 		S3SecretKey:       os.Getenv("S3_SECRET_KEY"),
 		S3PublicURL:       os.Getenv("S3_PUBLIC_URL"),
+		ShowFriends:       true,
+		ShowPayPrice:      true,
+		ShowOtherCost:     true,
 	}
 	return global
 }
@@ -99,6 +105,15 @@ func (c *Config) Update(s *SettingsUpdate) {
 	if s.S3PublicURL != nil {
 		c.S3PublicURL = *s.S3PublicURL
 	}
+	if s.ShowFriends != nil {
+		c.ShowFriends = *s.ShowFriends
+	}
+	if s.ShowPayPrice != nil {
+		c.ShowPayPrice = *s.ShowPayPrice
+	}
+	if s.ShowOtherCost != nil {
+		c.ShowOtherCost = *s.ShowOtherCost
+	}
 }
 
 type SettingsUpdate struct {
@@ -111,6 +126,9 @@ type SettingsUpdate struct {
 	S3AccessKey *string `json:"s3_access_key"`
 	S3SecretKey *string `json:"s3_secret_key"`
 	S3PublicURL *string `json:"s3_public_url"`
+	ShowFriends *bool `json:"show_friends"`
+	ShowPayPrice *bool `json:"show_pay_price"`
+	ShowOtherCost *bool `json:"show_other_cost"`
 }
 
 func (c *Config) GetSettingsResponse() map[string]interface{} {
@@ -133,6 +151,9 @@ func (c *Config) GetSettingsResponse() map[string]interface{} {
 		"s3_access_key":      c.S3AccessKey,
 		"s3_secret_key":      s3Key,
 		"s3_public_url":      c.S3PublicURL,
+		"show_friends":       c.ShowFriends,
+		"show_pay_price":     c.ShowPayPrice,
+		"show_other_cost":    c.ShowOtherCost,
 	}
 }
 
@@ -150,6 +171,9 @@ func (c *Config) SaveToFile(path string) error {
 		"s3_access_key": c.S3AccessKey,
 		"s3_secret_key": c.S3SecretKey,
 		"s3_public_url": c.S3PublicURL,
+		"show_friends":   b2s(c.ShowFriends),
+		"show_pay_price":  b2s(c.ShowPayPrice),
+		"show_other_cost": b2s(c.ShowOtherCost),
 	}
 
 	b, err := json.MarshalIndent(data, "", "  ")
@@ -205,6 +229,15 @@ func (c *Config) LoadFromFile(path string) error {
 	if v, ok := data["s3_public_url"]; ok {
 		c.S3PublicURL = v
 	}
+	if v, ok := data["show_friends"]; ok {
+		c.ShowFriends = v == "true"
+	}
+	if v, ok := data["show_pay_price"]; ok {
+		c.ShowPayPrice = v == "true"
+	}
+	if v, ok := data["show_other_cost"]; ok {
+		c.ShowOtherCost = v == "true"
+	}
 
 	return nil
 }
@@ -214,4 +247,11 @@ func getEnv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func b2s(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }

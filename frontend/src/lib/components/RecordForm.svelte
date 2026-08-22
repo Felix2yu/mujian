@@ -13,7 +13,7 @@
       price: 0, price_currency: 'CNY',
       pay_price: 0, pay_price_currency: 'CNY',
       other_cost: 0, other_cost_currency: 'CNY',
-      artist_names: '', play: '', guest: '',
+      play: '', guest: '',
       active_status: 0,
       date_local: '', coverFile: '', coverThumb: '',
       lat: '', lng: '',
@@ -40,7 +40,6 @@
     f.pay_price_currency = r.pay_price_currency || 'CNY';
     f.other_cost = r.other_cost || 0;
     f.other_cost_currency = r.other_cost_currency || 'CNY';
-    f.artist_names = (r.artist_names || []).join(', ');
     f.artist_ids = (r.artist_ids || []).slice();
     f.play = (r.play || []).join(', ');
     f.guest = (r.guest || []).join(', ');
@@ -67,6 +66,19 @@
   let saving = $state(false);
   let pickerOpen = $state(false);
   let fileInput = $state(null);
+
+  // 演员：自由文本胶囊（未建档案的姓名）。编辑已有记录时，
+  // 初始为 record.artist_names 中未关联到档案的部分（等演员列表载入后计算）。
+  let freeNames = $state([]);
+
+  // 字段显隐由「设置」控制（同行人 / 实付 / 其他花费），默认全部显示
+  let settings = $state({ show_friends: true, show_pay_price: true, show_other_cost: true });
+
+  // 坐标默认折叠在「定位」图标后，点击图标才展开经纬度输入
+  let showCoord = $state(false);
+
+  // 常用字段自动补全（来自历史记录 /api/autocomplete/{field}）
+  let ac = $state({ city: [], address: [], channel: [], company: [], seat: [], friends: [] });
 
   // 地址自动定位（高德地理编码）状态
   let geoStatus = $state('idle'); // idle | loading | ok | nokey | notfound | error
@@ -177,11 +189,11 @@
     } catch (e) { /* 非关键，忽略 */ }
   }
 
-  // 演员 picker state（仿 drama picker）
+  // 演员 picker state（胶囊 tag 输入）
   let artistList = $state([]);
   let artistQuery = $state('');
   let showArtistList = $state(false);
-  let newArtist = $state({ name: '' });
+  let creatingArtist = $state(false);
 
   const chosenArtists = $derived(
     artistList.filter((a) => form.artist_ids.includes(a.id))
@@ -203,8 +215,95 @@
   function removeArtist(aid) {
     form.artist_ids = form.artist_ids.filter((x) => x !== aid);
   }
-  async function createNewArtist() {
-    const name = newArtist.name.trim();
+  function removeFreeName(n) {
+    freeNames = freeNames.filter((x) => x !== n);
+  }
+
+  // 把输入框文本（可含中英文逗号分隔的多个名字）解析为胶囊：
+  // 与档案精确同名 → 关联档案；否则 → 自由文本胶囊
+  function commitArtistInput() {
+    const names = (artistQuery || '').split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+    if (!names.length) { artistQuery = ''; return; }
+    for (const n of names) {
+      const hit = addableArtists.find((a) => a.name === n);
+      if (hit) {
+        form.artist_ids = [...form.artist_ids, hit.id];
+      } else if (
+        !freeNames.includes(n) &&
+        !chosenArtists.some((a) => a.name === n)
+      ) {
+        freeNames = [...freeNames, n];
+      }
+    }
+    artistQuery = '';
+  }
+
+  function onArtistKeydown(e) {
+    if (e.isComposing || e.keyCode === 229) return; // 中文输入法组词中不响应
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitArtistInput();
+    } else if (e.key === 'Backspace' && !artistQuery) {
+      // 输入框为空时退格：删除最后一个胶囊（优先自由文本，其次已关联）
+      if (freeNames.length) freeNames = freeNames.slice(0, -1);
+      else if (form.artist_ids.length) form.artist_ids = form.artist_ids.slice(0, -1);
+    }
+  }
+
+  function onArtistInput(e) {
+    if (e.isComposing) return; // 中文输入法组词中不解析
+    artistQuery = e.currentTarget.value;
+    // 输入（含粘贴）中出现逗号：立即批量解析为胶囊
+    if (/[,，]/.test(artistQuery)) commitArtistInput();
+  }
+
+  // 剧团：一场演出可能隶属多个演出团体，支持逗号分隔一次添加多个
+  let companyQuery = $state('');
+  const companyTags = $derived(
+    (form.company || '').split(/[,，]/).map((s) => s.trim()).filter(Boolean)
+  );
+  function addCompany(name) {
+    name = (name || '').trim();
+    if (!name) return;
+    const cur = (form.company || '').split(/[,，]/).map((s) => s.trim()).filter(Boolean);
+    if (!cur.includes(name)) cur.push(name);
+    form.company = cur.join(', ');
+  }
+  function removeCompany(name) {
+    const cur = (form.company || '')
+      .split(/[,，]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .filter((n) => n !== name);
+    form.company = cur.join(', ');
+  }
+  function commitCompanyInput() {
+    const names = (companyQuery || '').split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+    if (!names.length) {
+      companyQuery = '';
+      return;
+    }
+    for (const n of names) addCompany(n);
+    companyQuery = '';
+  }
+  function onCompanyKeydown(e) {
+    if (e.isComposing || e.keyCode === 229) return; // 中文输入法组词中不响应
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitCompanyInput();
+    } else if (e.key === 'Backspace' && !companyQuery) {
+      const cur = (form.company || '').split(/[,，]/).map((s) => s.trim()).filter(Boolean);
+      if (cur.length) form.company = cur.slice(0, -1).join(', ');
+    }
+  }
+  function onCompanyInput(e) {
+    if (e.isComposing) return;
+    companyQuery = e.currentTarget.value;
+    if (/[,，]/.test(companyQuery)) commitCompanyInput();
+  }
+
+  async function createNewArtist(name) {
+    name = (name || '').trim();
     if (!name || creatingArtist) return;
     creatingArtist = true;
     error = '';
@@ -212,14 +311,13 @@
       const a = await api.createArtist({ name });
       await loadArtistList();
       form.artist_ids = [...form.artist_ids, a.id];
-      newArtist = { name: '' };
+      artistQuery = '';
     } catch (e) {
       error = e.message;
     } finally {
       creatingArtist = false;
     }
   }
-  let creatingArtist = $state(false);
   async function loadArtistList() {
     try {
       artistList = await api.listArtists();
@@ -228,7 +326,29 @@
 
   onMount(loadDramaTree);
 
-  onMount(loadArtistList);
+  onMount(async () => {
+    // 读取「设置」中的字段显隐偏好，决定编辑界面是否渲染对应字段
+    try {
+      settings = await api.getSettings();
+    } catch (e) {
+      /* 读取失败则用默认（全部显示） */
+    }
+  });
+
+  onMount(async () => {
+    await loadArtistList();
+    // 编辑场景：档案外的演员姓名进入自由文本胶囊
+    const initial = (record && record.artist_names) || [];
+    freeNames = initial.filter((n) => !chosenArtists.some((a) => a.name === n));
+  });
+
+  onMount(async () => {
+    const fields = ['city', 'address', 'channel', 'company', 'seat', 'friends'];
+    const results = await Promise.all(fields.map((f) => api.getAutocomplete(f).catch(() => [])));
+    const next = {};
+    fields.forEach((f, i) => (next[f] = results[i] || []));
+    ac = next;
+  });
 
   function triggerUpload() {
     fileInput?.click();
@@ -264,6 +384,7 @@
       error = '名称为必填项';
       return;
     }
+    commitArtistInput(); // 输入框里未回车的残留名字也一并收进胶囊
     const payload = {
       name: form.name.trim(),
       channel: form.channel.trim(),
@@ -281,10 +402,10 @@
       pay_price_currency: form.pay_price_currency || 'CNY',
       other_cost: Number(form.other_cost) || 0,
       other_cost_currency: form.other_cost_currency || 'CNY',
-      // 演员以关联实体为准：已选演员的名称 + 文本输入中未匹配为新演员
+      // 演员以关联实体为准：已选演员的名称 + 自由文本胶囊中未匹配档案的名字
       artist_names: [
         ...chosenArtists.map((a) => a.name),
-        ...splitList(form.artist_names).filter(
+        ...freeNames.filter(
           (n) => !chosenArtists.some((a) => a.name === n) && !artistList.some((a) => a.name === n)
         )
       ],
@@ -322,14 +443,15 @@
 </script>
 
 <form class="form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+  <!-- ============ 基本信息 ============ -->
   <div class="card section">
     <h3>基本信息</h3>
     <div class="row">
-      <div class="grow2">
+      <div class="f-lg">
         <label>名称 <span class="req">*</span></label>
         <input class="input" bind:value={form.name} placeholder="演出名称" />
       </div>
-      <div>
+      <div class="f-sm">
         <label>分类</label>
         <input class="input" bind:value={form.categoryName} list="cat-list" placeholder="如：昆剧" />
         <datalist id="cat-list">
@@ -338,44 +460,76 @@
       </div>
     </div>
     <div class="row">
-      <div><label>城市</label><input class="input" bind:value={form.city} placeholder="如：上海" /></div>
-      <div class="grow2"><label>场馆 / 地址</label><input class="input" bind:value={form.address} placeholder="如：上海大剧院" /></div>
-    </div>
-    <div class="row">
-      <div class="grow2">
-        <label>坐标 <span class="hint">地址自动定位，同场馆演出将同步该坐标</span></label>
-        {#if geoStatus === 'ok' && form.lat && form.lng}
-          <div class="geo-line">📍 {form.lat}, {form.lng}</div>
-        {:else if geoStatus === 'loading'}
-          <div class="geo-line muted">定位中…</div>
-        {:else if geoStatus === 'nokey'}
-          <div class="geo-line muted">未配置高德 Key，请在「设置」填写后自动定位</div>
-        {:else if geoStatus === 'notfound'}
-          <div class="geo-line muted">未找到该地址，可手动校正</div>
-        {:else if geoStatus === 'error'}
-          <div class="geo-line muted">定位失败（网络/密钥），可手动校正</div>
-        {:else}
-          <div class="geo-line muted">填写地址后自动定位</div>
-        {/if}
-        <details class="geo-manual" open={geoStatus === 'nokey' || geoStatus === 'notfound' || geoStatus === 'error' || manualOverride}>
-          <summary class="small">手动校正</summary>
-          <div class="money" style="margin-top:6px;">
-            <input class="input" type="number" step="0.000001" bind:value={form.lat} placeholder="纬度 31.230416" oninput={() => { manualOverride = true; geoStatus = 'ok'; }} />
-            <input class="input" type="number" step="0.000001" bind:value={form.lng} placeholder="经度 121.473700" oninput={() => { manualOverride = true; geoStatus = 'ok'; }} />
+      <div class="f-sm">
+        <label>城市</label>
+        <input class="input" bind:value={form.city} list="city-list" placeholder="如：上海" />
+        <datalist id="city-list">
+          {#each ac.city as v}<option value={v} />{/each}
+        </datalist>
+      </div>
+      <div class="f-lg">
+        <label>场馆 / 地址</label>
+        <div class="addr-row">
+          <input class="input" bind:value={form.address} list="addr-list" placeholder="如：上海大剧院" />
+          <button
+            type="button"
+            class="loc-btn"
+            class:active={geoStatus === 'ok' && !!form.lat && !!form.lng}
+            class:open={showCoord}
+            onclick={() => (showCoord = !showCoord)}
+            title={showCoord ? '收起坐标' : '定位坐标（点击展开经纬度）'}
+            aria-label="定位坐标"
+            aria-expanded={showCoord}
+          ><svg class="loc-ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 21c4.5-4.6 7-8.1 7-12a7 7 0 1 0-14 0c0 3.9 2.5 7.4 7 12z" />
+              <circle cx="12" cy="9" r="2.4" fill="currentColor" stroke="none" />
+            </svg></button>
+        </div>
+        <datalist id="addr-list">
+          {#each ac.address as v}<option value={v} />{/each}
+        </datalist>
+        {#if showCoord}
+          <!-- 坐标：点击定位图标后才展开，平时不显示经纬度 -->
+          <div class="sub-field">
+            <div class="sub-head">
+              <span class="sub-title">坐标</span>
+              <span class="hint">地址自动定位，同场馆演出将同步该坐标 · 再次点击定位图标可收起</span>
+            </div>
+            {#if geoStatus === 'ok' && form.lat && form.lng}
+              <div class="geo-line"><svg class="geo-pin" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21c4.5-4.6 7-8.1 7-12a7 7 0 1 0-14 0c0 3.9 2.5 7.4 7 12z" /><circle cx="12" cy="9" r="2.4" fill="currentColor" stroke="none" /></svg> {form.lat}, {form.lng}</div>
+            {:else if geoStatus === 'loading'}
+              <div class="geo-line muted">定位中…</div>
+            {:else if geoStatus === 'nokey'}
+              <div class="geo-line muted">未配置高德 Key，请在「设置」填写后自动定位</div>
+            {:else if geoStatus === 'notfound'}
+              <div class="geo-line muted">未找到该地址，可手动校正</div>
+            {:else if geoStatus === 'error'}
+              <div class="geo-line muted">定位失败（网络/密钥），可手动校正</div>
+            {:else}
+              <div class="geo-line muted">填写地址后自动定位</div>
+            {/if}
+            <details class="geo-manual" open={geoStatus === 'nokey' || geoStatus === 'notfound' || geoStatus === 'error' || manualOverride}>
+              <summary class="small">手动校正</summary>
+              <div class="row" style="margin-top:6px;">
+                <input class="input" type="number" step="0.000001" bind:value={form.lat} placeholder="纬度 31.230416" oninput={() => { manualOverride = true; geoStatus = 'ok'; }} />
+                <input class="input" type="number" step="0.000001" bind:value={form.lng} placeholder="经度 121.473700" oninput={() => { manualOverride = true; geoStatus = 'ok'; }} />
+              </div>
+            </details>
           </div>
-        </details>
+        {/if}
       </div>
     </div>
   </div>
 
+  <!-- ============ 观演信息 ============ -->
   <div class="card section">
-    <h3>时间与状态</h3>
+    <h3>观演信息</h3>
     <div class="row">
-      <div>
+      <div class="f-md">
         <label>演出时间</label>
         <input class="input" type="datetime-local" bind:value={form.date_local} />
       </div>
-      <div>
+      <div class="f-xs">
         <label>状态</label>
         <select class="input" bind:value={form.active_status}>
           <option value={0}>正常</option>
@@ -384,7 +538,7 @@
           <option value={3}>其他</option>
         </select>
       </div>
-      <div>
+      <div class="f-md">
         <label>评分</label>
         <div class="star-row">
           {#each [1, 2, 3, 4, 5] as n}
@@ -394,80 +548,124 @@
         </div>
       </div>
     </div>
+    <div class="row">
+      <div class="f-sm">
+        <label>座位</label>
+        <input class="input" bind:value={form.seat} list="seat-list" placeholder="如：3排15座" />
+        <datalist id="seat-list">
+          {#each ac.seat as v}<option value={v} />{/each}
+        </datalist>
+      </div>
+      {#if settings.show_friends}
+      <div class="f-md">
+        <label>同行</label>
+        <input class="input" bind:value={form.friends} list="friends-list" placeholder="同行人，多个用逗号分隔" />
+        <datalist id="friends-list">
+          {#each ac.friends as v}<option value={v} />{/each}
+        </datalist>
+      </div>
+      {/if}
+    </div>
   </div>
 
+  <!-- ============ 费用与渠道 ============ -->
   <div class="card section">
     <h3>费用与渠道</h3>
     <div class="row">
-      <div class="grow2"><label>购买渠道</label><input class="input" bind:value={form.channel} placeholder="如：大麦" /></div>
-    </div>
-    <div class="row">
-      <div>
+      <div class="f-sm">
+        <label>购买渠道</label>
+        <input class="input" bind:value={form.channel} list="channel-list" placeholder="如：大麦" />
+        <datalist id="channel-list">
+          {#each ac.channel as v}<option value={v} />{/each}
+        </datalist>
+      </div>
+      <div class="f-sm">
         <label>票价</label>
         <div class="money"><input class="input" type="number" step="0.01" min="0" bind:value={form.price} /><input class="input cur" bind:value={form.price_currency} /></div>
       </div>
-      <div>
-        <label>实付</label>
-        <div class="money"><input class="input" type="number" step="0.01" min="0" bind:value={form.pay_price} /><input class="input cur" bind:value={form.pay_price_currency} /></div>
-      </div>
-      <div>
-        <label>其他花费</label>
-        <div class="money"><input class="input" type="number" step="0.01" min="0" bind:value={form.other_cost} /><input class="input cur" bind:value={form.other_cost_currency} /></div>
-      </div>
     </div>
+    {#if settings.show_pay_price}
+      <div class="row">
+        <div class="f-sm">
+          <label>实付</label>
+          <div class="money"><input class="input" type="number" step="0.01" min="0" bind:value={form.pay_price} /><input class="input cur" bind:value={form.pay_price_currency} /></div>
+        </div>
+      </div>
+    {/if}
+    {#if settings.show_other_cost}
+      <div class="row">
+        <div class="f-sm">
+          <label>其他花费</label>
+          <div class="money"><input class="input" type="number" step="0.01" min="0" bind:value={form.other_cost} /><input class="input cur" bind:value={form.other_cost_currency} /></div>
+        </div>
+      </div>
+    {/if}
   </div>
 
+  <!-- ============ 阵容 ============ -->
   <div class="card section">
-    <h3>阵容与同行</h3>
-    <label>演员 <span class="hint">关联已有演员档案，或输入新姓名自动建档案</span></label>
-    <div class="ply">
-      {#if chosenArtists.length === 0}
-        <div class="ply-empty muted tiny">尚未关联演员。从下方选择或新建一个演员档案。</div>
-      {/if}
-      {#each chosenArtists as a (a.id)}
-        <div class="ply-item">
-          <div class="ply-head">
-            <span class="ply-name">{a.name}</span>
-            <button type="button" class="ply-x" onclick={() => removeArtist(a.id)} title="移除该演员">✕</button>
-          </div>
-        </div>
-      {/each}
-    </div>
-    <div class="ply-add">
-      <div class="combo">
+    <h3>阵容</h3>
+    <label>演员 <span class="hint">回车生成胶囊；逗号分隔可一次添加多个；与档案同名自动关联</span></label>
+    <div class="combo">
+      <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
+        {#each chosenArtists as a (a.id)}
+          <span class="capsule linked">
+            {a.name}
+            <button type="button" class="cap-x" onclick={() => removeArtist(a.id)} title="移除该演员" aria-label={`移除 ${a.name}`}>✕</button>
+          </span>
+        {/each}
+        {#each freeNames as n (n)}
+          <span class="capsule free">
+            {n}
+            <button type="button" class="cap-x" onclick={() => removeFreeName(n)} title="移除" aria-label={`移除 ${n}`}>✕</button>
+          </span>
+        {/each}
         <input
-          class="input"
-          placeholder="🔍 搜索并关联已有演员…"
+          placeholder={chosenArtists.length || freeNames.length ? '' : '输入演员姓名，回车确认…'}
           bind:value={artistQuery}
           onfocus={() => (showArtistList = true)}
           onblur={() => setTimeout(() => (showArtistList = false), 120)}
-          onkeydown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              const first = filteredArtists[0];
-              if (first) addArtist(first.id);
-            }
-          }}
+          onkeydown={onArtistKeydown}
+          oninput={onArtistInput}
         />
-        {#if showArtistList}
-          <div class="combo-list">
-            {#each filteredArtists as a (a.id)}
-              <button type="button" class="combo-item" onclick={() => addArtist(a.id)}>{a.name}</button>
-            {:else}
-              <div class="combo-empty">无匹配演员，可改用右侧新建</div>
-            {/each}
-          </div>
-        {/if}
       </div>
-      <details class="ply-new">
-        <summary class="small">＋ 新建演员档案</summary>
-        <div class="ply-new-body">
-          <div class="row">
-            <input class="input" placeholder="演员姓名，如：沈昳丽" bind:value={newArtist.name} onkeydown={(e) => e.key === 'Enter' && createNewArtist()} />
-          </div>
-          <button type="button" class="btn sm" onclick={createNewArtist} disabled={creatingArtist || !newArtist.name.trim()}>{creatingArtist ? '创建中…' : '创建并关联'}</button>
+      {#if showArtistList && (filteredArtists.length || artistQuery.trim())}
+        <div class="combo-list">
+          {#each filteredArtists as a (a.id)}
+            <button type="button" class="combo-item" onclick={() => addArtist(a.id)}>{a.name}</button>
+          {/each}
+          {#if artistQuery.trim() && !artistList.some((a) => a.name === artistQuery.trim())}
+            <button type="button" class="combo-item create" disabled={creatingArtist} onclick={() => createNewArtist(artistQuery)}>
+              {creatingArtist ? '创建中…' : `＋ 新建演员档案「${artistQuery.trim()}」`}
+            </button>
+          {:else if !filteredArtists.length}
+            <div class="combo-empty">无匹配演员</div>
+          {/if}
         </div>
-      </details>
+      {/if}
+    </div>
+    <div class="row">
+      <div class="f-sm">
+        <label>剧团 <span class="hint">回车生成胶囊；逗号分隔可一次添加多个</span></label>
+        <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
+          {#each companyTags as t (t)}
+            <span class="capsule free">
+              {t}
+              <button type="button" class="cap-x" onclick={() => removeCompany(t)} title="移除该团体" aria-label={`移除 ${t}`}>✕</button>
+            </span>
+          {/each}
+          <input
+            placeholder={companyTags.length ? '' : '如：上海昆剧团'}
+            bind:value={companyQuery}
+            list="company-list"
+            onkeydown={onCompanyKeydown}
+            oninput={onCompanyInput}
+          />
+        </div>
+        <datalist id="company-list">
+          {#each ac.company as v}<option value={v} />{/each}
+        </datalist>
+      </div>
     </div>
     <label>剧目</label>
     <div class="ply">
@@ -537,18 +735,15 @@
         </div>
       </details>
     </div>
-    <div class="row">
-      <div><label>同行</label><input class="input" bind:value={form.friends} /></div>
-      <div><label>剧团</label><input class="input" bind:value={form.company} /></div>
-      <div><label>座位</label><input class="input" bind:value={form.seat} placeholder="如：3排15座" /></div>
-    </div>
   </div>
 
+  <!-- ============ 备注 ============ -->
   <div class="card section">
     <h3>备注</h3>
-    <textarea class="input" rows="10" bind:value={form.remark} placeholder="剧评、观感、备忘…"></textarea>
+    <textarea class="input" rows="8" bind:value={form.remark} placeholder="剧评、观感、备忘…"></textarea>
   </div>
 
+  <!-- ============ 封面 ============ -->
   <div class="card section">
     <h3>封面</h3>
     <div class="cover-layout">
@@ -587,10 +782,27 @@
   .section h3 { margin: 0 0 6px; font-size: 15.5px; color: var(--text-2); }
   .req { color: var(--accent); }
   .hint { font-weight: 400; color: var(--text-3); font-size: 12px; }
-  .grow2 { flex: 2 !important; }
+
+  /* 字段宽度档位：短字段不独占整行（需压过全局 .row > * 的 flex:1） */
+  .row > .f-xs { flex: 0 1 130px; min-width: 110px; }
+  .row > .f-sm { flex: 0 1 200px; min-width: 150px; }
+  .row > .f-md { flex: 1 1 240px; min-width: 180px; }
+  .row > .f-lg { flex: 2.4 1 320px; min-width: 220px; }
+
   .money { display: flex; gap: 6px; }
   .money .cur { max-width: 76px; }
-  .geo-line { padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); font-size: 13.5px; }
+
+  /* 坐标：场馆的子字段（缩进 + 左侧竖线表示从属） */
+  .sub-field {
+    margin-top: 10px;
+    padding: 10px 12px 12px;
+    border-left: 2px solid var(--border-strong);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    background: var(--surface-2);
+  }
+  .sub-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .sub-title { font-size: 13px; font-weight: 500; color: var(--text-2); }
+  .geo-line { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); font-size: 13.5px; }
   .geo-manual { margin-top: 8px; }
   .geo-manual summary { cursor: pointer; color: var(--accent); }
 
@@ -607,6 +819,93 @@
   .star:hover { transform: scale(1.2); }
   .star.on { color: var(--gold); }
   .rate-text { margin-left: 8px; }
+
+  /* 场馆地址行：输入框 + 内联定位图标 */
+  .addr-row { display: flex; align-items: stretch; gap: 8px; }
+  .addr-row .input { flex: 1; min-width: 0; }
+  .loc-btn {
+    flex: 0 0 auto;
+    width: 40px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    cursor: pointer;
+    color: var(--text-2);
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--t-fast) var(--ease);
+  }
+  .loc-btn:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .loc-btn.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .loc-btn.open { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .geo-pin { vertical-align: -2px; }
+
+  /* 演员胶囊 tag 输入 */
+  .tagbox {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    min-height: 40px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    cursor: text;
+    transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease),
+      background var(--t-fast) var(--ease);
+  }
+  .tagbox:hover { border-color: var(--border-strong); }
+  .tagbox:focus-within {
+    border-color: var(--accent);
+    background: var(--surface);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .tagbox input {
+    flex: 1;
+    min-width: 140px;
+    height: 28px;
+    border: none;
+    background: none;
+    outline: none;
+    padding: 0 4px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--text);
+  }
+  .tagbox input::placeholder { color: var(--text-3); }
+  .capsule {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 6px 3px 11px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    animation: fadeIn var(--t-fast) var(--ease);
+  }
+  .capsule.linked { background: var(--accent-soft); color: var(--accent); }
+  .capsule.free { background: var(--surface-3); color: var(--text-2); border: 1px solid var(--border); }
+  .cap-x {
+    border: none;
+    background: none;
+    color: inherit;
+    opacity: 0.55;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .cap-x:hover { opacity: 1; background: rgba(0, 0, 0, 0.12); }
 
   .cover-layout { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
   .cover-main { display: flex; flex-direction: column; gap: 14px; flex: 1; min-width: 220px; }
@@ -646,7 +945,7 @@
   .ply-add { display: flex; gap: 10px; align-items: stretch; margin-top: 4px; flex-wrap: wrap; }
   .ply-add .input { flex: 1; }
 
-  /* 可搜索的「关联已有剧目」下拉 */
+  /* 可搜索下拉（演员 / 剧目共用） */
   .combo { position: relative; flex: 2; min-width: 200px; }
   .combo-list {
     position: absolute;
@@ -678,6 +977,7 @@
     text-overflow: ellipsis;
   }
   .combo-item:hover { background: var(--accent-soft); color: var(--accent); }
+  .combo-item.create { color: var(--accent); font-weight: 500; }
   .combo-empty { padding: 10px 12px; color: var(--text-3); font-size: 13px; }
   .ply-new { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; flex: 1; }
   .ply-new summary { cursor: pointer; color: var(--accent); }
