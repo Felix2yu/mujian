@@ -17,7 +17,7 @@
       active_status: 0,
       date_local: '', coverFile: '', coverThumb: '',
       lat: '', lng: '',
-      drama_ids: [], zhezi_ids: []
+      drama_ids: [], zhezi_ids: [], artist_ids: []
     };
   }
 
@@ -41,6 +41,7 @@
     f.other_cost = r.other_cost || 0;
     f.other_cost_currency = r.other_cost_currency || 'CNY';
     f.artist_names = (r.artist_names || []).join(', ');
+    f.artist_ids = (r.artist_ids || []).slice();
     f.play = (r.play || []).join(', ');
     f.guest = (r.guest || []).join(', ');
     f.drama_ids = (r.drama_ids || []).slice();
@@ -176,7 +177,58 @@
     } catch (e) { /* 非关键，忽略 */ }
   }
 
+  // 演员 picker state（仿 drama picker）
+  let artistList = $state([]);
+  let artistQuery = $state('');
+  let showArtistList = $state(false);
+  let newArtist = $state({ name: '' });
+
+  const chosenArtists = $derived(
+    artistList.filter((a) => form.artist_ids.includes(a.id))
+  );
+  const addableArtists = $derived(
+    artistList.filter((a) => !form.artist_ids.includes(a.id))
+  );
+  const filteredArtists = $derived(
+    artistQuery.trim()
+      ? addableArtists.filter((a) => (a.name || '').toLowerCase().includes(artistQuery.trim().toLowerCase()))
+      : addableArtists
+  );
+
+  function addArtist(aid) {
+    if (!aid || form.artist_ids.includes(aid)) return;
+    form.artist_ids = [...form.artist_ids, aid];
+    artistQuery = '';
+  }
+  function removeArtist(aid) {
+    form.artist_ids = form.artist_ids.filter((x) => x !== aid);
+  }
+  async function createNewArtist() {
+    const name = newArtist.name.trim();
+    if (!name || creatingArtist) return;
+    creatingArtist = true;
+    error = '';
+    try {
+      const a = await api.createArtist({ name });
+      await loadArtistList();
+      form.artist_ids = [...form.artist_ids, a.id];
+      newArtist = { name: '' };
+    } catch (e) {
+      error = e.message;
+    } finally {
+      creatingArtist = false;
+    }
+  }
+  let creatingArtist = $state(false);
+  async function loadArtistList() {
+    try {
+      artistList = await api.listArtists();
+    } catch (e) { /* 非关键，忽略 */ }
+  }
+
   onMount(loadDramaTree);
+
+  onMount(loadArtistList);
 
   function triggerUpload() {
     fileInput?.click();
@@ -229,7 +281,13 @@
       pay_price_currency: form.pay_price_currency || 'CNY',
       other_cost: Number(form.other_cost) || 0,
       other_cost_currency: form.other_cost_currency || 'CNY',
-      artist_names: splitList(form.artist_names),
+      // 演员以关联实体为准：已选演员的名称 + 文本输入中未匹配为新演员
+      artist_names: [
+        ...chosenArtists.map((a) => a.name),
+        ...splitList(form.artist_names).filter(
+          (n) => !chosenArtists.some((a) => a.name === n) && !artistList.some((a) => a.name === n)
+        )
+      ],
       // 剧目字段由所关联的剧目档案推导，保证与档案一致
       play: chosenDramas.map((d) => d.name),
       drama_ids: form.drama_ids,
@@ -361,8 +419,56 @@
 
   <div class="card section">
     <h3>阵容与同行</h3>
-    <label>演员 <span class="hint">逗号分隔</span></label>
-    <input class="input" bind:value={form.artist_names} placeholder="沈昳丽, 张伟伟, 胡刚" />
+    <label>演员 <span class="hint">关联已有演员档案，或输入新姓名自动建档案</span></label>
+    <div class="ply">
+      {#if chosenArtists.length === 0}
+        <div class="ply-empty muted tiny">尚未关联演员。从下方选择或新建一个演员档案。</div>
+      {/if}
+      {#each chosenArtists as a (a.id)}
+        <div class="ply-item">
+          <div class="ply-head">
+            <span class="ply-name">{a.name}</span>
+            <button type="button" class="ply-x" onclick={() => removeArtist(a.id)} title="移除该演员">✕</button>
+          </div>
+        </div>
+      {/each}
+    </div>
+    <div class="ply-add">
+      <div class="combo">
+        <input
+          class="input"
+          placeholder="🔍 搜索并关联已有演员…"
+          bind:value={artistQuery}
+          onfocus={() => (showArtistList = true)}
+          onblur={() => setTimeout(() => (showArtistList = false), 120)}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              const first = filteredArtists[0];
+              if (first) addArtist(first.id);
+            }
+          }}
+        />
+        {#if showArtistList}
+          <div class="combo-list">
+            {#each filteredArtists as a (a.id)}
+              <button type="button" class="combo-item" onclick={() => addArtist(a.id)}>{a.name}</button>
+            {:else}
+              <div class="combo-empty">无匹配演员，可改用右侧新建</div>
+            {/each}
+          </div>
+        {/if}
+      </div>
+      <details class="ply-new">
+        <summary class="small">＋ 新建演员档案</summary>
+        <div class="ply-new-body">
+          <div class="row">
+            <input class="input" placeholder="演员姓名，如：沈昳丽" bind:value={newArtist.name} onkeydown={(e) => e.key === 'Enter' && createNewArtist()} />
+          </div>
+          <button type="button" class="btn sm" onclick={createNewArtist} disabled={creatingArtist || !newArtist.name.trim()}>{creatingArtist ? '创建中…' : '创建并关联'}</button>
+        </div>
+      </details>
+    </div>
     <label>剧目</label>
     <div class="ply">
       {#if chosenDramas.length === 0}

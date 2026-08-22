@@ -7,6 +7,7 @@
   const nav = [
     { href: '/', label: '记录' },
     { href: '/dramas', label: '剧目' },
+    { href: '/artists', label: '演员' },
     { href: '/map', label: '地图' },
     { href: '/analytics', label: '分析' },
     { href: '/covers', label: '封面' },

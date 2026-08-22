@@ -325,7 +325,9 @@ func TestCategories(t *testing.T) {
 	if err != nil || len(cats) != 1 {
 		t.Fatalf("ListCategories: %v %v", cats, err)
 	}
-	if cats[0].Name != "昆曲" || len(cats[0].ActiveIDs) != 1 {
+	// active_ids is now a derived field (computed from records), so it is no
+	// longer persisted; ListCategories returns an empty slice for it.
+	if cats[0].Name != "昆曲" || len(cats[0].ActiveIDs) != 0 {
 		t.Errorf("category wrong: %+v", cats[0])
 	}
 	// Upsert with fixed id updates.
@@ -979,6 +981,15 @@ func (db *DB) countZheziLinks(t *testing.T, recordID string) int {
 	return n
 }
 
+func (db *DB) countArtistLinks(t *testing.T, recordID string) int {
+	t.Helper()
+	var n int
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM record_artists WHERE record_id = ?", recordID).Scan(&n); err != nil {
+		t.Fatalf("count artist links: %v", err)
+	}
+	return n
+}
+
 func TestRecordZhezisRelation(t *testing.T) {
 	db := newTestDB(t)
 	z, err := db.CreateZhezi(models.Zhezi{Name: "游园", DramaID: "d-1"})
@@ -1046,5 +1057,66 @@ func TestMigrateZheziRelationsIdempotent(t *testing.T) {
 	}
 	if n := db.countZheziLinks(t, "old1"); n != 1 {
 		t.Fatalf("migration should be idempotent, got %d", n)
+	}
+}
+
+func TestArtists(t *testing.T) {
+	db := newTestDB(t)
+
+	// Save a new artist; id is assigned internally.
+	saved, err := db.SaveArtist(models.Artist{Name: "张军", Aliases: []string{"张三"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.ID == "" {
+		t.Fatal("SaveArtist should assign an id")
+	}
+	if got, _ := db.GetArtist(saved.ID); got.Name != "张军" || len(got.Aliases) != 1 {
+		t.Errorf("GetArtist wrong: %+v", got)
+	}
+	// Update existing (upsert by id).
+	if _, err := db.SaveArtist(models.Artist{ID: saved.ID, Name: "张军(改)", Bio: "昆曲演员"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := db.GetArtist(saved.ID); got.Name != "张军(改)" || got.Bio != "昆曲演员" {
+		t.Errorf("artist update wrong: %+v", got)
+	}
+
+	// Linking a record to the artist via UpsertRecord, then reverse lookup.
+	r := sampleRecord("rec-artist", time.Date(2026, 8, 22, 19, 30, 0, 0, time.UTC).Unix())
+	r.ArtistNames = []string{"张军(改)"}
+	if err := db.UpsertRecord(r); err != nil {
+		t.Fatal(err)
+	}
+	detail, err := db.GetArtistDetail(saved.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(detail.Records) != 1 || detail.Records[0].ID != r.ID {
+		t.Errorf("artist reverse lookup wrong: %+v", detail.Records)
+	}
+	if saved2, _ := db.GetArtist(saved.ID); saved2.RecordCount != 1 {
+		t.Errorf("record_count should be 1, got %d", saved2.RecordCount)
+	}
+
+	// Second artist + reorder.
+	other, _ := db.SaveArtist(models.Artist{Name: "单雯"})
+	if err := db.ReorderArtists([]string{other.ID, saved.ID}); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := db.ListArtists()
+	if len(list) != 2 || list[0].ID != other.ID {
+		t.Errorf("reorder wrong: %+v", list)
+	}
+
+	// Delete cascades the relation row.
+	if err := db.DeleteArtist(saved.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.GetArtist(saved.ID); err == nil {
+		t.Error("deleted artist should be gone")
+	}
+	if n := db.countArtistLinks(t, r.ID); n != 0 {
+		t.Errorf("delete should cascade record_artists, got %d", n)
 	}
 }

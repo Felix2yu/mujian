@@ -124,6 +124,13 @@ export const api = {
   deleteZhezi: (id) => request(`/api/zhezis/${id}`, { method: 'DELETE' }),
   reorderZhezis: (dramaId, ids) => request(`/api/dramas/${dramaId}/zhezis/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
 
+  listArtists: () => request('/api/artists'),
+  getArtist: (id) => request(`/api/artists/${id}`),
+  createArtist: (data) => request('/api/artists', { method: 'POST', body: JSON.stringify(data) }),
+  updateArtist: (id, data) => request(`/api/artists/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteArtist: (id) => request(`/api/artists/${id}`, { method: 'DELETE' }),
+  reorderArtists: (ids) => request('/api/artists/reorder', { method: 'POST', body: JSON.stringify({ ids }) }),
+
   getStats: () => request('/api/stats'),
   getDashboard: () => request('/api/dashboard'),
   getCalendar: (year, month) => request(`/api/calendar?year=${year}&month=${month}`),

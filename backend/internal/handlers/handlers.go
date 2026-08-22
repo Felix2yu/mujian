@@ -63,6 +63,13 @@ func (h *Handler) Routes() chi.Router {
 	r.Put("/zhezis/{id}", h.updateZhezi)
 	r.Delete("/zhezis/{id}", h.deleteZhezi)
 
+	r.Get("/artists", h.listArtists)
+	r.Post("/artists", h.createArtist)
+	r.Get("/artists/{id}", h.getArtistDetail)
+	r.Put("/artists/{id}", h.updateArtist)
+	r.Delete("/artists/{id}", h.deleteArtist)
+	r.Post("/artists/reorder", h.reorderArtists)
+
 	r.Get("/stats", h.getStats)
 	r.Get("/dashboard", h.getDashboard)
 	r.Get("/calendar", h.getCalendar)
@@ -564,6 +571,122 @@ func (h *Handler) reorderDramas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.db.ReorderDramas(req.IDs); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "reordered"})
+}
+
+// ---------- Artists (演员) ----------
+
+func (h *Handler) listArtists(w http.ResponseWriter, r *http.Request) {
+	artists, err := h.db.ListArtists()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, artists)
+}
+
+func (h *Handler) createArtist(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name       string   `json:"name"`
+		Aliases    []string `json:"aliases"`
+		Remark     string   `json:"remark"`
+		Cover      string   `json:"cover"`
+		CoverFile  string   `json:"coverFile"`
+		CoverThumb string   `json:"coverThumb"`
+		Bio        string   `json:"bio"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		jsonErr(w, 400, "name is required")
+		return
+	}
+	a, err := h.db.SaveArtist(models.Artist{
+		Name:       strings.TrimSpace(req.Name),
+		Aliases:    req.Aliases,
+		Remark:     req.Remark,
+		Cover:      req.Cover,
+		CoverFile:  req.CoverFile,
+		CoverThumb: req.CoverThumb,
+		Bio:        req.Bio,
+	})
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 201, a)
+}
+
+func (h *Handler) getArtistDetail(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	a, err := h.db.GetArtistDetail(id)
+	if err != nil {
+		jsonErr(w, 404, "artist not found")
+		return
+	}
+	jsonResp(w, 200, a)
+}
+
+func (h *Handler) updateArtist(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req struct {
+		Name       string   `json:"name"`
+		Aliases    []string `json:"aliases"`
+		Remark     string   `json:"remark"`
+		Cover      string   `json:"cover"`
+		CoverFile  string   `json:"coverFile"`
+		CoverThumb string   `json:"coverThumb"`
+		Bio        string   `json:"bio"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		jsonErr(w, 400, "name is required")
+		return
+	}
+	a, err := h.db.SaveArtist(models.Artist{
+		ID:         id,
+		Name:       strings.TrimSpace(req.Name),
+		Aliases:    req.Aliases,
+		Remark:     req.Remark,
+		Cover:      req.Cover,
+		CoverFile:  req.CoverFile,
+		CoverThumb: req.CoverThumb,
+		Bio:        req.Bio,
+	})
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, a)
+}
+
+func (h *Handler) deleteArtist(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.db.DeleteArtist(id); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "deleted"})
+}
+
+// POST /artists/reorder {"ids":[...]} — manual ordering of artists (first = top).
+func (h *Handler) reorderArtists(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if err := h.db.ReorderArtists(req.IDs); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}

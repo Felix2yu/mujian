@@ -211,6 +211,32 @@ func (db *DB) migrate() error {
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_record_zhezis_zhezi ON record_zhezis(zhezi_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_record_zhezis_record ON record_zhezis(record_id)`,
+	// Actor (演员) is a first-class entity, mirroring dramas. It owns a cover,
+	// bio and aliases so it can power a dedicated actor home page.
+	`CREATE TABLE IF NOT EXISTS artists (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		aliases TEXT NOT NULL DEFAULT '[]',
+		remark TEXT NOT NULL DEFAULT '',
+		cover TEXT NOT NULL DEFAULT '',
+		cover_file TEXT NOT NULL DEFAULT '',
+		cover_thumb TEXT NOT NULL DEFAULT '',
+		bio TEXT NOT NULL DEFAULT '',
+		sort_order INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_artists_name ON artists(name)`,
+	// Relation table: record <-> artist. Replaces the JSON-in-TEXT artist_names
+	// column for cross-table lookups (actor home page reverse query).
+	// records.artist_names is kept only as a legacy fallback for old backups.
+	`CREATE TABLE IF NOT EXISTS record_artists (
+		record_id TEXT NOT NULL,
+		artist_id TEXT NOT NULL,
+		sort_order INTEGER NOT NULL DEFAULT 0,
+		PRIMARY KEY (record_id, artist_id)
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_record_artists_artist ON record_artists(artist_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_record_artists_record ON record_artists(record_id)`,
 }
 
 	for _, q := range queries {
@@ -243,6 +269,18 @@ func (db *DB) migrate() error {
 	}
 	// Same expansion for legacy records.zhezi_ids JSON into record_zhezis.
 	if err := db.migrateZheziRelations(); err != nil {
+		return err
+	}
+
+	// Expand legacy records.artist_names (names, not ids) into the artists
+	// entity table + record_artists relation table.
+	if err := db.migrateArtistRelations(); err != nil {
+		return err
+	}
+
+	// active_ids on categories is now derived from records; drop the redundant
+	// column. Existing data is reconstructable from records.active_status.
+	if err := db.dropColumnIfExists("categories", "active_ids"); err != nil {
 		return err
 	}
 
@@ -368,6 +406,95 @@ func (db *DB) migrateZheziRelations() error {
 	return nil
 }
 
+// resolveArtistByName finds an existing artist by exact name (or alias), or
+// creates a new one. Used by the legacy artist_names migration and by the
+// upsert path so free-typed actor names become first-class entities.
+func (db *DB) resolveArtistByName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", fmt.Errorf("empty artist name")
+	}
+	// Exact name match first.
+	var id string
+	if err := db.conn.QueryRow("SELECT id FROM artists WHERE name = ?", name).Scan(&id); err == nil {
+		return id, nil
+	}
+	// Alias match.
+	rows, err := db.conn.Query("SELECT id, aliases FROM artists")
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var aid, aliases string
+		if err := rows.Scan(&aid, &aliases); err != nil {
+			continue
+		}
+		for _, a := range unmarshalStrings(aliases) {
+			if a == name {
+				return aid, nil
+			}
+		}
+	}
+	// Not found: create.
+	id = newID()
+	if _, err := db.conn.Exec(
+		"INSERT INTO artists (id, name, aliases, sort_order) VALUES (?, ?, '[]', (SELECT COALESCE(MAX(sort_order),0)+1 FROM artists))",
+		id, name,
+	); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+// migrateArtistRelations expands the legacy records.artist_names TEXT column
+// (which stores actor *names*) into the artists entity table + record_artists
+// relation. Idempotent: existing artists are matched by name/alias and already
+// linked edges are skipped.
+func (db *DB) migrateArtistRelations() error {
+	rows, err := db.conn.Query("SELECT id, artist_names FROM records WHERE artist_names IS NOT NULL AND artist_names != '' AND artist_names != '[]'")
+	if err != nil {
+		return fmt.Errorf("migrate artist relations: %w", err)
+	}
+	type rec struct {
+		id   string
+		json string
+	}
+	var recs []rec
+	for rows.Next() {
+		var r rec
+		if err := rows.Scan(&r.id, &r.json); err != nil {
+			rows.Close()
+			return err
+		}
+		recs = append(recs, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, r := range recs {
+		names := unmarshalStrings(r.json)
+		if len(names) == 0 {
+			continue
+		}
+		for i, name := range names {
+			aid, err := db.resolveArtistByName(name)
+			if err != nil {
+				return err
+			}
+			if _, err := db.conn.Exec(
+				"INSERT OR IGNORE INTO record_artists (record_id, artist_id, sort_order) VALUES (?, ?, ?)",
+				r.id, aid, i,
+			); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // addColumn adds a column to a table if it does not already exist. SQLite 3
 // versions bundled with modernc.org/sqlite support ADD COLUMN; we guard on
 // pragma_table_info to make migration idempotent.
@@ -381,6 +508,22 @@ func (db *DB) addColumn(table, col, ddl string) error {
 	}
 	if _, err := db.conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", table, col+" "+ddl)); err != nil {
 		return fmt.Errorf("add column %s.%s: %w", table, col, err)
+	}
+	return nil
+}
+
+// dropColumnIfExists removes a column if present. SQLite 3.35+ (modernc) supports
+// DROP COLUMN; we guard on pragma_table_info so re-running is a no-op.
+func (db *DB) dropColumnIfExists(table, col string) error {
+	var cnt int
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?", table, col).Scan(&cnt); err != nil {
+		return fmt.Errorf("pragma %s.%s: %w", table, col, err)
+	}
+	if cnt == 0 {
+		return nil
+	}
+	if _, err := db.conn.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", table, col)); err != nil {
+		return fmt.Errorf("drop column %s.%s: %w", table, col, err)
 	}
 	return nil
 }
@@ -420,23 +563,30 @@ func unmarshalCoordinate(s string) *models.Coordinate {
 // ---------- Record queries ----------
 
 // recordColumns is the set of columns selected when reading records. drama_ids
-// is intentionally NOT included: drama links live in the record_dramas relation
-// table and are backfilled into models.Record.DramaIDs via backfillDramaIDs
-// after the query. (recordUpsertSQL still writes the legacy drama_ids column for
-// backward-compatible backups; the relation table is the source of truth.)
-const recordColumns = `id, name, channel, city, address, coordinate, cover, cover_file,
-	cover_thumb, custom_category_id, category_name, artist_names, guest, play, zhezi_ids, tag_ids,
-	date, date_text, rating, seat, friends, company, remark, active_status,
-	price, price_currency, pay_price, pay_price_currency, other_cost, other_cost_currency`
+// and artist_names are intentionally NOT included: those links live in relation
+// tables (record_dramas / record_artists) and are backfilled into
+// models.Record.DramaIDs / ArtistIDs after the query. (recordUpsertSQL still
+// writes the legacy drama_ids / artist_names columns for backward-compatible
+// backups; the relation tables are the source of truth.)
+// Every column is qualified with the `records` table alias so that queries
+// which JOIN record_artists / artists / record_dramas / record_zhezis do not
+// trip SQLite's "ambiguous column name" error on `id`.
+const recordColumns = `records.id, records.name, records.channel, records.city, records.address,
+	records.coordinate, records.cover, records.cover_file, records.cover_thumb,
+	records.custom_category_id, records.category_name, records.guest, records.play,
+	records.zhezi_ids, records.tag_ids, records.date, records.date_text, records.rating,
+	records.seat, records.friends, records.company, records.remark, records.active_status,
+	records.price, records.price_currency, records.pay_price, records.pay_price_currency,
+	records.other_cost, records.other_cost_currency`
 
 func scanRecord(rows *sql.Rows) (*models.Record, error) {
 	var r models.Record
 	var (
-		coordinate, artistNames, guest, play, zheziIDs, tagIDs string
+		coordinate, guest, play, zheziIDs, tagIDs string
 	)
 	err := rows.Scan(
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
-		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &artistNames, &guest, &play, &zheziIDs, &tagIDs,
+		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &guest, &play, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
 		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency,
 	)
@@ -444,7 +594,6 @@ func scanRecord(rows *sql.Rows) (*models.Record, error) {
 		return nil, err
 	}
 	r.Coordinate = unmarshalCoordinate(coordinate)
-	r.ArtistNames = unmarshalStrings(artistNames)
 	r.Guest = unmarshalStrings(guest)
 	r.Play = unmarshalStrings(play)
 	r.ZheziIDs = unmarshalStrings(zheziIDs)
@@ -462,6 +611,7 @@ type RecordFilter struct {
 	City     string
 	DramaID  string // a record whose drama_ids contains this id
 	ZheziID  string // a record whose zhezi_ids contains this id
+	ArtistID string // a record whose artist_ids contains this id
 }
 
 func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
@@ -471,7 +621,10 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 
 	if f.Query != "" {
 		like := "%" + f.Query + "%"
-		where = append(where, `(name LIKE ? OR city LIKE ? OR address LIKE ? OR company LIKE ? OR channel LIKE ? OR remark LIKE ? OR friends LIKE ? OR category_name LIKE ? OR artist_names LIKE ? OR play LIKE ?)`)
+		// actor names now live in the artists entity table; search them via a
+		// JOIN so we don't need instr() over a JSON text column.
+		query += " LEFT JOIN record_artists ra_q ON ra_q.record_id = records.id LEFT JOIN artists a_q ON a_q.id = ra_q.artist_id"
+		where = append(where, `(records.name LIKE ? OR records.city LIKE ? OR records.address LIKE ? OR records.company LIKE ? OR records.channel LIKE ? OR records.remark LIKE ? OR records.friends LIKE ? OR records.category_name LIKE ? OR a_q.name LIKE ? OR records.play LIKE ?)`)
 		for range 10 {
 			args = append(args, like)
 		}
@@ -497,6 +650,13 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 		query += " JOIN record_zhezis rz ON rz.record_id = records.id"
 		where = append(where, "rz.zhezi_id = ?")
 		args = append(args, f.ZheziID)
+	}
+	if f.ArtistID != "" {
+		// Use the relation table (indexed) instead of instr() over the JSON
+		// text column.
+		query += " JOIN record_artists ra ON ra.record_id = records.id"
+		where = append(where, "ra.artist_id = ?")
+		args = append(args, f.ArtistID)
 	}
 	if f.Year > 0 && f.Month > 0 {
 		// filter by calendar month of the unix `date`
@@ -543,6 +703,9 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 	}
 	if err := db.backfillZheziIDs(out); err != nil {
 		slog.Warn("backfill zhezi ids", "err", err)
+	}
+	if err := db.backfillArtistIDs(out); err != nil {
+		slog.Warn("backfill artist ids", "err", err)
 	}
 	return out, nil
 }
@@ -598,17 +761,20 @@ func (db *DB) GetRecord(id string) (*models.Record, error) {
 	if err := db.backfillZheziIDs(rs); err != nil {
 		slog.Warn("backfill zhezi ids", "err", err)
 	}
+	if err := db.backfillArtistIDs(rs); err != nil {
+		slog.Warn("backfill artist ids", "err", err)
+	}
 	return &rs[0], nil
 }
 
 func scanRecordRow(row *sql.Row) (*models.Record, error) {
 	var r models.Record
 	var (
-		coordinate, artistNames, guest, play, zheziIDs, tagIDs string
+		coordinate, guest, play, zheziIDs, tagIDs string
 	)
 	err := row.Scan(
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
-		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &artistNames, &guest, &play, &zheziIDs, &tagIDs,
+		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &guest, &play, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
 		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency,
 	)
@@ -616,7 +782,6 @@ func scanRecordRow(row *sql.Row) (*models.Record, error) {
 		return nil, err
 	}
 	r.Coordinate = unmarshalCoordinate(coordinate)
-	r.ArtistNames = unmarshalStrings(artistNames)
 	r.Guest = unmarshalStrings(guest)
 	r.Play = unmarshalStrings(play)
 	r.ZheziIDs = unmarshalStrings(zheziIDs)
@@ -679,11 +844,14 @@ func (db *DB) UpsertRecord(r models.Record) error {
 	); err != nil {
 		return err
 	}
-	// Keep the drama/zhezi relation tables in sync with the upserted record.
+	// Keep the drama/zhezi/artist relation tables in sync with the upserted record.
 	if err := db.setRecordDramas(db.conn, r.ID, r.DramaIDs); err != nil {
 		return err
 	}
-	return db.setRecordZhezis(db.conn, r.ID, r.ZheziIDs)
+	if err := db.setRecordZhezis(db.conn, r.ID, r.ZheziIDs); err != nil {
+		return err
+	}
+	return db.setRecordArtists(db.conn, r.ID, r.ArtistNames)
 }
 
 // UpsertRecordTx is like UpsertRecord but runs inside the supplied transaction.
@@ -704,11 +872,14 @@ func (db *DB) UpsertRecordTx(tx *sql.Tx, r models.Record) error {
 	); err != nil {
 		return err
 	}
-	// Keep the drama/zhezi relation tables in sync within the same transaction.
+	// Keep the drama/zhezi/artist relation tables in sync within the same transaction.
 	if err := db.setRecordDramas(tx, r.ID, r.DramaIDs); err != nil {
 		return err
 	}
-	return db.setRecordZhezis(tx, r.ID, r.ZheziIDs)
+	if err := db.setRecordZhezis(tx, r.ID, r.ZheziIDs); err != nil {
+		return err
+	}
+	return db.setRecordArtists(tx, r.ID, r.ArtistNames)
 }
 
 // BulkUpsertRecords inserts/updates many records inside a single transaction.
@@ -796,6 +967,35 @@ func (db *DB) setRecordZhezis(exec sqlExecutor, recordID string, ids []string) e
 		if _, err := exec.Exec(
 			"INSERT OR IGNORE INTO record_zhezis (record_id, zhezi_id, sort_order) VALUES (?, ?, ?)",
 			recordID, id, i,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// setRecordArtists mirrors setRecordDramas but works on actor *names* rather
+// than ids: each name is resolved to an artists entity (matched by name/alias
+// or created on demand) and linked via the record_artists relation table.
+// resolveArtistByName uses the pool connection; within a transaction the caller
+// passes the tx only for the actual link writes, so this is safe under the
+// default (non-pinned) connection pool.
+func (db *DB) setRecordArtists(exec sqlExecutor, recordID string, names []string) error {
+	if _, err := exec.Exec("DELETE FROM record_artists WHERE record_id = ?", recordID); err != nil {
+		return err
+	}
+	for i, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		aid, err := db.resolveArtistByName(name)
+		if err != nil {
+			return err
+		}
+		if _, err := exec.Exec(
+			"INSERT OR IGNORE INTO record_artists (record_id, artist_id, sort_order) VALUES (?, ?, ?)",
+			recordID, aid, i,
 		); err != nil {
 			return err
 		}
@@ -891,6 +1091,64 @@ func (db *DB) backfillZheziIDs(records []models.Record) error {
 			records[i].ZheziIDs = links
 		} else {
 			records[i].ZheziIDs = []string{}
+		}
+	}
+	return nil
+}
+
+// backfillArtistIDs loads actor ids+names for the given records from the
+// record_artists relation table in a single batched query and fills both
+// models.Record.ArtistIDs and models.Record.ArtistNames (names resolved by id,
+// preserving sort order).
+func (db *DB) backfillArtistIDs(records []models.Record) error {
+	if len(records) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(records))
+	for _, r := range records {
+		if r.ID != "" {
+			ids = append(ids, r.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	ph := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		ph[i] = "?"
+		args[i] = id
+	}
+	rows, err := db.conn.Query(
+		"SELECT ra.record_id, ra.artist_id, a.name FROM record_artists ra JOIN artists a ON a.id = ra.artist_id WHERE ra.record_id IN ("+strings.Join(ph, ",")+") ORDER BY ra.record_id, ra.sort_order",
+		args...,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	type link struct{ id, name string }
+	byRecord := map[string][]link{}
+	for rows.Next() {
+		var recordID, artistID, name string
+		if err := rows.Scan(&recordID, &artistID, &name); err != nil {
+			continue
+		}
+		byRecord[recordID] = append(byRecord[recordID], link{artistID, name})
+	}
+	for i := range records {
+		if links, ok := byRecord[records[i].ID]; ok {
+			idsOut := make([]string, len(links))
+			namesOut := make([]string, len(links))
+			for j, l := range links {
+				idsOut[j] = l.id
+				namesOut[j] = l.name
+			}
+			records[i].ArtistIDs = idsOut
+			records[i].ArtistNames = namesOut
+		} else {
+			records[i].ArtistIDs = []string{}
+			records[i].ArtistNames = []string{}
 		}
 	}
 	return nil
@@ -1275,13 +1533,21 @@ func (db *DB) BatchDeleteRecords(ids []string) (int64, error) {
 	if _, err := db.conn.Exec("DELETE FROM record_zhezis WHERE record_id IN "+inClause, args...); err != nil {
 		slog.Warn("delete record zhezi links", "err", err)
 	}
+	if _, err := db.conn.Exec("DELETE FROM record_artists WHERE record_id IN "+inClause, args...); err != nil {
+		slog.Warn("delete record artist links", "err", err)
+	}
 	return res.RowsAffected()
 }
 
 // ---------- Categories ----------
 
+// ListCategories returns all categories ordered by manual sort order then name.
+// active_ids is no longer stored: it was a redundant copy of
+// "records WHERE category_name = ? AND active_status = <watching>" and is now
+// derived on demand (see GetCategory). We keep models.Category.ActiveIDs as an
+// empty slice for backward-compatible JSON.
 func (db *DB) ListCategories() ([]models.Category, error) {
-	rows, err := db.conn.Query(`SELECT id, name, active_ids, record_count, sort_order FROM categories ORDER BY sort_order ASC, name`)
+	rows, err := db.conn.Query(`SELECT id, name, record_count, sort_order FROM categories ORDER BY sort_order ASC, name`)
 	if err != nil {
 		return nil, err
 	}
@@ -1289,11 +1555,10 @@ func (db *DB) ListCategories() ([]models.Category, error) {
 	var out []models.Category
 	for rows.Next() {
 		var c models.Category
-		var activeIDs string
-		if err := rows.Scan(&c.ID, &c.Name, &activeIDs, &c.RecordCount, &c.SortOrder); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.RecordCount, &c.SortOrder); err != nil {
 			continue
 		}
-		c.ActiveIDs = unmarshalStrings(activeIDs)
+		c.ActiveIDs = []string{}
 		out = append(out, c)
 	}
 	if out == nil {
@@ -1303,6 +1568,8 @@ func (db *DB) ListCategories() ([]models.Category, error) {
 }
 
 // upsertCategoryExec inserts/updates a category against the given executor.
+// active_ids is no longer persisted (derived from records); we ignore the
+// incoming ActiveIDs field.
 func upsertCategoryExec(exec sqlExecutor, c *models.Category) error {
 	if c.ID == "" {
 		c.ID = newID()
@@ -1310,9 +1577,9 @@ func upsertCategoryExec(exec sqlExecutor, c *models.Category) error {
 		exec.QueryRow("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM categories").Scan(&c.SortOrder)
 	}
 	_, err := exec.Exec(`
-		INSERT INTO categories (id, name, active_ids, record_count, sort_order) VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET name=excluded.name, active_ids=excluded.active_ids, record_count=excluded.record_count
-	`, c.ID, c.Name, marshalJSON(c.ActiveIDs), c.RecordCount, c.SortOrder)
+		INSERT INTO categories (id, name, record_count, sort_order) VALUES (?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET name=excluded.name, record_count=excluded.record_count
+	`, c.ID, c.Name, c.RecordCount, c.SortOrder)
 	return err
 }
 
@@ -1483,6 +1750,137 @@ func (db *DB) DeleteDrama(id string) error {
 		return err
 	}
 	if _, err := tx.Exec("DELETE FROM dramas WHERE id = ?", id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// ---------- Artists (演员) ----------
+
+// ListArtists returns all actors ordered by manual sort order then name.
+func (db *DB) ListArtists() ([]models.Artist, error) {
+	rows, err := db.conn.Query(`
+		SELECT a.id, a.name, a.aliases, a.remark, a.cover, a.cover_file, a.cover_thumb, a.bio, a.sort_order,
+			(SELECT COUNT(*) FROM record_artists ra WHERE ra.artist_id = a.id) AS record_count
+		FROM artists a ORDER BY a.sort_order ASC, a.name COLLATE NOCASE`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.Artist
+	for rows.Next() {
+		var a models.Artist
+		var aliases string
+		if err := rows.Scan(&a.ID, &a.Name, &aliases, &a.Remark, &a.Cover, &a.CoverFile, &a.CoverThumb, &a.Bio, &a.SortOrder, &a.RecordCount); err != nil {
+			continue
+		}
+		a.Aliases = unmarshalStrings(aliases)
+		out = append(out, a)
+	}
+	if out == nil {
+		out = []models.Artist{}
+	}
+	return out, nil
+}
+
+// GetArtist returns a single actor by id.
+func (db *DB) GetArtist(id string) (*models.Artist, error) {
+	var a models.Artist
+	var aliases string
+	err := db.conn.QueryRow(`
+		SELECT a.id, a.name, a.aliases, a.remark, a.cover, a.cover_file, a.cover_thumb, a.bio, a.sort_order,
+			(SELECT COUNT(*) FROM record_artists ra WHERE ra.artist_id = a.id)
+		FROM artists a WHERE a.id = ?`, id).
+		Scan(&a.ID, &a.Name, &aliases, &a.Remark, &a.Cover, &a.CoverFile, &a.CoverThumb, &a.Bio, &a.SortOrder, &a.RecordCount)
+	if err != nil {
+		return nil, fmt.Errorf("artist not found: %w", err)
+	}
+	a.Aliases = unmarshalStrings(aliases)
+	return &a, nil
+}
+
+// ReorderArtists sets the manual sort order of artists from an explicit ordered
+// id list (first = top). Artists not in the list keep their previous order.
+func (db *DB) ReorderArtists(orderedIDs []string) error {
+	for i, id := range orderedIDs {
+		if _, err := db.conn.Exec("UPDATE artists SET sort_order = ? WHERE id = ?", i, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ListArtistTree returns lightweight id+name pairs for pickers.
+func (db *DB) ListArtistTree() ([]models.ArtistTree, error) {
+	rows, err := db.conn.Query("SELECT id, name FROM artists ORDER BY sort_order ASC, name COLLATE NOCASE")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.ArtistTree
+	for rows.Next() {
+		var a models.ArtistTree
+		if err := rows.Scan(&a.ID, &a.Name); err != nil {
+			continue
+		}
+		out = append(out, a)
+	}
+	if out == nil {
+		out = []models.ArtistTree{}
+	}
+	return out, nil
+}
+
+// GetArtistDetail returns the actor plus the performances that feature them.
+func (db *DB) GetArtistDetail(id string) (*models.ArtistDetail, error) {
+	a, err := db.GetArtist(id)
+	if err != nil {
+		return nil, err
+	}
+	records, err := db.ListRecords(RecordFilter{ArtistID: id})
+	if err != nil {
+		return nil, err
+	}
+	return &models.ArtistDetail{Artist: *a, Records: records}, nil
+}
+
+// SaveArtist inserts or updates an actor. New actors append after any manually
+// ordered ones.
+func (db *DB) SaveArtist(a models.Artist) (*models.Artist, error) {
+	create := a.ID == ""
+	if create {
+		a.ID = newID()
+		db.conn.QueryRow("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM artists").Scan(&a.SortOrder)
+	}
+	if a.Aliases == nil {
+		a.Aliases = []string{}
+	}
+	_, err := db.conn.Exec(`
+		INSERT INTO artists (id, name, aliases, remark, cover, cover_file, cover_thumb, bio, sort_order)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			name=excluded.name, aliases=excluded.aliases, remark=excluded.remark,
+			cover=excluded.cover, cover_file=excluded.cover_file, cover_thumb=excluded.cover_thumb,
+			bio=excluded.bio`,
+		a.ID, a.Name, marshalJSON(a.Aliases), a.Remark, a.Cover, a.CoverFile, a.CoverThumb, a.Bio, a.SortOrder)
+	if err != nil {
+		return nil, fmt.Errorf("save artist: %w", err)
+	}
+	return db.GetArtist(a.ID)
+}
+
+// DeleteArtist removes an actor and cascades the record_artists links so the
+// relation table has no orphan rows.
+func (db *DB) DeleteArtist(id string) error {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("DELETE FROM record_artists WHERE artist_id = ?", id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM artists WHERE id = ?", id); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -1819,11 +2217,17 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 	if err := db.backfillZheziIDs(s.TopRated); err != nil {
 		slog.Warn("backfill top rated zhezi ids", "err", err)
 	}
+	if err := db.backfillArtistIDs(s.TopRated); err != nil {
+		slog.Warn("backfill top rated artist ids", "err", err)
+	}
 	if err := db.backfillDramaIDs(s.RecentRecords); err != nil {
 		slog.Warn("backfill recent drama ids", "err", err)
 	}
 	if err := db.backfillZheziIDs(s.RecentRecords); err != nil {
 		slog.Warn("backfill recent zhezi ids", "err", err)
+	}
+	if err := db.backfillArtistIDs(s.RecentRecords); err != nil {
+		slog.Warn("backfill recent artist ids", "err", err)
 	}
 
 	return s, nil
@@ -1906,6 +2310,9 @@ func (db *DB) GetByField(field, value string) ([]models.Record, error) {
 	}
 	if err := db.backfillZheziIDs(out); err != nil {
 		slog.Warn("backfill by-field zhezi ids", "err", err)
+	}
+	if err := db.backfillArtistIDs(out); err != nil {
+		slog.Warn("backfill by-field artist ids", "err", err)
 	}
 	return out, nil
 }

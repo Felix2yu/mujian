@@ -29,6 +29,7 @@ type Record struct {
 	Play              []string    `json:"play"`
 	DramaIDs          []string    `json:"drama_ids"`
 	ZheziIDs          []string    `json:"zhezi_ids"`
+	ArtistIDs         []string    `json:"artist_ids"`
 	TagIDs            []string    `json:"tagIds"`
 	Date              int64       `json:"date"` // unix seconds
 	DateText          string      `json:"dateText"`
@@ -95,6 +96,35 @@ type DramaTree struct {
 	Name         string  `json:"name"`
 	CategoryName string  `json:"categoryName"`
 	Zhezis       []Zhezi `json:"zhezis"`
+}
+
+// Artist is a 演员 (performer), a first-class entity mirroring dramas. It owns
+// a cover, bio and aliases so it can power a dedicated actor home page. The
+// reverse relationship (which performances feature this actor) is resolved via
+// the record_artists relation table.
+type Artist struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Aliases     []string `json:"aliases"`
+	Remark      string `json:"remark"`
+	Cover       string `json:"cover"`
+	CoverFile   string `json:"coverFile"`
+	CoverThumb  string `json:"coverThumb"`
+	Bio         string `json:"bio"`
+	SortOrder   int    `json:"sortOrder"` // manual ordering, 0 = alphabetical
+	RecordCount int    `json:"recordCount"` // performances referencing this artist
+}
+
+// ArtistDetail is Artist plus the performances that feature the actor.
+type ArtistDetail struct {
+	Artist
+	Records []Record `json:"records"`
+}
+
+// ArtistTree is a lightweight artist used by pickers (name + id only).
+type ArtistTree struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // Meta mirrors the export's `meta` object (song / tags / webdav_config).

@@ -28,7 +28,11 @@
       {#if record.city}<span class="dot">·</span><span>{record.city}</span>{/if}
     </div>
     {#if record.artist_names && record.artist_names.length}
-      <div class="artists">{record.artist_names.slice(0, 3).join(' / ')}{record.artist_names.length > 3 ? ' 等' : ''}</div>
+      <div class="artists">
+        {#each record.artist_names.slice(0, 3) as name, i}
+          <a class="artist-link" href={`/artists/${record.artist_ids?.[i] || ''}`} onclick={(e) => { if (!record.artist_ids?.[i]) e.preventDefault(); }}>{name}</a>{i < Math.min(record.artist_names.length, 3) - 1 ? ' / ' : ''}
+        {/each}{record.artist_names.length > 3 ? ' 等' : ''}
+      </div>
     {/if}
     <div class="bottom">
       {#if record.address}<span class="tag venue" title={record.address}>{record.address}</span>{/if}
@@ -116,6 +120,8 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .artist-link { color: var(--text-2); text-decoration: none; }
+  .artist-link:hover { color: var(--accent); text-decoration: underline; }
   .bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 6px; }
   .bottom .venue {
     flex: 1;
