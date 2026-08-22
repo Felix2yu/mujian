@@ -73,8 +73,11 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libavif-dev
 
+      # Only test internal packages. The `main` package uses `//go:embed all:dist`
+      # and cannot compile without a frontend build, which this job skips on
+      # purpose. `main` is already vetted and built in the `build` job.
       - name: Test backend with coverage
-        run: CGO_ENABLED=1 go vet ./... && CGO_ENABLED=1 go test ./... -coverprofile=coverage.out
+        run: CGO_ENABLED=1 go vet ./internal/... && CGO_ENABLED=1 go test ./internal/... -coverprofile=coverage.out
         working-directory: backend
 
       - name: Upload coverage to Codecov
