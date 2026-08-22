@@ -46,12 +46,16 @@
   .rec { display: flex; flex-direction: column; overflow: hidden; }
   .cover {
     position: relative;
-    aspect-ratio: 3 / 4;
+    /* 固定 3:4 宽高比：padding-top % 基于元素自身宽度，兼容性最强 */
+    padding-top: 133.33%;
+    height: 0;
     background: var(--surface-3);
     overflow: hidden;
     min-width: 0;
   }
   .cover img {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     max-width: 100%;
@@ -62,6 +66,8 @@
   }
   .rec:hover .cover img { transform: scale(1.05); }
   .no-cover {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     display: flex;
