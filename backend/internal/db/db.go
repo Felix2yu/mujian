@@ -615,7 +615,11 @@ type RecordFilter struct {
 }
 
 func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
-	query := `SELECT ` + recordColumns + ` FROM records`
+	// DISTINCT is required because the search/filter JOINs (record_artists,
+	// record_dramas, record_zhezis) multiply rows when a record has multiple
+	// linked entities. Since every SELECTed column comes from the `records`
+	// table itself, the duplicate rows are identical and DISTINCT collapses them.
+	query := `SELECT DISTINCT ` + recordColumns + ` FROM records`
 	where := []string{}
 	args := []interface{}{}
 
