@@ -829,3 +829,141 @@ func TestHelpers(t *testing.T) {
 		t.Error("dramaNames nil should return nil")
 	}
 }
+
+// countDramaLinks returns the number of rows in the record_dramas relation
+// table for a given record.
+func (db *DB) countDramaLinks(t *testing.T, recordID string) int {
+	t.Helper()
+	var n int
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM record_dramas WHERE record_id = ?", recordID).Scan(&n); err != nil {
+		t.Fatalf("count links: %v", err)
+	}
+	return n
+}
+
+func TestRecordDramasRelation(t *testing.T) {
+	db := newTestDB(t)
+	d, err := db.SaveDrama(models.Drama{Name: "长生殿"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	z := time.Now().Unix()
+
+	// Upsert writes links into the relation table.
+	_ = db.UpsertRecord(models.Record{ID: "r1", Name: "演出1", DramaIDs: []string{d.ID, "d-x"}, Date: z})
+	if n := db.countDramaLinks(t, "r1"); n != 2 {
+		t.Fatalf("expected 2 drama links, got %d", n)
+	}
+	// Read path backfills DramaIDs from the relation table.
+	r1, err := db.GetRecord("r1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r1.DramaIDs) != 2 {
+		t.Errorf("GetRecord should backfill DramaIDs: %+v", r1.DramaIDs)
+	}
+	// Re-upsert with fewer links should replace, not append.
+	_ = db.UpsertRecord(models.Record{ID: "r1", Name: "演出1", DramaIDs: []string{d.ID}, Date: z})
+	if n := db.countDramaLinks(t, "r1"); n != 1 {
+		t.Fatalf("re-upsert should replace links, got %d", n)
+	}
+
+	// ListRecords(DramaID) uses the indexed relation table.
+	matched, err := db.ListRecords(RecordFilter{DramaID: d.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matched) != 1 || matched[0].ID != "r1" {
+		t.Errorf("ListRecords(DramaID) mismatch: %+v", matched)
+	}
+
+	// GetDrama.record_count counts via the relation table.
+	got, err := db.GetDrama(d.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RecordCount != 1 {
+		t.Errorf("record_count should be 1, got %d", got.RecordCount)
+	}
+
+	// DeleteDrama cascades to the relation table.
+	if err := db.DeleteDrama(d.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n := db.countDramaLinks(t, "r1"); n != 0 {
+		t.Errorf("DeleteDrama should cascade links, got %d", n)
+	}
+}
+
+func TestMigrateDramaRelationsIdempotent(t *testing.T) {
+	db := newTestDB(t)
+	d, _ := db.SaveDrama(models.Drama{Name: "牡丹亭"})
+	// Simulate an old database: write the legacy drama_ids JSON column only
+	// (bypassing the relation table).
+	if _, err := db.conn.Exec("INSERT INTO records (id, name, drama_ids, date) VALUES (?, ?, ?, ?)",
+		"old1", "老演出", marshalJSON([]string{d.ID}), time.Now().Unix()); err != nil {
+		t.Fatal(err)
+	}
+	// Running the migration should expand the JSON into the relation table.
+	if err := db.migrateDramaRelations(); err != nil {
+		t.Fatal(err)
+	}
+	if n := db.countDramaLinks(t, "old1"); n != 1 {
+		t.Fatalf("migration should expand legacy column, got %d", n)
+	}
+	// Re-running must be idempotent (no duplicate rows thanks to PK).
+	if err := db.migrateDramaRelations(); err != nil {
+		t.Fatal(err)
+	}
+	if n := db.countDramaLinks(t, "old1"); n != 1 {
+		t.Fatalf("migration must be idempotent, got %d", n)
+	}
+	// And the read path sees the link after migration.
+	r, err := db.GetRecord("old1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.DramaIDs) != 1 {
+		t.Errorf("post-migration read should backfill: %+v", r.DramaIDs)
+	}
+}
+
+func TestExportImportRoundTripsDramaLinks(t *testing.T) {
+	db := newTestDB(t)
+	d, _ := db.SaveDrama(models.Drama{Name: "桃花扇"})
+	_ = db.UpsertRecord(models.Record{ID: "ex1", Name: "演出", DramaIDs: []string{d.ID}, Date: time.Now().Unix()})
+
+	data, err := db.Export()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The exported JSON must still carry drama_ids for backward compatibility.
+	var found bool
+	for _, r := range data.Records {
+		if r.ID == "ex1" {
+			if len(r.DramaIDs) != 1 {
+				t.Fatalf("export should include DramaIDs: %+v", r.DramaIDs)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("export missing record")
+	}
+
+	// Import into a fresh db: links should be rebuilt from DramaIDs.
+	db2 := newTestDB(t)
+	if _, err := db2.ImportData(data); err != nil {
+		t.Fatal(err)
+	}
+	if n := db2.countDramaLinks(t, "ex1"); n != 1 {
+		t.Fatalf("import should rebuild relation table, got %d", n)
+	}
+	r, err := db2.GetRecord("ex1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.DramaIDs) != 1 {
+		t.Errorf("imported record should link drama: %+v", r.DramaIDs)
+	}
+}

@@ -187,6 +187,18 @@ func (db *DB) migrate() error {
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_zhezis_drama ON zhezis(drama_id)`,
+		// Relation table: record <-> drama (replaces the JSON-in-TEXT drama_ids
+		// column for all cross-table lookups so we can use real indexes instead
+		// of instr() scans). records.drama_ids is kept only as a legacy fallback
+		// for reading old backups; the relation table is the source of truth.
+		`CREATE TABLE IF NOT EXISTS record_dramas (
+			record_id TEXT NOT NULL,
+			drama_id TEXT NOT NULL,
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (record_id, drama_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_record_dramas_drama ON record_dramas(drama_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_record_dramas_record ON record_dramas(record_id)`,
 	}
 
 	for _, q := range queries {
@@ -211,6 +223,75 @@ func (db *DB) migrate() error {
 		return err
 	}
 
+	// One-time migration: expand legacy records.drama_ids JSON into the
+	// record_dramas relation table. Idempotent — existing relation rows are
+	// preserved and only missing links are inserted.
+	if err := db.migrateDramaRelations(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// migrateDramaRelations backfills record_dramas from the legacy drama_ids TEXT
+// column. It only inserts links that are not already present, so re-running is
+// safe. After this, record_dramas is the source of truth for record<->drama
+// edges and records.drama_ids is only read when importing old backups.
+func (db *DB) migrateDramaRelations() error {
+	rows, err := db.conn.Query("SELECT id, drama_ids FROM records WHERE drama_ids IS NOT NULL AND drama_ids != '' AND drama_ids != '[]'")
+	if err != nil {
+		return fmt.Errorf("migrate drama relations: %w", err)
+	}
+	type rec struct {
+		id   string
+		json string
+	}
+	var recs []rec
+	for rows.Next() {
+		var r rec
+		if err := rows.Scan(&r.id, &r.json); err != nil {
+			rows.Close()
+			return err
+		}
+		recs = append(recs, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, r := range recs {
+		ids := unmarshalStrings(r.json)
+		if len(ids) == 0 {
+			continue
+		}
+		// Skip ids already linked (handles re-runs / partial prior runs).
+		placeholders := make([]string, len(ids))
+		args := make([]interface{}, 0, len(ids)+1)
+		args = append(args, r.id)
+		for i, id := range ids {
+			placeholders[i] = "?"
+			args = append(args, id)
+		}
+		var existing int
+		if err := db.conn.QueryRow(
+			"SELECT COUNT(*) FROM record_dramas WHERE record_id = ? AND drama_id IN ("+strings.Join(placeholders, ",")+")",
+			args...,
+		).Scan(&existing); err != nil {
+			return err
+		}
+		if existing == len(ids) {
+			continue
+		}
+		for i, id := range ids {
+			if _, err := db.conn.Exec(
+				"INSERT OR IGNORE INTO record_dramas (record_id, drama_id, sort_order) VALUES (?, ?, ?)",
+				r.id, id, i,
+			); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -265,19 +346,24 @@ func unmarshalCoordinate(s string) *models.Coordinate {
 
 // ---------- Record queries ----------
 
+// recordColumns is the set of columns selected when reading records. drama_ids
+// is intentionally NOT included: drama links live in the record_dramas relation
+// table and are backfilled into models.Record.DramaIDs via backfillDramaIDs
+// after the query. (recordUpsertSQL still writes the legacy drama_ids column for
+// backward-compatible backups; the relation table is the source of truth.)
 const recordColumns = `id, name, channel, city, address, coordinate, cover, cover_file,
-	cover_thumb, custom_category_id, category_name, artist_names, guest, play, drama_ids, zhezi_ids, tag_ids,
+	cover_thumb, custom_category_id, category_name, artist_names, guest, play, zhezi_ids, tag_ids,
 	date, date_text, rating, seat, friends, company, remark, active_status,
 	price, price_currency, pay_price, pay_price_currency, other_cost, other_cost_currency`
 
 func scanRecord(rows *sql.Rows) (*models.Record, error) {
 	var r models.Record
 	var (
-		coordinate, artistNames, guest, play, dramaIDs, zheziIDs, tagIDs string
+		coordinate, artistNames, guest, play, zheziIDs, tagIDs string
 	)
 	err := rows.Scan(
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
-		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &artistNames, &guest, &play, &dramaIDs, &zheziIDs, &tagIDs,
+		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &artistNames, &guest, &play, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
 		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency,
 	)
@@ -288,7 +374,6 @@ func scanRecord(rows *sql.Rows) (*models.Record, error) {
 	r.ArtistNames = unmarshalStrings(artistNames)
 	r.Guest = unmarshalStrings(guest)
 	r.Play = unmarshalStrings(play)
-	r.DramaIDs = unmarshalStrings(dramaIDs)
 	r.ZheziIDs = unmarshalStrings(zheziIDs)
 	r.TagIDs = unmarshalStrings(tagIDs)
 	return &r, nil
@@ -327,8 +412,11 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 		args = append(args, f.City)
 	}
 	if f.DramaID != "" {
-		where = append(where, "instr(drama_ids, ?) > 0")
-		args = append(args, `"`+f.DramaID+`"`)
+		// Use the relation table (indexed) instead of instr() over the JSON
+		// text column.
+		query += " JOIN record_dramas rd ON rd.record_id = records.id"
+		where = append(where, "rd.drama_id = ?")
+		args = append(args, f.DramaID)
 	}
 	if f.ZheziID != "" {
 		where = append(where, "instr(zhezi_ids, ?) > 0")
@@ -373,6 +461,9 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 	}
 	if out == nil {
 		out = []models.Record{}
+	}
+	if err := db.backfillDramaIDs(out); err != nil {
+		slog.Warn("backfill drama ids", "err", err)
 	}
 	return out, nil
 }
@@ -421,17 +512,21 @@ func (db *DB) GetRecord(id string) (*models.Record, error) {
 	if err != nil {
 		return nil, fmt.Errorf("record not found: %w", err)
 	}
-	return r, nil
+	rs := []models.Record{*r}
+	if err := db.backfillDramaIDs(rs); err != nil {
+		slog.Warn("backfill drama ids", "err", err)
+	}
+	return &rs[0], nil
 }
 
 func scanRecordRow(row *sql.Row) (*models.Record, error) {
 	var r models.Record
 	var (
-		coordinate, artistNames, guest, play, dramaIDs, zheziIDs, tagIDs string
+		coordinate, artistNames, guest, play, zheziIDs, tagIDs string
 	)
 	err := row.Scan(
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
-		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &artistNames, &guest, &play, &dramaIDs, &zheziIDs, &tagIDs,
+		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &artistNames, &guest, &play, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
 		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency,
 	)
@@ -442,7 +537,6 @@ func scanRecordRow(row *sql.Row) (*models.Record, error) {
 	r.ArtistNames = unmarshalStrings(artistNames)
 	r.Guest = unmarshalStrings(guest)
 	r.Play = unmarshalStrings(play)
-	r.DramaIDs = unmarshalStrings(dramaIDs)
 	r.ZheziIDs = unmarshalStrings(zheziIDs)
 	r.TagIDs = unmarshalStrings(tagIDs)
 	return &r, nil
@@ -494,14 +588,17 @@ func (db *DB) UpsertRecord(r models.Record) error {
 	if r.ID == "" {
 		r.ID = newID()
 	}
-	_, err := db.stmtUpsertRecord.Exec(
+	if _, err := db.stmtUpsertRecord.Exec(
 		r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
 		r.CustomCategoryID, r.CategoryName, marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
 		marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
 		r.Date, r.DateText, r.Rating, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
 		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency,
-	)
-	return err
+	); err != nil {
+		return err
+	}
+	// Keep the drama relation table in sync with the upserted record.
+	return db.setRecordDramas(db.conn, r.ID, r.DramaIDs)
 }
 
 // UpsertRecordTx is like UpsertRecord but runs inside the supplied transaction.
@@ -513,14 +610,17 @@ func (db *DB) UpsertRecordTx(tx *sql.Tx, r models.Record) error {
 	if r.ID == "" {
 		r.ID = newID()
 	}
-	_, err := tx.Exec(recordUpsertSQL,
+	if _, err := tx.Exec(recordUpsertSQL,
 		r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
 		r.CustomCategoryID, r.CategoryName, marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
 		marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
 		r.Date, r.DateText, r.Rating, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
 		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency,
-	)
-	return err
+	); err != nil {
+		return err
+	}
+	// Keep the drama relation table in sync within the same transaction.
+	return db.setRecordDramas(tx, r.ID, r.DramaIDs)
 }
 
 // BulkUpsertRecords inserts/updates many records inside a single transaction.
@@ -573,6 +673,74 @@ func (db *DB) dramaNames(ids []string) []string {
 		}
 	}
 	return out
+}
+
+// setRecordDramas replaces all drama links for a record with the given ids,
+// preserving order. Used after upserting a record so the relation table stays
+// the source of truth (records.drama_ids is only a legacy fallback column).
+func (db *DB) setRecordDramas(exec sqlExecutor, recordID string, ids []string) error {
+	if _, err := exec.Exec("DELETE FROM record_dramas WHERE record_id = ?", recordID); err != nil {
+		return err
+	}
+	for i, id := range ids {
+		if id == "" {
+			continue
+		}
+		if _, err := exec.Exec(
+			"INSERT OR IGNORE INTO record_dramas (record_id, drama_id, sort_order) VALUES (?, ?, ?)",
+			recordID, id, i,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// backfillDramaIDs loads drama ids for the given records from the relation
+// table in a single batched query and fills models.Record.DramaIDs.
+func (db *DB) backfillDramaIDs(records []models.Record) error {
+	if len(records) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(records))
+	for _, r := range records {
+		if r.ID != "" {
+			ids = append(ids, r.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	ph := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		ph[i] = "?"
+		args[i] = id
+	}
+	rows, err := db.conn.Query(
+		"SELECT record_id, drama_id FROM record_dramas WHERE record_id IN ("+strings.Join(ph, ",")+") ORDER BY record_id, sort_order",
+		args...,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	byRecord := map[string][]string{}
+	for rows.Next() {
+		var recordID, dramaID string
+		if err := rows.Scan(&recordID, &dramaID); err != nil {
+			continue
+		}
+		byRecord[recordID] = append(byRecord[recordID], dramaID)
+	}
+	for i := range records {
+		if links, ok := byRecord[records[i].ID]; ok {
+			records[i].DramaIDs = links
+		} else {
+			records[i].DramaIDs = []string{}
+		}
+	}
+	return nil
 }
 
 func (db *DB) CreateRecord(r models.RecordRequest) (*models.Record, error) {
@@ -947,6 +1115,10 @@ func (db *DB) BatchDeleteRecords(ids []string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	// Cascade: drop drama links for the deleted records.
+	if _, err := db.conn.Exec("DELETE FROM record_dramas WHERE record_id IN "+inClause, args...); err != nil {
+		slog.Warn("delete record drama links", "err", err)
+	}
 	return res.RowsAffected()
 }
 
@@ -1020,7 +1192,7 @@ func (db *DB) ListDramas() ([]models.Drama, error) {
 	rows, err := db.conn.Query(`
 		SELECT d.id, d.name, d.category_name, d.remark, d.sort_order,
 			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id) AS zhezi_count,
-			(SELECT COUNT(*) FROM records r WHERE instr(r.drama_ids, '"' || d.id || '"') > 0) AS record_count
+			(SELECT COUNT(*) FROM record_dramas rd WHERE rd.drama_id = d.id) AS record_count
 		FROM dramas d ORDER BY d.sort_order ASC, d.name COLLATE NOCASE`)
 	if err != nil {
 		return nil, err
@@ -1045,7 +1217,7 @@ func (db *DB) GetDrama(id string) (*models.Drama, error) {
 	err := db.conn.QueryRow(`
 		SELECT d.id, d.name, d.category_name, d.remark, d.sort_order,
 			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id),
-			(SELECT COUNT(*) FROM records r WHERE instr(r.drama_ids, '"' || d.id || '"') > 0)
+			(SELECT COUNT(*) FROM record_dramas rd WHERE rd.drama_id = d.id)
 		FROM dramas d WHERE d.id = ?`, id).
 		Scan(&d.ID, &d.Name, &d.CategoryName, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount)
 	if err != nil {
@@ -1150,6 +1322,10 @@ func (db *DB) DeleteDrama(id string) error {
 	if _, err := tx.Exec("DELETE FROM zhezis WHERE drama_id = ?", id); err != nil {
 		return err
 	}
+	// Cascade: drop drama links so record_dramas has no orphan rows.
+	if _, err := tx.Exec("DELETE FROM record_dramas WHERE drama_id = ?", id); err != nil {
+		return err
+	}
 	if _, err := tx.Exec("DELETE FROM dramas WHERE id = ?", id); err != nil {
 		return err
 	}
@@ -1224,10 +1400,30 @@ func (db *DB) dramaIDByName(name string) string {
 	return id
 }
 
+// recordDramaIDs returns the drama ids linked to a record, read from the
+// record_dramas relation table (the source of truth). Falls back to the legacy
+// records.drama_ids column when the relation table has no rows yet (e.g. mid
+// migration of an old database).
 func (db *DB) recordDramaIDs(id string) ([]string, error) {
+	rows, err := db.conn.Query("SELECT drama_id FROM record_dramas WHERE record_id = ? ORDER BY sort_order", id)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err == nil && d != "" {
+			ids = append(ids, d)
+		}
+	}
+	rows.Close()
+	if len(ids) > 0 {
+		return ids, nil
+	}
+	// Legacy fallback: try the old JSON text column.
 	var s string
 	if err := db.conn.QueryRow("SELECT drama_ids FROM records WHERE id = ?", id).Scan(&s); err != nil {
-		return nil, err
+		return []string{}, nil
 	}
 	return unmarshalStrings(s), nil
 }
@@ -1282,7 +1478,8 @@ func (db *DB) BackfillDramasFromRecords() error {
 		dramaIDByPlay[name] = id
 	}
 
-	// Link each record's plays to the corresponding drama ids.
+	// Link each record's plays to the corresponding drama ids, written into
+	// the record_dramas relation table (the source of truth).
 	for _, r := range recs {
 		if len(r.plays) == 0 {
 			continue
@@ -1306,7 +1503,7 @@ func (db *DB) BackfillDramasFromRecords() error {
 		for _, p := range r.plays {
 			push(dramaIDByPlay[p])
 		}
-		if _, err := db.conn.Exec("UPDATE records SET drama_ids = ? WHERE id = ?", marshalJSON(merged), r.id); err != nil {
+		if err := db.setRecordDramas(db.conn, r.id, merged); err != nil {
 			return err
 		}
 	}
@@ -1456,6 +1653,12 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 			}
 		}
 	}
+	if err := db.backfillDramaIDs(s.TopRated); err != nil {
+		slog.Warn("backfill top rated drama ids", "err", err)
+	}
+	if err := db.backfillDramaIDs(s.RecentRecords); err != nil {
+		slog.Warn("backfill recent drama ids", "err", err)
+	}
 
 	return s, nil
 }
@@ -1531,6 +1734,9 @@ func (db *DB) GetByField(field, value string) ([]models.Record, error) {
 	}
 	if out == nil {
 		out = []models.Record{}
+	}
+	if err := db.backfillDramaIDs(out); err != nil {
+		slog.Warn("backfill by-field drama ids", "err", err)
 	}
 	return out, nil
 }
