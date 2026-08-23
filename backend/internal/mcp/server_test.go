@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"mujian/internal/db"
 	"mujian/internal/models"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -378,6 +379,11 @@ func TestStdioRoundTrip(t *testing.T) {
 	// 验证 opencode 将看到的完整链路（DB_PATH 环境变量 → stdio → JSON 结果）。
 	if testing.Short() {
 		t.Skip("short mode")
+	}
+	// 主二进制含 //go:embed all:dist，纯后端 CI 环境（未构建前端）编译不了
+	// main 包；此时跳过，核心逻辑已由其余单元测试覆盖。
+	if _, err := os.Stat(filepath.Join("..", "..", "dist")); err != nil {
+		t.Skip("frontend dist not built; skip stdio round-trip")
 	}
 	ctx := context.Background()
 
