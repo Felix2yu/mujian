@@ -134,6 +134,7 @@ func (db *DB) migrate() error {
 			cover_thumb TEXT NOT NULL DEFAULT '',
 			custom_category_id TEXT NOT NULL DEFAULT '',
 			category_name TEXT NOT NULL DEFAULT '',
+			category_names TEXT NOT NULL DEFAULT '[]',
 			artist_names TEXT NOT NULL DEFAULT '[]',
 			guest TEXT NOT NULL DEFAULT '[]',
 			play TEXT NOT NULL DEFAULT '[]',
@@ -181,6 +182,7 @@ func (db *DB) migrate() error {
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
 			category_name TEXT NOT NULL DEFAULT '',
+			category_names TEXT NOT NULL DEFAULT '[]',
 			remark TEXT NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
@@ -261,6 +263,24 @@ func (db *DB) migrate() error {
 	}
 	if err := db.addColumn("records", "zhezi_ids", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
 		return err
+	}
+	// Multi-category support: category_names is a JSON array; category_name
+	// stays as the primary (first) category for compatibility.
+	if err := db.addColumn("records", "category_names", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
+		return err
+	}
+	if err := db.addColumn("dramas", "category_names", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
+		return err
+	}
+	// Backfill: wrap existing scalar categories into single-element arrays.
+	// Idempotent — only touches rows still on the empty-array default.
+	if _, err := db.conn.Exec(`UPDATE records SET category_names = json_array(category_name)
+		WHERE category_name != '' AND category_names = '[]'`); err != nil {
+		return fmt.Errorf("backfill records.category_names: %w", err)
+	}
+	if _, err := db.conn.Exec(`UPDATE dramas SET category_names = json_array(category_name)
+		WHERE category_name != '' AND category_names = '[]'`); err != nil {
+		return fmt.Errorf("backfill dramas.category_names: %w", err)
 	}
 	// Manual ordering for dramas/categories (0 = alphabetical).
 	if err := db.addColumn("dramas", "sort_order", "INTEGER NOT NULL DEFAULT 0"); err != nil {
@@ -589,7 +609,7 @@ func unmarshalCoordinate(s string) *models.Coordinate {
 // trip SQLite's "ambiguous column name" error on `id`.
 const recordColumns = `records.id, records.name, records.channel, records.city, records.address,
 	records.coordinate, records.cover, records.cover_file, records.cover_thumb,
-	records.custom_category_id, records.category_name, records.guest, records.play,
+	records.custom_category_id, records.category_name, records.category_names, records.guest, records.play,
 	records.zhezi_ids, records.tag_ids, records.date, records.date_text, records.rating,
 	records.seat, records.friends, records.company, records.remark, records.active_status,
 	records.price, records.price_currency, records.pay_price, records.pay_price_currency,
@@ -598,11 +618,11 @@ const recordColumns = `records.id, records.name, records.channel, records.city, 
 func scanRecord(rows *sql.Rows) (*models.Record, error) {
 	var r models.Record
 	var (
-		coordinate, guest, play, zheziIDs, tagIDs string
+		coordinate, guest, play, zheziIDs, tagIDs, categoryNames string
 	)
 	err := rows.Scan(
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
-		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &guest, &play, &zheziIDs, &tagIDs,
+		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &categoryNames, &guest, &play, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
 		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency,
 	)
@@ -614,7 +634,25 @@ func scanRecord(rows *sql.Rows) (*models.Record, error) {
 	r.Play = unmarshalStrings(play)
 	r.ZheziIDs = unmarshalStrings(zheziIDs)
 	r.TagIDs = unmarshalStrings(tagIDs)
+	applyCategoryFallback(&r, categoryNames)
 	return &r, nil
+}
+
+// applyCategoryFallback reconciles the scalar primary category with the
+// category_names JSON array read from disk. Rows written before the
+// multi-category migration only carry the scalar column; rows that somehow
+// carry an array but no scalar get the scalar backfilled from element 0.
+func applyCategoryFallback(r *models.Record, raw string) {
+	r.CategoryNames = unmarshalStrings(raw)
+	if len(r.CategoryNames) == 0 {
+		if r.CategoryName != "" {
+			r.CategoryNames = []string{r.CategoryName}
+		}
+		return
+	}
+	if r.CategoryName == "" {
+		r.CategoryName = r.CategoryNames[0]
+	}
 }
 
 type RecordFilter struct {
@@ -644,13 +682,15 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 		// actor names now live in the artists entity table; search them via a
 		// JOIN so we don't need instr() over a JSON text column.
 		query += " LEFT JOIN record_artists ra_q ON ra_q.record_id = records.id LEFT JOIN artists a_q ON a_q.id = ra_q.artist_id"
-		where = append(where, `(records.name LIKE ? OR records.city LIKE ? OR records.address LIKE ? OR records.company LIKE ? OR records.channel LIKE ? OR records.remark LIKE ? OR records.friends LIKE ? OR records.category_name LIKE ? OR a_q.name LIKE ? OR records.play LIKE ?)`)
-		for range 10 {
+		where = append(where, `(records.name LIKE ? OR records.city LIKE ? OR records.address LIKE ? OR records.company LIKE ? OR records.channel LIKE ? OR records.remark LIKE ? OR records.friends LIKE ? OR records.category_name LIKE ? OR records.category_names LIKE ? OR a_q.name LIKE ? OR records.play LIKE ?)`)
+		for range 11 {
 			args = append(args, like)
 		}
 	}
 	if f.Category != "" {
-		where = append(where, "category_name = ?")
+		// Multi-category: match any element of the category_names JSON array
+		// (single-category rows are stored as one-element arrays).
+		query += " JOIN json_each(records.category_names) je_cat ON je_cat.value = ?"
 		args = append(args, f.Category)
 	}
 	if f.City != "" {
@@ -790,11 +830,11 @@ func (db *DB) GetRecord(id string) (*models.Record, error) {
 func scanRecordRow(row *sql.Row) (*models.Record, error) {
 	var r models.Record
 	var (
-		coordinate, guest, play, zheziIDs, tagIDs string
+		coordinate, guest, play, zheziIDs, tagIDs, categoryNames string
 	)
 	err := row.Scan(
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
-		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &guest, &play, &zheziIDs, &tagIDs,
+		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &categoryNames, &guest, &play, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
 		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency,
 	)
@@ -806,6 +846,7 @@ func scanRecordRow(row *sql.Row) (*models.Record, error) {
 	r.Play = unmarshalStrings(play)
 	r.ZheziIDs = unmarshalStrings(zheziIDs)
 	r.TagIDs = unmarshalStrings(tagIDs)
+	applyCategoryFallback(&r, categoryNames)
 	return &r, nil
 }
 
@@ -833,14 +874,15 @@ type sqlExecutor interface {
 const recordUpsertSQL = `
 	INSERT INTO records (
 		id, name, channel, city, address, coordinate, cover, cover_file, cover_thumb,
-		custom_category_id, category_name, artist_names, guest, play, drama_ids, zhezi_ids, tag_ids,
+		custom_category_id, category_name, category_names, artist_names, guest, play, drama_ids, zhezi_ids, tag_ids,
 		date, date_text, rating, seat, friends, company, remark, active_status,
 		price, price_currency, pay_price, pay_price_currency, other_cost, other_cost_currency
-	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 	ON CONFLICT(id) DO UPDATE SET
 		name=excluded.name, channel=excluded.channel, city=excluded.city, address=excluded.address,
 		coordinate=excluded.coordinate, cover=excluded.cover, cover_file=excluded.cover_file, cover_thumb=excluded.cover_thumb,
 		custom_category_id=excluded.custom_category_id, category_name=excluded.category_name,
+		category_names=excluded.category_names,
 		artist_names=excluded.artist_names, guest=excluded.guest, play=excluded.play,
 		drama_ids=excluded.drama_ids, zhezi_ids=excluded.zhezi_ids, tag_ids=excluded.tag_ids,
 		date=excluded.date, date_text=excluded.date_text, rating=excluded.rating, seat=excluded.seat,
@@ -849,15 +891,56 @@ const recordUpsertSQL = `
 		pay_price_currency=excluded.pay_price_currency, other_cost=excluded.other_cost, other_cost_currency=excluded.other_cost_currency
 `
 
+// normalizeCategories reconciles the scalar primary category with the
+// multi-category array on any record about to be written:
+//   - array wins: a non-empty CategoryNames defines the truth and
+//     CategoryName is pinned to element 0;
+//   - scalar fallback: an empty array promotes CategoryName into a
+//     single-element array so reads never see an out-of-sync pair.
+//
+// The same invariant is applied to dramas via normalizeDramaCategories.
+func normalizeCategories(r *models.Record) {
+	names := make([]string, 0, len(r.CategoryNames))
+	for _, n := range r.CategoryNames {
+		if n = strings.TrimSpace(n); n != "" {
+			names = append(names, n)
+		}
+	}
+	if len(names) == 0 && strings.TrimSpace(r.CategoryName) != "" {
+		names = []string{strings.TrimSpace(r.CategoryName)}
+	}
+	r.CategoryNames = names
+	if len(names) > 0 {
+		r.CategoryName = names[0]
+	}
+}
+
+func normalizeDramaCategories(d *models.Drama) {
+	names := make([]string, 0, len(d.CategoryNames))
+	for _, n := range d.CategoryNames {
+		if n = strings.TrimSpace(n); n != "" {
+			names = append(names, n)
+		}
+	}
+	if len(names) == 0 && strings.TrimSpace(d.CategoryName) != "" {
+		names = []string{strings.TrimSpace(d.CategoryName)}
+	}
+	d.CategoryNames = names
+	if len(names) > 0 {
+		d.CategoryName = names[0]
+	}
+}
+
 // UpsertRecord inserts or updates a single record. For bulk imports prefer
 // BulkUpsertRecords, which wraps all rows in one transaction (far fewer fsyncs).
 func (db *DB) UpsertRecord(r models.Record) error {
 	if r.ID == "" {
 		r.ID = newID()
 	}
+	normalizeCategories(&r)
 	if _, err := db.stmtUpsertRecord.Exec(
 		r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
-		r.CustomCategoryID, r.CategoryName, marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
+		r.CustomCategoryID, r.CategoryName, marshalJSON(r.CategoryNames), marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
 		marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
 		r.Date, r.DateText, r.Rating, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
 		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency,
@@ -883,9 +966,10 @@ func (db *DB) UpsertRecordTx(tx *sql.Tx, r models.Record) error {
 	if r.ID == "" {
 		r.ID = newID()
 	}
+	normalizeCategories(&r)
 	if _, err := tx.Exec(recordUpsertSQL,
 		r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
-		r.CustomCategoryID, r.CategoryName, marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
+		r.CustomCategoryID, r.CategoryName, marshalJSON(r.CategoryNames), marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
 		marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
 		r.Date, r.DateText, r.Rating, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
 		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency,
@@ -1349,7 +1433,7 @@ func requestToRecord(r models.RecordRequest) models.Record {
 	return models.Record{
 		Name: r.Name, Channel: r.Channel, City: r.City, Address: r.Address,
 		Coordinate: r.Coordinate, Cover: r.Cover, CoverFile: r.CoverFile, CoverThumb: r.CoverThumb,
-		CustomCategoryID: r.CustomCategoryID, CategoryName: r.CategoryName,
+		CustomCategoryID: r.CustomCategoryID, CategoryName: r.CategoryName, CategoryNames: r.CategoryNames,
 		ArtistIDs: aid, ArtistNames: a, Guest: g, Play: p, DramaIDs: d, ZheziIDs: z, TagIDs: t,
 		Date: r.Date, DateText: r.DateText, Rating: r.Rating, Seat: r.Seat,
 		Friends: r.Friends, Company: r.Company, Remark: r.Remark, ActiveStatus: r.ActiveStatus,
@@ -1452,7 +1536,8 @@ func (db *DB) BatchUpdateRecords(params models.BatchUpdateParams) (int64, error)
 
 	hasArrayOps := params.DramaIDs != nil || params.ZheziIDs != nil ||
 		params.Play != nil || params.Guest != nil ||
-		params.ArtistNames != nil || params.TagIDs != nil
+		params.ArtistNames != nil || params.TagIDs != nil ||
+		params.CategoryNames != nil
 
 	// 2. Apply simple scalar updates (one SQL for all)
 	if len(simpleSets) > 0 {
@@ -1503,6 +1588,9 @@ func (db *DB) applyArrayOps(params models.BatchUpdateParams) (int64, error) {
 	if params.TagIDs != nil {
 		arrayCols["tag_ids"] = params.TagIDs
 	}
+	if params.CategoryNames != nil {
+		arrayCols["category_names"] = params.CategoryNames
+	}
 
 	var total int64
 	for _, id := range params.IDs {
@@ -1524,6 +1612,15 @@ func (db *DB) applyArrayOps(params models.BatchUpdateParams) (int64, error) {
 			newRaw, _ := json.Marshal(newVal)
 			colUpdates = append(colUpdates, col+" = ?")
 			colArgs = append(colArgs, string(newRaw))
+			// Keep the scalar primary category in sync with the array.
+			if col == "category_names" {
+				primary := ""
+				if len(newVal) > 0 {
+					primary = newVal[0]
+				}
+				colUpdates = append(colUpdates, "category_name = ?")
+				colArgs = append(colArgs, primary)
+			}
 		}
 
 		if len(colUpdates) > 0 {
@@ -1671,7 +1768,7 @@ func (db *DB) DeleteCategory(id string) error {
 
 func (db *DB) ListDramas() ([]models.Drama, error) {
 	rows, err := db.conn.Query(`
-		SELECT d.id, d.name, d.category_name, d.remark, d.sort_order,
+		SELECT d.id, d.name, d.category_name, d.category_names, d.remark, d.sort_order,
 			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id) AS zhezi_count,
 			(SELECT COUNT(*) FROM record_dramas rd WHERE rd.drama_id = d.id) AS record_count
 		FROM dramas d ORDER BY d.sort_order ASC, d.name COLLATE NOCASE`)
@@ -1682,9 +1779,11 @@ func (db *DB) ListDramas() ([]models.Drama, error) {
 	var out []models.Drama
 	for rows.Next() {
 		var d models.Drama
-		if err := rows.Scan(&d.ID, &d.Name, &d.CategoryName, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount); err != nil {
+		var categoryNames string
+		if err := rows.Scan(&d.ID, &d.Name, &d.CategoryName, &categoryNames, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount); err != nil {
 			continue
 		}
+		applyDramaCategoryFallback(&d, categoryNames)
 		out = append(out, d)
 	}
 	if out == nil {
@@ -1695,16 +1794,33 @@ func (db *DB) ListDramas() ([]models.Drama, error) {
 
 func (db *DB) GetDrama(id string) (*models.Drama, error) {
 	var d models.Drama
+	var categoryNames string
 	err := db.conn.QueryRow(`
-		SELECT d.id, d.name, d.category_name, d.remark, d.sort_order,
+		SELECT d.id, d.name, d.category_name, d.category_names, d.remark, d.sort_order,
 			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id),
 			(SELECT COUNT(*) FROM record_dramas rd WHERE rd.drama_id = d.id)
 		FROM dramas d WHERE d.id = ?`, id).
-		Scan(&d.ID, &d.Name, &d.CategoryName, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount)
+		Scan(&d.ID, &d.Name, &d.CategoryName, &categoryNames, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount)
 	if err != nil {
 		return nil, fmt.Errorf("drama not found: %w", err)
 	}
+	applyDramaCategoryFallback(&d, categoryNames)
 	return &d, nil
+}
+
+// applyDramaCategoryFallback mirrors applyCategoryFallback for dramas: the
+// scalar primary category and the JSON array are reconciled after every read.
+func applyDramaCategoryFallback(d *models.Drama, raw string) {
+	d.CategoryNames = unmarshalStrings(raw)
+	if len(d.CategoryNames) == 0 {
+		if d.CategoryName != "" {
+			d.CategoryNames = []string{d.CategoryName}
+		}
+		return
+	}
+	if d.CategoryName == "" {
+		d.CategoryName = d.CategoryNames[0]
+	}
 }
 
 // ReorderDramas sets the manual sort order of dramas from an explicit ordered
@@ -1753,7 +1869,7 @@ func (db *DB) ListDramaTree() ([]models.DramaTree, error) {
 		if err != nil {
 			continue
 		}
-		out = append(out, models.DramaTree{ID: d.ID, Name: d.Name, CategoryName: d.CategoryName, Zhezis: zs})
+		out = append(out, models.DramaTree{ID: d.ID, Name: d.Name, CategoryName: d.CategoryName, CategoryNames: d.CategoryNames, Zhezis: zs})
 	}
 	if out == nil {
 		out = []models.DramaTree{}
@@ -1779,15 +1895,17 @@ func (db *DB) GetDramaDetail(id string) (*models.DramaDetail, error) {
 
 func (db *DB) SaveDrama(d models.Drama) (*models.Drama, error) {
 	create := d.ID == ""
+	normalizeDramaCategories(&d)
 	if create {
 		d.ID = newID()
 		// New dramas append after any manually ordered ones.
 		db.conn.QueryRow("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM dramas").Scan(&d.SortOrder)
 	}
 	_, err := db.conn.Exec(`
-		INSERT INTO dramas (id, name, category_name, remark, sort_order) VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET name=excluded.name, category_name=excluded.category_name, remark=excluded.remark`,
-		d.ID, d.Name, d.CategoryName, d.Remark, d.SortOrder)
+		INSERT INTO dramas (id, name, category_name, category_names, remark, sort_order) VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET name=excluded.name, category_name=excluded.category_name,
+			category_names=excluded.category_names, remark=excluded.remark`,
+		d.ID, d.Name, d.CategoryName, marshalJSON(d.CategoryNames), d.Remark, d.SortOrder)
 	if err != nil {
 		return nil, fmt.Errorf("save drama: %w", err)
 	}
@@ -2216,9 +2334,12 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 		}
 	}
 
+	// Multi-category: expand the category_names array so a record counts
+	// once for every category it involves.
 	rows2, err := db.conn.Query(`
-		SELECT category_name, COUNT(*) as cnt FROM records
-		WHERE category_name != '' GROUP BY category_name ORDER BY cnt DESC`)
+		SELECT je.value AS category_name, COUNT(*) as cnt FROM records,
+			json_each(records.category_names) je
+		WHERE je.value != '' GROUP BY je.value ORDER BY cnt DESC`)
 	if err == nil {
 		defer rows2.Close()
 		for rows2.Next() {

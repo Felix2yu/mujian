@@ -1422,3 +1422,66 @@ func TestArtistResolutionAndMigration(t *testing.T) {
 		t.Fatalf("empty names should clear links, got %d", n)
 	}
 }
+
+func TestMultiCategory(t *testing.T) {
+	db := newTestDB(t)
+
+	// Upsert with multiple categories: scalar primary stays in sync.
+	r := sampleRecord("m1", 1000)
+	r.CategoryNames = []string{"昆剧", "苏剧"}
+	if err := db.UpsertRecord(r); err != nil {
+		t.Fatalf("UpsertRecord: %v", err)
+	}
+	got, err := db.GetRecord("m1")
+	if err != nil {
+		t.Fatalf("GetRecord: %v", err)
+	}
+	if got.CategoryName != "昆剧" || len(got.CategoryNames) != 2 || got.CategoryNames[1] != "苏剧" {
+		t.Fatalf("multi-category readback: %+v / %+v", got.CategoryName, got.CategoryNames)
+	}
+
+	// Scalar-only write promotes into a single-element array.
+	r2 := sampleRecord("m2", 2000)
+	r2.CategoryNames = nil
+	r2.CategoryName = "越剧"
+	if err := db.UpsertRecord(r2); err != nil {
+		t.Fatalf("UpsertRecord m2: %v", err)
+	}
+	got2, _ := db.GetRecord("m2")
+	if len(got2.CategoryNames) != 1 || got2.CategoryNames[0] != "越剧" {
+		t.Fatalf("scalar fallback: %+v", got2.CategoryNames)
+	}
+
+	// Category filter matches any element.
+	for _, cat := range []string{"昆剧", "苏剧"} {
+		rs, err := db.ListRecords(RecordFilter{Category: cat})
+		if err != nil {
+			t.Fatalf("ListRecords(%s): %v", cat, err)
+		}
+		if len(rs) != 1 || rs[0].ID != "m1" {
+			t.Fatalf("filter by %s: got %d records", cat, len(rs))
+		}
+	}
+
+	// Batch append keeps the primary category pinned to element 0.
+	n, err := db.BatchUpdateRecords(models.BatchUpdateParams{
+		IDs:           []string{"m1"},
+		CategoryNames: &models.BatchArrayOp{Op: "append", Value: []string{"评弹"}},
+	})
+	if err != nil || n == 0 {
+		t.Fatalf("batch append: n=%d err=%v", n, err)
+	}
+	got3, _ := db.GetRecord("m1")
+	if got3.CategoryName != "昆剧" || len(got3.CategoryNames) != 3 {
+		t.Fatalf("after batch append: %+v / %+v", got3.CategoryName, got3.CategoryNames)
+	}
+
+	// Dramas normalize the same way.
+	d, err := db.SaveDrama(models.Drama{Name: "白蛇传", CategoryNames: []string{"昆剧", "京剧"}})
+	if err != nil {
+		t.Fatalf("SaveDrama: %v", err)
+	}
+	if d.CategoryName != "昆剧" || len(d.CategoryNames) != 2 {
+		t.Fatalf("drama multi-category: %+v / %+v", d.CategoryName, d.CategoryNames)
+	}
+}

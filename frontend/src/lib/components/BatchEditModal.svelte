@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
+  import CategoryTags from '$lib/components/CategoryTags.svelte';
 
   let { selectedIds, records, onClose, onSaved } = $props();
 
@@ -11,7 +12,7 @@
 
   // 每个字段的修改模式：null = 不修改，{enabled: true, value: ...} = 修改
   let fields = $state({
-    category: { enabled: false, value: '' },
+    category: { enabled: false, value: [] },
     rating: { enabled: false, value: 0 },
     activeStatus: { enabled: false, value: 0 },
     city: { enabled: false, value: '' },
@@ -102,7 +103,9 @@
       const payload = { ids: selectedIds };
 
       // 标量字段
-      if (fields.category.enabled) payload.category_name = fields.category.value;
+      if (fields.category.enabled && fields.category.value.length > 0) {
+        payload.category_names = { op: 'set', value: [...fields.category.value] };
+      }
       if (fields.rating.enabled) payload.rating = parseInt(fields.rating.value) || 0;
       if (fields.activeStatus.enabled) payload.active_status = parseInt(fields.activeStatus.value) || 0;
       if (fields.city.enabled) payload.city = fields.city.value;
@@ -161,13 +164,16 @@
 
       <div class="section">
         <div class="section-title">分类与评分</div>
-        <label class="field">
-          <input type="checkbox" checked={fields.category.enabled} onchange={() => toggleField('category')} />
-          <span>分类</span>
-          <select bind:value={fields.category.value} disabled={!fields.category.enabled}>
-            <option value="">不修改</option>
-            {#each categories as c}<option value={c.name}>{c.name}</option>{/each}
-          </select>
+        <label class="field col">
+          <span class="cat-head">
+            <input type="checkbox" checked={fields.category.enabled} onchange={() => toggleField('category')} />
+            <span>剧种（可多个，覆盖设置）</span>
+          </span>
+          {#if fields.category.enabled}
+            <CategoryTags bind:values={fields.category.value} {categories} placeholder="添加剧种，回车确认" />
+          {:else}
+            <span class="muted small">勾选后设置剧种</span>
+          {/if}
         </label>
         <label class="field">
           <input type="checkbox" checked={fields.rating.enabled} onchange={() => toggleField('rating')} />
@@ -296,7 +302,7 @@
               {#each dramaTree as d (d.id)}
                 <label class="chip">
                   <input type="checkbox" checked={fields.drama_ids.value.includes(d.id)} onchange={() => toggleDrama(d.id)} />
-                  <span>{d.name}{#if d.categoryName} <em class="cat">{d.categoryName}</em>{/if}</span>
+                  <span>{d.name}{#if d.categoryNames?.length} <em class="cat">{d.categoryNames.join('/')}</em>{/if}</span>
                 </label>
               {/each}
             </div>
@@ -543,6 +549,9 @@
   }
   .field.full { flex-direction: column; align-items: stretch; }
   .field.full span { margin-bottom: 4px; }
+  .field.col { flex-direction: column; align-items: stretch; }
+  .field.col .cat-head { display: flex; align-items: center; gap: 8px; }
+  .field.col .cat-head span { min-width: 0; }
   .field:has(input[type="checkbox"]:not(:checked)) span {
     color: var(--text-3);
     text-decoration: line-through;

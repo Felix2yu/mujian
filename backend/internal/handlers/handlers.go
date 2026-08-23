@@ -260,6 +260,7 @@ func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 
 		// 每个字段为 nil 表示不修改；非 nil 则按指定操作更新
 		CategoryName *string `json:"category_name,omitempty"`
+		CategoryNames *models.BatchArrayOp `json:"category_names,omitempty"`
 		Rating       *int    `json:"rating,omitempty"`
 		ActiveStatus *int    `json:"active_status,omitempty"`
 		City         *string `json:"city,omitempty"`
@@ -296,6 +297,7 @@ func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 	updated, err := h.db.BatchUpdateRecords(models.BatchUpdateParams{
 		IDs:               req.IDs,
 		CategoryName:      req.CategoryName,
+		CategoryNames:     req.CategoryNames,
 		Rating:            req.Rating,
 		ActiveStatus:      req.ActiveStatus,
 		City:              req.City,
@@ -414,9 +416,10 @@ func (h *Handler) deleteCategory(w http.ResponseWriter, r *http.Request) {
 // ---------- Dramas & Zhezis ----------
 
 type dramaReq struct {
-	Name         string `json:"name"`
-	CategoryName string `json:"categoryName"`
-	Remark       string `json:"remark"`
+	Name          string   `json:"name"`
+	CategoryName  string   `json:"categoryName"`
+	CategoryNames []string `json:"categoryNames"`
+	Remark        string   `json:"remark"`
 }
 
 type zheziReq struct {
@@ -453,7 +456,7 @@ func (h *Handler) createDrama(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "name is required")
 		return
 	}
-	d, err := h.db.SaveDrama(models.Drama{Name: strings.TrimSpace(req.Name), CategoryName: req.CategoryName, Remark: req.Remark})
+	d, err := h.db.SaveDrama(models.Drama{Name: strings.TrimSpace(req.Name), CategoryName: req.CategoryName, CategoryNames: req.CategoryNames, Remark: req.Remark})
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -482,7 +485,7 @@ func (h *Handler) updateDrama(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "name is required")
 		return
 	}
-	d, err := h.db.SaveDrama(models.Drama{ID: id, Name: strings.TrimSpace(req.Name), CategoryName: req.CategoryName, Remark: req.Remark})
+	d, err := h.db.SaveDrama(models.Drama{ID: id, Name: strings.TrimSpace(req.Name), CategoryName: req.CategoryName, CategoryNames: req.CategoryNames, Remark: req.Remark})
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return

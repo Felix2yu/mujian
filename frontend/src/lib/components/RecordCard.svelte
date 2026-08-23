@@ -3,6 +3,11 @@
   let { record, selectionMode = false, selected = false } = $props();
   let coverFailed = $state(false);
 
+  // 封面角标：一场演出涉及多个剧种时显示为「拼盘」
+  const catBadge = $derived(
+    record.categoryNames?.length > 1 ? '拼盘' : record.categoryNames?.[0] || record.categoryName || ''
+  );
+
   function stars(n) {
     return '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
   }
@@ -17,7 +22,7 @@
     {:else}
       <div class="no-cover"><span>{(record.name || '?').slice(0, 1)}</span></div>
     {/if}
-    {#if record.categoryName}<span class="cat-badge">{record.categoryName}</span>{/if}
+    {#if catBadge}<span class="cat-badge">{catBadge}</span>{/if}
     {#if record.rating}
       <span class="rate-badge">★ {record.rating}</span>
     {/if}

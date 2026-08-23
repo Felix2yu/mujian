@@ -1,18 +1,20 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
+  import CategoryTags from '$lib/components/CategoryTags.svelte';
 
   let dramas = $state([]);
+  let categories = $state([]);
   let loading = $state(true);
   let error = $state('');
   let adding = $state(false);
-  let form = $state({ name: '', categoryName: '', remark: '' });
+  let form = $state({ name: '', categoryNames: [], remark: '' });
 
   async function load() {
     loading = true;
     error = '';
     try {
-      dramas = await api.listDramas();
+      [dramas, categories] = await Promise.all([api.listDramas(), api.listCategories().catch(() => [])]);
     } catch (e) {
       error = e.message;
     } finally {
@@ -26,7 +28,7 @@
     adding = true;
     error = '';
     try {
-      const d = await api.createDrama({ name, categoryName: form.categoryName.trim(), remark: form.remark.trim() });
+      const d = await api.createDrama({ name, categoryNames: form.categoryNames.slice(), remark: form.remark.trim() });
       location.href = `/dramas/${d.id}`;
     } catch (e) {
       error = e.message;
@@ -86,8 +88,10 @@
 
   <div class="card add-bar">
     <input class="input grow" placeholder="剧目名称（必填），如：牡丹亭" bind:value={form.name} onkeydown={(e) => e.key === 'Enter' && add()} />
-    <input class="input" style="width:150px;" placeholder="剧种，如：昆曲" bind:value={form.categoryName} onkeydown={(e) => e.key === 'Enter' && add()} />
-    <input class="input grow" placeholder="备注（可选）" bind:value={form.remark} onkeydown={(e) => e.key === 'Enter' && add()} />
+    <div class="grow cat-field">
+      <CategoryTags bind:values={form.categoryNames} {categories} placeholder="剧种（可多个），如：昆剧" />
+    </div>
+    <input class="input grow" placeholder="备注（可选）" bind:value={form.remark} />
     <button class="btn primary" onclick={add} disabled={adding || !form.name.trim()}>{adding ? '创建中…' : '＋ 创建剧目'}</button>
   </div>
 
@@ -119,7 +123,9 @@
           <a class="drama-main" href={`/dramas/${d.id}`}>
             <div class="d-title">{d.name}</div>
             <div class="d-meta">
-              {#if d.categoryName}<span>{d.categoryName}</span>{/if}
+              {#if d.categoryNames?.length}
+                {#each d.categoryNames as cn}<span class="d-cat">{cn}</span>{/each}
+              {/if}
               {#if d.remark}<span class="remark" title={d.remark}>{d.remark}</span>{/if}
             </div>
           </a>
@@ -142,7 +148,15 @@
   .drama-main { flex: 1; min-width: 0; text-decoration: none; transition: color var(--t-fast) var(--ease); }
   .drama-main:hover .d-title { color: var(--accent); }
   .d-title { font-weight: 600; font-size: 15.5px; font-family: var(--font-serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .d-meta { display: flex; gap: 6px; font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+  .d-meta { display: flex; gap: 6px; font-size: 12px; color: var(--text-muted); margin-top: 3px; flex-wrap: wrap; }
+  .d-cat {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 0 8px;
+    line-height: 1.7;
+    white-space: nowrap;
+  }
   .d-meta .remark { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .d-stats { display: flex; gap: 8px; flex: 0 0 auto; }
   .stat { font-size: 12px; color: var(--text-muted); }

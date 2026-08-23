@@ -23,7 +23,8 @@ type Record struct {
 	CoverFile         string      `json:"coverFile"`
 	CoverThumb        string      `json:"coverThumb"`
 	CustomCategoryID  string      `json:"customCategoryId"`
-	CategoryName      string      `json:"categoryName"`
+	CategoryName      string      `json:"categoryName"`   // 主剧种 = CategoryNames[0]，kept in sync for export compatibility
+	CategoryNames     []string    `json:"categoryNames"` // 一场演出可涉及多个剧种
 	ArtistNames       []string    `json:"artist_names"`
 	Guest             []string    `json:"guest"`
 	Play              []string    `json:"play"`
@@ -59,13 +60,14 @@ type Category struct {
 // Drama is a 剧目 (a play/drama), a first-class entity that owns an ordered
 // list of 折子 (zhezi / sub-scenes).
 type Drama struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	CategoryName string `json:"categoryName"` // 剧种, e.g. 昆曲 / 越剧
-	Remark       string `json:"remark"`
-	SortOrder    int    `json:"sortOrder"` // manual ordering, 0 = alphabetical
-	ZheziCount   int    `json:"zheziCount"`
-	RecordCount  int    `json:"recordCount"` // performances referencing this drama
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	CategoryName  string   `json:"categoryName"`  // 主剧种 = CategoryNames[0]，kept in sync for compatibility
+	CategoryNames []string `json:"categoryNames"` // 剧目可跨多个剧种, e.g. [昆剧 苏剧]
+	Remark        string   `json:"remark"`
+	SortOrder     int      `json:"sortOrder"` // manual ordering, 0 = alphabetical
+	ZheziCount    int      `json:"zheziCount"`
+	RecordCount   int      `json:"recordCount"` // performances referencing this drama
 }
 
 // Zhezi is a 折子 (a sub-scene) belonging to exactly one drama. Because
@@ -92,10 +94,11 @@ type DramaDetail struct {
 // DramaTree is a lightweight drama + its zhezis, used by pickers that need the
 // full drama/zhezi structure in one request without performance records.
 type DramaTree struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"`
-	CategoryName string  `json:"categoryName"`
-	Zhezis       []Zhezi `json:"zhezis"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	CategoryName  string   `json:"categoryName"`
+	CategoryNames []string `json:"categoryNames"`
+	Zhezis        []Zhezi  `json:"zhezis"`
 }
 
 // Artist is a 演员 (performer), a first-class entity mirroring dramas. It owns
@@ -164,6 +167,7 @@ type RecordRequest struct {
 	CoverThumb        string      `json:"coverThumb"`
 	CustomCategoryID  string      `json:"customCategoryId"`
 	CategoryName      string      `json:"categoryName"`
+	CategoryNames     []string    `json:"categoryNames"` // 多剧种；优先于 CategoryName
 	ArtistIDs         []string    `json:"artist_ids"`
 	ArtistNames       []string    `json:"artist_names"`
 	Guest             []string    `json:"guest"`
@@ -188,14 +192,15 @@ type RecordRequest struct {
 }
 
 type CalendarEvent struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Date         int64  `json:"date"`
-	City         string `json:"city"`
-	Address      string `json:"address"`
-	CoverFile    string `json:"coverFile"`
-	Rating       int    `json:"rating"`
-	CategoryName string `json:"categoryName"`
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Date           int64    `json:"date"`
+	City           string   `json:"city"`
+	Address        string   `json:"address"`
+	CoverFile      string   `json:"coverFile"`
+	Rating         int      `json:"rating"`
+	CategoryName   string   `json:"categoryName"`
+	CategoryNames  []string `json:"categoryNames"`
 }
 
 type Stats struct {
@@ -318,6 +323,7 @@ type BatchArrayOp struct {
 type BatchUpdateParams struct {
 	IDs               []string
 	CategoryName      *string
+	CategoryNames     *BatchArrayOp // 多剧种 set/append/remove（覆盖 CategoryName）
 	Rating            *int
 	ActiveStatus      *int
 	City              *string

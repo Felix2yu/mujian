@@ -31,16 +31,17 @@ type ArrayOp struct {
 type BatchUpdateRecordsInput struct {
 	IDs []string `json:"ids"`
 
-	CategoryName *string `json:"category_name,omitempty"`
-	Rating       *int    `json:"rating,omitempty"`
-	ActiveStatus *int    `json:"active_status,omitempty"`
-	City         *string `json:"city,omitempty"`
-	Address      *string `json:"address,omitempty"`
-	Channel      *string `json:"channel,omitempty"`
-	Company      *string `json:"company,omitempty"`
-	Friends      *string `json:"friends,omitempty"`
-	Remark       *string `json:"remark,omitempty"`
-	Seat         *string `json:"seat,omitempty"`
+	CategoryName  *string  `json:"category_name,omitempty"`
+	CategoryNames *ArrayOp `json:"category_names,omitempty"`
+	Rating        *int     `json:"rating,omitempty"`
+	ActiveStatus  *int     `json:"active_status,omitempty"`
+	City          *string  `json:"city,omitempty"`
+	Address       *string  `json:"address,omitempty"`
+	Channel       *string  `json:"channel,omitempty"`
+	Company       *string  `json:"company,omitempty"`
+	Friends       *string  `json:"friends,omitempty"`
+	Remark        *string  `json:"remark,omitempty"`
+	Seat          *string  `json:"seat,omitempty"`
 
 	DramaIDs    *ArrayOp `json:"drama_ids,omitempty"`
 	ZheziIDs    *ArrayOp `json:"zhezi_ids,omitempty"`
@@ -183,22 +184,23 @@ func (s *Server) handleBatchUpdateRecords(ctx context.Context, req *mcp.CallTool
 		return errResult("ids 不能为空")
 	}
 	params := models.BatchUpdateParams{
-		IDs:          in.IDs,
-		CategoryName: in.CategoryName,
-		Rating:       in.Rating,
-		ActiveStatus: in.ActiveStatus,
-		City:         in.City,
-		Address:      in.Address,
-		Channel:      in.Channel,
-		Company:      in.Company,
-		Friends:      in.Friends,
-		Remark:       in.Remark,
-		Seat:         in.Seat,
-		DramaIDs:     (*models.BatchArrayOp)(in.DramaIDs),
-		ZheziIDs:     (*models.BatchArrayOp)(in.ZheziIDs),
-		Play:         (*models.BatchArrayOp)(in.Play),
-		Guest:        (*models.BatchArrayOp)(in.Guest),
-		ArtistNames:  (*models.BatchArrayOp)(in.ArtistNames),
+		IDs:           in.IDs,
+		CategoryName:  in.CategoryName,
+		CategoryNames: (*models.BatchArrayOp)(in.CategoryNames),
+		Rating:        in.Rating,
+		ActiveStatus:  in.ActiveStatus,
+		City:          in.City,
+		Address:       in.Address,
+		Channel:       in.Channel,
+		Company:       in.Company,
+		Friends:       in.Friends,
+		Remark:        in.Remark,
+		Seat:          in.Seat,
+		DramaIDs:      (*models.BatchArrayOp)(in.DramaIDs),
+		ZheziIDs:      (*models.BatchArrayOp)(in.ZheziIDs),
+		Play:          (*models.BatchArrayOp)(in.Play),
+		Guest:         (*models.BatchArrayOp)(in.Guest),
+		ArtistNames:   (*models.BatchArrayOp)(in.ArtistNames),
 	}
 	n, err := s.db.BatchUpdateRecords(params)
 	if err != nil {

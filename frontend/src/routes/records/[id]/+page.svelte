@@ -95,9 +95,9 @@
       </div>
       <div class="head">
         <div class="badges">
-          {#if rec.categoryName}
-            <a class="pill" href={`/?category=${encodeURIComponent(rec.categoryName)}`}>{rec.categoryName}</a>
-          {/if}
+          {#each rec.categoryNames && rec.categoryNames.length ? rec.categoryNames : (rec.categoryName ? [rec.categoryName] : []) as catName (catName)}
+            <a class="pill" href={`/?category=${encodeURIComponent(catName)}`}>{catName}</a>
+          {/each}
           {#if rec.channel}
             <a class="pill" href={`/?q=${encodeURIComponent(rec.channel)}`}>{rec.channel}</a>
           {/if}
