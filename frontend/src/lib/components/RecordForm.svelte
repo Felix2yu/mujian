@@ -120,6 +120,7 @@
   // 剧目 / 折子 picker state
   let dramaTree = $state([]);
   let dramaQuery = $state('');
+  let dramaComposing = $state(false);
   let showDramaList = $state(false);
   let newDrama = $state({ name: '' });
   let creatingDrama = $state(false);
@@ -188,9 +189,9 @@
     dramaTree.filter((d) => !form.drama_ids.includes(d.id))
   );
 
-  // 关联剧目下拉的可搜索过滤结果（按名称 / 剧种）
+  // 关联剧目下拉的可搜索过滤结果（按名称 / 剧种）；组词中暂停过滤
   const filteredDramas = $derived(
-    dramaQuery.trim()
+    dramaQuery.trim() && !dramaComposing
       ? addableDramas.filter(
           (d) =>
             (d.name || '').toLowerCase().includes(dramaQuery.trim().toLowerCase()) ||
@@ -274,6 +275,8 @@
     artistOverIdx = -1;
   }
   let artistQuery = $state('');
+  // 输入法组词中暂停本地过滤，避免拼音中间态把下拉列表过滤得闪烁
+  let artistComposing = $state(false);
   let showArtistList = $state(false);
   let creatingArtist = $state(false);
 
@@ -284,7 +287,7 @@
     artistList.filter((a) => !form.artist_ids.includes(a.id))
   );
   const filteredArtists = $derived(
-    artistQuery.trim()
+    artistQuery.trim() && !artistComposing
       ? addableArtists.filter((a) => (a.name || '').toLowerCase().includes(artistQuery.trim().toLowerCase()))
       : addableArtists
   );
@@ -732,6 +735,8 @@
           onblur={() => setTimeout(() => (showArtistList = false), 120)}
           onkeydown={onArtistKeydown}
           oninput={onArtistInput}
+          oncompositionstart={() => (artistComposing = true)}
+          oncompositionend={() => (artistComposing = false)}
         />
       </div>
       {#if showArtistList && (filteredArtists.length || artistQuery.trim())}
@@ -850,6 +855,8 @@
           bind:value={dramaQuery}
           onfocus={() => (showDramaList = true)}
           onblur={() => setTimeout(() => (showDramaList = false), 120)}
+          oncompositionstart={() => (dramaComposing = true)}
+          oncompositionend={() => (dramaComposing = false)}
           onkeydown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();

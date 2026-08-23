@@ -14,6 +14,7 @@
   let filters = $state({ q: '', category: '', city: '', year: '', month: '', drama: '', zhezi: '' });
   let zheziNames = $state(new Map());
   let searchTimer;
+  let searchComposing = false;
 
   // 批量操作状态
   let selectionMode = $state(false);
@@ -119,8 +120,21 @@
   }
 
   function onSearchInput() {
+    // 中文输入法组词中不触发搜索，等 compositionend 上屏后再查，
+    // 避免拼音中间态被当作关键词查出无结果。
+    if (searchComposing) return;
     clearTimeout(searchTimer);
     searchTimer = setTimeout(load, 260);
+  }
+
+  function onSearchCompositionStart() {
+    searchComposing = true;
+  }
+
+  function onSearchCompositionEnd() {
+    searchComposing = false;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(load, 120);
   }
 
   function clearChip(k) {
@@ -158,6 +172,8 @@
         placeholder="搜索演出名称、演员、城市、剧团、备注…"
         bind:value={filters.q}
         oninput={onSearchInput}
+        oncompositionstart={onSearchCompositionStart}
+        oncompositionend={onSearchCompositionEnd}
       />
       {#if filters.q}<button class="search-clear" onclick={() => clearChip('q')}>✕</button>{/if}
     </div>
