@@ -33,14 +33,22 @@ func New(dbPath string) (*DB, error) {
 
 	// SQLite pragmas (WAL + safe performance tuning):
 	//  - journal_mode(WAL): concurrent readers while a writer is active
-	//  - busy_timeout(5000): wait instead of immediately erroring on lock
+	//  - busy_timeout(30000): wait instead of erroring on lock contention. Long
+	//    enough for a second import to queue behind a running one.
+	//  - _txlock=immediate: every transaction acquires the write lock at BEGIN,
+	//    not lazily at first write. This matters because a DEFERRED tx that
+	//    upgrades mid-transaction returns SQLITE_BUSY immediately (busy_timeout
+	//    is not consulted when a read snapshot would be invalidated), which is
+	//    how imports failed with "database is locked" under concurrent writers.
+	//    With IMMEDIATE, contenders simply queue on BEGIN and then run lock-free.
 	//  - foreign_keys(0): the schema uses JSON-in-TEXT links, not FK constraints
 	//  - synchronous(NORMAL): WAL already protects against corruption; avoids a
 	//    fsync per transaction while keeping crash safety (recommended for WAL)
 	//  - mmap_size / cache_size: keep more of the db in memory for read speed
 	conn, err := sql.Open("sqlite", dbPath+"?"+
 		"_pragma=journal_mode(WAL)"+
-		"&_pragma=busy_timeout(5000)"+
+		"&_pragma=busy_timeout(30000)"+
+		"&_txlock=immediate"+
 		"&_pragma=foreign_keys(0)"+
 		"&_pragma=synchronous(NORMAL)"+
 		"&_pragma=cache_size(-8000)")
@@ -48,11 +56,12 @@ func New(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
 
-	// SQLite is a single-writer database. busy_timeout (set in the DSN above)
-	// makes concurrent writers wait instead of erroring with "database is
-	// locked". We deliberately do NOT pin MaxOpenConns(1): with modernc.org/sqlite
-	// that can deadlock when successive calls briefly contend on the single
-	// pooled connection. The pool default is safe for this low-concurrency app.
+	// SQLite is a single-writer database. With _txlock=immediate + busy_timeout
+	// (both set in the DSN above), concurrent writers serialize on BEGIN instead
+	// of failing mid-transaction. We deliberately do NOT pin MaxOpenConns(1):
+	// with modernc.org/sqlite that can deadlock when successive calls briefly
+	// contend on the single pooled connection. The pool default is safe for this
+	// low-concurrency app.
 
 	if err := conn.Ping(); err != nil {
 		return nil, fmt.Errorf("ping db: %w", err)
@@ -409,14 +418,20 @@ func (db *DB) migrateZheziRelations() error {
 // resolveArtistByName finds an existing artist by exact name (or alias), or
 // creates a new one. Used by the legacy artist_names migration and by the
 // upsert path so free-typed actor names become first-class entities.
-func (db *DB) resolveArtistByName(name string) (string, error) {
+//
+// exec must be the caller's execution context (*sql.DB for standalone use,
+// *sql.Tx inside a transaction). This is critical for ImportData: creating a
+// missing artist writes to the table, and doing so on a pool connection while
+// the import transaction holds the write lock self-deadlocks until
+// busy_timeout expires (SQLITE_BUSY).
+func (db *DB) resolveArtistByName(exec sqlExecutor, name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", fmt.Errorf("empty artist name")
 	}
 	// Exact name match first.
 	var id string
-	if err := db.conn.QueryRow("SELECT id FROM artists WHERE name = ?", name).Scan(&id); err == nil {
+	if err := exec.QueryRow("SELECT id FROM artists WHERE name = ?", name).Scan(&id); err == nil {
 		return id, nil
 	}
 	// Alias match.
@@ -436,9 +451,10 @@ func (db *DB) resolveArtistByName(name string) (string, error) {
 			}
 		}
 	}
-	// Not found: create.
+	rows.Close()
+	// Not found: create (inside the caller's transaction, if any).
 	id = newID()
-	if _, err := db.conn.Exec(
+	if _, err := exec.Exec(
 		"INSERT INTO artists (id, name, aliases, sort_order) VALUES (?, ?, '[]', (SELECT COALESCE(MAX(sort_order),0)+1 FROM artists))",
 		id, name,
 	); err != nil {
@@ -480,7 +496,7 @@ func (db *DB) migrateArtistRelations() error {
 			continue
 		}
 		for i, name := range names {
-			aid, err := db.resolveArtistByName(name)
+			aid, err := db.resolveArtistByName(db.conn, name)
 			if err != nil {
 				return err
 			}
@@ -983,9 +999,9 @@ func (db *DB) setRecordZhezis(exec sqlExecutor, recordID string, ids []string) e
 // directly) and actor names (resolved to an entity by name/alias, created on
 // demand). The IDs path is what the new record form sends (artist_ids picked
 // from the tree); the names path preserves backward compatibility with legacy
-// artist_names text. resolveArtistByName uses the pool connection; within a
-// transaction the caller passes the tx only for the actual link writes, so this
-// is safe under the default (non-pinned) connection pool.
+// artist_names text. resolveArtistByName runs on the same exec context as the
+// link writes, so a name resolution inside an import transaction never writes
+// through the pool while that transaction holds the SQLite write lock.
 func (db *DB) setRecordArtists(exec sqlExecutor, recordID string, ids, names []string) error {
 	if _, err := exec.Exec("DELETE FROM record_artists WHERE record_id = ?", recordID); err != nil {
 		return err
@@ -1014,7 +1030,7 @@ func (db *DB) setRecordArtists(exec sqlExecutor, recordID string, ids, names []s
 		if name == "" {
 			continue
 		}
-		aid, err := db.resolveArtistByName(name)
+		aid, err := db.resolveArtistByName(exec, name)
 		if err != nil {
 			return err
 		}

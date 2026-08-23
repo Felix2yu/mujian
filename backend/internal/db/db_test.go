@@ -603,6 +603,41 @@ func TestAutocompleteAndByField(t *testing.T) {
 	}
 }
 
+func TestSetRecordArtistsNewNameInsideTx(t *testing.T) {
+	// 回归：ImportData 事务内解析未知演员名时，旧实现经由连接池
+	// INSERT artists —— 写锁被本事务持有，池连接等满 busy_timeout 后
+	// 以 SQLITE_BUSY 失败（导入报 "database is locked"）。现在解析与
+	// 链接写入共用同一个 exec 上下文。
+	db := newTestDB(t)
+
+	tx, err := db.conn.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	// 先在事务连接上制造一次写，确保 RESERVED 写锁已被本事务持有。
+	if _, err := tx.Exec("INSERT INTO records (id) VALUES ('tx-rec')"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.setRecordArtists(tx, "tx-rec", nil, []string{"事务新演员"}); err != nil {
+		t.Fatalf("setRecordArtists inside tx: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+
+	var aid string
+	if err := db.conn.QueryRow(
+		"SELECT artist_id FROM record_artists WHERE record_id = 'tx-rec'",
+	).Scan(&aid); err != nil {
+		t.Fatalf("link missing: %v", err)
+	}
+	var name string
+	if err := db.conn.QueryRow("SELECT name FROM artists WHERE id = ?", aid).Scan(&name); err != nil || name != "事务新演员" {
+		t.Fatalf("artist created: %q %v", name, err)
+	}
+}
+
 func TestExportImport(t *testing.T) {
 	db := newTestDB(t)
 	_ = db.UpsertRecord(models.Record{ID: "e1", Name: "导出记录", Date: time.Now().Unix()})
@@ -1318,7 +1353,7 @@ func TestArtistResolutionAndMigration(t *testing.T) {
 	db := newTestDB(t)
 
 	// resolveArtistByName creates a new artist when the name is unknown.
-	id1, err := db.resolveArtistByName(" 新演员 ")
+	id1, err := db.resolveArtistByName(db.conn, " 新演员 ")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1326,19 +1361,19 @@ func TestArtistResolutionAndMigration(t *testing.T) {
 		t.Fatal("resolve should create artist")
 	}
 	// Exact match on second call.
-	id1b, _ := db.resolveArtistByName("新演员")
+	id1b, _ := db.resolveArtistByName(db.conn, "新演员")
 	if id1b != id1 {
 		t.Fatalf("exact match should return same id: %s vs %s", id1, id1b)
 	}
 	// Empty name errors.
-	if _, err := db.resolveArtistByName("  "); err == nil {
+	if _, err := db.resolveArtistByName(db.conn, "  "); err == nil {
 		t.Error("empty name should error")
 	}
 	// Alias match: create artist with alias, then resolve by alias.
 	if _, err := db.SaveArtist(models.Artist{Name: "老演员", Aliases: []string{"小李"}}); err != nil {
 		t.Fatal(err)
 	}
-	if aid, err := db.resolveArtistByName("小李"); err != nil || aid == "" {
+	if aid, err := db.resolveArtistByName(db.conn, "小李"); err != nil || aid == "" {
 		t.Fatalf("alias match failed: %v %s", err, aid)
 	}
 

@@ -14,8 +14,15 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
+
+// importMu serializes imports/restores. A single import already holds the
+// SQLite write lock for its whole transaction; a second concurrent import used
+// to fail with SQLITE_BUSY after a confusing wait (or worse, both raced).
+// Rejecting overlaps with an explicit 409 turns that into a clear message.
+var importMu sync.Mutex
 
 // importRecords ingests:
 //  1. a plain data.json file (already-converted export), or
@@ -39,12 +46,24 @@ func (h *Handler) importRecords(w http.ResponseWriter, r *http.Request) {
 	name := strings.ToLower(header.Filename)
 	switch {
 	case strings.HasSuffix(name, ".json"):
-		h.importJSON(w, file)
+		h.withImportLock(w, func() { h.importJSON(w, file) })
 	case strings.HasSuffix(name, ".zip"):
-		h.importZIP(w, file)
+		h.withImportLock(w, func() { h.importZIP(w, file) })
 	default:
 		jsonErr(w, 400, "仅支持 .json 文件或「记录现场」导出的 .zip 压缩包（JI_LU_XIAN_CHANG.android.zip）")
 	}
+}
+
+// withImportLock runs fn while holding the process-wide import mutex. If
+// another import is already running it responds 409 instead of queueing (the
+// client should not upload a large file just to be told to wait).
+func (h *Handler) withImportLock(w http.ResponseWriter, fn func()) {
+	if !importMu.TryLock() {
+		jsonErr(w, 409, "已有另一个导入正在进行，请等待其完成后再试")
+		return
+	}
+	defer importMu.Unlock()
+	fn()
 }
 
 // importJSON: plain data.json, no covers included.

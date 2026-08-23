@@ -75,8 +75,10 @@
     <button class="btn primary lg" onclick={runImport} disabled={busy || !file}>
       {busy ? '导入中…' : '开始导入'}
     </button>
-    {#if file}<button class="btn" onclick={() => (file = null)}>清除</button>{/if}
+    {#if file && !busy}<button class="btn" onclick={() => (file = null)}>清除</button>{/if}
   </div>
+
+  {#if busy}<p class="tiny warn-hint">导入进行中，请勿刷新或关闭页面、不要重复点击；大备份（含封面）可能需要数分钟。</p>{/if}
 
   {#if error}<div class="banner error">⚠ {error}</div>{/if}
   {#if result}
@@ -150,6 +152,7 @@
   }
 
   .btn-row { display: flex; gap: 10px; margin-top: 14px; }
+  .warn-hint { color: var(--text-muted); margin-top: 8px; }
 
   .sec { padding: 18px 20px; margin-top: 16px; }
   .sec h3 { margin: 0 0 10px; font-size: 15.5px; }

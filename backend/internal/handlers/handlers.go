@@ -935,14 +935,16 @@ func (h *Handler) backupRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.db.ImportData(&data)
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonResp(w, 200, map[string]interface{}{
-		"message":    "restore completed",
-		"records":    result.Records,
-		"categories": result.Categories,
+	h.withImportLock(w, func() {
+		result, err := h.db.ImportData(&data)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]interface{}{
+			"message":    "restore completed",
+			"records":    result.Records,
+			"categories": result.Categories,
+		})
 	})
 }
