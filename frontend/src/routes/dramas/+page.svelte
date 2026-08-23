@@ -119,7 +119,10 @@
             <div class="d-title">{d.name}</div>
             <div class="d-meta">
               {#if d.categoryNames?.length}
-                {#each d.categoryNames as cn}<span class="d-cat">{cn}</span>{/each}
+                {#each d.categoryNames.slice(0, 4) as cn}<span class="d-cat">{cn}</span>{/each}
+                {#if d.categoryNames.length > 4}
+                  <span class="d-cat more" title={d.categoryNames.join(' / ')}>+{d.categoryNames.length - 4}</span>
+                {/if}
               {/if}
               {#if d.remark}<span class="remark" title={d.remark}>{d.remark}</span>{/if}
             </div>
@@ -152,6 +155,7 @@
     line-height: 1.7;
     white-space: nowrap;
   }
+  .d-cat.more { background: var(--surface-3); color: var(--text-muted); }
   .d-meta .remark { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .d-stats { display: flex; gap: 8px; flex: 0 0 auto; }
   .stat { font-size: 12px; color: var(--text-muted); }

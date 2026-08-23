@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
+  import { loadStatusFilter } from '$lib/statusPrefs.js';
   import RecordCard from '$lib/components/RecordCard.svelte';
   import BatchEditModal from '$lib/components/BatchEditModal.svelte';
 
@@ -92,7 +93,9 @@
     loading = true;
     error = '';
     try {
-      records = await api.listRecords(filters);
+      const all = await api.listRecords(filters);
+      const visible = new Set(loadStatusFilter());
+      records = all.filter((r) => visible.has(r.active_status));
     } catch (e) {
       error = e.message;
     } finally {

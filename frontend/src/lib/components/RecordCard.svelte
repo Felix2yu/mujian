@@ -1,5 +1,6 @@
 <script>
   import { coverUrl, formatCurrency } from '$lib/api.js';
+  import { STATUS_LABELS } from '$lib/statusPrefs.js';
   let { record, selectionMode = false, selected = false } = $props();
   let coverFailed = $state(false);
 
@@ -7,6 +8,7 @@
   const catBadge = $derived(
     record.categoryNames?.length > 1 ? '拼盘' : record.categoryNames?.[0] || record.categoryName || ''
   );
+  const statusText = $derived(STATUS_LABELS[record.active_status] ?? record.active_status);
 
   function stars(n) {
     return '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
@@ -23,6 +25,7 @@
       <div class="no-cover"><span>{(record.name || '?').slice(0, 1)}</span></div>
     {/if}
     {#if catBadge}<span class="cat-badge">{catBadge}</span>{/if}
+    <span class="status-badge s{record.active_status}">{statusText}</span>
     {#if record.rating}
       <span class="rate-badge">★ {record.rating}</span>
     {/if}
@@ -112,6 +115,24 @@
     font-weight: 600;
     letter-spacing: 0.03em;
   }
+  /* 海报左下角：演出状态（0 已看 / 1 想看 / 2 已取消 / 3 其他） */
+  .status-badge {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: #fff;
+    background: rgba(20, 17, 15, 0.62);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+  .status-badge.s1 { background: rgba(146, 106, 24, 0.82); }
+  .status-badge.s2 { background: rgba(90, 90, 96, 0.82); text-decoration: line-through; }
+  .status-badge.s3 { background: rgba(93, 62, 110, 0.82); }
   .rate-badge {
     position: absolute;
     top: 8px;

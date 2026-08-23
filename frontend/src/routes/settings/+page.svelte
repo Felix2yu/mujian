@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
   import { theme } from '$lib/stores.js';
+  import { STATUS_LABELS, loadStatusFilter, saveStatusFilter } from '$lib/statusPrefs.js';
 
   let settings = $state({ storage_type: 'local', theme: 'auto', image_format: 'avif' });
   let error = $state('');
@@ -21,6 +22,16 @@
   // 日历订阅链接（同源部署，取当前站点地址拼出完整 URL）
   let icsUrl = $state('');
   let icsCopied = $state(false);
+
+  // 首页列表显示哪些演出状态（本地偏好，不进服务端设置）
+  let statusFilter = $state([0, 1, 2, 3]);
+  function toggleStatus(v) {
+    const set = new Set(statusFilter);
+    if (set.has(v)) set.delete(v);
+    else set.add(v);
+    statusFilter = [...set].sort();
+    saveStatusFilter(statusFilter);
+  }
 
   const MAP_SOURCES = [
     { k: 'osm', label: '标准' },
@@ -148,6 +159,7 @@
       currentTheme = val;
     });
     icsUrl = `${window.location.origin}${api.getICSUrl()}`;
+    statusFilter = loadStatusFilter();
     load();
   });
 </script>
@@ -300,6 +312,19 @@
     </div>
 
     <div class="card sec">
+      <h3>演出状态</h3>
+      <p class="hint" style="margin-bottom: 12px;">控制首页列表显示哪些状态的演出（本地偏好，立即生效）</p>
+      <div class="status-row">
+        {#each [0, 1, 2, 3] as sv}
+          <label class="status-opt" class:on={statusFilter.includes(sv)}>
+            <input type="checkbox" checked={statusFilter.includes(sv)} onchange={() => toggleStatus(sv)} />
+            <span>{STATUS_LABELS[sv]}</span>
+          </label>
+        {/each}
+      </div>
+    </div>
+
+    <div class="card sec">
       <h3>地图</h3>
       <label>默认底图</label>
       <select class="input" bind:value={mapSource} style="max-width: 280px;">
@@ -416,4 +441,21 @@
   }
   .switch-row:first-of-type { border-top: none; }
   .switch-row input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+  .status-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .status-opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1.5px solid var(--border);
+    background: var(--surface-2);
+    cursor: pointer;
+    font-size: 13.5px;
+    color: var(--text-2);
+    transition: all var(--t-fast) var(--ease);
+    user-select: none;
+  }
+  .status-opt input { accent-color: var(--accent); cursor: pointer; }
+  .status-opt.on { border-color: var(--accent); background: var(--accent-softer); color: var(--accent); font-weight: 600; }
 </style>
