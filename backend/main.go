@@ -1,18 +1,22 @@
 package main
 
 import (
+	"context"
 	"embed"
+	"flag"
 	"fmt"
 	"io/fs"
 	"log/slog"
-	"mujian/internal/config"
-	"mujian/internal/db"
-	"mujian/internal/handlers"
-	"mujian/internal/storage"
+	mujianmcp "mujian/internal/mcp"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"mujian/internal/config"
+	"mujian/internal/db"
+	"mujian/internal/handlers"
+	"mujian/internal/storage"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -44,6 +48,9 @@ func (r rootFileSystem) Open(name string) (http.File, error) {
 var frontend embed.FS
 
 func main() {
+	mcpMode := flag.Bool("mcp", false, "run as an MCP stdio server instead of the HTTP server")
+	flag.Parse()
+
 	cfg := config.Load()
 
 	database, err := db.New(cfg.DBPath)
@@ -52,6 +59,16 @@ func main() {
 	}
 	defer database.Close()
 	database.SetLocation(cfg.Location())
+
+	// MCP 模式：在 stdin/stdout 上提供工具服务，不监听端口、不加载静态资源。
+	// 注意：MCP 模式下 settings.json 的主题等设置与 HTTP 服务无关，仅跳过。
+	if *mcpMode {
+		ctx := context.Background()
+		if err := mujianmcp.New(database).Run(ctx); err != nil {
+			fatal("mcp server error: %v", err)
+		}
+		return
+	}
 
 	cfg.LoadFromFile(filepath.Join(filepath.Dir(cfg.DBPath), "settings.json"))
 

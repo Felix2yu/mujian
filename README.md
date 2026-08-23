@@ -13,6 +13,7 @@
 - **地图** — Leaflet 地图按城市/场馆查看演出，同场馆坐标自动对齐
 - **封面管理** — 内容哈希去重合并、未引用封面清理与回收站、统一缩略图、批量格式转换（AVIF / WebP / JPEG）
 - **导入导出** — 兼容「记录现场」导出的 `data.json` 与 `JI_LU_XIAN_CHANG.android.zip`（含 base64 封面），支持 JSON / ZIP 备份恢复
+- **AI 助手（MCP）** — 内置 Model Context Protocol 服务器，支持 AI 批量查询/修改/分析演出数据：按演员统一剧团、合并近似场馆写法、从互联网补充剧目常演折子等
 - **PWA 支持** — 可添加到主屏幕，离线缓存，推送通知提醒
 - **暗色模式** — 跟随系统或手动切换
 
@@ -81,6 +82,30 @@ cd backend && CGO_ENABLED=1 go test ./... -coverprofile=coverage.out
 
 CI 中每次推送/PR 都会运行测试并上传 Codecov；`codecov.yml` 设定 project 与 patch 覆盖率目标 **85%**（`main.go` 与 pprof 调试桩不计入门禁）。
 
+## AI 助手（MCP 服务）
+
+后端内置 MCP（Model Context Protocol）服务器，通过 `./mujian -mcp` 以 stdin/stdout 方式运行，直接读写数据库，供 opencode 等 AI 编程助手批量查找、修改、分析演出数据。
+
+```bash
+cd backend && ./mujian -mcp   # 手动运行；opencode 用户由项目根 opencode.json 自动接管
+```
+
+工具分三类（共 15 个）：
+
+| 类别 | 工具 |
+|------|------|
+| 查询/分析 | `search_records`、`get_record`、`list_artists`、`get_artist_detail`、`list_dramas`、`get_drama_detail`、`list_venues`、`value_counts`、`get_stats` |
+| 批量修改 | `batch_update_company_by_artist`、`batch_merge_venues`、`batch_update_records` |
+| 折子管理 | `batch_create_zhezis`、`update_zhezi`、`delete_zhezi` |
+
+典型场景：
+
+1. **按演员统一剧团** — 预览某演员全部演出的剧团写法，一次统一为标准名。
+2. **合并近似场馆** — 如「xx剧院」与「xx剧院（某某店）」实为同址，合并地址并同步坐标。
+3. **补充剧目常演折子** — AI 联网查证后批量写入剧目折子档案，供演出记录选用。
+
+所有批量修改均支持 `dry_run` 预览。详细说明见 [AGENTS.md](AGENTS.md) 与 [docs/mcp.md](docs/mcp.md)。
+
 ## 环境变量
 
 | 变量 | 默认值 | 说明 |
@@ -116,13 +141,14 @@ mujian/
 │           └── settings/              # 设置
 │   └── static/sw.js           # Service Worker（PWA 缓存与推送）
 ├── backend/                   # Go 后端（前端 dist 通过 go:embed 内嵌）
-│   ├── main.go                # 入口、路由挂载、uploads 静态服务（os.Root 防护）
+│   ├── main.go                # 入口、路由挂载、uploads 静态服务（os.Root 防护）；-mcp 启动 MCP 模式
 │   ├── default.pgo            # PGO profile
 │   └── internal/
 │       ├── config/            # 配置加载与设置持久化
 │       ├── db/                # SQLite 数据层
 │       ├── handlers/          # HTTP 处理器（含流式进度接口）
 │       ├── ics/               # iCalendar 导出
+│       ├── mcp/               # MCP 服务器（AI 批量查询/修改/分析工具）
 │       ├── models/            # 数据模型
 │       └── storage/           # 封面存储（本地/S3）、图片编解码、格式嗅探
 ├── codecov.yml                # Codecov 覆盖率门禁

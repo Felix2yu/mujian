@@ -1958,6 +1958,11 @@ func (db *DB) zheziByID(id string) (*models.Zhezi, error) {
 	return &z, nil
 }
 
+// GetZhezi returns a single zhezi by id (exported for MCP tooling).
+func (db *DB) GetZhezi(id string) (*models.Zhezi, error) {
+	return db.zheziByID(id)
+}
+
 func (db *DB) UpdateZhezi(z models.Zhezi) (*models.Zhezi, error) {
 	if z.Aliases == nil {
 		z.Aliases = []string{}
