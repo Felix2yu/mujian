@@ -259,6 +259,7 @@ func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 		IDs []string `json:"ids"`
 
 		// 每个字段为 nil 表示不修改；非 nil 则按指定操作更新
+		Name          *string `json:"name,omitempty"`
 		CategoryName *string `json:"category_name,omitempty"`
 		CategoryNames *models.BatchArrayOp `json:"category_names,omitempty"`
 		Rating       *int    `json:"rating,omitempty"`
@@ -270,6 +271,8 @@ func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 		Friends      *string `json:"friends,omitempty"`
 		Remark       *string `json:"remark,omitempty"`
 		Seat         *string `json:"seat,omitempty"`
+		DateText     *string             `json:"date_text,omitempty"`
+		Coordinate   *models.Coordinate  `json:"coordinate,omitempty"`
 
 		Price             *float64 `json:"price,omitempty"`
 		PriceCurrency     *string  `json:"price_currency,omitempty"`
@@ -296,6 +299,7 @@ func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	updated, err := h.db.BatchUpdateRecords(models.BatchUpdateParams{
 		IDs:               req.IDs,
+		Name:              req.Name,
 		CategoryName:      req.CategoryName,
 		CategoryNames:     req.CategoryNames,
 		Rating:            req.Rating,
@@ -307,6 +311,8 @@ func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 		Friends:           req.Friends,
 		Remark:            req.Remark,
 		Seat:              req.Seat,
+		DateText:          req.DateText,
+		Coordinate:        req.Coordinate,
 		Price:             req.Price,
 		PriceCurrency:     req.PriceCurrency,
 		PayPrice:          req.PayPrice,

@@ -31,6 +31,7 @@ type ArrayOp struct {
 type BatchUpdateRecordsInput struct {
 	IDs []string `json:"ids"`
 
+	Name          *string  `json:"name,omitempty"`
 	CategoryName  *string  `json:"category_name,omitempty"`
 	CategoryNames *ArrayOp `json:"category_names,omitempty"`
 	Rating        *int     `json:"rating,omitempty"`
@@ -42,12 +43,23 @@ type BatchUpdateRecordsInput struct {
 	Friends       *string  `json:"friends,omitempty"`
 	Remark        *string  `json:"remark,omitempty"`
 	Seat          *string  `json:"seat,omitempty"`
+	// 演出时间文本（如 "2026-08-23 19:30"），解析后联动 date；空串清空
+	DateText   *string            `json:"date_text,omitempty"`
+	Coordinate *models.Coordinate `json:"coordinate,omitempty"`
+
+	Price             *float64 `json:"price,omitempty"`
+	PriceCurrency     *string  `json:"price_currency,omitempty"`
+	PayPrice          *float64 `json:"pay_price,omitempty"`
+	PayPriceCurrency  *string  `json:"pay_price_currency,omitempty"`
+	OtherCost         *float64 `json:"other_cost,omitempty"`
+	OtherCostCurrency *string  `json:"other_cost_currency,omitempty"`
 
 	DramaIDs    *ArrayOp `json:"drama_ids,omitempty"`
 	ZheziIDs    *ArrayOp `json:"zhezi_ids,omitempty"`
 	Play        *ArrayOp `json:"play,omitempty"`
 	Guest       *ArrayOp `json:"guest,omitempty"`
 	ArtistNames *ArrayOp `json:"artist_names,omitempty"`
+	TagIDs      *ArrayOp `json:"tag_ids,omitempty"`
 }
 
 // ---------- 工具实现 ----------
@@ -184,23 +196,33 @@ func (s *Server) handleBatchUpdateRecords(ctx context.Context, req *mcp.CallTool
 		return errResult("ids 不能为空")
 	}
 	params := models.BatchUpdateParams{
-		IDs:           in.IDs,
-		CategoryName:  in.CategoryName,
-		CategoryNames: (*models.BatchArrayOp)(in.CategoryNames),
-		Rating:        in.Rating,
-		ActiveStatus:  in.ActiveStatus,
-		City:          in.City,
-		Address:       in.Address,
-		Channel:       in.Channel,
-		Company:       in.Company,
-		Friends:       in.Friends,
-		Remark:        in.Remark,
-		Seat:          in.Seat,
-		DramaIDs:      (*models.BatchArrayOp)(in.DramaIDs),
-		ZheziIDs:      (*models.BatchArrayOp)(in.ZheziIDs),
-		Play:          (*models.BatchArrayOp)(in.Play),
-		Guest:         (*models.BatchArrayOp)(in.Guest),
-		ArtistNames:   (*models.BatchArrayOp)(in.ArtistNames),
+		IDs:               in.IDs,
+		Name:              in.Name,
+		CategoryName:      in.CategoryName,
+		CategoryNames:     (*models.BatchArrayOp)(in.CategoryNames),
+		Rating:            in.Rating,
+		ActiveStatus:      in.ActiveStatus,
+		City:              in.City,
+		Address:           in.Address,
+		Channel:           in.Channel,
+		Company:           in.Company,
+		Friends:           in.Friends,
+		Remark:            in.Remark,
+		Seat:              in.Seat,
+		DateText:          in.DateText,
+		Coordinate:        in.Coordinate,
+		Price:             in.Price,
+		PriceCurrency:     in.PriceCurrency,
+		PayPrice:          in.PayPrice,
+		PayPriceCurrency:  in.PayPriceCurrency,
+		OtherCost:         in.OtherCost,
+		OtherCostCurrency: in.OtherCostCurrency,
+		DramaIDs:          (*models.BatchArrayOp)(in.DramaIDs),
+		ZheziIDs:          (*models.BatchArrayOp)(in.ZheziIDs),
+		Play:              (*models.BatchArrayOp)(in.Play),
+		Guest:             (*models.BatchArrayOp)(in.Guest),
+		ArtistNames:       (*models.BatchArrayOp)(in.ArtistNames),
+		TagIDs:            (*models.BatchArrayOp)(in.TagIDs),
 	}
 	n, err := s.db.BatchUpdateRecords(params)
 	if err != nil {

@@ -322,6 +322,7 @@ type BatchArrayOp struct {
 // BatchUpdateParams holds all possible fields for batch update.
 type BatchUpdateParams struct {
 	IDs               []string
+	Name              *string
 	CategoryName      *string
 	CategoryNames     *BatchArrayOp // 多剧种 set/append/remove（覆盖 CategoryName）
 	Rating            *int
@@ -333,6 +334,8 @@ type BatchUpdateParams struct {
 	Friends           *string
 	Remark            *string
 	Seat              *string
+	DateText          *string             // 演出时间文本，解析后联动 date 列；空串清空
+	Coordinate        *Coordinate         // 直接覆写坐标 JSON
 	Price             *float64
 	PriceCurrency     *string
 	PayPrice          *float64

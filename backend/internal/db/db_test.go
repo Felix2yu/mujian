@@ -1485,3 +1485,66 @@ func TestMultiCategory(t *testing.T) {
 		t.Fatalf("drama multi-category: %+v / %+v", d.CategoryName, d.CategoryNames)
 	}
 }
+
+func TestBatchUpdateNameDateTimeCoordinateMoney(t *testing.T) {
+	db := newTestDB(t)
+	r := sampleRecord("n1", 1000)
+	r.CategoryNames = []string{"昆剧", "苏剧"}
+	if err := db.UpsertRecord(r); err != nil {
+		t.Fatalf("UpsertRecord: %v", err)
+	}
+
+	n, err := db.BatchUpdateRecords(models.BatchUpdateParams{
+		IDs:       []string{"n1"},
+		Name:      strPtr("改名后的演出"),
+		DateText:  strPtr("2026-08-23 19:30"),
+		Coordinate: &models.Coordinate{Latitude: 31.3, Longitude: 120.6},
+		Price:     fltPtr(180),
+	})
+	if err != nil || n == 0 {
+		t.Fatalf("batch update: n=%d err=%v", n, err)
+	}
+	got, _ := db.GetRecord("n1")
+	if got.Name != "改名后的演出" {
+		t.Fatalf("name: %q", got.Name)
+	}
+	wantT, ok := parseDateText("2026-08-23 19:30", db.loc)
+	if !ok {
+		t.Fatal("parseDateText should accept the canonical format")
+	}
+	if got.DateText != "2026-08-23 19:30" || got.Date != wantT.Unix() {
+		t.Fatalf("date: %q %d", got.DateText, got.Date)
+	}
+	if got.Coordinate == nil || got.Coordinate.Latitude != 31.3 {
+		t.Fatalf("coordinate: %+v", got.Coordinate)
+	}
+	if got.Price != 180 {
+		t.Fatalf("price: %v", got.Price)
+	}
+
+	// 无效日期文本不改动任何字段（no-op，仅计入请求数）
+	if _, err = db.BatchUpdateRecords(models.BatchUpdateParams{IDs: []string{"n1"}, DateText: strPtr("not-a-date")}); err != nil {
+		t.Fatalf("invalid date should not error: %v", err)
+	}
+	got2, _ := db.GetRecord("n1")
+	if got2.DateText != "2026-08-23 19:30" {
+		t.Fatalf("date changed by invalid input: %q", got2.DateText)
+	}
+
+	// tagIds 数组操作
+	n, err = db.BatchUpdateRecords(models.BatchUpdateParams{
+		IDs:    []string{"n1"},
+		TagIDs: &models.BatchArrayOp{Op: "append", Value: []string{"小剧场"}},
+	})
+	if err != nil || n == 0 {
+		t.Fatalf("tag append: n=%d err=%v", n, err)
+	}
+	got3, _ := db.GetRecord("n1")
+	// sampleRecord 自带 tag-1；append 后应为两个元素（去重集合，顺序不保证）
+	if len(got3.TagIDs) != 2 {
+		t.Fatalf("tag_ids: %+v", got3.TagIDs)
+	}
+}
+
+func strPtr(s string) *string { return &s }
+func fltPtr(f float64) *float64 { return &f }

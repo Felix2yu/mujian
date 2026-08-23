@@ -421,3 +421,48 @@ func TestHTTPRoundTrip(t *testing.T) {
 		t.Fatalf("venue groups = %v, want 3", m["total_groups"])
 	}
 }
+
+func TestUpdateDrama(t *testing.T) {
+	s := newTestServer(t)
+	d, _ := s.db.SaveDrama(models.Drama{Name: "牡丹亭", CategoryNames: []string{"昆剧"}, Remark: "旧备注"})
+
+	res, _, err := s.handleUpdateDrama(context.Background(), nil, UpdateDramaInput{
+		ID:            d.ID,
+		CategoryNames: []string{"昆剧", "苏剧"},
+	})
+	if err != nil {
+		t.Fatalf("update_drama: %v", err)
+	}
+	m := resultMap(t, res)
+	got, err := s.db.GetDrama(d.ID)
+	if err != nil {
+		t.Fatalf("GetDrama: %v", err)
+	}
+	if got.Name != "牡丹亭" || got.Remark != "旧备注" {
+		t.Fatalf("untouched fields should persist: %+v", got)
+	}
+	if got.CategoryName != "昆剧" || len(got.CategoryNames) != 2 {
+		t.Fatalf("category_names: %+v / %+v", got.CategoryName, got.CategoryNames)
+	}
+	_ = m
+
+	// 名称更新 + 空字符串拒绝
+	res, _, err = s.handleUpdateDrama(context.Background(), nil, UpdateDramaInput{ID: d.ID, Name: strPtrT("牡丹亭·珍藏版")})
+	if err != nil {
+		t.Fatalf("update name: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected tool error: %v", res.Content)
+	}
+	got, _ = s.db.GetDrama(d.ID)
+	if got.Name != "牡丹亭·珍藏版" {
+		t.Fatalf("name: %q", got.Name)
+	}
+
+	res, _, _ = s.handleUpdateDrama(context.Background(), nil, UpdateDramaInput{ID: d.ID, Name: strPtrT("  ")})
+	if !res.IsError {
+		t.Fatal("blank name should be rejected")
+	}
+}
+
+func strPtrT(s string) *string { return &s }

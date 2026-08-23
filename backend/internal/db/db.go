@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"maps"
 	"mujian/internal/models"
 	"os"
 	"path/filepath"
@@ -790,8 +789,19 @@ func parseTimeArg(s string, loc *time.Location) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-func isAllDigits(s string) bool {
-	if s == "" {
+// parseDateText parses the human-facing date text accepted by record forms
+// ("2026-08-23 19:30" etc). Returns ok=false when no format matches.
+func parseDateText(s string, loc *time.Location) (time.Time, bool) {
+	s = strings.TrimSpace(s)
+	for _, f := range []string{"2006-01-02 15:04", "2006-01-02 15:04:05", "2006-01-02T15:04:05", "2006-01-02"} {
+		if t, err := time.ParseInLocation(f, s, loc); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func isAllDigits(s string) bool {	if s == "" {
 		return false
 	}
 	for _, c := range s {
@@ -1469,6 +1479,10 @@ func (db *DB) BatchUpdateRecords(params models.BatchUpdateParams) (int64, error)
 	simpleSets := []string{}
 	simpleArgs := []interface{}{}
 
+	if params.Name != nil {
+		simpleSets = append(simpleSets, "name = ?")
+		simpleArgs = append(simpleArgs, *params.Name)
+	}
 	if params.CategoryName != nil {
 		simpleSets = append(simpleSets, "category_name = ?")
 		simpleArgs = append(simpleArgs, *params.CategoryName)
@@ -1508,6 +1522,20 @@ func (db *DB) BatchUpdateRecords(params models.BatchUpdateParams) (int64, error)
 	if params.Seat != nil {
 		simpleSets = append(simpleSets, "seat = ?")
 		simpleArgs = append(simpleArgs, *params.Seat)
+	}
+	if params.DateText != nil {
+		// 演出时间以文本为准，解析后联动 unix date 列；空串表示清空。
+		if t, ok := parseDateText(*params.DateText, db.loc); ok {
+			simpleSets = append(simpleSets, "date = ?", "date_text = ?")
+			simpleArgs = append(simpleArgs, t.Unix(), t.Format("2006-01-02 15:04"))
+		} else if *params.DateText == "" {
+			simpleSets = append(simpleSets, "date = ?", "date_text = ?")
+			simpleArgs = append(simpleArgs, 0, "")
+		}
+	}
+	if params.Coordinate != nil {
+		simpleSets = append(simpleSets, "coordinate = ?")
+		simpleArgs = append(simpleArgs, marshalJSON(params.Coordinate))
 	}
 	if params.Price != nil {
 		simpleSets = append(simpleSets, "price = ?")
@@ -1644,14 +1672,21 @@ func applyArrayOp(existing []string, op *models.BatchArrayOp) []string {
 	case "set":
 		return op.Value
 	case "append":
+		// 保持既有顺序、新值按传入顺序去重追加 —— 主元素（如主剧种）
+		// 必须稳定，不能因 map 遍历顺序而漂移。
 		set := make(map[string]struct{}, len(existing)+len(op.Value))
 		for _, v := range existing {
 			set[v] = struct{}{}
 		}
+		out := slices.Clone(existing)
 		for _, v := range op.Value {
+			if _, dup := set[v]; dup {
+				continue
+			}
+			out = append(out, v)
 			set[v] = struct{}{}
 		}
-		return slices.Collect(maps.Keys(set))
+		return out
 	case "remove":
 		removeSet := make(map[string]struct{}, len(op.Value))
 		for _, v := range op.Value {

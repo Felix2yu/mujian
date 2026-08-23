@@ -113,8 +113,14 @@ func (s *Server) registerTools() {
 
 	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "batch_update_records",
-		Description: "通用批量更新演出记录（按 ID 列表）。标量字段直接赋值；数组字段（drama_ids/zhezi_ids/artist_names/play/guest/tag_ids/category_names 多剧种）支持 set/append/remove 三种操作。",
+		Description: "通用批量更新演出记录（按 ID 列表）。标量字段直接赋值（name/分类/评分/状态/城市/场馆/渠道/剧团/同行/备注/座位/date_text 演出时间/coordinate 坐标/票价等金额字段）；数组字段（drama_ids/zhezi_ids/artist_names/play/guest/tag_ids/category_names 多剧种）支持 set/append/remove 三种操作。",
 	}, s.handleBatchUpdateRecords)
+
+	// ---- 剧目管理 ----
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "update_drama",
+		Description: "更新剧目档案的名称/剧种（可多个）/备注。未提供的字段保持不变。",
+	}, s.handleUpdateDrama)
 
 	// ---- 折子管理 ----
 	mcp.AddTool(s.server, &mcp.Tool{
