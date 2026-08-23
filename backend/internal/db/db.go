@@ -908,7 +908,7 @@ const recordUpsertSQL = `
 //   - scalar fallback: an empty array promotes CategoryName into a
 //     single-element array so reads never see an out-of-sync pair.
 //
-// The same invariant is applied to dramas via normalizeDramaCategories.
+// (Drama categories are derived from performances on read; see SaveDrama.)
 func normalizeCategories(r *models.Record) {
 	names := make([]string, 0, len(r.CategoryNames))
 	for _, n := range r.CategoryNames {
@@ -922,22 +922,6 @@ func normalizeCategories(r *models.Record) {
 	r.CategoryNames = names
 	if len(names) > 0 {
 		r.CategoryName = names[0]
-	}
-}
-
-func normalizeDramaCategories(d *models.Drama) {
-	names := make([]string, 0, len(d.CategoryNames))
-	for _, n := range d.CategoryNames {
-		if n = strings.TrimSpace(n); n != "" {
-			names = append(names, n)
-		}
-	}
-	if len(names) == 0 && strings.TrimSpace(d.CategoryName) != "" {
-		names = []string{strings.TrimSpace(d.CategoryName)}
-	}
-	d.CategoryNames = names
-	if len(names) > 0 {
-		d.CategoryName = names[0]
 	}
 }
 
@@ -1801,9 +1785,51 @@ func (db *DB) DeleteCategory(id string) error {
 
 // ---------- Dramas & Zhezis ----------
 
+// dramaCategoriesAgg aggregates the categories actually used by the
+// performances that reference each drama, ordered by usage count descending.
+// The drama archive itself no longer stores editable categories: the shows
+// that stage it are the single source of truth.
+func (db *DB) dramaCategoriesAll() (map[string][]string, error) {
+	rows, err := db.conn.Query(`
+		SELECT rd.drama_id, je.value AS cat, COUNT(*) AS cnt
+		FROM record_dramas rd
+		JOIN records r ON r.id = rd.record_id
+		JOIN json_each(r.category_names) je
+		WHERE je.value != ''
+		GROUP BY rd.drama_id, cat`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]string{}
+	for rows.Next() {
+		var dramaID, cat string
+		var cnt int
+		if err := rows.Scan(&dramaID, &cat, &cnt); err != nil {
+			continue
+		}
+		out[dramaID] = append(out[dramaID], cat)
+	}
+	return out, rows.Err()
+}
+
+// applyDramaCategories fills the derived CategoryNames (and primary scalar)
+// from the usage aggregation; dramas without performances get an empty list.
+func applyDramaCategories(d *models.Drama, agg map[string][]string) {
+	d.CategoryNames = agg[d.ID]
+	if d.CategoryNames == nil {
+		d.CategoryNames = []string{}
+	}
+	if len(d.CategoryNames) > 0 {
+		d.CategoryName = d.CategoryNames[0]
+	} else {
+		d.CategoryName = ""
+	}
+}
+
 func (db *DB) ListDramas() ([]models.Drama, error) {
 	rows, err := db.conn.Query(`
-		SELECT d.id, d.name, d.category_name, d.category_names, d.remark, d.sort_order,
+		SELECT d.id, d.name, d.remark, d.sort_order,
 			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id) AS zhezi_count,
 			(SELECT COUNT(*) FROM record_dramas rd WHERE rd.drama_id = d.id) AS record_count
 		FROM dramas d ORDER BY d.sort_order ASC, d.name COLLATE NOCASE`)
@@ -1811,14 +1837,17 @@ func (db *DB) ListDramas() ([]models.Drama, error) {
 		return nil, err
 	}
 	defer rows.Close()
+	agg, err := db.dramaCategoriesAll()
+	if err != nil {
+		return nil, err
+	}
 	var out []models.Drama
 	for rows.Next() {
 		var d models.Drama
-		var categoryNames string
-		if err := rows.Scan(&d.ID, &d.Name, &d.CategoryName, &categoryNames, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount); err != nil {
+		if err := rows.Scan(&d.ID, &d.Name, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount); err != nil {
 			continue
 		}
-		applyDramaCategoryFallback(&d, categoryNames)
+		applyDramaCategories(&d, agg)
 		out = append(out, d)
 	}
 	if out == nil {
@@ -1829,33 +1858,46 @@ func (db *DB) ListDramas() ([]models.Drama, error) {
 
 func (db *DB) GetDrama(id string) (*models.Drama, error) {
 	var d models.Drama
-	var categoryNames string
 	err := db.conn.QueryRow(`
-		SELECT d.id, d.name, d.category_name, d.category_names, d.remark, d.sort_order,
+		SELECT d.id, d.name, d.remark, d.sort_order,
 			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id),
 			(SELECT COUNT(*) FROM record_dramas rd WHERE rd.drama_id = d.id)
 		FROM dramas d WHERE d.id = ?`, id).
-		Scan(&d.ID, &d.Name, &d.CategoryName, &categoryNames, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount)
+		Scan(&d.ID, &d.Name, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount)
 	if err != nil {
 		return nil, fmt.Errorf("drama not found: %w", err)
 	}
-	applyDramaCategoryFallback(&d, categoryNames)
+	cats, err := db.dramaCategoriesFor(id)
+	if err != nil {
+		return nil, err
+	}
+	applyDramaCategories(&d, map[string][]string{id: cats})
 	return &d, nil
 }
 
-// applyDramaCategoryFallback mirrors applyCategoryFallback for dramas: the
-// scalar primary category and the JSON array are reconciled after every read.
-func applyDramaCategoryFallback(d *models.Drama, raw string) {
-	d.CategoryNames = unmarshalStrings(raw)
-	if len(d.CategoryNames) == 0 {
-		if d.CategoryName != "" {
-			d.CategoryNames = []string{d.CategoryName}
+// dramaCategoriesFor aggregates used categories for a single drama.
+func (db *DB) dramaCategoriesFor(dramaID string) ([]string, error) {
+	rows, err := db.conn.Query(`
+		SELECT je.value, COUNT(*) AS cnt
+		FROM record_dramas rd
+		JOIN records r ON r.id = rd.record_id
+		JOIN json_each(r.category_names) je
+		WHERE rd.drama_id = ? AND je.value != ''
+		GROUP BY je.value ORDER BY cnt DESC`, dramaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var cat string
+		var cnt int
+		if err := rows.Scan(&cat, &cnt); err != nil {
+			continue
 		}
-		return
+		out = append(out, cat)
 	}
-	if d.CategoryName == "" {
-		d.CategoryName = d.CategoryNames[0]
-	}
+	return out, rows.Err()
 }
 
 // ReorderDramas sets the manual sort order of dramas from an explicit ordered
@@ -1930,7 +1972,10 @@ func (db *DB) GetDramaDetail(id string) (*models.DramaDetail, error) {
 
 func (db *DB) SaveDrama(d models.Drama) (*models.Drama, error) {
 	create := d.ID == ""
-	normalizeDramaCategories(&d)
+	// 剧种由关联演出自动聚合，档案本身不再存储：清空写入，
+	// 传入的 CategoryName/CategoryNames 一律忽略。
+	d.CategoryName = ""
+	d.CategoryNames = []string{}
 	if create {
 		d.ID = newID()
 		// New dramas append after any manually ordered ones.

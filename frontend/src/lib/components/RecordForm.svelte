@@ -121,7 +121,7 @@
   let dramaTree = $state([]);
   let dramaQuery = $state('');
   let showDramaList = $state(false);
-  let newDrama = $state({ name: '', categoryNames: [] });
+  let newDrama = $state({ name: '' });
   let creatingDrama = $state(false);
 
   const chosenDramas = $derived(
@@ -197,10 +197,10 @@
     creatingDrama = true;
     error = '';
     try {
-      const d = await api.createDrama({ name, categoryNames: newDrama.categoryNames.slice() });
+      const d = await api.createDrama({ name });
       await loadDramaTree();
       form.drama_ids = [...form.drama_ids, d.id];
-      newDrama = { name: '', categoryNames: [] };
+      newDrama = { name: '' };
     } catch (e) {
       error = e.message;
     } finally {
@@ -824,9 +824,8 @@
         <div class="ply-new-body">
           <div class="row">
             <input class="input" placeholder="剧目，如：牡丹亭" bind:value={newDrama.name} onkeydown={(e) => e.key === 'Enter' && createNewDrama()} />
+            <button type="button" class="btn sm" onclick={createNewDrama} disabled={creatingDrama || !newDrama.name.trim()}>{creatingDrama ? '创建中…' : '创建并关联'}</button>
           </div>
-          <CategoryTags bind:values={newDrama.categoryNames} {categories} placeholder="剧种（可多个），回车添加" />
-          <button type="button" class="btn sm" onclick={createNewDrama} disabled={creatingDrama || !newDrama.name.trim()}>{creatingDrama ? '创建中…' : '创建并关联'}</button>
         </div>
       </details>
     </div>

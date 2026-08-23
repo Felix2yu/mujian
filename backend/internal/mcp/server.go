@@ -119,7 +119,7 @@ func (s *Server) registerTools() {
 	// ---- 剧目管理 ----
 	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "update_drama",
-		Description: "更新剧目档案的名称/剧种（可多个）/备注。未提供的字段保持不变。",
+		Description: "更新剧目档案的名称/备注。剧种由关联演出自动聚合，不可手动编辑。未提供的字段保持不变。",
 	}, s.handleUpdateDrama)
 
 	// ---- 折子管理 ----

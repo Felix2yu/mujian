@@ -1476,13 +1476,66 @@ func TestMultiCategory(t *testing.T) {
 		t.Fatalf("after batch append: %+v / %+v", got3.CategoryName, got3.CategoryNames)
 	}
 
-	// Dramas normalize the same way.
+	// 剧目剧种由关联演出聚合：传入的分类被忽略，未关联时为空。
 	d, err := db.SaveDrama(models.Drama{Name: "白蛇传", CategoryNames: []string{"昆剧", "京剧"}})
 	if err != nil {
 		t.Fatalf("SaveDrama: %v", err)
 	}
-	if d.CategoryName != "昆剧" || len(d.CategoryNames) != 2 {
-		t.Fatalf("drama multi-category: %+v / %+v", d.CategoryName, d.CategoryNames)
+	if d.CategoryName != "" || len(d.CategoryNames) != 0 {
+		t.Fatalf("drama categories should be empty before any performance: %+v / %+v", d.CategoryName, d.CategoryNames)
+	}
+
+	// 关联两条不同剧种的演出后，GetDrama 聚合出剧种（按使用次数降序）。
+	mustUpsertRec(t, db, "w1", "白蛇传", []string{"昆曲"})
+	mustUpsertRec(t, db, "w2", "白蛇传", []string{"京剧"})
+	mustUpsertRec(t, db, "w3", "白蛇传", []string{"京剧"})
+	if _, err := db.SaveDrama(models.Drama{ID: d.ID, Name: "白蛇传"}); err != nil {
+		t.Fatalf("resave drama: %v", err)
+	}
+	gotD, err := db.GetDrama(d.ID)
+	if err != nil {
+		t.Fatalf("GetDrama: %v", err)
+	}
+	if gotD.CategoryName != "京剧" || len(gotD.CategoryNames) != 2 || gotD.CategoryNames[0] != "京剧" || gotD.CategoryNames[1] != "昆曲" {
+		t.Fatalf("aggregated categories: %+v / %+v", gotD.CategoryName, gotD.CategoryNames)
+	}
+	list, err := db.ListDramas()
+	if err != nil {
+		t.Fatalf("ListDramas: %v", err)
+	}
+	var listed *models.Drama
+	for i := range list {
+		if list[i].ID == d.ID {
+			listed = &list[i]
+		}
+	}
+	if listed == nil || listed.CategoryName != "京剧" || len(listed.CategoryNames) != 2 {
+		t.Fatalf("list aggregated categories: %+v", listed)
+	}
+}
+
+// mustUpsertRec writes a minimal performance record with the given categories
+// linked to a drama of the same name (created on demand).
+func mustUpsertRec(t *testing.T, db *DB, id, dramaName string, cats []string) {
+	t.Helper()
+	ds, _ := db.ListDramas()
+	var did string
+	for _, x := range ds {
+		if x.Name == dramaName {
+			did = x.ID
+			break
+		}
+	}
+	if did == "" {
+		nd, err := db.SaveDrama(models.Drama{Name: dramaName})
+		if err != nil {
+			t.Fatalf("SaveDrama(%s): %v", dramaName, err)
+		}
+		did = nd.ID
+	}
+	r := models.Record{ID: id, Name: dramaName, DateText: "2026-01-01 19:30", CategoryName: cats[0], CategoryNames: cats, DramaIDs: []string{did}}
+	if err := db.UpsertRecord(r); err != nil {
+		t.Fatalf("UpsertRecord %s: %v", id, err)
 	}
 }
 

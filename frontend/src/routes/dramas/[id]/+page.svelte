@@ -4,7 +4,6 @@
   import { api } from '$lib/api.js';
   import BackLink from '$lib/components/BackLink.svelte';
   import RecordCard from '$lib/components/RecordCard.svelte';
-  import CategoryTags from '$lib/components/CategoryTags.svelte';
 
   const id = $page.params.id;
   let drama = $state(null);
@@ -12,11 +11,10 @@
   let records = $state([]);
   let loading = $state(true);
   let error = $state('');
-  let categories = $state([]);
 
   // inline drama editing
   let editingInfo = $state(false);
-  let info = $state({ name: '', categoryNames: [], remark: '' });
+  let info = $state({ name: '', remark: '' });
 
   // zhezi creation / editing
   let form = $state({ name: '', aliases: '', remark: '' });
@@ -34,8 +32,7 @@
       drama = d;
       zhezis = d.zhezis || [];
       records = d.records || [];
-      info = { name: d.name, categoryNames: (d.categoryNames && d.categoryNames.length ? d.categoryNames : d.categoryName ? [d.categoryName] : []).slice(), remark: d.remark };
-      api.listCategories().then((cs) => (categories = cs)).catch(() => {});
+      info = { name: d.name, remark: d.remark };
     } catch (e) {
       error = e.message;
     } finally {
@@ -44,11 +41,7 @@
   }
 
   function startEdit() {
-    info = {
-      name: drama.name,
-      categoryNames: (drama.categoryNames && drama.categoryNames.length ? drama.categoryNames : drama.categoryName ? [drama.categoryName] : []).slice(),
-      remark: drama.remark
-    };
+    info = { name: drama.name, remark: drama.remark };
     editingInfo = true;
   }
 
@@ -57,7 +50,7 @@
     saving = true;
     error = '';
     try {
-      drama = await api.updateDrama(id, { name: info.name.trim(), categoryNames: info.categoryNames.slice(), remark: info.remark.trim() });
+      drama = await api.updateDrama(id, { name: info.name.trim(), remark: info.remark.trim() });
       editingInfo = false;
     } catch (e) {
       error = e.message;
@@ -171,9 +164,7 @@
     <div class="card head-card">
       {#if editingInfo}
         <input class="input" placeholder="剧目名称" bind:value={info.name} />
-        <div class="row">
-          <CategoryTags bind:values={info.categoryNames} {categories} placeholder="剧种（可多个），回车添加" />
-        </div>
+        <div class="row"><span class="muted small">剧种由关联演出自动统计，无需手动填写</span></div>
         <textarea class="input" rows="2" placeholder="备注" bind:value={info.remark}></textarea>
         <div class="actions">
           <button class="btn primary sm" onclick={saveInfo} disabled={saving || !info.name.trim()}>{saving ? '保存中…' : '保存'}</button>
@@ -184,7 +175,7 @@
           <div>
             <h1>{drama.name}</h1>
             <div class="sub">
-              {#each drama.categoryNames || [] as cn}<span class="pill">{cn}</span>{/each}
+              {#each drama.categoryNames || [] as cn}<span class="pill" title="由关联演出自动统计">{cn}</span>{/each}
               <span class="muted">{drama.zheziCount} 折 · {drama.recordCount} 场演出</span>
             </div>
             {#if drama.remark}<p class="remark">{drama.remark}</p>{/if}
