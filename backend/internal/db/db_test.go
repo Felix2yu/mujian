@@ -1614,3 +1614,76 @@ func TestBatchUpdateNameDateTimeCoordinateMoney(t *testing.T) {
 
 func strPtr(s string) *string { return &s }
 func fltPtr(f float64) *float64 { return &f }
+
+// 批量数组操作必须同步关联表（record_dramas / record_artists），
+// 否则读取回填看不到变更——水浒记合并时曾因此丢失关联。
+func TestBatchArrayOpsSyncRelations(t *testing.T) {
+	db := newTestDB(t)
+	d1, _ := db.SaveDrama(models.Drama{Name: "牡丹亭"})
+	d2, _ := db.SaveDrama(models.Drama{Name: "长生殿"})
+	a1, _ := db.SaveArtist(models.Artist{Name: "张军"})
+
+	r := sampleRecord("rel1", 1000)
+	r.DramaIDs = []string{d1.ID}
+	r.ArtistNames = []string{"张军"}
+	r.TagIDs = []string{}
+	if err := db.UpsertRecord(r); err != nil {
+		t.Fatalf("UpsertRecord: %v", err)
+	}
+
+	// append 另一剧目：读取（关联表回填）应立即可见。
+	if _, err := db.BatchUpdateRecords(models.BatchUpdateParams{
+		IDs:      []string{"rel1"},
+		DramaIDs: &models.BatchArrayOp{Op: "append", Value: []string{d2.ID}},
+	}); err != nil {
+		t.Fatalf("batch append drama: %v", err)
+	}
+	got, err := db.GetRecord("rel1")
+	if err != nil {
+		t.Fatalf("GetRecord: %v", err)
+	}
+	has := func(ids []string, want string) bool {
+		for _, x := range ids {
+			if x == want {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(got.DramaIDs, d1.ID) || !has(got.DramaIDs, d2.ID) {
+		t.Fatalf("drama_ids after append: %+v", got.DramaIDs)
+	}
+
+	// remove 后关联表同步删除。
+	if _, err := db.BatchUpdateRecords(models.BatchUpdateParams{
+		IDs:      []string{"rel1"},
+		DramaIDs: &models.BatchArrayOp{Op: "remove", Value: []string{d1.ID}},
+	}); err != nil {
+		t.Fatalf("batch remove drama: %v", err)
+	}
+	got, _ = db.GetRecord("rel1")
+	if has(got.DramaIDs, d1.ID) || !has(got.DramaIDs, d2.ID) {
+		t.Fatalf("drama_ids after remove: %+v", got.DramaIDs)
+	}
+
+	// artist_names 变化同步 record_artists（演员详情页反向查询依赖它）。
+	if _, err := db.BatchUpdateRecords(models.BatchUpdateParams{
+		IDs:          []string{"rel1"},
+		ArtistNames:  &models.BatchArrayOp{Op: "append", Value: []string{"龚隐雷"}},
+	}); err != nil {
+		t.Fatalf("batch append artist: %v", err)
+	}
+	detail, err := db.GetArtistDetail(a1.ID)
+	if err != nil {
+		t.Fatalf("GetArtistDetail: %v", err)
+	}
+	found := false
+	for _, rr := range detail.Records {
+		if rr.ID == "rel1" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("artist detail should still include rel1 after append")
+	}
+}

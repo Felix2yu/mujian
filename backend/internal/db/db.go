@@ -1660,10 +1660,59 @@ func (db *DB) applyArrayOps(params models.BatchUpdateParams) (int64, error) {
 			if _, err := db.conn.Exec(sql, colArgs...); err != nil {
 				return total, err
 			}
+			// 关联表同步：读取路径从 record_dramas / record_zhezis /
+			// record_artists 回填（JSON 列只是遗留兜底），批量改写后必须
+			// 镜像到关联表，否则变更对查询"不可见"。
+			if err := db.syncRecordRelationsAfterBatch(db.conn, id, arrayCols); err != nil {
+				return total, err
+			}
 			total++
 		}
 	}
 	return total, nil
+}
+
+// syncRecordRelationsAfterBatch mirrors the JSON-array columns rewritten by a
+// batch array op into the relation tables, mirroring what UpsertRecord does
+// for whole-record writes.
+func (db *DB) syncRecordRelationsAfterBatch(exec sqlExecutor, recordID string, cols map[string]*models.BatchArrayOp) error {
+	selectCol := func(col string) ([]string, error) {
+		var raw string
+		if err := exec.QueryRow("SELECT "+col+" FROM records WHERE id = ?", recordID).Scan(&raw); err != nil {
+			return nil, err
+		}
+		return unmarshalStrings(raw), nil
+	}
+	if cols["drama_ids"] != nil {
+		ids, err := selectCol("drama_ids")
+		if err != nil {
+			return err
+		}
+		if err := db.setRecordDramas(exec, recordID, ids); err != nil {
+			return err
+		}
+	}
+	if cols["zhezi_ids"] != nil {
+		ids, err := selectCol("zhezi_ids")
+		if err != nil {
+			return err
+		}
+		if err := db.setRecordZhezis(exec, recordID, ids); err != nil {
+			return err
+		}
+	}
+	if cols["artist_names"] != nil {
+		// records 表没有 artist_ids 列：按名字解析（resolveArtistByName
+		// 会自动补建缺失档案），与 UpsertRecord 的 names 兜底路径一致。
+		names, err := selectCol("artist_names")
+		if err != nil {
+			return err
+		}
+		if err := db.setRecordArtists(exec, recordID, nil, names); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // applyArrayOp applies the op (set/append/remove) to existing values.
