@@ -362,6 +362,15 @@ func TestStatsCalendarSettings(t *testing.T) {
 	if !strings.Contains(string(b), "BEGIN:VCALENDAR") {
 		t.Fatalf("ics body: %s", b)
 	}
+	// 默认 inline（便于日历订阅），?dl=1 时作为附件下载。
+	res, _ = doJSON(t, "GET", ts.URL+"/api/calendar.ics", nil)
+	if disp := res.Header.Get("Content-Disposition"); !strings.HasPrefix(disp, "inline") {
+		t.Fatalf("default ics disposition: %q", disp)
+	}
+	res, _ = doJSON(t, "GET", ts.URL+"/api/calendar.ics?dl=1", nil)
+	if disp := res.Header.Get("Content-Disposition"); !strings.Contains(disp, "attachment") {
+		t.Fatalf("dl=1 disposition: %q", disp)
+	}
 
 	res, b = doJSON(t, "GET", ts.URL+"/api/autocomplete/city", nil)
 	expectStatus(t, res, 200, "autocomplete")

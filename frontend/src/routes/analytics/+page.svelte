@@ -150,7 +150,6 @@
       {/if}
     </div>
 
-    <a class="btn" href={api.getICSUrl()}>⇩ 导出日历 (.ics)</a>
   {/if}
 </div>
 

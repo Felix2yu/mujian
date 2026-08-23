@@ -771,7 +771,12 @@ func (h *Handler) getICS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
-	w.Header().Set("Content-Disposition", "attachment; filename=mujian.ics")
+	// 默认 inline 以便日历客户端直接订阅；?dl=1 时作为文件下载。
+	if r.URL.Query().Get("dl") == "1" {
+		w.Header().Set("Content-Disposition", "attachment; filename=mujian.ics")
+	} else {
+		w.Header().Set("Content-Disposition", "inline; filename=mujian.ics")
+	}
 	w.Write([]byte(ics.GenerateCalendar(recs, h.cfg.Location())))
 }
 

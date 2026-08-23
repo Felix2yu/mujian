@@ -18,6 +18,10 @@
   let alignResult = $state(null);
   let alignError = $state('');
 
+  // 日历订阅链接（同源部署，取当前站点地址拼出完整 URL）
+  let icsUrl = $state('');
+  let icsCopied = $state(false);
+
   const MAP_SOURCES = [
     { k: 'osm', label: '标准' },
     { k: 'gaode', label: '高德' },
@@ -143,6 +147,7 @@
     const unsub = theme.subscribe((val) => {
       currentTheme = val;
     });
+    icsUrl = `${window.location.origin}${api.getICSUrl()}`;
     load();
   });
 </script>
@@ -154,8 +159,9 @@
   </div>
 
   {#if loading}
-    <div class="skeleton" style="height: 220px; max-width: 520px;"></div>
+    <div class="skeleton" style="height: 220px;"></div>
   {:else}
+    <div class="settings-grid">
     <div class="card sec">
       <h3>主题</h3>
       <div class="theme-row">
@@ -250,6 +256,33 @@
     </div>
 
     <div class="card sec">
+      <h3>日历</h3>
+      <p class="hint" style="margin-bottom: 12px;">将演出记录同步到系统日历：下载 .ics 文件导入，或复制订阅链接添加到日历应用（如 Apple 日历 → 订阅日历），内容会随记录更新</p>
+      <div class="cal-actions">
+        <a class="btn" href={`${api.getICSUrl()}?dl=1`}>⇩ 导出日历 (.ics)</a>
+        <div class="cal-subscribe">
+          <input class="input" readonly value={icsUrl} onfocus={(e) => e.currentTarget.select()} />
+          <button
+            type="button"
+            class="btn"
+            onclick={async () => {
+              try {
+                await navigator.clipboard.writeText(icsUrl);
+                icsCopied = true;
+                setTimeout(() => (icsCopied = false), 2000);
+              } catch {
+                // 剪贴板不可用时退化为选中文本手动复制
+              }
+            }}
+          >
+            {icsCopied ? '已复制' : '复制'}
+          </button>
+        </div>
+        <span class="hint">订阅链接为完整地址，可在手机 / 电脑的日历应用中直接添加订阅；该地址无鉴权，请勿公开分享</span>
+      </div>
+    </div>
+
+    <div class="card sec">
       <h3>记录字段</h3>
       <p class="hint" style="margin-bottom: 12px;">控制新建 / 编辑演出时是否显示以下字段，不常用的可按需隐藏</p>
       <label class="switch-row">
@@ -309,6 +342,7 @@
         <div class="banner error">⚠ {alignError}</div>
       {/if}
     </div>
+    </div>
 
     {#if error}<div class="banner error">⚠ {error}</div>{/if}
     {#if saved}<div class="banner success">✓ 已保存</div>{/if}
@@ -318,7 +352,15 @@
 </div>
 
 <style>
-  .sec { padding: 18px 20px; margin-bottom: 14px; max-width: 520px; }
+  /* 宽屏下卡片两列铺排，窄屏自动退化为单列 */
+  .settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 14px;
+    align-items: start;
+    margin-bottom: 14px;
+  }
+  .sec { padding: 18px 20px; margin-bottom: 0; }
   .sec h3 { margin: 0 0 12px; font-size: 15.5px; }
 
   .theme-row { display: flex; gap: 8px; }
@@ -358,6 +400,10 @@
   }
   .convert-actions .btn { width: fit-content; }
   .btn.disabled, .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .cal-actions { display: flex; flex-direction: column; gap: 8px; }
+  .cal-subscribe { display: flex; gap: 8px; }
+  .cal-subscribe .input { flex: 1; font-size: 12.5px; color: var(--text-2); }
+  .cal-subscribe .btn { white-space: nowrap; }
   .switch-row {
     display: flex;
     align-items: center;
