@@ -18,11 +18,12 @@ import (
 )
 
 // importRecords ingests:
-//   1. a plain data.json file (already-converted export), or
-//   2. the original 记录现场 export archive JI_LU_XIAN_CHANG.android.zip
-//      (contains JI_LU_XIAN_CHANG.android, a zlib/raw-deflate JSON, plus
-//      covers/<uuid> files that are base64-encoded images), or
-//   3. a zip containing data.json + covers/ (converted layout).
+//  1. a plain data.json file (already-converted export), or
+//  2. the original 记录现场 export archive JI_LU_XIAN_CHANG.android.zip
+//     (contains JI_LU_XIAN_CHANG.android, a zlib/raw-deflate JSON, plus
+//     covers/<uuid> files that are base64-encoded images), or
+//  3. a zip containing data.json + covers/ (converted layout).
+//
 // Records/categories/meta are upserted; covers are decoded to binary and
 // written into <UploadDir>/covers/, with each record's coverFile derived from
 // the cover UUID when it is absent.

@@ -117,18 +117,18 @@ func (c *Config) Update(s *SettingsUpdate) {
 }
 
 type SettingsUpdate struct {
-	Theme       *string `json:"theme"`
-	StorageType *string `json:"storage_type"`
-	ImageFormat *string `json:"image_format"`
-	S3Endpoint  *string `json:"s3_endpoint"`
-	S3Bucket    *string `json:"s3_bucket"`
-	S3Region    *string `json:"s3_region"`
-	S3AccessKey *string `json:"s3_access_key"`
-	S3SecretKey *string `json:"s3_secret_key"`
-	S3PublicURL *string `json:"s3_public_url"`
-	ShowFriends *bool `json:"show_friends"`
-	ShowPayPrice *bool `json:"show_pay_price"`
-	ShowOtherCost *bool `json:"show_other_cost"`
+	Theme         *string `json:"theme"`
+	StorageType   *string `json:"storage_type"`
+	ImageFormat   *string `json:"image_format"`
+	S3Endpoint    *string `json:"s3_endpoint"`
+	S3Bucket      *string `json:"s3_bucket"`
+	S3Region      *string `json:"s3_region"`
+	S3AccessKey   *string `json:"s3_access_key"`
+	S3SecretKey   *string `json:"s3_secret_key"`
+	S3PublicURL   *string `json:"s3_public_url"`
+	ShowFriends   *bool   `json:"show_friends"`
+	ShowPayPrice  *bool   `json:"show_pay_price"`
+	ShowOtherCost *bool   `json:"show_other_cost"`
 }
 
 func (c *Config) GetSettingsResponse() map[string]interface{} {
@@ -141,19 +141,19 @@ func (c *Config) GetSettingsResponse() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"theme":              c.Theme,
-		"storage_type":       c.StorageType,
-		"image_format":       c.ImageFormat,
+		"theme":               c.Theme,
+		"storage_type":        c.StorageType,
+		"image_format":        c.ImageFormat,
 		"allow_local_storage": c.AllowLocalStorage,
-		"s3_endpoint":        c.S3Endpoint,
-		"s3_bucket":          c.S3Bucket,
-		"s3_region":          c.S3Region,
-		"s3_access_key":      c.S3AccessKey,
-		"s3_secret_key":      s3Key,
-		"s3_public_url":      c.S3PublicURL,
-		"show_friends":       c.ShowFriends,
-		"show_pay_price":     c.ShowPayPrice,
-		"show_other_cost":    c.ShowOtherCost,
+		"s3_endpoint":         c.S3Endpoint,
+		"s3_bucket":           c.S3Bucket,
+		"s3_region":           c.S3Region,
+		"s3_access_key":       c.S3AccessKey,
+		"s3_secret_key":       s3Key,
+		"s3_public_url":       c.S3PublicURL,
+		"show_friends":        c.ShowFriends,
+		"show_pay_price":      c.ShowPayPrice,
+		"show_other_cost":     c.ShowOtherCost,
 	}
 }
 
@@ -162,16 +162,16 @@ func (c *Config) SaveToFile(path string) error {
 	defer c.mu.RUnlock()
 
 	data := map[string]string{
-		"theme":        c.Theme,
-		"storage_type": c.StorageType,
-		"image_format": c.ImageFormat,
-		"s3_endpoint":  c.S3Endpoint,
-		"s3_bucket":    c.S3Bucket,
-		"s3_region":    c.S3Region,
-		"s3_access_key": c.S3AccessKey,
-		"s3_secret_key": c.S3SecretKey,
-		"s3_public_url": c.S3PublicURL,
-		"show_friends":   b2s(c.ShowFriends),
+		"theme":           c.Theme,
+		"storage_type":    c.StorageType,
+		"image_format":    c.ImageFormat,
+		"s3_endpoint":     c.S3Endpoint,
+		"s3_bucket":       c.S3Bucket,
+		"s3_region":       c.S3Region,
+		"s3_access_key":   c.S3AccessKey,
+		"s3_secret_key":   c.S3SecretKey,
+		"s3_public_url":   c.S3PublicURL,
+		"show_friends":    b2s(c.ShowFriends),
 		"show_pay_price":  b2s(c.ShowPayPrice),
 		"show_other_cost": b2s(c.ShowOtherCost),
 	}

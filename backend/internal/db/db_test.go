@@ -248,7 +248,7 @@ func TestBatchUpdateAndDelete(t *testing.T) {
 	if _, err := db.BatchUpdateRecords(models.BatchUpdateParams{
 		IDs: []string{"bf"}, CategoryName: &cat, Rating: &rate, ActiveStatus: &act,
 		City: &addr, Address: &addr, Channel: &chanS, Company: &comp, Friends: &fr,
-		Remark: &remark, Seat: &seat, 		Price: &price, PriceCurrency: &pcur,
+		Remark: &remark, Seat: &seat, Price: &price, PriceCurrency: &pcur,
 		PayPrice: &pp, PayPriceCurrency: &ppcur, OtherCost: &oc, OtherCostCurrency: &ocur,
 		DramaIDs: setD, ZheziIDs: zset, Play: appOp, Guest: appG, ArtistNames: appA, TagIDs: rmT,
 	}); err != nil {

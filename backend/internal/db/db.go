@@ -197,23 +197,23 @@ func (db *DB) migrate() error {
 			sort_order INTEGER NOT NULL DEFAULT 0,
 			PRIMARY KEY (record_id, drama_id)
 		)`,
-	`CREATE INDEX IF NOT EXISTS idx_record_dramas_drama ON record_dramas(drama_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_record_dramas_record ON record_dramas(record_id)`,
-	// Relation table: record <-> zhezi. Same rationale as record_dramas:
-	// replaces the JSON-in-TEXT zhezi_ids column so cross-table lookups use
-	// real indexes instead of instr() scans. records.zhezi_ids is kept only as
-	// a legacy fallback for reading old backups; the relation table is truth.
-	`CREATE TABLE IF NOT EXISTS record_zhezis (
+		`CREATE INDEX IF NOT EXISTS idx_record_dramas_drama ON record_dramas(drama_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_record_dramas_record ON record_dramas(record_id)`,
+		// Relation table: record <-> zhezi. Same rationale as record_dramas:
+		// replaces the JSON-in-TEXT zhezi_ids column so cross-table lookups use
+		// real indexes instead of instr() scans. records.zhezi_ids is kept only as
+		// a legacy fallback for reading old backups; the relation table is truth.
+		`CREATE TABLE IF NOT EXISTS record_zhezis (
 		record_id TEXT NOT NULL,
 		zhezi_id TEXT NOT NULL,
 		sort_order INTEGER NOT NULL DEFAULT 0,
 		PRIMARY KEY (record_id, zhezi_id)
 	)`,
-	`CREATE INDEX IF NOT EXISTS idx_record_zhezis_zhezi ON record_zhezis(zhezi_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_record_zhezis_record ON record_zhezis(record_id)`,
-	// Actor (演员) is a first-class entity, mirroring dramas. It owns a cover,
-	// bio and aliases so it can power a dedicated actor home page.
-	`CREATE TABLE IF NOT EXISTS artists (
+		`CREATE INDEX IF NOT EXISTS idx_record_zhezis_zhezi ON record_zhezis(zhezi_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_record_zhezis_record ON record_zhezis(record_id)`,
+		// Actor (演员) is a first-class entity, mirroring dramas. It owns a cover,
+		// bio and aliases so it can power a dedicated actor home page.
+		`CREATE TABLE IF NOT EXISTS artists (
 		id TEXT PRIMARY KEY,
 		name TEXT NOT NULL,
 		aliases TEXT NOT NULL DEFAULT '[]',
@@ -225,19 +225,19 @@ func (db *DB) migrate() error {
 		sort_order INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`,
-	`CREATE INDEX IF NOT EXISTS idx_artists_name ON artists(name)`,
-	// Relation table: record <-> artist. Replaces the JSON-in-TEXT artist_names
-	// column for cross-table lookups (actor home page reverse query).
-	// records.artist_names is kept only as a legacy fallback for old backups.
-	`CREATE TABLE IF NOT EXISTS record_artists (
+		`CREATE INDEX IF NOT EXISTS idx_artists_name ON artists(name)`,
+		// Relation table: record <-> artist. Replaces the JSON-in-TEXT artist_names
+		// column for cross-table lookups (actor home page reverse query).
+		// records.artist_names is kept only as a legacy fallback for old backups.
+		`CREATE TABLE IF NOT EXISTS record_artists (
 		record_id TEXT NOT NULL,
 		artist_id TEXT NOT NULL,
 		sort_order INTEGER NOT NULL DEFAULT 0,
 		PRIMARY KEY (record_id, artist_id)
 	)`,
-	`CREATE INDEX IF NOT EXISTS idx_record_artists_artist ON record_artists(artist_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_record_artists_record ON record_artists(record_id)`,
-}
+		`CREATE INDEX IF NOT EXISTS idx_record_artists_artist ON record_artists(artist_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_record_artists_record ON record_artists(record_id)`,
+	}
 
 	for _, q := range queries {
 		if _, err := db.conn.Exec(q); err != nil {

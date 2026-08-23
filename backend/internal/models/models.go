@@ -103,16 +103,16 @@ type DramaTree struct {
 // reverse relationship (which performances feature this actor) is resolved via
 // the record_artists relation table.
 type Artist struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
 	Aliases     []string `json:"aliases"`
-	Remark      string `json:"remark"`
-	Cover       string `json:"cover"`
-	CoverFile   string `json:"coverFile"`
-	CoverThumb  string `json:"coverThumb"`
-	Bio         string `json:"bio"`
-	SortOrder   int    `json:"sortOrder"` // manual ordering, 0 = alphabetical
-	RecordCount int    `json:"recordCount"` // performances referencing this artist
+	Remark      string   `json:"remark"`
+	Cover       string   `json:"cover"`
+	CoverFile   string   `json:"coverFile"`
+	CoverThumb  string   `json:"coverThumb"`
+	Bio         string   `json:"bio"`
+	SortOrder   int      `json:"sortOrder"`   // manual ordering, 0 = alphabetical
+	RecordCount int      `json:"recordCount"` // performances referencing this artist
 }
 
 // ArtistDetail is Artist plus the performances that feature the actor.
@@ -142,7 +142,7 @@ type Meta struct {
 type ExportData struct {
 	Source       string     `json:"source"`
 	ExportedAt   string     `json:"exportedAt"`
-	RecordCount   int        `json:"recordCount"`
+	RecordCount  int        `json:"recordCount"`
 	CoverMissing int        `json:"coverMissing"`
 	CoverDir     string     `json:"coverDir"`
 	CoverNote    string     `json:"coverNote"`
@@ -188,14 +188,14 @@ type RecordRequest struct {
 }
 
 type CalendarEvent struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"`
-	Date         int64   `json:"date"`
-	City         string  `json:"city"`
-	Address      string  `json:"address"`
-	CoverFile    string  `json:"coverFile"`
-	Rating       int     `json:"rating"`
-	CategoryName string  `json:"categoryName"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Date         int64  `json:"date"`
+	City         string `json:"city"`
+	Address      string `json:"address"`
+	CoverFile    string `json:"coverFile"`
+	Rating       int    `json:"rating"`
+	CategoryName string `json:"categoryName"`
 }
 
 type Stats struct {
@@ -240,25 +240,25 @@ type DashboardStats struct {
 
 // Settings / request structures are reused from config.
 type Settings struct {
-	Theme              string `json:"theme"`
-	StorageType        string `json:"storage_type"`
-	S3Endpoint         string `json:"s3_endpoint"`
-	S3Bucket           string `json:"s3_bucket"`
-	S3Region           string `json:"s3_region"`
-	S3AccessKey        string `json:"s3_access_key"`
-	S3SecretKey        string `json:"s3_secret_key"`
-	S3PublicURL        string `json:"s3_public_url"`
+	Theme       string `json:"theme"`
+	StorageType string `json:"storage_type"`
+	S3Endpoint  string `json:"s3_endpoint"`
+	S3Bucket    string `json:"s3_bucket"`
+	S3Region    string `json:"s3_region"`
+	S3AccessKey string `json:"s3_access_key"`
+	S3SecretKey string `json:"s3_secret_key"`
+	S3PublicURL string `json:"s3_public_url"`
 }
 
 type SettingsRequest struct {
-	Theme          *string `json:"theme"`
-	StorageType    *string `json:"storage_type"`
-	S3Endpoint     *string `json:"s3_endpoint"`
-	S3Bucket       *string `json:"s3_bucket"`
-	S3Region       *string `json:"s3_region"`
-	S3AccessKey    *string `json:"s3_access_key"`
-	S3SecretKey    *string `json:"s3_secret_key"`
-	S3PublicURL    *string `json:"s3_public_url"`
+	Theme       *string `json:"theme"`
+	StorageType *string `json:"storage_type"`
+	S3Endpoint  *string `json:"s3_endpoint"`
+	S3Bucket    *string `json:"s3_bucket"`
+	S3Region    *string `json:"s3_region"`
+	S3AccessKey *string `json:"s3_access_key"`
+	S3SecretKey *string `json:"s3_secret_key"`
+	S3PublicURL *string `json:"s3_public_url"`
 }
 
 // ---------- Cover management ----------
