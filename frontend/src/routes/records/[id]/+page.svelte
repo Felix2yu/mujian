@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api, coverUrl, formatCurrency, formatDate } from '$lib/api.js';
+  import BackLink from '$lib/components/BackLink.svelte';
 
   const id = $page.params.id;
   let rec = $state(null);
@@ -81,7 +82,7 @@
   <a class="btn ghost" href="/">← 返回列表</a>
 {:else if rec}
   <div class="detail fade-up">
-    <a class="back" href="/">← 返回</a>
+    <BackLink />
 
     <div class="hero card">
       <div class="cover">

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
+  import BackLink from '$lib/components/BackLink.svelte';
   import RecordForm from '$lib/components/RecordForm.svelte';
 
   const id = $page.params.id;
@@ -32,7 +33,7 @@
 </script>
 
 <div class="fade-up">
-  <a class="back" href={`/records/${id}`}>← 返回详情</a>
+  <BackLink fallback={`/records/${id}`} label="← 返回详情" />
   <div class="page-head">
     <h1>编辑记录</h1>
   </div>

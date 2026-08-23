@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api, coverUrl } from '$lib/api.js';
+  import BackLink from '$lib/components/BackLink.svelte';
   import RecordCard from '$lib/components/RecordCard.svelte';
 
   const id = $page.params.id;
@@ -109,7 +110,7 @@
 </script>
 
 <div class="fade-up">
-  <a class="back" href="/artists">← 演员</a>
+  <BackLink fallback="/artists" label="← 演员" />
 
   {#if loading}
     <div class="loading">

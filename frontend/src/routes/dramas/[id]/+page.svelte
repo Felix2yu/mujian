@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
+  import BackLink from '$lib/components/BackLink.svelte';
   import RecordCard from '$lib/components/RecordCard.svelte';
   import CategoryTags from '$lib/components/CategoryTags.svelte';
 
@@ -153,7 +154,7 @@
 </script>
 
 <div class="fade-up">
-  <a class="back" href="/dramas">← 剧目</a>
+  <BackLink fallback="/dramas" label="← 剧目" />
 
   {#if loading}
     <div class="loading">
