@@ -5,8 +5,7 @@ import (
 	"encoding/json"
 	"mujian/internal/db"
 	"mujian/internal/models"
-	"os"
-	"os/exec"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -374,41 +373,25 @@ func TestGetValueCounts(t *testing.T) {
 	}
 }
 
-func TestStdioRoundTrip(t *testing.T) {
-	// 端到端：以子进程方式运行 `mujian -mcp`，用 SDK 客户端完成握手并调用工具，
-	// 验证 opencode 将看到的完整链路（DB_PATH 环境变量 → stdio → JSON 结果）。
+func TestHTTPRoundTrip(t *testing.T) {
+	// 端到端：通过 Streamable HTTP transport（与线上 /mcp 端点相同的配置）
+	// 完成 MCP 握手并调用工具，验证远程客户端（如 opencode remote MCP）
+	// 将看到的完整链路。
 	if testing.Short() {
 		t.Skip("short mode")
 	}
-	// 主二进制含 //go:embed all:dist，纯后端 CI 环境（未构建前端）编译不了
-	// main 包；此时跳过，核心逻辑已由其余单元测试覆盖。
-	if _, err := os.Stat(filepath.Join("..", "..", "dist")); err != nil {
-		t.Skip("frontend dist not built; skip stdio round-trip")
-	}
-	ctx := context.Background()
-
-	// 构建主二进制（main 包在模块根目录，即测试 cwd 的上两级）。
-	bin := filepath.Join(t.TempDir(), "mujian-test")
-	build := exec.Command("go", "build", "-o", bin, ".")
-	build.Dir = filepath.Join("..", "..")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v\n%s", err, out)
-	}
-
-	// 预先准备含种子数据的数据库，再交给子进程。
-	dbPath := filepath.Join(t.TempDir(), "data", "mujian.db")
-	database, err := db.New(dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := &Server{db: database}
+	s := newTestServer(t)
 	seedVenueAndTroupeData(t, s)
-	database.Close()
 
-	cmd := exec.Command(bin, "-mcp")
-	cmd.Env = append(cmd.Environ(), "DB_PATH="+dbPath)
+	srv := httptest.NewServer(s.HTTPHandler())
+	defer srv.Close()
+
+	ctx := context.Background()
 	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v0"}, nil)
-	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: cmd}, nil)
+	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint:             srv.URL,
+		DisableStandaloneSSE: true, // 服务端为 Stateless，不提供独立 SSE 流
+	}, nil)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
@@ -423,7 +406,7 @@ func TestStdioRoundTrip(t *testing.T) {
 	}
 	m := resultMap(t, res)
 	if num(t, m, "total") != 4 {
-		t.Fatalf("stdio total = %v, want 4", m["total"])
+		t.Fatalf("http total = %v, want 4", m["total"])
 	}
 
 	res, err = session.CallTool(ctx, &mcp.CallToolParams{

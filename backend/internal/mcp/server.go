@@ -1,20 +1,22 @@
 // Package mcp exposes MuJian's data layer as an MCP (Model Context Protocol)
-// stdio server so AI agents can search, bulk-edit and analyse performance
-// records — e.g. unify troupe names across an actor's shows, merge
-// near-duplicate venue spellings, or curate a drama's zhezi list.
+// server so AI agents can search, bulk-edit and analyse performance records —
+// e.g. unify troupe names across an actor's shows, merge near-duplicate venue
+// spellings, or curate a drama's zhezi list.
+//
+// The server is served over the Streamable HTTP transport by the main HTTP
+// process (typically at /mcp behind a reverse proxy).
 package mcp
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"mujian/internal/db"
+	"net/http"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Server wires the MuJian database into an MCP server over stdio.
+// Server wires the MuJian database into an MCP server over HTTP.
 type Server struct {
 	server *mcp.Server
 	db     *db.DB
@@ -33,10 +35,22 @@ func New(database *db.DB) *Server {
 	return s
 }
 
-// Run serves MCP requests over stdin/stdout until the client disconnects.
-func (s *Server) Run(ctx context.Context) error {
-	slog.Info("mujian mcp server starting")
-	return s.server.Run(ctx, &mcp.StdioTransport{})
+// HTTPHandler returns an http.Handler serving the MCP server over the
+// Streamable HTTP transport, for the main router to mount (e.g. at "/mcp").
+//
+// Stateless + JSON responses keep the endpoint session-free: no
+// Mcp-Session-Id state survives restarts and plain application/json avoids
+// SSE streaming pitfalls through compressing proxies. Localhost/DNS-rebinding
+// protection is disabled because requests arrive via a reverse proxy carrying
+// a public Host header; exposure is delegated to the proxy layer.
+func (s *Server) HTTPHandler() http.Handler {
+	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+		return s.server
+	}, &mcp.StreamableHTTPOptions{
+		Stateless:                  true,
+		JSONResponse:               true,
+		DisableLocalhostProtection: true,
+	})
 }
 
 func (s *Server) registerTools() {

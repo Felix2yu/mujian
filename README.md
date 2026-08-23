@@ -84,10 +84,10 @@ CI 中每次推送/PR 都会运行测试并上传 Codecov；`codecov.yml` 设定
 
 ## AI 助手（MCP 服务）
 
-后端内置 MCP（Model Context Protocol）服务器，通过 `./mujian -mcp` 以 stdin/stdout 方式运行，直接读写数据库，供 opencode 等 AI 编程助手批量查找、修改、分析演出数据。
+后端内置 MCP（Model Context Protocol）服务器，随 HTTP 服务启动并通过 `/mcp` 端点以 Streamable HTTP 暴露，直接读写数据库，供 opencode 等 AI 编程助手批量查找、修改、分析演出数据。
 
 ```bash
-cd backend && ./mujian -mcp   # 手动运行；opencode 用户由项目根 opencode.json 自动接管
+cd backend && ./mujian        # MCP 随服务自动启动；opencode 用户由项目根 opencode.json 接管（remote 指向 /mcp）
 ```
 
 工具分三类（共 15 个）：
@@ -141,7 +141,7 @@ mujian/
 │           └── settings/              # 设置
 │   └── static/sw.js           # Service Worker（PWA 缓存与推送）
 ├── backend/                   # Go 后端（前端 dist 通过 go:embed 内嵌）
-│   ├── main.go                # 入口、路由挂载、uploads 静态服务（os.Root 防护）；-mcp 启动 MCP 模式
+│   ├── main.go                # 入口、路由挂载（/api、/mcp）、uploads 静态服务（os.Root 防护）
 │   ├── default.pgo            # PGO profile
 │   └── internal/
 │       ├── config/            # 配置加载与设置持久化

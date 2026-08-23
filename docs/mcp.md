@@ -5,21 +5,22 @@
 ## 架构
 
 ```
-opencode ──stdin/stdout (JSON-RPC)──▶ ./mujian -mcp ──▶ backend/data/mujian.db
+opencode ──Streamable HTTP (JSON-RPC)──▶ https://<服务地址>/mcp ──▶ backend/data/mujian.db
 ```
 
-- 传输：stdio（换行分隔 JSON），由 opencode 按项目根 `opencode.json` 自动拉起子进程。
-- 数据库：与 HTTP 服务共用同一个 SQLite（WAL），两者可同时运行。
-- 入口：`main.go` 的 `-mcp` flag；实现在 `backend/internal/mcp/`。
+- 传输：Streamable HTTP（Stateless + JSON 响应），MCP 服务随主 HTTP 服务一起启动，挂载在 `/mcp` 端点。
+- 数据库：与 HTTP API 共用同一个 SQLite（WAL）、同一个 `*db.DB` 实例。
+- 入口：`main.go` 的 `/mcp` 路由；实现在 `backend/internal/mcp/`。
+- 无鉴权：暴露面与 `/api` 一致，由反向代理（nginx）或内网边界保护。
 
 ## 启动方式
 
 ```bash
-# 手动运行（调试）
-cd backend && DB_PATH=./data/mujian.db ./mujian -mcp
+# MCP 随 HTTP 服务自动启动，无需单独运行
+cd backend && ./mujian   # 之后 AI 客户端连接 http://<服务地址>/mcp
 
-# opencode：项目根 opencode.json 已注册（go run . -mcp，cwd=backend），
-# 重启 opencode 后即可使用全部 mujian 工具。
+# opencode：项目根 opencode.json 已注册 remote MCP（url 指向 /mcp），
+# 改成你的实际域名后重启 opencode 即可使用全部 mujian 工具。
 ```
 
 ## 工具清单（15 个）

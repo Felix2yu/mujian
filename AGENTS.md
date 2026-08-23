@@ -4,7 +4,7 @@
 
 ## MCP 服务（mujian）
 
-本项目通过 `opencode.json` 注册了本地 MCP 服务 `mujian`（`backend -mcp` 子命令，stdin/stdout），直接读写 `backend/data/mujian.db`。涉及演出数据查询、批量修改、分析时优先使用这些 MCP 工具，而不是直接用 sqlite 命令行改库。
+本项目通过 `opencode.json` 注册了 remote MCP 服务 `mujian`，指向后端 HTTP 服务的 `/mcp` 端点（Streamable HTTP，随服务启动，无单独进程），直接读写 `backend/data/mujian.db`。涉及演出数据查询、批量修改、分析时优先使用这些 MCP 工具，而不是直接用 sqlite 命令行改库。
 
 ### 工具速查
 

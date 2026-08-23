@@ -2,12 +2,8 @@
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "mujian": {
-      "type": "local",
-      "command": ["go", "run", ".", "-mcp"],
-      "cwd": "backend",
-      "environment": {
-        "DB_PATH": "./data/mujian.db"
-      },
+      "type": "remote",
+      "url": "https://your-domain.example/mcp",
       "enabled": true,
       "timeout": 60000
     }

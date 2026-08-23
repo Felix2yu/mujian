@@ -1,9 +1,7 @@
 package main
 
 import (
-	"context"
 	"embed"
-	"flag"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -48,9 +46,6 @@ func (r rootFileSystem) Open(name string) (http.File, error) {
 var frontend embed.FS
 
 func main() {
-	mcpMode := flag.Bool("mcp", false, "run as an MCP stdio server instead of the HTTP server")
-	flag.Parse()
-
 	cfg := config.Load()
 
 	database, err := db.New(cfg.DBPath)
@@ -59,16 +54,6 @@ func main() {
 	}
 	defer database.Close()
 	database.SetLocation(cfg.Location())
-
-	// MCP 模式：在 stdin/stdout 上提供工具服务，不监听端口、不加载静态资源。
-	// 注意：MCP 模式下 settings.json 的主题等设置与 HTTP 服务无关，仅跳过。
-	if *mcpMode {
-		ctx := context.Background()
-		if err := mujianmcp.New(database).Run(ctx); err != nil {
-			fatal("mcp server error: %v", err)
-		}
-		return
-	}
 
 	cfg.LoadFromFile(filepath.Join(filepath.Dir(cfg.DBPath), "settings.json"))
 
@@ -93,6 +78,10 @@ func main() {
 
 	h := handlers.New(database, cfg, st)
 	r.Mount("/api", h.Routes())
+
+	// MCP over Streamable HTTP：与 /api 同进程同库，供 AI 客户端远程调用
+	// （无鉴权，暴露面与 /api 一致，由反向代理/内网边界保护）。
+	r.Handle("/mcp", mujianmcp.New(database).HTTPHandler())
 
 	// Serve uploaded covers from the uploads dir, but constrain file access to
 	// that subtree using os.Root (Go 1.24) so path traversal outside the dir
