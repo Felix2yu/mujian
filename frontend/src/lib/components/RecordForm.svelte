@@ -137,6 +137,39 @@
   let dramaDragIdx = $state(-1);
   let dramaOverIdx = $state(-1);
 
+  // 已关联剧目的内联编辑：不离开表单即可改名称/剧种（折子仍到详情页管理）
+  let editingDramaId = $state(null);
+  let dramaEdit = $state({ name: '', categoryNames: [] });
+  let savingDramaEdit = $state(false);
+
+  function startDramaEdit(d) {
+    editingDramaId = d.id;
+    dramaEdit = { name: d.name, categoryNames: (d.categoryNames || []).slice() };
+  }
+
+  function cancelDramaEdit() {
+    editingDramaId = null;
+    dramaEdit = { name: '', categoryNames: [] };
+  }
+
+  async function saveDramaEdit() {
+    if (!dramaEdit.name.trim() || savingDramaEdit) return;
+    savingDramaEdit = true;
+    error = '';
+    try {
+      await api.updateDrama(editingDramaId, {
+        name: dramaEdit.name.trim(),
+        categoryNames: dramaEdit.categoryNames.slice()
+      });
+      await loadDramaTree();
+      cancelDramaEdit();
+    } catch (e) {
+      error = e.message;
+    } finally {
+      savingDramaEdit = false;
+    }
+  }
+
   function onDramaDropAt(targetIdx) {
     if (dramaDragIdx < 0 || dramaDragIdx === targetIdx) {
       dramaDragIdx = -1;
@@ -759,7 +792,7 @@
       {#each orderedChosenDramas as d, di (d.id)}
         <div
           class="ply-item"
-          draggable="true"
+          draggable={editingDramaId !== d.id ? 'true' : 'false'}
           class:dragging={dramaDragIdx === di}
           class:drop-target={dramaOverIdx === di && dramaDragIdx !== di}
           ondragstart={(e) => { dramaDragIdx = di; e.dataTransfer.effectAllowed = 'move'; }}
@@ -768,12 +801,27 @@
           ondrop={(e) => { e.preventDefault(); onDramaDropAt(di); }}
           ondragend={() => { dramaDragIdx = -1; dramaOverIdx = -1; }}
         >
+          {#if editingDramaId === d.id}
+            <div class="ply-edit">
+              <input class="input" placeholder="剧目名称" bind:value={dramaEdit.name} />
+              <CategoryTags bind:values={dramaEdit.categoryNames} {categories} placeholder="剧种（可多个）；清空则按演出自动统计" />
+              <div class="ply-edit-actions">
+                <button type="button" class="btn primary sm" onclick={saveDramaEdit} disabled={savingDramaEdit || !dramaEdit.name.trim()}>
+                  {savingDramaEdit ? '保存中…' : '保存'}
+                </button>
+                <button type="button" class="btn ghost sm" onclick={cancelDramaEdit}>取消</button>
+              </div>
+            </div>
+          {:else}
           <div class="ply-head">
             <span class="ply-name" title="拖动调整顺序">
               <span class="cap-grip" aria-hidden="true">⠿</span>
               {d.name}{#if d.categoryNames?.length}<em class="ply-cat">{d.categoryNames.join(' / ')}</em>{/if}
             </span>
-            <button type="button" class="ply-x" onclick={() => removeDrama(d.id)} title="移除该剧目">✕</button>
+            <span class="ply-ops">
+              <button type="button" class="ply-edit-btn" onclick={() => startDramaEdit(d)} title="编辑该剧目（名称/剧种）">✎</button>
+              <button type="button" class="ply-x" onclick={() => removeDrama(d.id)} title="移除该剧目">✕</button>
+            </span>
           </div>
           {#if d.zhezis && d.zhezis.length}
             <div class="ply-zhezis">
@@ -789,6 +837,7 @@
             </div>
           {:else}
             <div class="small muted">该剧目暂无折子（可在剧目详情页添加）</div>
+          {/if}
           {/if}
         </div>
       {/each}
@@ -1030,6 +1079,14 @@
   .ply-item.drop-target { outline: 2px dashed var(--accent); outline-offset: 2px; }
   .ply-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .ply-name { font-weight: 600; font-size: 14.5px; }
+  .ply-ops { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+  .ply-edit-btn {
+    border: none; background: none; color: var(--text-3); width: 24px; height: 24px;
+    border-radius: 50%; cursor: pointer; font-size: 13px;
+  }
+  .ply-edit-btn:hover { background: var(--surface-3); color: var(--accent); }
+  .ply-edit { display: flex; flex-direction: column; gap: 10px; }
+  .ply-edit-actions { display: flex; gap: 8px; }
   .ply-cat { font-style: normal; font-size: 12px; color: var(--text-muted); background: var(--surface-3); border-radius: 999px; padding: 2px 9px; margin-left: 8px; }
   .ply-x { border: none; background: none; color: var(--text-3); width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 12px; }
   .ply-x:hover { background: var(--danger-soft); color: var(--danger); }
