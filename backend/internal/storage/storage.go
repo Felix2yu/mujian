@@ -87,6 +87,11 @@ func DetectExt(b []byte) string {
 	if len(b) >= 12 && b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F' && string(b[8:12]) == "WEBP" {
 		return ".webp"
 	}
+	// AVIF: ftyp box with avif/avis brand. Without this branch AVIF bytes were
+	// mislabeled ".jpg" (the fallback), corrupting stored extensions.
+	if len(b) >= 12 && string(b[4:8]) == "ftyp" && (string(b[8:12]) == "avif" || string(b[8:12]) == "avis") {
+		return ".avif"
+	}
 	return ".jpg"
 }
 

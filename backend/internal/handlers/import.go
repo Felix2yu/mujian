@@ -418,18 +418,22 @@ func materializeCover(f *zip.File) ([]byte, string, error) {
 	return nil, "", fmt.Errorf("unsupported cover format")
 }
 
+// magic returns the canonical extension for supported image bytes. It defers
+// to storage.DetectImageFormat so the accepted set (jpeg/png/webp/avif) stays
+// in lockstep with the storage layer — mujian exports store covers as AVIF,
+// and before AVIF was recognized here every re-imported cover fell into the
+// base64 branch, failed, and was silently counted as missing.
 func magic(b []byte) (string, bool) {
-	if len(b) < 4 {
+	switch storage.DetectImageFormat(b) {
+	case "jpeg":
+		return ".jpg", true
+	case "png":
+		return ".png", true
+	case "webp":
+		return ".webp", true
+	case "avif":
+		return ".avif", true
+	default:
 		return "", false
 	}
-	if b[0] == 0xff && b[1] == 0xd8 {
-		return ".jpg", true
-	}
-	if b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4e && b[3] == 0x47 {
-		return ".png", true
-	}
-	if b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F' && len(b) >= 12 && string(b[8:12]) == "WEBP" {
-		return ".webp", true
-	}
-	return "", false
 }
