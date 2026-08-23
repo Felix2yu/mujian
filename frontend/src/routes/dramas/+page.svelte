@@ -1,18 +1,20 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
+  import CategoryTags from '$lib/components/CategoryTags.svelte';
 
   let dramas = $state([]);
+  let categories = $state([]);
   let loading = $state(true);
   let error = $state('');
   let adding = $state(false);
-  let form = $state({ name: '', remark: '' });
+  let form = $state({ name: '', categoryNames: [], remark: '' });
 
   async function load() {
     loading = true;
     error = '';
     try {
-      dramas = await api.listDramas();
+      [dramas, categories] = await Promise.all([api.listDramas(), api.listCategories().catch(() => [])]);
     } catch (e) {
       error = e.message;
     } finally {
@@ -26,7 +28,7 @@
     adding = true;
     error = '';
     try {
-      const d = await api.createDrama({ name, remark: form.remark.trim() });
+      const d = await api.createDrama({ name, categoryNames: form.categoryNames.slice(), remark: form.remark.trim() });
       location.href = `/dramas/${d.id}`;
     } catch (e) {
       error = e.message;
@@ -86,6 +88,9 @@
 
   <div class="card add-bar">
     <input class="input grow" placeholder="剧目名称（必填），如：牡丹亭" bind:value={form.name} onkeydown={(e) => e.key === 'Enter' && add()} />
+    <div class="grow">
+      <CategoryTags bind:values={form.categoryNames} {categories} placeholder="剧种（可多个，可留空自动统计）" />
+    </div>
     <input class="input grow" placeholder="备注（可选）" bind:value={form.remark} />
     <button class="btn primary" onclick={add} disabled={adding || !form.name.trim()}>{adding ? '创建中…' : '＋ 创建剧目'}</button>
   </div>

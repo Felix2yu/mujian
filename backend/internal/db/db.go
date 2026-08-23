@@ -908,7 +908,8 @@ const recordUpsertSQL = `
 //   - scalar fallback: an empty array promotes CategoryName into a
 //     single-element array so reads never see an out-of-sync pair.
 //
-// (Drama categories are derived from performances on read; see SaveDrama.)
+// The same invariant is applied to dramas via normalizeDramaCategories; on
+// read a manually stored list wins over the performance aggregation.
 func normalizeCategories(r *models.Record) {
 	names := make([]string, 0, len(r.CategoryNames))
 	for _, n := range r.CategoryNames {
@@ -922,6 +923,24 @@ func normalizeCategories(r *models.Record) {
 	r.CategoryNames = names
 	if len(names) > 0 {
 		r.CategoryName = names[0]
+	}
+}
+
+// normalizeDramaCategories trims the manually maintained category list and
+// keeps the scalar primary in sync (element 0). An empty list means "derive
+// from performances" on read.
+func normalizeDramaCategories(d *models.Drama) {
+	names := make([]string, 0, len(d.CategoryNames))
+	for _, n := range d.CategoryNames {
+		if n = strings.TrimSpace(n); n != "" {
+			names = append(names, n)
+		}
+	}
+	d.CategoryNames = names
+	if len(names) > 0 {
+		d.CategoryName = names[0]
+	} else {
+		d.CategoryName = ""
 	}
 }
 
@@ -1813,10 +1832,15 @@ func (db *DB) dramaCategoriesAll() (map[string][]string, error) {
 	return out, rows.Err()
 }
 
-// applyDramaCategories fills the derived CategoryNames (and primary scalar)
-// from the usage aggregation; dramas without performances get an empty list.
-func applyDramaCategories(d *models.Drama, agg map[string][]string) {
-	d.CategoryNames = agg[d.ID]
+// applyDramaCategories fills the derived categories: a manually set
+// category_names on the drama archive wins; otherwise fall back to the
+// aggregation of categories used by the performances staging it (拼盘演出
+// 会把无关剧种带进聚合，手动覆盖用于修正这类场景).
+func applyDramaCategories(d *models.Drama, raw string, agg map[string][]string) {
+	d.CategoryNames = unmarshalStrings(raw)
+	if len(d.CategoryNames) == 0 {
+		d.CategoryNames = agg[d.ID]
+	}
 	if d.CategoryNames == nil {
 		d.CategoryNames = []string{}
 	}
@@ -1829,7 +1853,7 @@ func applyDramaCategories(d *models.Drama, agg map[string][]string) {
 
 func (db *DB) ListDramas() ([]models.Drama, error) {
 	rows, err := db.conn.Query(`
-		SELECT d.id, d.name, d.remark, d.sort_order,
+		SELECT d.id, d.name, d.category_names, d.remark, d.sort_order,
 			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id) AS zhezi_count,
 			(SELECT COUNT(*) FROM record_dramas rd WHERE rd.drama_id = d.id) AS record_count
 		FROM dramas d ORDER BY d.sort_order ASC, d.name COLLATE NOCASE`)
@@ -1844,10 +1868,11 @@ func (db *DB) ListDramas() ([]models.Drama, error) {
 	var out []models.Drama
 	for rows.Next() {
 		var d models.Drama
-		if err := rows.Scan(&d.ID, &d.Name, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount); err != nil {
+		var manual string
+		if err := rows.Scan(&d.ID, &d.Name, &manual, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount); err != nil {
 			continue
 		}
-		applyDramaCategories(&d, agg)
+		applyDramaCategories(&d, manual, agg)
 		out = append(out, d)
 	}
 	if out == nil {
@@ -1858,12 +1883,13 @@ func (db *DB) ListDramas() ([]models.Drama, error) {
 
 func (db *DB) GetDrama(id string) (*models.Drama, error) {
 	var d models.Drama
+	var manual string
 	err := db.conn.QueryRow(`
-		SELECT d.id, d.name, d.remark, d.sort_order,
+		SELECT d.id, d.name, d.category_names, d.remark, d.sort_order,
 			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id),
 			(SELECT COUNT(*) FROM record_dramas rd WHERE rd.drama_id = d.id)
 		FROM dramas d WHERE d.id = ?`, id).
-		Scan(&d.ID, &d.Name, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount)
+		Scan(&d.ID, &d.Name, &manual, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount)
 	if err != nil {
 		return nil, fmt.Errorf("drama not found: %w", err)
 	}
@@ -1871,7 +1897,7 @@ func (db *DB) GetDrama(id string) (*models.Drama, error) {
 	if err != nil {
 		return nil, err
 	}
-	applyDramaCategories(&d, map[string][]string{id: cats})
+	applyDramaCategories(&d, manual, map[string][]string{id: cats})
 	return &d, nil
 }
 
@@ -1972,10 +1998,7 @@ func (db *DB) GetDramaDetail(id string) (*models.DramaDetail, error) {
 
 func (db *DB) SaveDrama(d models.Drama) (*models.Drama, error) {
 	create := d.ID == ""
-	// 剧种由关联演出自动聚合，档案本身不再存储：清空写入，
-	// 传入的 CategoryName/CategoryNames 一律忽略。
-	d.CategoryName = ""
-	d.CategoryNames = []string{}
+	normalizeDramaCategories(&d)
 	if create {
 		d.ID = newID()
 		// New dramas append after any manually ordered ones.

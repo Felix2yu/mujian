@@ -1476,8 +1476,8 @@ func TestMultiCategory(t *testing.T) {
 		t.Fatalf("after batch append: %+v / %+v", got3.CategoryName, got3.CategoryNames)
 	}
 
-	// 剧目剧种由关联演出聚合：传入的分类被忽略，未关联时为空。
-	d, err := db.SaveDrama(models.Drama{Name: "白蛇传", CategoryNames: []string{"昆剧", "京剧"}})
+	// 未手动设置且未关联演出时为空（SaveDrama 传入的分类即手动值，此处不传）。
+	d, err := db.SaveDrama(models.Drama{Name: "白蛇传"})
 	if err != nil {
 		t.Fatalf("SaveDrama: %v", err)
 	}
@@ -1489,9 +1489,6 @@ func TestMultiCategory(t *testing.T) {
 	mustUpsertRec(t, db, "w1", "白蛇传", []string{"昆曲"})
 	mustUpsertRec(t, db, "w2", "白蛇传", []string{"京剧"})
 	mustUpsertRec(t, db, "w3", "白蛇传", []string{"京剧"})
-	if _, err := db.SaveDrama(models.Drama{ID: d.ID, Name: "白蛇传"}); err != nil {
-		t.Fatalf("resave drama: %v", err)
-	}
 	gotD, err := db.GetDrama(d.ID)
 	if err != nil {
 		t.Fatalf("GetDrama: %v", err)
@@ -1511,6 +1508,22 @@ func TestMultiCategory(t *testing.T) {
 	}
 	if listed == nil || listed.CategoryName != "京剧" || len(listed.CategoryNames) != 2 {
 		t.Fatalf("list aggregated categories: %+v", listed)
+	}
+
+	// 手动覆盖优先于聚合（修正拼盘演出污染）；清空后回退聚合。
+	if _, err := db.SaveDrama(models.Drama{ID: d.ID, Name: "白蛇传", CategoryNames: []string{"滑稽戏"}}); err != nil {
+		t.Fatalf("manual override: %v", err)
+	}
+	gotD, _ = db.GetDrama(d.ID)
+	if gotD.CategoryName != "滑稽戏" || len(gotD.CategoryNames) != 1 {
+		t.Fatalf("manual override should win: %+v / %+v", gotD.CategoryName, gotD.CategoryNames)
+	}
+	if _, err := db.SaveDrama(models.Drama{ID: d.ID, Name: "白蛇传", CategoryNames: []string{}}); err != nil {
+		t.Fatalf("clear override: %v", err)
+	}
+	gotD, _ = db.GetDrama(d.ID)
+	if gotD.CategoryName != "京剧" || len(gotD.CategoryNames) != 2 {
+		t.Fatalf("cleared override should fall back to aggregation: %+v / %+v", gotD.CategoryName, gotD.CategoryNames)
 	}
 }
 

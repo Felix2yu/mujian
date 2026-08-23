@@ -462,7 +462,7 @@ func (h *Handler) createDrama(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "name is required")
 		return
 	}
-	d, err := h.db.SaveDrama(models.Drama{Name: strings.TrimSpace(req.Name), Remark: req.Remark})
+	d, err := h.db.SaveDrama(models.Drama{Name: strings.TrimSpace(req.Name), CategoryNames: req.CategoryNames, Remark: req.Remark})
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -491,7 +491,7 @@ func (h *Handler) updateDrama(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "name is required")
 		return
 	}
-	d, err := h.db.SaveDrama(models.Drama{ID: id, Name: strings.TrimSpace(req.Name), Remark: req.Remark})
+	d, err := h.db.SaveDrama(models.Drama{ID: id, Name: strings.TrimSpace(req.Name), CategoryNames: req.CategoryNames, Remark: req.Remark})
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return

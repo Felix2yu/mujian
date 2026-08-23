@@ -8,11 +8,13 @@ import (
 )
 
 // UpdateDramaInput edits a drama archive. Nil fields keep their current value.
-// 剧种不在可编辑范围内：它由关联演出的剧种自动聚合统计。
+// category_names 为手动覆盖：提供非空列表时固定剧种（用于修正拼盘演出聚合
+// 污染）；提供空数组则清除覆盖，回到按关联演出自动聚合。
 type UpdateDramaInput struct {
-	ID     string  `json:"id"`
-	Name   *string `json:"name,omitempty"`
-	Remark *string `json:"remark,omitempty"`
+	ID            string   `json:"id"`
+	Name          *string  `json:"name,omitempty"`
+	CategoryNames []string `json:"category_names,omitempty"`
+	Remark        *string  `json:"remark,omitempty"`
 }
 
 // handleUpdateDrama updates a drama's editable fields via SaveDrama (upsert).
@@ -29,6 +31,9 @@ func (s *Server) handleUpdateDrama(ctx context.Context, req *mcp.CallToolRequest
 			return errResult("name 不能为空字符串")
 		}
 		d.Name = strings.TrimSpace(*in.Name)
+	}
+	if in.CategoryNames != nil {
+		d.CategoryNames = in.CategoryNames
 	}
 	if in.Remark != nil {
 		d.Remark = *in.Remark

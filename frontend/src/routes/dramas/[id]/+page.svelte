@@ -4,6 +4,7 @@
   import { api } from '$lib/api.js';
   import BackLink from '$lib/components/BackLink.svelte';
   import RecordCard from '$lib/components/RecordCard.svelte';
+  import CategoryTags from '$lib/components/CategoryTags.svelte';
 
   const id = $page.params.id;
   let drama = $state(null);
@@ -11,10 +12,11 @@
   let records = $state([]);
   let loading = $state(true);
   let error = $state('');
+  let categories = $state([]);
 
   // inline drama editing
   let editingInfo = $state(false);
-  let info = $state({ name: '', remark: '' });
+  let info = $state({ name: '', categoryNames: [], remark: '' });
 
   // zhezi creation / editing
   let form = $state({ name: '', aliases: '', remark: '' });
@@ -32,7 +34,8 @@
       drama = d;
       zhezis = d.zhezis || [];
       records = d.records || [];
-      info = { name: d.name, remark: d.remark };
+      info = { name: d.name, categoryNames: [], remark: d.remark };
+      api.listCategories().then((cs) => (categories = cs)).catch(() => {});
     } catch (e) {
       error = e.message;
     } finally {
@@ -41,7 +44,8 @@
   }
 
   function startEdit() {
-    info = { name: drama.name, remark: drama.remark };
+    // 编辑框显示当前生效剧种；清空保存则回到「按演出自动聚合」
+    info = { name: drama.name, categoryNames: (drama.categoryNames || []).slice(), remark: drama.remark };
     editingInfo = true;
   }
 
@@ -50,7 +54,7 @@
     saving = true;
     error = '';
     try {
-      drama = await api.updateDrama(id, { name: info.name.trim(), remark: info.remark.trim() });
+      drama = await api.updateDrama(id, { name: info.name.trim(), categoryNames: info.categoryNames.slice(), remark: info.remark.trim() });
       editingInfo = false;
     } catch (e) {
       error = e.message;
@@ -164,7 +168,10 @@
     <div class="card head-card">
       {#if editingInfo}
         <input class="input" placeholder="剧目名称" bind:value={info.name} />
-        <div class="row"><span class="muted small">剧种由关联演出自动统计，无需手动填写</span></div>
+        <div class="row">
+          <CategoryTags bind:values={info.categoryNames} {categories} placeholder="剧种（可多个）；清空则按演出自动统计" />
+        </div>
+        <div class="row"><span class="muted small">留空剧种 = 按关联演出自动统计；手动填写可修正拼盘演出带来的偏差</span></div>
         <textarea class="input" rows="2" placeholder="备注" bind:value={info.remark}></textarea>
         <div class="actions">
           <button class="btn primary sm" onclick={saveInfo} disabled={saving || !info.name.trim()}>{saving ? '保存中…' : '保存'}</button>
