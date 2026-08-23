@@ -149,6 +149,8 @@
 
   onMount(load);
 </script>
+<svelte:head><title>{drama ? `${drama.name} - 幕间` : "剧目 - 幕间"}</title></svelte:head>
+
 
 <div class="fade-up">
   <BackLink fallback="/dramas" label="← 剧目" />

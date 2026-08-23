@@ -162,6 +162,8 @@
     load();
   });
 </script>
+<svelte:head><title>演出 - 幕间</title></svelte:head>
+
 
 <div class="home fade-up">
   <div class="hero">

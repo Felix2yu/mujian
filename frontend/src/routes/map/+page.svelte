@@ -221,7 +221,7 @@
   }
 </script>
 
-<svelte:head><title>地图 · 幕间</title></svelte:head>
+<svelte:head><title>地图 - 幕间</title></svelte:head>
 
 <div class="fade-up">
   <div class="page-head">

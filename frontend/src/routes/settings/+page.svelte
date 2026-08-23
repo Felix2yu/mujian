@@ -163,6 +163,8 @@
     load();
   });
 </script>
+<svelte:head><title>设置 - 幕间</title></svelte:head>
+
 
 <div class="fade-up">
   <div class="page-head">

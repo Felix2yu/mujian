@@ -136,6 +136,8 @@
     }
   }
 </script>
+<svelte:head><title>封面 - 幕间</title></svelte:head>
+
 
 <div class="fade-up">
   <div class="page-head">

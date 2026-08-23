@@ -32,6 +32,8 @@
 
   onMount(load);
 </script>
+<svelte:head><title>分析 - 幕间</title></svelte:head>
+
 
 <div class="fade-up">
   <div class="page-head">

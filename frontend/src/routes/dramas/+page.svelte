@@ -10,6 +10,28 @@
   let adding = $state(false);
   let form = $state({ name: '', categoryNames: [], remark: '' });
 
+  // 筛选与排序：默认按演出数降序；「手动排序」即拖拽顺序（后端 sort_order）
+  let filterQuery = $state('');
+  let filterCat = $state('');
+  let sortBy = $state('records');
+
+  const allCats = $derived.by(() => {
+    const set = new Set();
+    for (const d of dramas) for (const c of d.categoryNames || []) set.add(c);
+    return [...set].sort((a, b) => a.localeCompare(b, 'zh'));
+  });
+
+  const visibleDramas = $derived.by(() => {
+    let list = dramas;
+    const q = filterQuery.trim().toLowerCase();
+    if (q) list = list.filter((d) => (d.name || '').toLowerCase().includes(q) || (d.remark || '').toLowerCase().includes(q));
+    if (filterCat) list = list.filter((d) => d.categoryNames?.includes(filterCat));
+    if (sortBy === 'records') return [...list].sort((a, b) => b.recordCount - a.recordCount || a.name.localeCompare(b.name, 'zh'));
+    if (sortBy === 'zhezis') return [...list].sort((a, b) => b.zheziCount - a.zheziCount || a.name.localeCompare(b.name, 'zh'));
+    if (sortBy === 'name') return [...list].sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+    return list; // manual：后端已按 sort_order 排序
+  });
+
   async function load() {
     loading = true;
     error = '';
@@ -60,14 +82,20 @@
       resetDrag();
       return;
     }
-    const next = dramas.slice();
+    // 以当前可见顺序为基础重排；提交完整顺序后自动切到「手动排序」视图。
+    // 筛选状态下拖拽：未显示的剧目追加在尾部，保持相对顺序不变。
+    const next = visibleDramas.slice();
     const [moved] = next.splice(dragIdx, 1);
     next.splice(targetIdx, 0, moved);
     resetDrag();
     error = '';
-    api.reorderDramas(next.map((x) => x.id))
+    const shown = new Set(next.map((d) => d.id));
+    const full = [...next, ...dramas.filter((d) => !shown.has(d.id))];
+    api.reorderDramas(full.map((x) => x.id))
       .then(() => {
-        dramas = next;
+        sortBy = 'manual';
+        const order = new Map(full.map((d, i) => [d.id, i]));
+        dramas = [...dramas].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
       })
       .catch((e) => (error = e.message));
   }
@@ -79,6 +107,8 @@
 
   onMount(load);
 </script>
+<svelte:head><title>剧目 - 幕间</title></svelte:head>
+
 
 <div class="fade-up">
   <div class="page-head">
@@ -108,8 +138,26 @@
       <div class="h">在上方输入剧目名称创建第一个档案</div>
     </div>
   {:else}
+    <div class="card filter-bar">
+      <input class="input grow" placeholder="🔍 搜索剧目名称 / 备注…" bind:value={filterQuery} />
+      <select class="input" bind:value={filterCat}>
+        <option value="">全部剧种</option>
+        {#each allCats as c}<option value={c}>{c}</option>{/each}
+      </select>
+      <select class="input" bind:value={sortBy} title="选择「手动排序」后可拖动卡片调整顺序">
+        <option value="records">按演出数</option>
+        <option value="zhezis">按折子数</option>
+        <option value="name">按名称</option>
+        <option value="manual">手动排序</option>
+      </select>
+      <span class="muted small">{visibleDramas.length}/{dramas.length}</span>
+    </div>
+
+    {#if visibleDramas.length === 0}
+      <div class="empty card"><div class="t">无匹配剧目</div><div class="h">调整筛选条件试试</div></div>
+    {:else}
     <div class="grid stagger">
-      {#each dramas as d, i (d.id)}
+      {#each visibleDramas as d, i (d.id)}
         <div
           class="card drama"
           draggable="true"
@@ -140,12 +188,20 @@
         </div>
       {/each}
     </div>
+    {/if}
   {/if}
 </div>
 
 <style>
   .add-bar { display: flex; gap: 10px; padding: 12px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
   .add-bar .grow { flex: 1 1 160px; }
+  .filter-bar {
+    display: flex; gap: 10px; padding: 10px 12px; margin-bottom: 14px;
+    align-items: center; flex-wrap: wrap;
+  }
+  .filter-bar .input { width: auto; min-width: 130px; }
+  .filter-bar .grow { flex: 1 1 180px; }
+  .filter-bar select { max-width: 150px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
   .drama { display: flex; align-items: center; gap: 8px; padding: 14px 16px; }
   .drama-main { flex: 1; min-width: 0; text-decoration: none; transition: color var(--t-fast) var(--ease); }

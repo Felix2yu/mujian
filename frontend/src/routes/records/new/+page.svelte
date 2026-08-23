@@ -21,6 +21,8 @@
     try { categories = await api.listCategories(); } catch (e) {}
   });
 </script>
+<svelte:head><title>新建演出 - 幕间</title></svelte:head>
+
 
 <div class="fade-up">
   <BackLink />

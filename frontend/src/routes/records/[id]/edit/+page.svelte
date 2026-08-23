@@ -31,6 +31,8 @@
     }
   });
 </script>
+<svelte:head><title>{record ? `编辑 ${record.name} - 幕间` : "编辑演出 - 幕间"}</title></svelte:head>
+
 
 <div class="fade-up">
   <BackLink fallback={`/records/${id}`} label="← 返回详情" />

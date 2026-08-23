@@ -67,6 +67,8 @@
 
   onMount(load);
 </script>
+<svelte:head><title>{rec ? `${rec.name} - 幕间` : "演出 - 幕间"}</title></svelte:head>
+
 
 {#if loading}
   <div class="detail-loading">

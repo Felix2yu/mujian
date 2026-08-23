@@ -108,6 +108,8 @@
 
   onMount(load);
 </script>
+<svelte:head><title>{artist ? `${artist.name} - 幕间` : "演员 - 幕间"}</title></svelte:head>
+
 
 <div class="fade-up">
   <BackLink fallback="/artists" label="← 演员" />

@@ -79,6 +79,8 @@
 
   onMount(load);
 </script>
+<svelte:head><title>分类 - 幕间</title></svelte:head>
+
 
 <div class="fade-up">
   <div class="page-head">
