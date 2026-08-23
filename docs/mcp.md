@@ -19,8 +19,9 @@ opencode ──Streamable HTTP (JSON-RPC)──▶ https://<服务地址>/mcp �
 # MCP 随 HTTP 服务自动启动，无需单独运行
 cd backend && ./mujian   # 之后 AI 客户端连接 http://<服务地址>/mcp
 
-# opencode：项目根 opencode.json 已注册 remote MCP（url 指向 /mcp），
-# 改成你的实际域名后重启 opencode 即可使用全部 mujian 工具。
+# opencode：项目根 opencode.json 已注册 remote MCP（url 经 {file:.mcp-url} 插值），
+# 本地新建 .mcp-url 文件写入你的服务地址（如 https://mujian.example.com/mcp，
+# 该文件已 gitignore），重启 opencode 即可使用全部 mujian 工具。
 ```
 
 ## 工具清单（15 个）

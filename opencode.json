@@ -3,7 +3,7 @@
   "mcp": {
     "mujian": {
       "type": "remote",
-      "url": "https://your-domain.example/mcp",
+      "url": "{file:.mcp-url}",
       "enabled": true,
       "timeout": 60000
     }
