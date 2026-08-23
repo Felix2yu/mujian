@@ -1,8 +1,11 @@
 <script>
-  // 多剧种选择：chips + 回车添加；categories 提供建议列表（datalist）
+  // 多剧种选择：chips 可拖拽排序；回车添加；categories 提供建议列表（datalist）
   let { values = $bindable([]), categories = [], placeholder = '添加剧种，回车确认' } = $props();
   let input = $state('');
   const uid = $props.id();
+
+  let dragIdx = $state(-1);
+  let overIdx = $state(-1);
 
   const suggestions = $derived(categories.map((c) => c.name).filter(Boolean));
 
@@ -29,11 +32,40 @@
   function onSelect(e) {
     commit(e.target.value);
   }
+
+  function onDropAt(i) {
+    if (dragIdx < 0 || dragIdx === i) {
+      resetDrag();
+      return;
+    }
+    const next = values.slice();
+    const [moved] = next.splice(dragIdx, 1);
+    next.splice(i, 0, moved);
+    values.splice(0, values.length, ...next);
+    resetDrag();
+  }
+
+  function resetDrag() {
+    dragIdx = -1;
+    overIdx = -1;
+  }
 </script>
 
 <div class="ctags">
   {#each values as v, i (v)}
-    <span class="chip">
+    <span
+      class="chip"
+      draggable="true"
+      class:dragging={dragIdx === i}
+      class:drop-target={overIdx === i && dragIdx !== i}
+      title="拖动调整顺序"
+      ondragstart={(e) => { dragIdx = i; e.dataTransfer.effectAllowed = 'move'; }}
+      ondragover={(e) => { e.preventDefault(); overIdx = i; }}
+      ondragleave={() => { if (overIdx === i) overIdx = -1; }}
+      ondrop={(e) => { e.preventDefault(); onDropAt(i); }}
+      ondragend={resetDrag}
+    >
+      <span class="grip" aria-hidden="true">⠿</span>
       {v}
       <button type="button" class="x" onclick={() => values.splice(i, 1)} title="移除">×</button>
     </span>
@@ -71,11 +103,24 @@
     background: var(--accent-soft);
     color: var(--accent);
     border-radius: 999px;
-    padding: 2px 4px 2px 10px;
+    padding: 2px 4px 2px 6px;
     font-size: 13px;
     font-weight: 500;
     line-height: 1.5;
     white-space: nowrap;
+    cursor: grab;
+    transition: opacity var(--t-fast, 0.15s) ease, outline-color var(--t-fast, 0.15s) ease;
+  }
+  .chip:active { cursor: grabbing; }
+  .chip.dragging { opacity: 0.35; }
+  .chip.drop-target { outline: 2px dashed var(--accent); outline-offset: 1px; }
+  .grip {
+    color: currentColor;
+    opacity: 0.5;
+    font-size: 12px;
+    line-height: 1;
+    user-select: none;
+    cursor: grab;
   }
   .x {
     border: none;

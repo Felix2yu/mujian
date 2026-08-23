@@ -128,6 +128,29 @@
     dramaTree.filter((d) => form.drama_ids.includes(d.id))
   );
 
+  // 已选剧目按 form.drama_ids 顺序渲染（拖拽排序即重排该数组），
+  // 提交时 play 数组也按此顺序生成，保证与详情页展示一致。
+  const orderedChosenDramas = $derived(
+    form.drama_ids.map((id) => dramaTree.find((d) => d.id === id)).filter(Boolean)
+  );
+
+  let dramaDragIdx = $state(-1);
+  let dramaOverIdx = $state(-1);
+
+  function onDramaDropAt(targetIdx) {
+    if (dramaDragIdx < 0 || dramaDragIdx === targetIdx) {
+      dramaDragIdx = -1;
+      dramaOverIdx = -1;
+      return;
+    }
+    const next = form.drama_ids.slice();
+    const [moved] = next.splice(dramaDragIdx, 1);
+    next.splice(targetIdx, 0, moved);
+    form.drama_ids = next;
+    dramaDragIdx = -1;
+    dramaOverIdx = -1;
+  }
+
   const addableDramas = $derived(
     dramaTree.filter((d) => !form.drama_ids.includes(d.id))
   );
@@ -193,6 +216,30 @@
 
   // 演员 picker state（胶囊 tag 输入）
   let artistList = $state([]);
+
+  // 演员胶囊统一视图：档案演员 + 自由文本按展示顺序合并，支持拖拽排序。
+  // 重排后写回 form.artist_ids 与 freeNames，最终 artist_names 顺序即此顺序。
+  let artistDragIdx = $state(-1);
+  let artistOverIdx = $state(-1);
+  const artistItems = $derived([
+    ...chosenArtists.map((a) => ({ kind: 'linked', key: a.id, label: a.name, id: a.id })),
+    ...freeNames.map((n) => ({ kind: 'free', key: 'free:' + n, label: n }))
+  ]);
+
+  function onArtistDropAt(targetIdx) {
+    if (artistDragIdx < 0 || artistDragIdx === targetIdx) {
+      artistDragIdx = -1;
+      artistOverIdx = -1;
+      return;
+    }
+    const next = artistItems.slice();
+    const [moved] = next.splice(artistDragIdx, 1);
+    next.splice(targetIdx, 0, moved);
+    form.artist_ids = next.filter((x) => x.kind === 'linked').map((x) => x.id);
+    freeNames = next.filter((x) => x.kind === 'free').map((x) => x.label);
+    artistDragIdx = -1;
+    artistOverIdx = -1;
+  }
   let artistQuery = $state('');
   let showArtistList = $state(false);
   let creatingArtist = $state(false);
@@ -297,6 +344,23 @@
       const cur = (form.company || '').split(/[,，]/).map((s) => s.trim()).filter(Boolean);
       if (cur.length) form.company = cur.slice(0, -1).join(', ');
     }
+  }
+
+  // 剧团胶囊拖拽排序：重排后写回逗号分隔的 company 字段
+  let companyDragIdx = $state(-1);
+  let companyOverIdx = $state(-1);
+  function onCompanyDropAt(targetIdx) {
+    if (companyDragIdx < 0 || companyDragIdx === targetIdx) {
+      companyDragIdx = -1;
+      companyOverIdx = -1;
+      return;
+    }
+    const next = companyTags.slice();
+    const [moved] = next.splice(companyDragIdx, 1);
+    next.splice(targetIdx, 0, moved);
+    form.company = next.join(', ');
+    companyDragIdx = -1;
+    companyOverIdx = -1;
   }
   function onCompanyInput(e) {
     if (e.isComposing) return;
@@ -412,8 +476,8 @@
           (n) => !chosenArtists.some((a) => a.name === n) && !artistList.some((a) => a.name === n)
         )
       ],
-      // 剧目字段由所关联的剧目档案推导，保证与档案一致
-      play: chosenDramas.map((d) => d.name),
+      // 剧目字段由所关联的剧目档案推导，保证与档案一致；顺序跟随 drama_ids
+      play: orderedChosenDramas.map((d) => d.name),
       drama_ids: form.drama_ids,
       zhezi_ids: form.zhezi_ids,
       guest: splitList(form.guest),
@@ -608,16 +672,24 @@
     <label>演员 <span class="hint">回车生成胶囊；逗号分隔可一次添加多个；与档案同名自动关联</span></label>
     <div class="combo">
       <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
-        {#each chosenArtists as a (a.id)}
-          <span class="capsule linked">
-            {a.name}
-            <button type="button" class="cap-x" onclick={() => removeArtist(a.id)} title="移除该演员" aria-label={`移除 ${a.name}`}>✕</button>
-          </span>
-        {/each}
-        {#each freeNames as n (n)}
-          <span class="capsule free">
-            {n}
-            <button type="button" class="cap-x" onclick={() => removeFreeName(n)} title="移除" aria-label={`移除 ${n}`}>✕</button>
+        {#each artistItems as item, i (item.key)}
+          <span
+            class="capsule"
+            class:linked={item.kind === 'linked'}
+            class:free={item.kind === 'free'}
+            class:cap-dragging={artistDragIdx === i}
+            class:cap-drop={artistOverIdx === i && artistDragIdx !== i}
+            draggable="true"
+            title="拖动调整顺序"
+            ondragstart={(e) => { artistDragIdx = i; e.dataTransfer.effectAllowed = 'move'; }}
+            ondragover={(e) => { e.preventDefault(); artistOverIdx = i; }}
+            ondragleave={() => { if (artistOverIdx === i) artistOverIdx = -1; }}
+            ondrop={(e) => { e.preventDefault(); onArtistDropAt(i); }}
+            ondragend={() => { artistDragIdx = -1; artistOverIdx = -1; }}
+          >
+            <span class="cap-grip" aria-hidden="true">⠿</span>
+            {item.label}
+            <button type="button" class="cap-x" onclick={item.kind === 'linked' ? () => removeArtist(item.id) : () => removeFreeName(item.label)} title={item.kind === 'linked' ? '移除该演员' : '移除'} aria-label={`移除 ${item.label}`}>✕</button>
           </span>
         {/each}
         <input
@@ -648,8 +720,20 @@
       <div class="f-sm">
         <label>剧团 <span class="hint">回车生成胶囊；逗号分隔可一次添加多个</span></label>
         <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
-          {#each companyTags as t (t)}
-            <span class="capsule free">
+          {#each companyTags as t, ti (t)}
+            <span
+              class="capsule free"
+              class:cap-dragging={companyDragIdx === ti}
+              class:cap-drop={companyOverIdx === ti && companyDragIdx !== ti}
+              draggable="true"
+              title="拖动调整顺序"
+              ondragstart={(e) => { companyDragIdx = ti; e.dataTransfer.effectAllowed = 'move'; }}
+              ondragover={(e) => { e.preventDefault(); companyOverIdx = ti; }}
+              ondragleave={() => { if (companyOverIdx === ti) companyOverIdx = -1; }}
+              ondrop={(e) => { e.preventDefault(); onCompanyDropAt(ti); }}
+              ondragend={() => { companyDragIdx = -1; companyOverIdx = -1; }}
+            >
+              <span class="cap-grip" aria-hidden="true">⠿</span>
               {t}
               <button type="button" class="cap-x" onclick={() => removeCompany(t)} title="移除该团体" aria-label={`移除 ${t}`}>✕</button>
             </span>
@@ -672,10 +756,21 @@
       {#if chosenDramas.length === 0}
         <div class="ply-empty muted tiny">尚未关联剧目。从下方选择或新建一个剧目档案。</div>
       {/if}
-      {#each chosenDramas as d (d.id)}
-        <div class="ply-item">
+      {#each orderedChosenDramas as d, di (d.id)}
+        <div
+          class="ply-item"
+          draggable="true"
+          class:dragging={dramaDragIdx === di}
+          class:drop-target={dramaOverIdx === di && dramaDragIdx !== di}
+          ondragstart={(e) => { dramaDragIdx = di; e.dataTransfer.effectAllowed = 'move'; }}
+          ondragover={(e) => { e.preventDefault(); dramaOverIdx = di; }}
+          ondragleave={() => { if (dramaOverIdx === di) dramaOverIdx = -1; }}
+          ondrop={(e) => { e.preventDefault(); onDramaDropAt(di); }}
+          ondragend={() => { dramaDragIdx = -1; dramaOverIdx = -1; }}
+        >
           <div class="ply-head">
-            <span class="ply-name">
+            <span class="ply-name" title="拖动调整顺序">
+              <span class="cap-grip" aria-hidden="true">⠿</span>
               {d.name}{#if d.categoryNames?.length}<em class="ply-cat">{d.categoryNames.join(' / ')}</em>{/if}
             </span>
             <button type="button" class="ply-x" onclick={() => removeDrama(d.id)} title="移除该剧目">✕</button>
@@ -880,13 +975,18 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 3px 6px 3px 11px;
+    padding: 3px 6px 3px 6px;
     border-radius: 999px;
     font-size: 13px;
     font-weight: 500;
     white-space: nowrap;
     animation: fadeIn var(--t-fast) var(--ease);
+    cursor: grab;
   }
+  .capsule:active { cursor: grabbing; }
+  .cap-grip { color: currentColor; opacity: 0.45; font-size: 11px; line-height: 1; user-select: none; cursor: grab; }
+  .capsule.cap-dragging { opacity: 0.35; }
+  .capsule.cap-drop { outline: 2px dashed var(--accent); outline-offset: 1px; }
   .capsule.linked { background: var(--accent-soft); color: var(--accent); }
   .capsule.free { background: var(--surface-3); color: var(--text-2); border: 1px solid var(--border); }
   .cap-x {
@@ -925,7 +1025,10 @@
   /* 剧目 / 折子 picker */
   .ply { display: flex; flex-direction: column; gap: 10px; }
   .ply-empty { padding: 8px 2px; }
-  .ply-item { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; background: var(--surface); }
+  .ply-item { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; background: var(--surface); cursor: grab; }
+  .ply-item:active { cursor: grabbing; }
+  .ply-item.dragging { opacity: 0.4; }
+  .ply-item.drop-target { outline: 2px dashed var(--accent); outline-offset: 2px; }
   .ply-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .ply-name { font-weight: 600; font-size: 14.5px; }
   .ply-cat { font-style: normal; font-size: 12px; color: var(--text-muted); background: var(--surface-3); border-radius: 999px; padding: 2px 9px; margin-left: 8px; }
