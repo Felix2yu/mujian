@@ -5,6 +5,8 @@
    ============================================================ */
 
 :root {
+  color-scheme: light;
+
   /* 色彩 · 亮色 */
   --bg: #f7f6f3;
   --bg-elevated: #ffffff;
@@ -50,6 +52,8 @@
 }
 
 :root.dark {
+  color-scheme: dark;
+
   --bg: #14110f;
   --bg-elevated: #1c1917;
   --surface: #1c1917;
