@@ -6,6 +6,7 @@ import (
 	"mujian/internal/storage"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -593,6 +594,16 @@ func TestAutocompleteAndByField(t *testing.T) {
 	cities, err := db.GetAutocomplete("city")
 	if err != nil || len(cities) != 1 || cities[0] != "杭州" {
 		t.Fatalf("autocomplete: %v %v", cities, err)
+	}
+	_ = db.UpsertRecord(models.Record{ID: "f2", Name: "雷峰塔", City: "杭州", Company: "上海昆剧团, 苏州昆剧院", Date: time.Now().Unix()})
+	_ = db.UpsertRecord(models.Record{ID: "f3", Name: "占花魁", City: "杭州", Company: "苏州昆剧院，上海评弹团", Date: time.Now().Unix()})
+	companies, err := db.GetAutocomplete("company")
+	if err != nil {
+		t.Fatalf("autocomplete company: %v", err)
+	}
+	want := []string{"上海昆剧团", "上海评弹团", "苏州昆剧院"}
+	if !slices.Equal(companies, want) {
+		t.Fatalf("company autocomplete = %v, want %v", companies, want)
 	}
 	if _, err := db.GetByField("bogus", "x"); err == nil {
 		t.Error("GetByField invalid field should error")

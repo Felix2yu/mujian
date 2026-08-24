@@ -188,11 +188,8 @@
           {#if rec.categoryName}
             <div class="kv-row"><dt>分类</dt><dd><a class="flink" href={`/?category=${encodeURIComponent(rec.categoryName)}`}>{rec.categoryName}</a></dd></div>
           {/if}
-          {#if rec.channel}
-            <div class="kv-row"><dt>渠道</dt><dd><a class="flink" href={`/?q=${encodeURIComponent(rec.channel)}`}>{rec.channel}</a></dd></div>
-          {/if}
           {#if rec.company}
-            <div class="kv-row"><dt>剧团</dt><dd><a class="flink" href={`/?q=${encodeURIComponent(rec.company)}`}>{rec.company}</a></dd></div>
+            <div class="kv-row"><dt>剧团</dt><dd>{#each rec.company.split(/[,，]/).map((s) => s.trim()).filter(Boolean) as t, i}{i > 0 ? '、' : ''}<a class="flink" href={`/?q=${encodeURIComponent(t)}`}>{t}</a>{/each}</dd></div>
           {/if}
           {#if rec.city}
             <div class="kv-row"><dt>城市</dt><dd><a class="flink" href={`/?city=${encodeURIComponent(rec.city)}`}>{rec.city}</a></dd></div>
@@ -201,7 +198,7 @@
             <div class="kv-row"><dt>场馆</dt><dd><a class="flink" href={`/?q=${encodeURIComponent(rec.address)}`}>{rec.address}</a></dd></div>
           {/if}
           {#if rec.friends}
-            <div class="kv-row"><dt>同行</dt><dd><a class="flink" href={`/?q=${encodeURIComponent(rec.friends)}`}>{rec.friends}</a></dd></div>
+            <div class="kv-row"><dt>同行</dt><dd>{#each rec.friends.split(/[,，]/).map((s) => s.trim()).filter(Boolean) as t, i}{i > 0 ? '、' : ''}<a class="flink" href={`/?q=${encodeURIComponent(t)}`}>{t}</a>{/each}</dd></div>
           {/if}
           {#if rec.seat}
             <div class="kv-row"><dt>座位</dt><dd>{rec.seat}</dd></div>
@@ -217,6 +214,9 @@
           <div class="kv-row"><dt>其他花费</dt><dd class="money">{rec.other_cost ? formatCurrency(rec.other_cost, rec.other_cost_currency) : '—'}</dd></div>
           {#if rec.pay_price || rec.other_cost}
             <div class="kv-row total"><dt>合计</dt><dd class="money">{formatCurrency((rec.pay_price || 0) + (rec.other_cost || 0), rec.pay_price_currency || 'CNY')}</dd></div>
+          {/if}
+          {#if rec.channel}
+            <div class="kv-row"><dt>渠道</dt><dd><a class="flink" href={`/?q=${encodeURIComponent(rec.channel)}`}>{rec.channel}</a></dd></div>
           {/if}
         </dl>
       </div>

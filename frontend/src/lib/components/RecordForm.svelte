@@ -342,6 +342,13 @@
     if (/[,，]/.test(artistQuery)) commitArtistInput();
   }
 
+  // 失焦时：输入内容与演员档案精确同名才自动提交；新名字留在输入框，需回车显式确认
+  function onArtistBlur() {
+    const n = artistQuery.trim();
+    if (n && artistList.some((a) => a.name === n)) commitArtistInput();
+    setTimeout(() => (showArtistList = false), 120);
+  }
+
   // 剧团：一场演出可能隶属多个演出团体，支持逗号分隔一次添加多个
   let companyQuery = $state('');
   const companyTags = $derived(
@@ -402,6 +409,12 @@
     if (e.isComposing) return;
     companyQuery = e.currentTarget.value;
     if (/[,，]/.test(companyQuery)) commitCompanyInput();
+  }
+
+  // 失焦时：输入内容在历史团体中才自动提交；新名称留在输入框，需回车生成胶囊
+  function onCompanyBlur() {
+    const n = companyQuery.trim();
+    if (n && ac.company.includes(n)) commitCompanyInput();
   }
 
   async function createNewArtist(name) {
@@ -732,7 +745,7 @@
           placeholder={chosenArtists.length || freeNames.length ? '' : '输入演员姓名，回车确认…'}
           bind:value={artistQuery}
           onfocus={() => (showArtistList = true)}
-          onblur={() => setTimeout(() => (showArtistList = false), 120)}
+          onblur={onArtistBlur}
           onkeydown={onArtistKeydown}
           oninput={onArtistInput}
           oncompositionstart={() => (artistComposing = true)}
@@ -756,7 +769,7 @@
     </div>
     <div class="row">
       <div class="f-sm">
-        <label>剧团 <span class="hint">回车生成胶囊；逗号分隔可一次添加多个</span></label>
+        <label>剧团 <span class="hint">已有团体失焦自动添加；新名称回车生成胶囊，逗号分隔可一次添加多个</span></label>
         <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
           {#each companyTags as t, ti (t)}
             <span
@@ -782,6 +795,7 @@
             list="company-list"
             onkeydown={onCompanyKeydown}
             oninput={onCompanyInput}
+            onblur={onCompanyBlur}
           />
         </div>
         <datalist id="company-list">

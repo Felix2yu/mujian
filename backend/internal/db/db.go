@@ -2613,12 +2613,27 @@ func (db *DB) GetAutocomplete(field string) ([]string, error) {
 	}
 	defer rows.Close()
 	var out []string
+	seen := map[string]bool{}
 	for rows.Next() {
 		var v string
 		if err := rows.Scan(&v); err != nil {
 			continue
 		}
-		out = append(out, v)
+		parts := []string{v}
+		if field == "company" || field == "friends" {
+			parts = strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == '，' })
+		}
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part == "" || seen[part] {
+				continue
+			}
+			seen[part] = true
+			out = append(out, part)
+		}
+	}
+	if field == "company" || field == "friends" {
+		slices.Sort(out)
 	}
 	return out, nil
 }

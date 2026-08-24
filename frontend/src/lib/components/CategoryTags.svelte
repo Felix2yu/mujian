@@ -29,8 +29,10 @@
     }
   }
 
+  // datalist 选择 / 手输已有剧种：失焦时自动提交；新剧种留在输入框，需回车确认
   function onSelect(e) {
-    commit(e.target.value);
+    const v = String(e.target.value || '').trim();
+    if (v && suggestions.includes(v)) commit(v);
   }
 
   function onDropAt(i) {

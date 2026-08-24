@@ -217,7 +217,7 @@
         <label class="field">
           <input type="checkbox" checked={fields.company.enabled} onchange={() => toggleField('company')} />
           <span>剧团/主办方</span>
-          <input class="input" bind:value={fields.company.value} disabled={!fields.company.enabled} />
+          <input class="input" bind:value={fields.company.value} placeholder="逗号分隔" disabled={!fields.company.enabled} />
         </label>
         <label class="field">
           <input type="checkbox" checked={fields.seat.enabled} onchange={() => toggleField('seat')} />
