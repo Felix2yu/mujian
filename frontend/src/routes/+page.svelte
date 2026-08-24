@@ -1,8 +1,9 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
   import { loadStatusFilter } from '$lib/statusPrefs.js';
+  import { loadPref } from '$lib/prefs.js';
   import RecordCard from '$lib/components/RecordCard.svelte';
   import BatchEditModal from '$lib/components/BatchEditModal.svelte';
 
@@ -15,6 +16,44 @@
   let zheziNames = $state(new Map());
   let searchTimer;
   let searchComposing = false;
+
+  // 定位到当前时间：锚点为最近已发生（含今天）的演出；全为未来演出时取最接近现在的
+  let showJump = $state(false);
+  let flashId = $state('');
+  let flashTimer;
+
+  const nowAnchorId = $derived.by(() => {
+    if (!records.length) return '';
+    const d = new Date();
+    d.setHours(23, 59, 59, 999);
+    const endOfToday = Math.floor(d.getTime() / 1000);
+    for (const r of records) {
+      if (r.date <= endOfToday) return r.id;
+    }
+    return records[records.length - 1].id;
+  });
+
+  function jumpToNow(smooth = true) {
+    if (!nowAnchorId) return;
+    const el = document.getElementById('rec-' + nowAnchorId);
+    if (!el) return;
+    el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' });
+    if (smooth) {
+      flashId = nowAnchorId;
+      clearTimeout(flashTimer);
+      flashTimer = setTimeout(() => (flashId = ''), 1500);
+    }
+  }
+
+  function onScroll() {
+    showJump = window.scrollY > 320;
+  }
+
+  function autoJumpOnLoad() {
+    if (loadPref('mujian:home_jump_now', false)) {
+      tick().then(() => jumpToNow(false));
+    }
+  }
 
   // 批量操作状态
   let selectionMode = $state(false);
@@ -159,10 +198,11 @@
       zhezi: sp.get('zhezi') || ''
     };
     loadMeta();
-    load();
+    load().then(autoJumpOnLoad);
   });
 </script>
 <svelte:head><title>演出 - 幕间</title></svelte:head>
+<svelte:window onscroll={onScroll} />
 
 
 <div class="home fade-up">
@@ -253,9 +293,11 @@
         <div class="grid stagger">
           {#each records as r (r.id)}
             <div
+              id={'rec-' + r.id}
               class="record-card-wrapper"
               class:select-mode={selectionMode}
               class:selected={selectedIds.has(r.id)}
+              class:flash={flashId === r.id}
               role={selectionMode ? 'button' : undefined}
               tabindex={selectionMode ? 0 : undefined}
               aria-pressed={selectionMode ? selectedIds.has(r.id) : undefined}
@@ -268,6 +310,10 @@
         </div>
       {/if}
 </div>
+
+{#if showJump && !loading && records.length && nowAnchorId}
+  <button class="jump-now" onclick={() => jumpToNow()} title="定位到当前时间" aria-label="定位到当前时间">⌖</button>
+{/if}
 
 {#if showBatchEdit}
   <BatchEditModal
@@ -393,6 +439,46 @@
   .record-card-wrapper {
     position: relative;
     display: block;
+  }
+  .record-card-wrapper.flash::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 2px solid var(--accent);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 0 0 6px var(--accent-soft);
+    pointer-events: none;
+    animation: flash-fade 1.5s var(--ease) forwards;
+  }
+  @keyframes flash-fade {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+
+  .jump-now {
+    position: fixed;
+    right: 18px;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--accent);
+    font-size: 22px;
+    line-height: 1;
+    box-shadow: var(--shadow-md);
+    cursor: pointer;
+    z-index: 40;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--t-fast) var(--ease);
+  }
+  .jump-now:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
   }
   .record-card-wrapper.select-mode {
     cursor: pointer;

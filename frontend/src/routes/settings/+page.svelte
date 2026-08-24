@@ -3,6 +3,7 @@
   import { api } from '$lib/api.js';
   import { theme } from '$lib/stores.js';
   import { STATUS_LABELS, loadStatusFilter, saveStatusFilter } from '$lib/statusPrefs.js';
+  import { loadPref as loadJsonPref, savePref as saveJsonPref } from '$lib/prefs.js';
 
   let settings = $state({ storage_type: 'local', theme: 'auto', image_format: 'avif' });
   let error = $state('');
@@ -31,6 +32,13 @@
     else set.add(v);
     statusFilter = [...set].sort();
     saveStatusFilter(statusFilter);
+  }
+
+  // 进入首页自动定位到当前时间（本地偏好，不进服务端设置）
+  let jumpNowPref = $state(false);
+  function setJumpNowPref(v) {
+    jumpNowPref = !!v;
+    saveJsonPref('mujian:home_jump_now', jumpNowPref);
   }
 
   const MAP_SOURCES = [
@@ -160,6 +168,7 @@
     });
     icsUrl = `${window.location.origin}${api.getICSUrl()}`;
     statusFilter = loadStatusFilter();
+    jumpNowPref = !!loadJsonPref('mujian:home_jump_now', false);
     load();
   });
 </script>
@@ -324,6 +333,16 @@
           </label>
         {/each}
       </div>
+    </div>
+
+    <div class="card sec">
+      <h3>列表</h3>
+      <p class="hint" style="margin-bottom: 12px;">首页浏览辅助（本地偏好，立即生效）</p>
+      <label class="switch-row">
+        <span>进入首页自动定位到当前时间</span>
+        <input type="checkbox" checked={jumpNowPref} onchange={(e) => setJumpNowPref(e.target.checked)} />
+      </label>
+      <p class="hint" style="margin-top: 8px;">开启后每次打开演出列表会自动滚动到最近已发生（含今天）的演出；列表右下角也随时提供手动定位按钮</p>
     </div>
 
     <div class="card sec">
