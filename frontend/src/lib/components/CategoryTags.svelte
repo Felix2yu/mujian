@@ -6,6 +6,7 @@
 
   let dragIdx = $state(-1);
   let overIdx = $state(-1);
+  let overBefore = $state(true);
 
   const suggestions = $derived(categories.map((c) => c.name).filter(Boolean));
 
@@ -35,14 +36,23 @@
     if (v && suggestions.includes(v)) commit(v);
   }
 
-  function onDropAt(i) {
+  function onDragOver(e, i) {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    overIdx = i;
+    overBefore = e.clientX < rect.left + rect.width / 2;
+  }
+
+  function onDropAt(i, before) {
     if (dragIdx < 0 || dragIdx === i) {
       resetDrag();
       return;
     }
     const next = values.slice();
     const [moved] = next.splice(dragIdx, 1);
-    next.splice(i, 0, moved);
+    // 移除拖动项后，位于其后的目标索引左移一位；再按指示的插入侧落位
+    const at = dragIdx < i ? i - 1 : i;
+    next.splice(before ? at : at + 1, 0, moved);
     values.splice(0, values.length, ...next);
     resetDrag();
   }
@@ -59,12 +69,13 @@
       class="chip"
       draggable="true"
       class:dragging={dragIdx === i}
-      class:drop-target={overIdx === i && dragIdx !== i}
+      class:drop-before={overIdx === i && dragIdx !== i && overBefore}
+      class:drop-after={overIdx === i && dragIdx !== i && !overBefore}
       title="拖动调整顺序"
       ondragstart={(e) => { dragIdx = i; e.dataTransfer.effectAllowed = 'move'; }}
-      ondragover={(e) => { e.preventDefault(); overIdx = i; }}
+      ondragover={(e) => onDragOver(e, i)}
       ondragleave={() => { if (overIdx === i) overIdx = -1; }}
-      ondrop={(e) => { e.preventDefault(); onDropAt(i); }}
+      ondrop={(e) => { e.preventDefault(); onDropAt(i, overBefore); }}
       ondragend={resetDrag}
     >
       <span class="grip" aria-hidden="true">⠿</span>
@@ -99,6 +110,7 @@
   }
   .ctags:focus-within { border-color: var(--accent); }
   .chip {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -115,7 +127,20 @@
   }
   .chip:active { cursor: grabbing; }
   .chip.dragging { opacity: 0.35; }
-  .chip.drop-target { outline: 2px dashed var(--accent); outline-offset: 1px; }
+  /* 拖拽插入指示：目标左/右侧显示竖线光标，表示松手后的插入位置 */
+  .chip.drop-before::before,
+  .chip.drop-after::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+    pointer-events: none;
+  }
+  .chip.drop-before::before { left: -5px; }
+  .chip.drop-after::after { right: -5px; }
   .grip {
     color: currentColor;
     opacity: 0.5;

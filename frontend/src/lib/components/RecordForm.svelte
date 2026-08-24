@@ -215,6 +215,7 @@
     if (!did || form.drama_ids.includes(did)) return;
     form.drama_ids = [...form.drama_ids, did];
     dramaQuery = '';
+    showDramaList = false;
   }
 
   function removeDrama(did) {
@@ -260,7 +261,14 @@
     ...freeNames.map((n) => ({ kind: 'free', key: 'free:' + n, label: n }))
   ]);
 
-  function onArtistDropAt(targetIdx) {
+  let artistOverBefore = $state(true);
+  function onArtistDragOver(e, i) {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    artistOverIdx = i;
+    artistOverBefore = e.clientX < rect.left + rect.width / 2;
+  }
+  function onArtistDropAt(targetIdx, before) {
     if (artistDragIdx < 0 || artistDragIdx === targetIdx) {
       artistDragIdx = -1;
       artistOverIdx = -1;
@@ -268,7 +276,9 @@
     }
     const next = artistItems.slice();
     const [moved] = next.splice(artistDragIdx, 1);
-    next.splice(targetIdx, 0, moved);
+    // 移除拖动项后，位于其后的目标索引左移一位；再按指示的插入侧落位
+    const at = artistDragIdx < targetIdx ? targetIdx - 1 : targetIdx;
+    next.splice(before ? at : at + 1, 0, moved);
     form.artist_ids = next.filter((x) => x.kind === 'linked').map((x) => x.id);
     freeNames = next.filter((x) => x.kind === 'free').map((x) => x.label);
     artistDragIdx = -1;
@@ -392,7 +402,14 @@
   // 剧团胶囊拖拽排序：重排后写回逗号分隔的 company 字段
   let companyDragIdx = $state(-1);
   let companyOverIdx = $state(-1);
-  function onCompanyDropAt(targetIdx) {
+  let companyOverBefore = $state(true);
+  function onCompanyDragOver(e, ti) {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    companyOverIdx = ti;
+    companyOverBefore = e.clientX < rect.left + rect.width / 2;
+  }
+  function onCompanyDropAt(targetIdx, before) {
     if (companyDragIdx < 0 || companyDragIdx === targetIdx) {
       companyDragIdx = -1;
       companyOverIdx = -1;
@@ -400,7 +417,9 @@
     }
     const next = companyTags.slice();
     const [moved] = next.splice(companyDragIdx, 1);
-    next.splice(targetIdx, 0, moved);
+    // 移除拖动项后，位于其后的目标索引左移一位；再按指示的插入侧落位
+    const at = companyDragIdx < targetIdx ? targetIdx - 1 : targetIdx;
+    next.splice(before ? at : at + 1, 0, moved);
     form.company = next.join(', ');
     companyDragIdx = -1;
     companyOverIdx = -1;
@@ -722,7 +741,7 @@
           {#if showChannelList && filteredChannels.length}
             <div class="combo-list">
               {#each filteredChannels as v (v)}
-                <button type="button" class="combo-item" onclick={() => pickChannel(v)}>{v}</button>
+                <button type="button" class="combo-item" onmousedown={(e) => e.preventDefault()} onclick={() => pickChannel(v)}>{v}</button>
               {/each}
             </div>
           {/if}
@@ -759,18 +778,19 @@
       <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
         {#each artistItems as item, i (item.key)}
           <span
-            class="capsule"
-            class:linked={item.kind === 'linked'}
-            class:free={item.kind === 'free'}
-            class:cap-dragging={artistDragIdx === i}
-            class:cap-drop={artistOverIdx === i && artistDragIdx !== i}
-            draggable="true"
-            title="拖动调整顺序"
-            ondragstart={(e) => { artistDragIdx = i; e.dataTransfer.effectAllowed = 'move'; }}
-            ondragover={(e) => { e.preventDefault(); artistOverIdx = i; }}
-            ondragleave={() => { if (artistOverIdx === i) artistOverIdx = -1; }}
-            ondrop={(e) => { e.preventDefault(); onArtistDropAt(i); }}
-            ondragend={() => { artistDragIdx = -1; artistOverIdx = -1; }}
+                class="capsule"
+                class:linked={item.kind === 'linked'}
+                class:free={item.kind === 'free'}
+                class:cap-dragging={artistDragIdx === i}
+                class:drop-before={artistOverIdx === i && artistDragIdx !== i && artistOverBefore}
+                class:drop-after={artistOverIdx === i && artistDragIdx !== i && !artistOverBefore}
+                draggable="true"
+                title="拖动调整顺序"
+                ondragstart={(e) => { artistDragIdx = i; e.dataTransfer.effectAllowed = 'move'; }}
+                ondragover={(e) => onArtistDragOver(e, i)}
+                ondragleave={() => { if (artistOverIdx === i) artistOverIdx = -1; }}
+                ondrop={(e) => { e.preventDefault(); onArtistDropAt(i, artistOverBefore); }}
+                ondragend={() => { artistDragIdx = -1; artistOverIdx = -1; }}
           >
             <span class="cap-grip" aria-hidden="true">⠿</span>
             {item.label}
@@ -791,10 +811,10 @@
       {#if showArtistList && (filteredArtists.length || artistQuery.trim())}
         <div class="combo-list">
           {#each filteredArtists as a (a.id)}
-            <button type="button" class="combo-item" onclick={() => addArtist(a.id)}>{a.name}</button>
+            <button type="button" class="combo-item" onmousedown={(e) => e.preventDefault()} onclick={() => addArtist(a.id)}>{a.name}</button>
           {/each}
           {#if artistQuery.trim() && !artistList.some((a) => a.name === artistQuery.trim())}
-            <button type="button" class="combo-item create" disabled={creatingArtist} onclick={() => createNewArtist(artistQuery)}>
+            <button type="button" class="combo-item create" disabled={creatingArtist} onmousedown={(e) => e.preventDefault()} onclick={() => createNewArtist(artistQuery)}>
               {creatingArtist ? '创建中…' : `＋ 新建演员档案「${artistQuery.trim()}」`}
             </button>
           {:else if !filteredArtists.length}
@@ -812,13 +832,14 @@
               <span
                 class="capsule free"
                 class:cap-dragging={companyDragIdx === ti}
-                class:cap-drop={companyOverIdx === ti && companyDragIdx !== ti}
+                class:drop-before={companyOverIdx === ti && companyDragIdx !== ti && companyOverBefore}
+                class:drop-after={companyOverIdx === ti && companyDragIdx !== ti && !companyOverBefore}
                 draggable="true"
                 title="拖动调整顺序"
                 ondragstart={(e) => { companyDragIdx = ti; e.dataTransfer.effectAllowed = 'move'; }}
-                ondragover={(e) => { e.preventDefault(); companyOverIdx = ti; }}
+                ondragover={(e) => onCompanyDragOver(e, ti)}
                 ondragleave={() => { if (companyOverIdx === ti) companyOverIdx = -1; }}
-                ondrop={(e) => { e.preventDefault(); onCompanyDropAt(ti); }}
+                ondrop={(e) => { e.preventDefault(); onCompanyDropAt(ti, companyOverBefore); }}
                 ondragend={() => { companyDragIdx = -1; companyOverIdx = -1; }}
               >
                 <span class="cap-grip" aria-hidden="true">⠿</span>
@@ -838,7 +859,7 @@
           {#if showCompanyList && (filteredCompanies.length || companyQuery.trim())}
             <div class="combo-list">
               {#each filteredCompanies as v (v)}
-                <button type="button" class="combo-item" onclick={() => pickCompany(v)}>{v}</button>
+                <button type="button" class="combo-item" onmousedown={(e) => e.preventDefault()} onclick={() => pickCompany(v)}>{v}</button>
               {/each}
               {#if companyQuery.trim() && !filteredCompanies.length}
                 <div class="combo-empty">无匹配团体，回车添加新团体</div>
@@ -927,7 +948,7 @@
         {#if showDramaList}
           <div class="combo-list">
             {#each filteredDramas as d (d.id)}
-              <button type="button" class="combo-item" onclick={() => addDrama(d.id)}>{d.name}{d.categoryNames?.length ? `（${d.categoryNames.join('/')}）` : ''}</button>
+              <button type="button" class="combo-item" onmousedown={(e) => e.preventDefault()} onclick={() => addDrama(d.id)}>{d.name}{d.categoryNames?.length ? `（${d.categoryNames.join('/')}）` : ''}</button>
             {:else}
               <div class="combo-empty">无匹配剧目，可改用右侧新建</div>
             {/each}
@@ -1086,6 +1107,7 @@
   }
   .tagbox input::placeholder { color: var(--text-3); }
   .capsule {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -1100,7 +1122,20 @@
   .capsule:active { cursor: grabbing; }
   .cap-grip { color: currentColor; opacity: 0.45; font-size: 11px; line-height: 1; user-select: none; cursor: grab; }
   .capsule.cap-dragging { opacity: 0.35; }
-  .capsule.cap-drop { outline: 2px dashed var(--accent); outline-offset: 1px; }
+  /* 拖拽插入指示：目标左/右侧显示竖线光标，表示松手后的插入位置 */
+  .capsule.drop-before::before,
+  .capsule.drop-after::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+    pointer-events: none;
+  }
+  .capsule.drop-before::before { left: -5px; }
+  .capsule.drop-after::after { right: -5px; }
   .capsule.linked { background: var(--accent-soft); color: var(--accent); }
   .capsule.free { background: var(--surface-3); color: var(--text-2); border: 1px solid var(--border); }
   .cap-x {
