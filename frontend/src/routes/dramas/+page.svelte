@@ -221,13 +221,13 @@
   }
   .d-cat.more { background: var(--surface-3); color: var(--text-muted); }
   .d-remark { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .d-stats { display: flex; gap: 8px; flex: 0 0 auto; }
+  .d-stats { display: flex; gap: 8px; flex: 0 0 auto; align-self: flex-start; margin-top: 3px; }
   .stat { font-size: 12px; color: var(--text-muted); }
   .stat b { color: var(--accent); font-size: 13px; }
   .del {
     border: none; background: none; color: var(--text-3); cursor: pointer; font-size: 12px;
     width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-    transition: all var(--t-fast) var(--ease); flex: 0 0 auto;
+    transition: all var(--t-fast) var(--ease); flex: 0 0 auto; align-self: flex-start;
   }
   .del:hover { background: var(--danger-soft); color: var(--danger); }
   .drama.dragging { opacity: 0.4; cursor: grabbing; }

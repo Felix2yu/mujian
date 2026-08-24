@@ -8,7 +8,13 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,    label: amd64 }
+          - { os: ubuntu-24.04-arm, label: arm64 }
 
     steps:
       - uses: actions/checkout@v7
@@ -49,11 +55,23 @@ jobs:
         run: CGO_ENABLED=1 go build -o mujian .
         working-directory: backend
 
+      # Upload the prebuilt Go binary for this architecture. The Docker job
+      # downloads it instead of compiling inside the image.
       - name: Upload binary
         uses: actions/upload-artifact@v7
         with:
-          name: mujian
+          name: mujian-${{ matrix.label }}
           path: backend/mujian
+          retention-days: 7
+
+      # Frontend output is arch-independent, so upload it only once (from the
+      # amd64 build) to avoid duplicate artifact names in the run.
+      - name: Upload frontend dist
+        if: matrix.label == 'amd64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: frontend/dist
           retention-days: 7
 
   coverage:
@@ -95,14 +113,13 @@ jobs:
     permissions:
       contents: read
       packages: write
+      actions: read
 
     strategy:
       matrix:
         include:
-          - platform: linux/amd64
-            runner: ubuntu-latest
-          - platform: linux/arm64
-            runner: ubuntu-24.04-arm
+          - { platform: linux/amd64, runner: ubuntu-latest,    label: amd64 }
+          - { platform: linux/arm64, runner: ubuntu-24.04-arm, label: arm64 }
 
     steps:
       - uses: actions/checkout@v7
@@ -121,15 +138,30 @@ jobs:
         id: repo
         run: echo "name=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
+      # Pull the prebuilt frontend assets and the Go binary produced by the
+      # `build` job. The Docker build only assembles the final image — no
+      # Node/pnpm toolchain, no Go compilation.
+      - name: Download frontend dist
+        uses: actions/download-artifact@v7
+        with:
+          name: frontend-dist
+          path: dist
+
+      - name: Download prebuilt binary
+        uses: actions/download-artifact@v7
+        with:
+          name: mujian-${{ matrix.label }}
+          path: bin
+
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
           context: .
           platforms: ${{ matrix.platform }}
           push: true
-          tags: ghcr.io/${{ steps.repo.outputs.name }}:${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
-          cache-from: type=gha,scope=${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
-          cache-to: type=gha,scope=${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }},mode=max
+          tags: ghcr.io/${{ steps.repo.outputs.name }}:${{ matrix.label }}
+          cache-from: type=gha,scope=${{ matrix.label }}
+          cache-to: type=gha,scope=${{ matrix.label }},mode=max
 
   docker-manifest:
     runs-on: ubuntu-latest
