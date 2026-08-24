@@ -115,7 +115,7 @@
     font-weight: 600;
     letter-spacing: 0.03em;
   }
-  /* 海报左下角：演出状态（0 已看 / 1 想看 / 2 已取消 / 3 其他） */
+  /* 海报左下角：演出状态（0 正常 / 1 想看 / 2 已取消 / 3 未赴约） */
   .status-badge {
     position: absolute;
     left: 8px;

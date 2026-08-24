@@ -191,7 +191,7 @@
           <input type="checkbox" checked={fields.activeStatus.enabled} onchange={() => toggleField('activeStatus')} />
           <span>状态</span>
           <select bind:value={fields.activeStatus.value} disabled={!fields.activeStatus.enabled}>
-            <option value="0">已看</option>
+            <option value="0">正常</option>
             <option value="1">想看</option>
           </select>
         </label>

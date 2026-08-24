@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
   import { theme } from '$lib/stores.js';
-  import { STATUS_LABELS, loadStatusFilter, saveStatusFilter } from '$lib/statusPrefs.js';
+  import { STATUS_LABELS, ALL_STATUSES, loadStatusFilter, saveStatusFilter } from '$lib/statusPrefs.js';
   import { loadPref as loadJsonPref, savePref as saveJsonPref } from '$lib/prefs.js';
 
   let settings = $state({ storage_type: 'local', theme: 'auto', image_format: 'avif' });
@@ -326,7 +326,7 @@
       <h3>演出状态</h3>
       <p class="hint" style="margin-bottom: 12px;">控制首页列表显示哪些状态的演出（本地偏好，立即生效）</p>
       <div class="status-row">
-        {#each [0, 1, 2, 3] as sv}
+        {#each ALL_STATUSES as sv}
           <label class="status-opt" class:on={statusFilter.includes(sv)}>
             <input type="checkbox" checked={statusFilter.includes(sv)} onchange={() => toggleStatus(sv)} />
             <span>{STATUS_LABELS[sv]}</span>

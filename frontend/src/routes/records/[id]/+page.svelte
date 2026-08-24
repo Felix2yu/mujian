@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api, coverUrl, formatCurrency, formatDate } from '$lib/api.js';
+  import { STATUS_LABELS } from '$lib/statusPrefs.js';
   import BackLink from '$lib/components/BackLink.svelte';
 
   const id = $page.params.id;
@@ -33,7 +34,7 @@
     return groups;
   });
 
-  const statusLabel = { 0: '正常', 1: '想看', 2: '已取消', 3: '其他' };
+  const statusLabel = STATUS_LABELS;
 
   async function load() {
     loading = true;
