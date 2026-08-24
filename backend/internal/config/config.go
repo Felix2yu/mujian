@@ -25,6 +25,7 @@ type Config struct {
 	ShowFriends       bool   `json:"show_friends"`
 	ShowPayPrice      bool   `json:"show_pay_price"`
 	ShowOtherCost     bool   `json:"show_other_cost"`
+	MultiCurrency     bool   `json:"multi_currency"`
 	mu                sync.RWMutex
 }
 
@@ -52,6 +53,7 @@ func Load() *Config {
 		ShowFriends:       true,
 		ShowPayPrice:      true,
 		ShowOtherCost:     true,
+		MultiCurrency:     true,
 	}
 	return global
 }
@@ -114,6 +116,9 @@ func (c *Config) Update(s *SettingsUpdate) {
 	if s.ShowOtherCost != nil {
 		c.ShowOtherCost = *s.ShowOtherCost
 	}
+	if s.MultiCurrency != nil {
+		c.MultiCurrency = *s.MultiCurrency
+	}
 }
 
 type SettingsUpdate struct {
@@ -129,6 +134,7 @@ type SettingsUpdate struct {
 	ShowFriends   *bool   `json:"show_friends"`
 	ShowPayPrice  *bool   `json:"show_pay_price"`
 	ShowOtherCost *bool   `json:"show_other_cost"`
+	MultiCurrency *bool   `json:"multi_currency"`
 }
 
 func (c *Config) GetSettingsResponse() map[string]interface{} {
@@ -154,6 +160,7 @@ func (c *Config) GetSettingsResponse() map[string]interface{} {
 		"show_friends":        c.ShowFriends,
 		"show_pay_price":      c.ShowPayPrice,
 		"show_other_cost":     c.ShowOtherCost,
+		"multi_currency":      c.MultiCurrency,
 	}
 }
 
@@ -174,6 +181,7 @@ func (c *Config) SaveToFile(path string) error {
 		"show_friends":    b2s(c.ShowFriends),
 		"show_pay_price":  b2s(c.ShowPayPrice),
 		"show_other_cost": b2s(c.ShowOtherCost),
+		"multi_currency":  b2s(c.MultiCurrency),
 	}
 
 	b, err := json.MarshalIndent(data, "", "  ")
@@ -237,6 +245,9 @@ func (c *Config) LoadFromFile(path string) error {
 	}
 	if v, ok := data["show_other_cost"]; ok {
 		c.ShowOtherCost = v == "true"
+	}
+	if v, ok := data["multi_currency"]; ok {
+		c.MultiCurrency = v == "true"
 	}
 
 	return nil

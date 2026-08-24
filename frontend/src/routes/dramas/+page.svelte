@@ -172,12 +172,14 @@
             <div class="d-title">{d.name}</div>
             <div class="d-meta">
               {#if d.categoryNames?.length}
-                {#each d.categoryNames.slice(0, 4) as cn}<span class="d-cat">{cn}</span>{/each}
-                {#if d.categoryNames.length > 4}
-                  <span class="d-cat more" title={d.categoryNames.join(' / ')}>+{d.categoryNames.length - 4}</span>
-                {/if}
+                <div class="d-cats">
+                  {#each d.categoryNames.slice(0, 4) as cn}<span class="d-cat">{cn}</span>{/each}
+                  {#if d.categoryNames.length > 4}
+                    <span class="d-cat more" title={d.categoryNames.join(' / ')}>+{d.categoryNames.length - 4}</span>
+                  {/if}
+                </div>
               {/if}
-              {#if d.remark}<span class="remark" title={d.remark}>{d.remark}</span>{/if}
+              {#if d.remark}<span class="d-remark" title={d.remark}>{d.remark}</span>{/if}
             </div>
           </a>
           <div class="d-stats">
@@ -207,7 +209,8 @@
   .drama-main { flex: 1; min-width: 0; text-decoration: none; transition: color var(--t-fast) var(--ease); }
   .drama-main:hover .d-title { color: var(--accent); }
   .d-title { font-weight: 600; font-size: 15.5px; font-family: var(--font-serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .d-meta { display: flex; gap: 6px; font-size: 12px; color: var(--text-muted); margin-top: 3px; flex-wrap: wrap; }
+  .d-meta { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-muted); margin-top: 3px; min-width: 0; }
+  .d-cats { display: flex; flex-wrap: nowrap; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .d-cat {
     background: var(--accent-soft);
     color: var(--accent);
@@ -217,7 +220,7 @@
     white-space: nowrap;
   }
   .d-cat.more { background: var(--surface-3); color: var(--text-muted); }
-  .d-meta .remark { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .d-remark { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .d-stats { display: flex; gap: 8px; flex: 0 0 auto; }
   .stat { font-size: 12px; color: var(--text-muted); }
   .stat b { color: var(--accent); font-size: 13px; }

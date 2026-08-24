@@ -10,6 +10,13 @@
   );
   const statusText = $derived(STATUS_LABELS[record.active_status] ?? record.active_status);
 
+  // 剧团：最多展示 3 个，超出以 +N 收起，避免多剧团把卡片撑高。
+  const troupeTags = $derived(
+    (record.company || '').split(/[,，]/).map((s) => s.trim()).filter(Boolean)
+  );
+  const shownTroupes = $derived(troupeTags.slice(0, 3));
+  const extraTroupes = $derived(troupeTags.length - shownTroupes.length);
+
   function stars(n) {
     return '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
   }
@@ -44,16 +51,19 @@
     <div class="artists">
       {#if record.artist_names && record.artist_names.length}
         {#each record.artist_names.slice(0, 3) as name, i}
-          <a class="artist-link" href={`/artists/${record.artist_ids?.[i] || ''}`} onclick={(e) => { if (!record.artist_ids?.[i]) e.preventDefault(); }}>{name}</a>{i < Math.min(record.artist_names.length, 3) - 1 ? ' / ' : ''}
+          {#if record.artist_ids?.[i]}
+            <a class="artist-link" href={`/artists/${record.artist_ids[i]}`}>{name}</a>
+          {:else}
+            <span class="artist-link">{name}</span>
+          {/if}{i < Math.min(record.artist_names.length, 3) - 1 ? ' / ' : ''}
         {/each}{record.artist_names.length > 3 ? ' 等' : ''}
       {/if}
     </div>
-    <div class="troupes">
-      {#if record.company}
-        {#each record.company.split(/[,，]/).map((s) => s.trim()).filter(Boolean) as t}
-          <span class="troupe-tag">{t}</span>
-        {/each}
-      {/if}
+    <div class="troupes" title={troupeTags.join('、')}>
+      {#each shownTroupes as t}
+        <span class="troupe-tag">{t}</span>
+      {/each}
+      {#if extraTroupes > 0}<span class="troupe-tag more">+{extraTroupes}</span>{/if}
     </div>
     <div class="bottom">
       {#if record.address}<span class="tag venue" title={record.address}>{record.address}</span>{/if}
@@ -206,6 +216,12 @@
     padding: 1px 8px;
     white-space: nowrap;
     line-height: 1.6;
+  }
+  .troupe-tag.more {
+    color: var(--text-muted);
+    background: transparent;
+    border-style: dashed;
+    cursor: default;
   }
   .bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 6px; }
   .bottom .venue {

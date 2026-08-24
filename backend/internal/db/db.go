@@ -1859,12 +1859,17 @@ func (db *DB) DeleteCategory(id string) error {
 // that stage it are the single source of truth.
 func (db *DB) dramaCategoriesAll() (map[string][]string, error) {
 	rows, err := db.conn.Query(`
+		WITH solo AS (
+			SELECT record_id FROM record_dramas GROUP BY record_id HAVING COUNT(*) = 1
+		)
 		SELECT rd.drama_id, je.value AS cat, COUNT(*) AS cnt
 		FROM record_dramas rd
 		JOIN records r ON r.id = rd.record_id
 		JOIN json_each(r.category_names) je
+		JOIN solo s ON s.record_id = rd.record_id
 		WHERE je.value != ''
-		GROUP BY rd.drama_id, cat`)
+		GROUP BY rd.drama_id, cat
+		ORDER BY cnt DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -1953,10 +1958,14 @@ func (db *DB) GetDrama(id string) (*models.Drama, error) {
 // dramaCategoriesFor aggregates used categories for a single drama.
 func (db *DB) dramaCategoriesFor(dramaID string) ([]string, error) {
 	rows, err := db.conn.Query(`
+		WITH solo AS (
+			SELECT record_id FROM record_dramas GROUP BY record_id HAVING COUNT(*) = 1
+		)
 		SELECT je.value, COUNT(*) AS cnt
 		FROM record_dramas rd
 		JOIN records r ON r.id = rd.record_id
 		JOIN json_each(r.category_names) je
+		JOIN solo s ON s.record_id = rd.record_id
 		WHERE rd.drama_id = ? AND je.value != ''
 		GROUP BY je.value ORDER BY cnt DESC`, dramaID)
 	if err != nil {

@@ -85,6 +85,7 @@
       if (typeof settings.show_friends !== 'boolean') settings.show_friends = true;
       if (typeof settings.show_pay_price !== 'boolean') settings.show_pay_price = true;
       if (typeof settings.show_other_cost !== 'boolean') settings.show_other_cost = true;
+      if (typeof settings.multi_currency !== 'boolean') settings.multi_currency = true;
       mapSource = loadPref('mujian:map_source', 'osm');
       mapKey = loadPref('mujian:map_custom_key', '');
       mapCustomUrl = loadPref('mujian:map_custom_url', '');
@@ -106,7 +107,8 @@
         image_format: settings.image_format,
         show_friends: settings.show_friends,
         show_pay_price: settings.show_pay_price,
-        show_other_cost: settings.show_other_cost
+        show_other_cost: settings.show_other_cost,
+        multi_currency: settings.multi_currency
       });
       saved = true;
       setTimeout(() => (saved = false), 2400);
@@ -319,6 +321,10 @@
       <label class="switch-row">
         <span>显示「其他花费」</span>
         <input type="checkbox" bind:checked={settings.show_other_cost} />
+      </label>
+      <label class="switch-row">
+        <span>启用多币种（金额可单独选择币种）</span>
+        <input type="checkbox" bind:checked={settings.multi_currency} />
       </label>
     </div>
 

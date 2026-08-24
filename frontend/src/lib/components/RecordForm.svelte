@@ -73,7 +73,7 @@
   let freeNames = $state([]);
 
   // 字段显隐由「设置」控制（同行人 / 实付 / 其他花费），默认全部显示
-  let settings = $state({ show_friends: true, show_pay_price: true, show_other_cost: true });
+  let settings = $state({ show_friends: true, show_pay_price: true, show_other_cost: true, multi_currency: true });
 
   // 坐标默认折叠在「定位」图标后，点击图标才展开经纬度输入
   let showCoord = $state(false);
@@ -138,19 +138,20 @@
   let dramaDragIdx = $state(-1);
   let dramaOverIdx = $state(-1);
 
-  // 已关联剧目的内联编辑：不离开表单即可改名称/剧种（折子仍到详情页管理）
+  // 已关联剧目的内联编辑：不离开表单即可改名。剧种交由后端按「单独演出」自动聚合，
+  // 这里不再暴露剧种编辑，避免改一场演出就污染该剧目的全部剧种展示（footgun）。
   let editingDramaId = $state(null);
-  let dramaEdit = $state({ name: '', categoryNames: [] });
+  let dramaEdit = $state({ name: '' });
   let savingDramaEdit = $state(false);
 
   function startDramaEdit(d) {
     editingDramaId = d.id;
-    dramaEdit = { name: d.name, categoryNames: (d.categoryNames || []).slice() };
+    dramaEdit = { name: d.name };
   }
 
   function cancelDramaEdit() {
     editingDramaId = null;
-    dramaEdit = { name: '', categoryNames: [] };
+    dramaEdit = { name: '' };
   }
 
   async function saveDramaEdit() {
@@ -159,8 +160,7 @@
     error = '';
     try {
       await api.updateDrama(editingDramaId, {
-        name: dramaEdit.name.trim(),
-        categoryNames: dramaEdit.categoryNames.slice()
+        name: dramaEdit.name.trim()
       });
       await loadDramaTree();
       cancelDramaEdit();
@@ -168,6 +168,30 @@
       error = e.message;
     } finally {
       savingDramaEdit = false;
+    }
+  }
+
+  // 内联新增折子：无需跳到剧目详情页。在当前剧目下直接创建并刷新 tree，
+  // 创建后自动选中该折子。
+  let addZheziFor = $state('');
+  let newZheziName = $state('');
+  let savingZhezi = $state(false);
+
+  async function createZheziFor(did) {
+    const name = newZheziName.trim();
+    if (!name || !did || savingZhezi) return;
+    savingZhezi = true;
+    error = '';
+    try {
+      const z = await api.createZhezi(did, { name: name });
+      await loadDramaTree();
+      if (z && z.id) form.zhezi_ids = [...form.zhezi_ids, z.id];
+      newZheziName = '';
+      addZheziFor = '';
+    } catch (e) {
+      error = e.message;
+    } finally {
+      savingZhezi = false;
     }
   }
 
@@ -599,6 +623,15 @@
   function setRating(n) {
     form.rating = form.rating === n ? 0 : n;
   }
+
+  // 币种：下拉选择，避免自由文本输入币种缩写（如 cny/CNY/Cny）导致的数据不一致。
+  const commonCurrencies = ['CNY', 'USD', 'HKD', 'TWD', 'JPY', 'EUR', 'GBP', 'KRW', 'AUD', 'SGD'];
+  function currencyOptions(v) {
+    const out = [];
+    if (v) out.push(v);
+    for (const c of commonCurrencies) if (c !== v) out.push(c);
+    return out;
+  }
 </script>
 
 <form class="form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
@@ -749,22 +782,22 @@
       </div>
       <div class="f-sm">
         <label>票价</label>
-        <div class="money"><input class="input" type="number" step="0.01" min="0" bind:value={form.price} /><input class="input cur" bind:value={form.price_currency} /></div>
+        <div class="money"><input class="input" type="number" step="0.01" min="0" bind:value={form.price} />{#if settings.multi_currency}<input class="input cur" bind:value={form.price_currency} />{/if}</div>
       </div>
     </div>
     {#if settings.show_pay_price}
       <div class="row">
         <div class="f-sm">
           <label>实付</label>
-          <div class="money"><input class="input" type="number" step="0.01" min="0" bind:value={form.pay_price} /><input class="input cur" bind:value={form.pay_price_currency} /></div>
+          <div class="money"><input class="input" type="number" step="0.01" min="0" bind:value={form.pay_price} />{#if settings.multi_currency}<select class="input cur" bind:value={form.pay_price_currency}>{#each currencyOptions(form.pay_price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
         </div>
       </div>
     {/if}
     {#if settings.show_other_cost}
       <div class="row">
         <div class="f-sm">
-          <label>其他花费</label>
-          <div class="money"><input class="input" type="number" step="0.01" min="0" bind:value={form.other_cost} /><input class="input cur" bind:value={form.other_cost_currency} /></div>
+        <label>其他花费</label>
+        <div class="money"><input class="input" type="number" step="0.01" min="0" bind:value={form.other_cost} />{#if settings.multi_currency}<select class="input cur" bind:value={form.other_cost_currency}>{#each currencyOptions(form.other_cost_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
         </div>
       </div>
     {/if}
@@ -889,7 +922,6 @@
           {#if editingDramaId === d.id}
             <div class="ply-edit">
               <input class="input" placeholder="剧目名称" bind:value={dramaEdit.name} />
-              <CategoryTags bind:values={dramaEdit.categoryNames} {categories} placeholder="剧种（可多个）；清空则按演出自动统计" />
               <div class="ply-edit-actions">
                 <button type="button" class="btn primary sm" onclick={saveDramaEdit} disabled={savingDramaEdit || !dramaEdit.name.trim()}>
                   {savingDramaEdit ? '保存中…' : '保存'}
@@ -904,7 +936,7 @@
               {d.name}{#if d.categoryNames?.length}<em class="ply-cat">{d.categoryNames.join(' / ')}</em>{/if}
             </span>
             <span class="ply-ops">
-              <button type="button" class="ply-edit-btn" onclick={() => startDramaEdit(d)} title="编辑该剧目（名称/剧种）">✎</button>
+              <button type="button" class="ply-edit-btn" onclick={() => startDramaEdit(d)} title="编辑该剧目名称">✎</button>
               <button type="button" class="ply-x" onclick={() => removeDrama(d.id)} title="移除该剧目">✕</button>
             </span>
           </div>
@@ -921,7 +953,17 @@
               </div>
             </div>
           {:else}
-            <div class="small muted">该剧目暂无折子（可在剧目详情页添加）</div>
+            <div class="small muted">该剧目暂无折子</div>
+          {/if}
+          <!-- 内联新增折子：无需跳到剧目详情页 -->
+          {#if addZheziFor === d.id}
+            <div class="zhezi-add">
+              <input class="input" placeholder="新折子名称" bind:value={newZheziName} onkeydown={(e) => e.key === 'Enter' && createZheziFor(d.id)} />
+              <button type="button" class="btn primary sm" onclick={() => createZheziFor(d.id)} disabled={savingZhezi || !newZheziName.trim()}>{savingZhezi ? '添加中…' : '添加'}</button>
+              <button type="button" class="btn ghost sm" onclick={() => { addZheziFor = ''; newZheziName = ''; }}>取消</button>
+            </div>
+          {:else}
+            <button type="button" class="zhezi-add-btn" onclick={() => { addZheziFor = d.id; newZheziName = ''; }}>＋ 添加折子</button>
           {/if}
           {/if}
         </div>
@@ -1202,6 +1244,26 @@
   }
   .zhezi:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
   .zhezi input { accent-color: var(--accent); }
+  .zhezi-add {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .zhezi-add .input { flex: 1 1 160px; min-width: 140px; }
+  .zhezi-add-btn {
+    margin-top: 10px;
+    border: 1px dashed var(--border-strong);
+    background: none;
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: all var(--t-fast) var(--ease);
+  }
+  .zhezi-add-btn:hover { background: var(--accent-soft); border-color: var(--accent); }
   .ply-add { display: flex; gap: 10px; align-items: stretch; margin-top: 4px; flex-wrap: wrap; }
   .ply-add .input { flex: 1; }
 

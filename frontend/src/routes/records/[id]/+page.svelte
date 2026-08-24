@@ -186,9 +186,9 @@
       <div class="card section">
         <h3>演出信息</h3>
         <dl class="kv">
-          {#if rec.categoryName}
-            <div class="kv-row"><dt>分类</dt><dd><a class="flink" href={`/?category=${encodeURIComponent(rec.categoryName)}`}>{rec.categoryName}</a></dd></div>
-          {/if}
+          {#each (rec.categoryNames && rec.categoryNames.length ? rec.categoryNames : (rec.categoryName ? [rec.categoryName] : [])) as cn}
+            <div class="kv-row"><dt>分类</dt><dd><a class="flink" href={`/?category=${encodeURIComponent(cn)}`}>{cn}</a></dd></div>
+          {/each}
           {#if rec.company}
             <div class="kv-row"><dt>剧团</dt><dd>{#each rec.company.split(/[,，]/).map((s) => s.trim()).filter(Boolean) as t, i}{i > 0 ? '、' : ''}<a class="flink" href={`/?q=${encodeURIComponent(t)}`}>{t}</a>{/each}</dd></div>
           {/if}

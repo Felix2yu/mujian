@@ -129,6 +129,33 @@
     ].filter(Boolean)
   );
 
+  // 将当前筛选条件同步进 URL（不新增历史记录），使点开某条演出后「← 返回」
+  // 能回到带筛选的首页，而不是未筛选页面。
+  let urlReady = $state(false);
+
+  function buildFilterQuery() {
+    const params = new URLSearchParams();
+    if (filters.q) params.set('q', filters.q);
+    if (filters.category) params.set('category', filters.category);
+    if (filters.city) params.set('city', filters.city);
+    if (filters.year) params.set('year', filters.year);
+    if (filters.month) params.set('month', filters.month);
+    if (filters.drama) params.set('drama', filters.drama);
+    if (filters.zhezi) params.set('zhezi', filters.zhezi);
+    return params.toString();
+  }
+
+  // 筛选变化后把状态写回地址栏；与当前 URL 相同则跳过，避免无意义写入与循环。
+  $effect(() => {
+    if (!urlReady) return;
+    // 依赖：读取全部筛选项以触发更新
+    const _ = [filters.q, filters.category, filters.city, filters.year, filters.month, filters.drama, filters.zhezi];
+    const qs = buildFilterQuery();
+    const url = qs ? `/?${qs}` : '/';
+    const cur = location.pathname + location.search;
+    if (url !== cur) history.replaceState(history.state, '', url);
+  });
+
   async function load() {
     loading = true;
     error = '';
@@ -197,6 +224,7 @@
       drama: sp.get('drama') || '',
       zhezi: sp.get('zhezi') || ''
     };
+    urlReady = true;
     loadMeta();
     load().then(autoJumpOnLoad);
   });

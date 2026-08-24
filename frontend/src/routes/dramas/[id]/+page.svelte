@@ -173,7 +173,7 @@
         <div class="row">
           <CategoryTags bind:values={info.categoryNames} {categories} placeholder="剧种（可多个）；清空则按演出自动统计" />
         </div>
-        <div class="row"><span class="muted small">留空剧种 = 按关联演出自动统计；手动填写可修正拼盘演出带来的偏差</span></div>
+        <div class="row"><span class="muted small">留空剧种 = 按该剧目「单独演出」时的剧种自动统计（拼盘演出已自动排除）；手动填写可覆盖</span></div>
         <textarea class="input" rows="2" placeholder="备注" bind:value={info.remark}></textarea>
         <div class="actions">
           <button class="btn primary sm" onclick={saveInfo} disabled={saving || !info.name.trim()}>{saving ? '保存中…' : '保存'}</button>

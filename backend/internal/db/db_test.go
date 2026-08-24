@@ -1534,7 +1534,53 @@ func TestMultiCategory(t *testing.T) {
 	}
 	gotD, _ = db.GetDrama(d.ID)
 	if gotD.CategoryName != "京剧" || len(gotD.CategoryNames) != 2 {
-		t.Fatalf("cleared override should fall back to aggregation: %+v / %+v", gotD.CategoryName, gotD.CategoryNames)
+	t.Fatalf("cleared override should fall back to aggregation: %+v / %+v", gotD.CategoryName, gotD.CategoryNames)
+}
+
+	// 拼盘噪声过滤：一条演出同时关联多个剧目时，其剧种不应污染任一剧目的聚合，
+	// 剧目只应反映「被单独演出」时的真实剧种。
+	a, err := db.SaveDrama(models.Drama{Name: "牡丹亭"})
+	if err != nil {
+		t.Fatalf("SaveDrama A: %v", err)
+	}
+	b, err := db.SaveDrama(models.Drama{Name: "长生殿"})
+	if err != nil {
+		t.Fatalf("SaveDrama B: %v", err)
+	}
+	// 拼盘演出：同场演《牡丹亭》《长生殿》，剧种分别为 昆曲 / 京昆
+	if err := db.UpsertRecord(models.Record{
+		ID: "p1", Name: "昆曲专场", DateText: "2026-02-01 19:30",
+		CategoryName: "昆曲", CategoryNames: []string{"昆曲", "京昆"},
+		DramaIDs: []string{a.ID, b.ID},
+	}); err != nil {
+		t.Fatalf("UpsertRecord 拼盘: %v", err)
+	}
+	// 《牡丹亭》另有一场单独演出（昆曲），验证单独演出的剧种仍被统计
+	if err := db.UpsertRecord(models.Record{
+		ID: "s1", Name: "牡丹亭独演", DateText: "2026-02-02 19:30",
+		CategoryName: "昆曲", CategoryNames: []string{"昆曲"},
+		DramaIDs: []string{a.ID},
+	}); err != nil {
+		t.Fatalf("UpsertRecord 独演: %v", err)
+	}
+	gotA, err := db.GetDrama(a.ID)
+	if err != nil {
+		t.Fatalf("GetDrama A: %v", err)
+	}
+	for _, c := range gotA.CategoryNames {
+		if c == "京昆" {
+			t.Fatalf("拼盘噪声未过滤，牡丹亭被污染: %+v", gotA.CategoryNames)
+		}
+	}
+	if len(gotA.CategoryNames) != 1 || gotA.CategoryNames[0] != "昆曲" {
+		t.Fatalf("牡丹亭应仅聚合单独演出的昆曲: %+v", gotA.CategoryNames)
+	}
+	gotB, err := db.GetDrama(b.ID)
+	if err != nil {
+		t.Fatalf("GetDrama B: %v", err)
+	}
+	if len(gotB.CategoryNames) != 0 {
+		t.Fatalf("长生殿仅出现在拼盘中，聚合应为空: %+v", gotB.CategoryNames)
 	}
 }
 

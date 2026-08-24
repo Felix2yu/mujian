@@ -9,6 +9,8 @@
   let dramaTree = $state([]);
   let saving = $state(false);
   let error = $state('');
+  // 多币种开关：来自「设置」，OFF 时批量编辑不提供币种字段（金额沿用记录原币种）
+  let settings = $state({ multi_currency: true });
 
   // 每个字段的修改模式：null = 不修改，{enabled: true, value: ...} = 修改
   let fields = $state({
@@ -150,6 +152,12 @@
   }
 
   onMount(loadMeta);
+
+  onMount(async () => {
+    try {
+      settings = await api.getSettings();
+    } catch (e) { /* 读取失败则用默认（多币种开） */ }
+  });
 </script>
 
 <div class="modal-mask" onclick={onClose}>
@@ -244,13 +252,16 @@
             <span>票价</span>
             <input class="input" type="number" bind:value={fields.price.value} placeholder="金额" disabled={!fields.price.enabled} />
           </label>
+          {#if settings.multi_currency}
           <label class="field">
+            <input type="checkbox" checked={fields.priceCurrency.enabled} onchange={() => toggleField('priceCurrency')} />
             <span>币种</span>
             <select bind:value={fields.priceCurrency.value} disabled={!fields.priceCurrency.enabled}>
               <option value="CNY">¥ CNY</option>
               <option value="USD">$ USD</option>
             </select>
           </label>
+          {/if}
         </div>
         <div class="cost-row">
           <label class="field">
@@ -258,13 +269,16 @@
             <span>实付</span>
             <input class="input" type="number" bind:value={fields.payPrice.value} placeholder="金额" disabled={!fields.payPrice.enabled} />
           </label>
+          {#if settings.multi_currency}
           <label class="field">
+            <input type="checkbox" checked={fields.payPriceCurrency.enabled} onchange={() => toggleField('payPriceCurrency')} />
             <span>币种</span>
             <select bind:value={fields.payPriceCurrency.value} disabled={!fields.payPriceCurrency.enabled}>
               <option value="CNY">¥ CNY</option>
               <option value="USD">$ USD</option>
             </select>
           </label>
+          {/if}
         </div>
         <div class="cost-row">
           <label class="field">
@@ -272,13 +286,16 @@
             <span>其他费用</span>
             <input class="input" type="number" bind:value={fields.otherCost.value} placeholder="金额" disabled={!fields.otherCost.enabled} />
           </label>
+          {#if settings.multi_currency}
           <label class="field">
+            <input type="checkbox" checked={fields.otherCostCurrency.enabled} onchange={() => toggleField('otherCostCurrency')} />
             <span>币种</span>
             <select bind:value={fields.otherCostCurrency.value} disabled={!fields.otherCostCurrency.enabled}>
               <option value="CNY">¥ CNY</option>
               <option value="USD">$ USD</option>
             </select>
           </label>
+          {/if}
         </div>
       </div>
 
