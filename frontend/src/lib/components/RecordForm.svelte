@@ -415,6 +415,30 @@
   function onCompanyBlur() {
     const n = companyQuery.trim();
     if (n && ac.company.includes(n)) commitCompanyInput();
+    setTimeout(() => (showCompanyList = false), 120);
+  }
+
+  // 剧团 / 渠道输入建议：子串匹配历史值，点击即补充（替代原生 datalist 的不可控匹配）
+  let showCompanyList = $state(false);
+  let showChannelList = $state(false);
+  const filteredCompanies = $derived.by(() => {
+    const q = companyQuery.trim().toLowerCase();
+    const base = ac.company.filter((v) => !companyTags.includes(v));
+    if (!q) return base;
+    return base.filter((v) => v.toLowerCase().includes(q));
+  });
+  const filteredChannels = $derived.by(() => {
+    const q = (form.channel || '').trim().toLowerCase();
+    if (!q) return ac.channel;
+    return ac.channel.filter((v) => v.toLowerCase().includes(q));
+  });
+  function pickCompany(v) {
+    addCompany(v);
+    companyQuery = '';
+  }
+  function pickChannel(v) {
+    form.channel = v;
+    showChannelList = false;
   }
 
   async function createNewArtist(name) {
@@ -646,9 +670,9 @@
         <label>状态</label>
         <select class="input" bind:value={form.active_status}>
           <option value={0}>正常</option>
-          <option value={1}>想看</option>
           <option value={2}>已取消</option>
-          <option value={3}>其他</option>
+          <option value={1}>想看</option>
+          <option value={3}>未赴约</option>
         </select>
       </div>
       <div class="f-md">
@@ -687,10 +711,22 @@
     <div class="row">
       <div class="f-sm">
         <label>购买渠道</label>
-        <input class="input" bind:value={form.channel} list="channel-list" placeholder="如：大麦" />
-        <datalist id="channel-list">
-          {#each ac.channel as v}<option value={v} />{/each}
-        </datalist>
+        <div class="combo">
+          <input
+            class="input"
+            bind:value={form.channel}
+            placeholder="如：大麦"
+            onfocus={() => (showChannelList = true)}
+            onblur={() => setTimeout(() => (showChannelList = false), 120)}
+          />
+          {#if showChannelList && filteredChannels.length}
+            <div class="combo-list">
+              {#each filteredChannels as v (v)}
+                <button type="button" class="combo-item" onclick={() => pickChannel(v)}>{v}</button>
+              {/each}
+            </div>
+          {/if}
+        </div>
       </div>
       <div class="f-sm">
         <label>票价</label>
@@ -770,37 +806,46 @@
     <div class="row">
       <div class="f-sm">
         <label>剧团 <span class="hint">已有团体失焦自动添加；新名称回车生成胶囊，逗号分隔可一次添加多个</span></label>
-        <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
-          {#each companyTags as t, ti (t)}
-            <span
-              class="capsule free"
-              class:cap-dragging={companyDragIdx === ti}
-              class:cap-drop={companyOverIdx === ti && companyDragIdx !== ti}
-              draggable="true"
-              title="拖动调整顺序"
-              ondragstart={(e) => { companyDragIdx = ti; e.dataTransfer.effectAllowed = 'move'; }}
-              ondragover={(e) => { e.preventDefault(); companyOverIdx = ti; }}
-              ondragleave={() => { if (companyOverIdx === ti) companyOverIdx = -1; }}
-              ondrop={(e) => { e.preventDefault(); onCompanyDropAt(ti); }}
-              ondragend={() => { companyDragIdx = -1; companyOverIdx = -1; }}
-            >
-              <span class="cap-grip" aria-hidden="true">⠿</span>
-              {t}
-              <button type="button" class="cap-x" onclick={() => removeCompany(t)} title="移除该团体" aria-label={`移除 ${t}`}>✕</button>
-            </span>
-          {/each}
-          <input
-            placeholder={companyTags.length ? '' : '如：上海昆剧团'}
-            bind:value={companyQuery}
-            list="company-list"
-            onkeydown={onCompanyKeydown}
-            oninput={onCompanyInput}
-            onblur={onCompanyBlur}
-          />
+        <div class="combo">
+          <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
+            {#each companyTags as t, ti (t)}
+              <span
+                class="capsule free"
+                class:cap-dragging={companyDragIdx === ti}
+                class:cap-drop={companyOverIdx === ti && companyDragIdx !== ti}
+                draggable="true"
+                title="拖动调整顺序"
+                ondragstart={(e) => { companyDragIdx = ti; e.dataTransfer.effectAllowed = 'move'; }}
+                ondragover={(e) => { e.preventDefault(); companyOverIdx = ti; }}
+                ondragleave={() => { if (companyOverIdx === ti) companyOverIdx = -1; }}
+                ondrop={(e) => { e.preventDefault(); onCompanyDropAt(ti); }}
+                ondragend={() => { companyDragIdx = -1; companyOverIdx = -1; }}
+              >
+                <span class="cap-grip" aria-hidden="true">⠿</span>
+                {t}
+                <button type="button" class="cap-x" onclick={() => removeCompany(t)} title="移除该团体" aria-label={`移除 ${t}`}>✕</button>
+              </span>
+            {/each}
+            <input
+              placeholder={companyTags.length ? '' : '如：上海昆剧团'}
+              bind:value={companyQuery}
+              onfocus={() => (showCompanyList = true)}
+              onblur={onCompanyBlur}
+              onkeydown={onCompanyKeydown}
+              oninput={onCompanyInput}
+            />
+          </div>
+          {#if showCompanyList && (filteredCompanies.length || companyQuery.trim())}
+            <div class="combo-list">
+              {#each filteredCompanies as v (v)}
+                <button type="button" class="combo-item" onclick={() => pickCompany(v)}>{v}</button>
+              {/each}
+              {#if companyQuery.trim() && !filteredCompanies.length}
+                <div class="combo-empty">无匹配团体，回车添加新团体</div>
+              {/if}
+            </div>
+          {/if}
         </div>
-        <datalist id="company-list">
-          {#each ac.company as v}<option value={v} />{/each}
-        </datalist>
       </div>
     </div>
     <label>剧目</label>
@@ -1127,6 +1172,8 @@
 
   /* 可搜索下拉（演员 / 剧目共用） */
   .combo { position: relative; flex: 2; min-width: 200px; }
+  /* 表单栅格内的下拉容器：去掉演员区专用的最小宽度，避免窄屏溢出 */
+  .f-sm .combo, .f-md .combo { min-width: 0; }
   .combo-list {
     position: absolute;
     top: calc(100% + 4px);
