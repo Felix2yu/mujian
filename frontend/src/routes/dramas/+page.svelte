@@ -41,6 +41,8 @@
       error = e.message;
     } finally {
       loading = false;
+      // 等 DOM 渲染完毕后测量剧种标签
+      tick().then(() => requestAnimationFrame(measureCats));
     }
   }
 
@@ -72,6 +74,30 @@
   // 拖拽排序状态（与折子页一致）
   let dragIdx = $state(-1);
   let overIdx = $state(-1);
+
+  // 剧种标签溢出检测：计算每个剧目能显示几个剧种标签
+  let catVis = $state({});
+  let catEls = new Map();
+
+  function measureCats() {
+    for (const [id, el] of catEls) {
+      if (!el) { catVis[id] = 0; continue; }
+      const cats = dramas.find(d => d.id === id)?.categoryNames || [];
+      if (!cats.length) { catVis[id] = 0; continue; }
+      const W = el.clientWidth;
+      const ch = el.children;
+      if (!ch.length) { catVis[id] = 0; continue; }
+      // 找到最后一个右边界仍在容器内的标签
+      const elR = el.getBoundingClientRect().right;
+      let n = 0;
+      for (let i = 0; i < ch.length; i++) {
+        if (ch[i].getBoundingClientRect().right <= elR) n = i + 1;
+      }
+      if (n < 1) n = 1;
+      if (n > cats.length) n = cats.length;
+      catVis[id] = n;
+    }
+  }
 
   function onDragStart(i) {
     dragIdx = i;
@@ -105,7 +131,20 @@
     overIdx = -1;
   }
 
-  onMount(load);
+  onMount(() => {
+    load();
+    // 窗口大小变化时重新测量
+    const ro = new ResizeObserver(() => measureCats());
+    const gridEl = document.querySelector('.grid');
+    if (gridEl) ro.observe(gridEl);
+    return () => ro.disconnect();
+  });
+
+  function setCatRef(el, id) {
+    catEls.set(id, el);
+    measureCats();
+    return { destroy() { catEls.delete(id); } };
+  }
 </script>
 <svelte:head><title>剧目 - 幕间</title></svelte:head>
 
@@ -172,10 +211,10 @@
             <div class="d-title">{d.name}</div>
             <div class="d-meta">
               {#if d.categoryNames?.length}
-                <div class="d-cats">
-                  {#each d.categoryNames.slice(0, 4) as cn}<span class="d-cat">{cn}</span>{/each}
-                  {#if d.categoryNames.length > 4}
-                    <span class="d-cat more" title={d.categoryNames.join(' / ')}>+{d.categoryNames.length - 4}</span>
+                <div class="d-cats" use:setCatRef={d.id}>
+                  {#each d.categoryNames as cn}<span class="d-cat">{cn}</span>{/each}
+                  {#if catVis[d.id] != null && catVis[d.id] < d.categoryNames.length}
+                    <span class="d-cat more" title={d.categoryNames.join(' / ')}>等</span>
                   {/if}
                 </div>
               {/if}
@@ -210,7 +249,7 @@
   .drama-main:hover .d-title { color: var(--accent); }
   .d-title { font-weight: 600; font-size: 15.5px; font-family: var(--font-serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .d-meta { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-muted); margin-top: 3px; min-width: 0; }
-  .d-cats { display: flex; flex-wrap: nowrap; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .d-cats { display: flex; flex-wrap: nowrap; gap: 6px; min-width: 0; overflow: hidden; position: relative; }
   .d-cat {
     background: var(--accent-soft);
     color: var(--accent);
@@ -218,8 +257,9 @@
     padding: 0 8px;
     line-height: 1.7;
     white-space: nowrap;
+    flex-shrink: 0;
   }
-  .d-cat.more { background: var(--surface-3); color: var(--text-muted); }
+  .d-cat.more { background: var(--surface-3); color: var(--text-muted); position: absolute; right: 0; }
   .d-remark { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .d-stats { display: flex; gap: 8px; flex: 0 0 auto; align-self: flex-start; margin-top: 3px; }
   .stat { font-size: 12px; color: var(--text-muted); }
