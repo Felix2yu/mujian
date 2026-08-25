@@ -65,3 +65,33 @@ func TestGetCalendarEvents(t *testing.T) {
 		t.Errorf("want empty non-nil slice, got %#v", evs)
 	}
 }
+
+// 单行损坏不得拖垮整月数据：利用 SQLite 动态类型向 INTEGER 列
+// 写入文本制造 Scan 失败，坏行应被跳过并记日志。
+func TestGetCalendarEventsBadRowSkipped(t *testing.T) {
+	g := newTestDB(t)
+	r := sampleRecord("cal-good", time.Date(2026, 8, 10, 19, 0, 0, 0, time.UTC).Unix())
+	if err := g.UpsertRecord(r); err != nil {
+		t.Fatalf("UpsertRecord: %v", err)
+	}
+	if _, err := g.conn.Exec(`INSERT INTO records (id, name, rating) VALUES ('cal-corrupt', '脏数据', 'not-a-number')`); err != nil {
+		t.Fatalf("insert corrupt row: %v", err)
+	}
+
+	evs, err := g.GetCalendarEvents(2026, 8)
+	if err != nil {
+		t.Fatalf("GetCalendarEvents: %v", err)
+	}
+	if len(evs) != 1 || evs[0].ID != "cal-good" {
+		t.Errorf("corrupt row should be skipped, got %+v", evs)
+	}
+}
+
+// 连接已关闭时查询必须报错而非静默返回空结果。
+func TestGetCalendarEventsClosedDB(t *testing.T) {
+	g := newTestDB(t)
+	g.Close()
+	if _, err := g.GetCalendarEvents(2026, 8); err == nil {
+		t.Error("query on closed DB should error")
+	}
+}

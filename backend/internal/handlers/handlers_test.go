@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/flate"
 	"compress/zlib"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -432,6 +433,13 @@ func TestStatsCalendarSettings(t *testing.T) {
 	expectStatus(t, res, 400, "update settings invalid body")
 }
 
+func TestCalendarEndpointDBError(t *testing.T) {
+	ts, _, database, _ := newTestServer(t, nil)
+	database.Close()
+	res, _ := doJSON(t, "GET", ts.URL+"/api/calendar?year=2026&month=8", nil)
+	expectStatus(t, res, 500, "calendar with closed db")
+}
+
 // ---------- upload / export / import ----------
 
 func TestUploadExportImport(t *testing.T) {
@@ -679,6 +687,121 @@ func TestCoversEndpoints(t *testing.T) {
 	expectStatus(t, res, 400, "batch invalid body")
 	res, _ = doJSON(t, "POST", ts.URL+"/api/covers/convert-batch", map[string]interface{}{"format": "gif"})
 	expectStatus(t, res, 400, "batch unsupported format")
+}
+
+// covers.go 的错误与防御分支：merge 跳过未知 hash、orphans 的 size=0
+// 读文件兜底、cleanup 的「被引用文件永不清理」保护、convert 失败 500。
+func TestCoversEdgeBranches(t *testing.T) {
+	ts, h, _, store := newTestServer(t, nil)
+	jpg := jpgFixture()
+	refKey := seedCover(t, h, jpg, "covRef") // 始终被记录引用
+
+	// merge：covers 元数据中不存在的 hash 应被跳过而非报错。
+	res, b := doJSON(t, "POST", ts.URL+"/api/covers/merge", map[string]interface{}{"hashes": []string{"deadbeef"}})
+	expectStatus(t, res, 200, "merge unknown hash")
+	var merge map[string]interface{}
+	decodeResp(t, b, &merge)
+	if merge["merged_groups"].(float64) != 0 || merge["updated_records"].(float64) != 0 {
+		t.Fatalf("unknown hash should be skipped: %v", merge)
+	}
+
+	// orphans：meta 缺失尺寸（size=0）时应回退读取实际文件大小。
+	// 注意不能用 jpgFixture()——同内容会被哈希去重成被引用的同一个文件。
+	orphanKey, _, err := store.SaveCoverBytes([]byte{0xFF, 0xD8, 0xFF, 0xE0, 'z', 'e', 'r', 'o'}, ".jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = h.db.UpsertCoverMeta("zero-size", orphanKey, ".jpg", 0)
+	res, b = doJSON(t, "GET", ts.URL+"/api/covers/orphans", nil)
+	expectStatus(t, res, 200, "orphans zero-size")
+	var orph struct {
+		Files []models.OrphanItem `json:"files"`
+	}
+	decodeResp(t, b, &orph)
+	foundZero := false
+	for _, f := range orph.Files {
+		if f.FileName == filepath.Base(orphanKey) && f.Size > 0 {
+			foundZero = true
+		}
+	}
+	if !foundZero {
+		t.Fatalf("zero-size orphan should report real file size: %+v", orph.Files)
+	}
+
+	// cleanup all：孤儿被移入回收站，被引用的封面必须原地不动。
+	res, b = doJSON(t, "POST", ts.URL+"/api/covers/cleanup", map[string]interface{}{"all": true})
+	expectStatus(t, res, 200, "cleanup protects referenced")
+	var clean map[string]interface{}
+	decodeResp(t, b, &clean)
+	if clean["moved"].(float64) < 1 {
+		t.Fatalf("cleanup should move the orphan: %v", clean)
+	}
+	if !store.CoverExists(refKey) {
+		t.Fatalf("referenced cover must survive cleanup: %s", refKey)
+	}
+
+	// convert：key 不存在时返回 500 而非静默成功。
+	res, _ = doJSON(t, "POST", ts.URL+"/api/covers/convert", map[string]interface{}{"key": "covers/nope.jpg", "format": "webp"})
+	expectStatus(t, res, 500, "convert missing key")
+}
+
+// runRegenerateThumbs 三种逐项状态：正常重生成、源文件丢失、内容非图片，
+// 以及客户端取消后立即中止（不再产出 item 事件）。
+func TestRunRegenerateThumbsStates(t *testing.T) {
+	_, h, _, store := newTestServer(t, nil)
+
+	okKey, _, err := store.SaveCoverBytes(jpgFixture(), ".jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	badKey, _, err := store.SaveCoverBytes([]byte("this is not an image"), ".jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	goneKey := "covers/deleted-from-disk.jpg"
+	for id, k := range map[string]string{"rt-ok": okKey, "rt-bad": badKey, "rt-gone": goneKey} {
+		if err := h.db.UpsertRecord(models.Record{ID: id, Name: id, CoverFile: k, Date: time.Now().Unix()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	items := []map[string]interface{}{}
+	req := httptest.NewRequest("POST", "/api/covers/thumbs", nil)
+	if _, err := h.runRegenerateThumbs(req, func(v map[string]interface{}) { items = append(items, v) }); err != nil {
+		t.Fatalf("runRegenerateThumbs: %v", err)
+	}
+	status := map[string]string{}
+	for _, it := range items {
+		if it["phase"] == "item" {
+			status[it["key"].(string)] = it["status"].(string)
+		}
+	}
+	if status[okKey] != "ok" {
+		t.Errorf("valid cover should regenerate ok, got %q", status[okKey])
+	}
+	if status[goneKey] != "error" || status[badKey] != "error" {
+		t.Errorf("missing file and non-image should both error, got %v", status)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	items = nil
+	req = httptest.NewRequest("POST", "/api/covers/thumbs", nil).WithContext(ctx)
+	if _, err := h.runRegenerateThumbs(req, func(v map[string]interface{}) { items = append(items, v) }); err != nil {
+		t.Fatalf("cancelled run: %v", err)
+	}
+	for _, it := range items {
+		if it["phase"] == "item" {
+			t.Fatalf("cancelled context must stop before processing, got item: %v", it)
+		}
+	}
+}
+
+func TestCoversDuplicatesDBError(t *testing.T) {
+	ts, _, database, _ := newTestServer(t, nil)
+	database.Close()
+	res, _ := doJSON(t, "GET", ts.URL+"/api/covers/duplicates", nil)
+	expectStatus(t, res, 500, "duplicates with closed db")
 }
 
 func TestUploadDisabledLocalStorage(t *testing.T) {
