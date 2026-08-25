@@ -13,7 +13,7 @@
 
   // inline editing
   let editing = $state(false);
-  let form = $state({ name: '', aliases: '', remark: '', bio: '', coverFile: '', coverThumb: '' });
+  let form = $state({ name: '', aliases: '', remark: '', coverFile: '', coverThumb: '' });
   let uploading = $state(false);
   let fileInput = $state(null);
   let saving = $state(false);
@@ -31,8 +31,7 @@
       form = {
         name: a.name,
         aliases: (a.aliases || []).join(', '),
-        remark: a.remark || '',
-        bio: a.bio || '',
+        remark: [a.bio, a.remark].filter(Boolean).join('\n'),
         coverFile: a.coverFile || '',
         coverThumb: a.coverThumb || ''
       };
@@ -47,8 +46,7 @@
     form = {
       name: artist.name,
       aliases: (artist.aliases || []).join(', '),
-      remark: artist.remark || '',
-      bio: artist.bio || '',
+      remark: [artist.bio, artist.remark].filter(Boolean).join('\n'),
       coverFile: artist.coverFile || '',
       coverThumb: artist.coverThumb || ''
     };
@@ -64,7 +62,7 @@
         name: form.name.trim(),
         aliases: splitList(form.aliases),
         remark: form.remark.trim(),
-        bio: form.bio.trim(),
+        bio: '',
         coverFile: form.coverFile.trim(),
         coverThumb: form.coverThumb.trim()
       });
@@ -127,23 +125,24 @@
 
     <div class="card head-card">
       {#if editing}
-        <div class="row head-row">
-          {#if form.coverFile}
-            <img class="avatar" src={coverUrl(form.coverFile)} alt="头像预览" />
-          {:else}
-            <div class="avatar placeholder">🎭</div>
-          {/if}
-          <div class="grow">
-            <input class="input" placeholder="演员姓名" bind:value={form.name} />
-            <input class="input" placeholder="别名（逗号分隔）" bind:value={form.aliases} />
-          </div>
-          <div>
-            <button class="btn sm" onclick={triggerUpload} disabled={uploading}>{uploading ? '上传中…' : '⇪ 头像'}</button>
-            <input type="file" accept="image/*" onchange={handleUpload} disabled={uploading} hidden bind:this={fileInput} />
+        <div class="head-main">
+          <div class="head-left">
+            {#if form.coverFile}
+              <img class="avatar lg" src={coverUrl(form.coverFile)} alt="头像预览" />
+            {:else}
+              <div class="avatar lg placeholder">🎭</div>
+            {/if}
+            <div class="edit-fields">
+              <input class="input" placeholder="演员姓名" bind:value={form.name} />
+              <input class="input" placeholder="别名（逗号分隔）" bind:value={form.aliases} />
+              <textarea class="input" rows="3" placeholder="简介 / 备注" bind:value={form.remark}></textarea>
+              <div>
+                <button class="btn sm" onclick={triggerUpload} disabled={uploading}>{uploading ? '上传中…' : '⇪ 头像'}</button>
+                <input type="file" accept="image/*" onchange={handleUpload} disabled={uploading} hidden bind:this={fileInput} />
+              </div>
+            </div>
           </div>
         </div>
-        <textarea class="input" rows="2" placeholder="简介" bind:value={form.bio}></textarea>
-        <textarea class="input" rows="2" placeholder="备注" bind:value={form.remark}></textarea>
         <div class="actions">
           <button class="btn primary sm" onclick={save} disabled={saving || !form.name.trim()}>{saving ? '保存中…' : '保存'}</button>
           <button class="btn ghost sm" onclick={() => { editing = false; }}>取消</button>
@@ -152,9 +151,9 @@
         <div class="head-main">
           <div class="head-left">
             {#if artist.coverFile}
-              <img class="avatar" src={coverUrl(artist.coverFile)} alt={artist.name} />
+              <img class="avatar lg" src={coverUrl(artist.coverFile)} alt={artist.name} />
             {:else}
-              <div class="avatar placeholder">🎭</div>
+              <div class="avatar lg placeholder">🎭</div>
             {/if}
             <div>
               <h1>{artist.name}</h1>
@@ -164,8 +163,7 @@
                 {/if}
                 <span class="muted">{artist.recordCount} 场演出</span>
               </div>
-              {#if artist.bio}<p class="remark bio">{artist.bio}</p>{/if}
-              {#if artist.remark}<p class="remark">{artist.remark}</p>{/if}
+              {#if artist.bio || artist.remark}<p class="remark">{artist.bio || ''}{artist.bio && artist.remark ? '\n' : ''}{artist.remark || ''}</p>{/if}
             </div>
           </div>
           <div class="head-actions">
@@ -198,20 +196,18 @@
 
   .head-card { padding: 18px 20px; margin-bottom: 14px; }
   .head-main { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
-  .head-left { display: flex; gap: 16px; align-items: flex-start; min-width: 0; }
-  .avatar { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--surface-3); }
-  .avatar.placeholder { display: flex; align-items: center; justify-content: center; font-size: 38px; }
+  .head-left { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: start; min-width: 0; flex: 1; }
+  .avatar { width: 160px; height: 160px; border-radius: 50%; object-fit: cover; background: var(--surface-3); }
+  .avatar.placeholder { display: flex; align-items: center; justify-content: center; font-size: 56px; }
   h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.25; }
   .sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .aliases { font-size: 12.5px; color: var(--text-muted); }
   .muted { color: var(--text-muted); font-size: 13px; }
   .remark { margin: 10px 0 0; color: var(--text-2); white-space: pre-wrap; line-height: 1.6; }
-  .bio { font-size: 14px; }
   .head-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+  .edit-fields { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .edit-fields .input { width: 100%; }
 
-  .row { display: flex; gap: 10px; }
-  .row .input { flex: 1; }
-  .grow { flex: 1; display: flex; flex-direction: column; gap: 8px; }
   .actions { display: flex; gap: 8px; margin-top: 10px; }
 
   .section { padding: 18px 20px; margin-top: 14px; }
