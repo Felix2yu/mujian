@@ -1860,7 +1860,10 @@ func (db *DB) DeleteCategory(id string) error {
 func (db *DB) dramaCategoriesAll() (map[string][]string, error) {
 	rows, err := db.conn.Query(`
 		WITH solo AS (
-			SELECT record_id FROM record_dramas GROUP BY record_id HAVING COUNT(*) = 1
+			SELECT r.id AS record_id
+			FROM records r, json_each(r.category_names) je
+			WHERE je.value != ''
+			GROUP BY r.id HAVING COUNT(DISTINCT je.value) = 1
 		)
 		SELECT rd.drama_id, je.value AS cat, COUNT(*) AS cnt
 		FROM record_dramas rd
@@ -1888,8 +1891,8 @@ func (db *DB) dramaCategoriesAll() (map[string][]string, error) {
 
 // applyDramaCategories fills the derived categories: a manually set
 // category_names on the drama archive wins; otherwise fall back to the
-// aggregation of categories used by the performances staging it (拼盘演出
-// 会把无关剧种带进聚合，手动覆盖用于修正这类场景).
+// aggregation of categories used by the performances staging it (多剧种拼盘
+// 演出会把无关剧种带进聚合，手动覆盖用于修正这类场景).
 func applyDramaCategories(d *models.Drama, raw string, agg map[string][]string) {
 	d.CategoryNames = unmarshalStrings(raw)
 	if len(d.CategoryNames) == 0 {
@@ -1959,7 +1962,10 @@ func (db *DB) GetDrama(id string) (*models.Drama, error) {
 func (db *DB) dramaCategoriesFor(dramaID string) ([]string, error) {
 	rows, err := db.conn.Query(`
 		WITH solo AS (
-			SELECT record_id FROM record_dramas GROUP BY record_id HAVING COUNT(*) = 1
+			SELECT r.id AS record_id
+			FROM records r, json_each(r.category_names) je
+			WHERE je.value != ''
+			GROUP BY r.id HAVING COUNT(DISTINCT je.value) = 1
 		)
 		SELECT je.value, COUNT(*) AS cnt
 		FROM record_dramas rd
