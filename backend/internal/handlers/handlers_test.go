@@ -357,6 +357,33 @@ func TestStatsCalendarSettings(t *testing.T) {
 	res, _ = doJSON(t, "GET", ts.URL+"/api/calendar", nil)
 	expectStatus(t, res, 200, "calendar default")
 
+	res, b = doJSON(t, "GET", ts.URL+"/api/calendar?year=abc&month=99", nil)
+	expectStatus(t, res, 200, "calendar invalid params")
+	// 非法参数必须回退到「当前月」：插入一条当前月记录，
+	// 若 year=0 / month 被 normalize 到别的月份，这里查不到它。
+	now := time.Now()
+	if err := database.UpsertRecord(models.Record{ID: "cal-cur", Name: "B",
+		Date: time.Date(now.Year(), now.Month(), 15, 12, 0, 0, 0, time.UTC).Unix()}); err != nil {
+		t.Fatalf("upsert current-month record: %v", err)
+	}
+	res, b = doJSON(t, "GET", ts.URL+"/api/calendar?year=abc&month=99", nil)
+	expectStatus(t, res, 200, "calendar invalid params")
+	if !strings.Contains(string(b), `"cal-cur"`) {
+		t.Fatalf("invalid params should fall back to current month, got: %s", b)
+	}
+
+	res, b = doJSON(t, "GET", ts.URL+"/api/calendar?year=2026&month=0", nil)
+	expectStatus(t, res, 200, "calendar month=0")
+	// month=0 同样回退当前月：仅当当前月是 2026-08 时才会混入 st1。
+	decodeResp(t, b, &evs)
+	if now.Year() == 2026 && int(now.Month()) == 8 {
+		if len(evs) != 2 || !strings.Contains(string(b), `"cal-cur"`) {
+			t.Fatalf("month=0 fallback (2026-08): %s", b)
+		}
+	} else if strings.Contains(string(b), "st1") {
+		t.Fatalf("month=0 must not return 2026-08 data outside august: %s", b)
+	}
+
 	res, b = doJSON(t, "GET", ts.URL+"/api/calendar.ics", nil)
 	expectStatus(t, res, 200, "ics")
 	if !strings.Contains(string(b), "BEGIN:VCALENDAR") {

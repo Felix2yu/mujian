@@ -2610,9 +2610,13 @@ func (db *DB) GetCalendarEvents(year, month int) ([]models.CalendarEvent, error)
 	for rows.Next() {
 		var e models.CalendarEvent
 		if err := rows.Scan(&e.ID, &e.Name, &e.Date, &e.City, &e.Address, &e.CoverFile, &e.CoverThumb, &e.Rating, &e.ActiveStatus, &e.CategoryName); err != nil {
+			slog.Warn("scan calendar event", "err", err)
 			continue
 		}
 		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	if out == nil {
 		out = []models.CalendarEvent{}

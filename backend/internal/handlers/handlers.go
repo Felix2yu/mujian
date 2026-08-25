@@ -750,11 +750,18 @@ func (h *Handler) getDashboard(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) getCalendar(w http.ResponseWriter, r *http.Request) {
 	year := time.Now().Year()
 	month := int(time.Now().Month())
+	// 解析失败或越界时保留「当前月」默认值：
+	// - Atoi 失败得到 0 会查询公元元年，表现为莫名空日历；
+	// - month=0/13 会被 time.Date 规范化到相邻年份，静默错位一个月。
 	if y := r.URL.Query().Get("year"); y != "" {
-		year, _ = strconv.Atoi(y)
+		if v, err := strconv.Atoi(y); err == nil {
+			year = v
+		}
 	}
 	if m := r.URL.Query().Get("month"); m != "" {
-		month, _ = strconv.Atoi(m)
+		if v, err := strconv.Atoi(m); err == nil && v >= 1 && v <= 12 {
+			month = v
+		}
 	}
 	events, err := h.db.GetCalendarEvents(year, month)
 	if err != nil {
