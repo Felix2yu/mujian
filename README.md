@@ -24,7 +24,7 @@
 | 前端 | SvelteKit, Svelte 5, pnpm, Vite, Leaflet |
 | 后端 | Go 1.27, Chi Router, log/slog, PGO |
 | 数据库 | SQLite（modernc.org/sqlite，纯 Go） |
-| 图片 | AVIF（默认）/ WebP / JPEG（avif-go + libavif、chai2010/webp，需 CGO） |
+| 图片 | AVIF（默认）/ WebP / JPEG（avif-go、chai2010/webp 自带静态库，需 CGO） |
 | 存储 | 本地磁盘或 S3（AWS SDK v2），封面按内容哈希（`covers/<sha256>.<ext>`）寻址 |
 | 部署 | Docker（ghcr.io/felix2yu/mujian，amd64/arm64），docker-compose |
 | CI/CD | GitHub Actions + Codecov（覆盖率 ≥85% 门禁） |
@@ -35,9 +35,9 @@
 
 - Node.js 20+ 与 pnpm
 - Go 1.27
-- CGO 依赖（AVIF/WebP 编码需要）：
-  - macOS：`brew install libavif`
-  - Debian/Ubuntu：`apt install libavif-dev gcc`
+- CGO 编译器（AVIF/WebP 编码需要；两个图像库自带静态库，无需系统 libavif）：
+  - macOS：Xcode Command Line Tools
+  - Debian/Ubuntu：`apt install gcc`
 
 ### 开发模式
 

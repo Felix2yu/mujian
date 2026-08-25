@@ -1,30 +1,31 @@
 # Final image assembled from CI-prebuilt artifacts:
 #   - `frontend-dist`             -> ./dist    (prebuilt frontend static assets)
-#   - `mujian-amd64`/`mujian-arm64` -> ./bin/mujian (Go binary built with CGO + libavif)
+#   - `mujian-amd64`/`mujian-arm64` -> ./bin/mujian (Go binary built with CGO)
 #
 # The `build` job compiles everything; this Dockerfile only assembles the
 # runtime image. The binary is built on the ubuntu:24.04 runner but runs on
-# ubuntu:26.04 here — that is safe because the only dynamic dependencies are
-# glibc's libc/libm (verified via ldd; libavif is linked statically into the
-# binary), and glibc is backward compatible. libavif16 is installed as a
-# defensive runtime dep for the dlopen path.
+# debian:13-slim here — that is safe because the only dynamic dependencies are
+# glibc's libc/libm (verified via ldd) and glibc is backward compatible.
 #
-# The ubuntu base image already ships an `ubuntu` user at uid 1000, so we run
-# the app as that user instead of creating a colliding uid-1000 account.
+# No system image-codec packages are needed: avif-go and chai2010/webp bundle
+# their own headers and static libraries (AVIF/WebP codecs are linked into the
+# binary), and SQLite is pure Go (modernc.org/sqlite).
+#
+# debian:13-slim ships no pre-created uid-1000 account, so one is created
+# below — named `ubuntu` to keep the PUID/PGID=1000 semantics of previous
+# releases.
 
-FROM ubuntu:26.04
+FROM debian:13-slim
 
 # Upgrade base-image packages before installing ours: the published image
 # digest can lag behind the security pocket, and scanners flag the stale
-# snapshot even when fixes already exist upstream. Pebble (bundled with the
-# 26.04 base image as a raw binary in /usr/bin, NOT a dpkg package) is a Go
-# daemon manager this image never runs — and its bundled stdlib carried
-# fixable HIGH CVEs — so the file is removed directly.
+# snapshot even when fixes already exist upstream.
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
-      ca-certificates tzdata libavif16 curl \
-    && rm -rf /var/lib/apt/lists/* /usr/bin/pebble \
+      ca-certificates tzdata curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --uid 1000 --user-group --create-home --shell /bin/sh ubuntu \
     && mkdir -p /app/data/uploads \
     && chown -R ubuntu:ubuntu /app
 
