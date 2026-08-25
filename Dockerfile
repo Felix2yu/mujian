@@ -17,14 +17,14 @@ FROM ubuntu:26.04
 # Upgrade base-image packages before installing ours: the published image
 # digest can lag behind the security pocket, and scanners flag the stale
 # snapshot even when fixes already exist upstream. Pebble (bundled with the
-# 26.04 base image) is a Go daemon manager this image never runs — and its
-# bundled stdlib carried fixable HIGH CVEs — so it is purged.
+# 26.04 base image as a raw binary in /usr/bin, NOT a dpkg package) is a Go
+# daemon manager this image never runs — and its bundled stdlib carried
+# fixable HIGH CVEs — so the file is removed directly.
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
       ca-certificates tzdata libavif16 curl \
-    && apt-get purge -y pebble \
-    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/lib/apt/lists/* /usr/bin/pebble \
     && mkdir -p /app/data/uploads \
     && chown -R ubuntu:ubuntu /app
 
