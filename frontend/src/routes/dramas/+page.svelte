@@ -41,8 +41,8 @@
       error = e.message;
     } finally {
       loading = false;
-      // 等 Svelte 渲染 DOM + 浏览器完成布局后再测量
-      tick().then(() => setTimeout(measureCats, 0));
+      await tick();
+      requestAnimationFrame(() => requestAnimationFrame(measureCats));
     }
   }
 
@@ -89,15 +89,21 @@
       if (!el) continue;
       const cats = dramas.find(d => d.id === id)?.categoryNames || [];
       if (!cats.length) { catVis[id] = 0; continue; }
-      // 暂时移除溢出指示器，避免它参与子元素定位测量
+      // 先渲染所有标签（不含"等"），测量哪些放得下
       const moreEl = el.querySelector('.d-cat.more');
       if (moreEl) moreEl.remove();
-      const ch = el.children;
+      const ch = [...el.children];
       if (!ch.length) { catVis[id] = 0; if (moreEl) el.appendChild(moreEl); continue; }
-      const elR = el.getBoundingClientRect().right;
+      // 计算每个标签的累计宽度（含 gap）
+      const gap = parseFloat(getComputedStyle(el).gap) || 6;
+      const elRect = el.getBoundingClientRect();
+      let acc = 0;
       let n = 0;
       for (let i = 0; i < ch.length; i++) {
-        if (ch[i].getBoundingClientRect().right <= elR) n = i + 1;
+        const w = ch[i].getBoundingClientRect().width;
+        acc += (i > 0 ? gap : 0) + w;
+        if (acc <= elRect.width) n = i + 1;
+        else break;
       }
       if (n < 1) n = 1;
       if (n > cats.length) n = cats.length;
@@ -140,10 +146,9 @@
 
   onMount(() => {
     load();
-    const ro = new ResizeObserver(() => measureCats());
-    const gridEl = document.querySelector('.grid');
-    if (gridEl) ro.observe(gridEl);
-    return () => ro.disconnect();
+    const onResize = () => measureCats();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   });
 </script>
 <svelte:head><title>剧目 - 幕间</title></svelte:head>
