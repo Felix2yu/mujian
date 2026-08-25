@@ -1,5 +1,5 @@
 <script>
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
   import CategoryTags from '$lib/components/CategoryTags.svelte';
 
@@ -41,8 +41,6 @@
       error = e.message;
     } finally {
       loading = false;
-      await tick();
-      requestAnimationFrame(() => requestAnimationFrame(measureCats));
     }
   }
 
@@ -74,43 +72,6 @@
   // 拖拽排序状态（与折子页一致）
   let dragIdx = $state(-1);
   let overIdx = $state(-1);
-
-  // 剧种标签溢出检测：计算每个剧目能显示几个剧种标签
-  let catVis = $state({});
-
-  function measureCats() {
-    const grid = document.querySelector('.grid');
-    if (!grid) return;
-    const cards = grid.querySelectorAll('.drama');
-    for (const card of cards) {
-      const id = card.dataset?.id;
-      if (!id) continue;
-      const el = card.querySelector('.d-cats');
-      if (!el) continue;
-      const cats = dramas.find(d => d.id === id)?.categoryNames || [];
-      if (!cats.length) { catVis[id] = 0; continue; }
-      // 先渲染所有标签（不含"等"），测量哪些放得下
-      const moreEl = el.querySelector('.d-cat.more');
-      if (moreEl) moreEl.remove();
-      const ch = [...el.children];
-      if (!ch.length) { catVis[id] = 0; if (moreEl) el.appendChild(moreEl); continue; }
-      // 计算每个标签的累计宽度（含 gap）
-      const gap = parseFloat(getComputedStyle(el).gap) || 6;
-      const elRect = el.getBoundingClientRect();
-      let acc = 0;
-      let n = 0;
-      for (let i = 0; i < ch.length; i++) {
-        const w = ch[i].getBoundingClientRect().width;
-        acc += (i > 0 ? gap : 0) + w;
-        if (acc <= elRect.width) n = i + 1;
-        else break;
-      }
-      if (n < 1) n = 1;
-      if (n > cats.length) n = cats.length;
-      catVis[id] = n;
-      if (moreEl) el.appendChild(moreEl);
-    }
-  }
 
   function onDragStart(i) {
     dragIdx = i;
@@ -144,12 +105,7 @@
     overIdx = -1;
   }
 
-  onMount(() => {
-    load();
-    const onResize = () => measureCats();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  });
+  onMount(load);
 </script>
 <svelte:head><title>剧目 - 幕间</title></svelte:head>
 
@@ -204,7 +160,6 @@
       {#each visibleDramas as d, i (d.id)}
         <div
           class="card drama"
-          data-id={d.id}
           draggable="true"
           class:dragging={dragIdx === i}
           ondragstart={(e) => { onDragStart(i); e.dataTransfer.effectAllowed = 'move'; }}
@@ -218,8 +173,8 @@
             <div class="d-meta">
               {#if d.categoryNames?.length}
                 <div class="d-cats">
-                  {#each d.categoryNames as cn}<span class="d-cat">{cn}</span>{/each}
-                  {#if catVis[d.id] != null && catVis[d.id] < d.categoryNames.length}
+                  {#each d.categoryNames.slice(0, 3) as cn}<span class="d-cat">{cn}</span>{/each}
+                  {#if d.categoryNames.length > 3}
                     <span class="d-cat more" title={d.categoryNames.join(' / ')}>等</span>
                   {/if}
                 </div>
@@ -255,7 +210,7 @@
   .drama-main:hover .d-title { color: var(--accent); }
   .d-title { font-weight: 600; font-size: 15.5px; font-family: var(--font-serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .d-meta { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-muted); margin-top: 3px; min-width: 0; }
-  .d-cats { display: flex; flex-wrap: nowrap; gap: 6px; min-width: 0; overflow: hidden; position: relative; }
+  .d-cats { display: flex; flex-wrap: nowrap; gap: 6px; min-width: 0; }
   .d-cat {
     background: var(--accent-soft);
     color: var(--accent);
@@ -263,9 +218,8 @@
     padding: 0 8px;
     line-height: 1.7;
     white-space: nowrap;
-    flex-shrink: 0;
   }
-  .d-cat.more { background: var(--surface-3); color: var(--text-muted); position: absolute; right: 0; }
+  .d-cat.more { background: var(--surface-3); color: var(--text-muted); }
   .d-remark { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .d-stats { display: flex; gap: 8px; flex: 0 0 auto; align-self: flex-start; margin-top: 3px; }
   .stat { font-size: 12px; color: var(--text-muted); }

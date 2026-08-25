@@ -1909,6 +1909,14 @@ func applyDramaCategories(d *models.Drama, raw string, agg map[string][]string) 
 }
 
 func (db *DB) ListDramas() ([]models.Drama, error) {
+	type rawDrama struct {
+		d      models.Drama
+		manual string
+	}
+	agg, err := db.dramaCategoriesAll()
+	if err != nil {
+		return nil, err
+	}
 	rows, err := db.conn.Query(`
 		SELECT d.id, d.name, d.category_names, d.remark, d.sort_order,
 			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id) AS zhezi_count,
@@ -1917,23 +1925,24 @@ func (db *DB) ListDramas() ([]models.Drama, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	agg, err := db.dramaCategoriesAll()
-	if err != nil {
-		return nil, err
-	}
-	var out []models.Drama
+	var raw []rawDrama
 	for rows.Next() {
-		var d models.Drama
-		var manual string
-		if err := rows.Scan(&d.ID, &d.Name, &manual, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount); err != nil {
+		var r rawDrama
+		if err := rows.Scan(&r.d.ID, &r.d.Name, &r.manual, &r.d.Remark, &r.d.SortOrder, &r.d.ZheziCount, &r.d.RecordCount); err != nil {
 			continue
 		}
-		applyDramaCategories(&d, manual, agg)
-		out = append(out, d)
+		raw = append(raw, r)
 	}
-	if out == nil {
-		out = []models.Drama{}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]models.Drama, 0, len(raw))
+	for i := range raw {
+		applyDramaCategories(&raw[i].d, raw[i].manual, agg)
+		out = append(out, raw[i].d)
 	}
 	return out, nil
 }
