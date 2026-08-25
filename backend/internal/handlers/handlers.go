@@ -97,6 +97,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Post("/upload", h.uploadFile)
 	r.Get("/export", h.exportRecords)
 	r.Post("/backup/restore", h.backupRestore)
+	r.Post("/storage/migrate-to-s3", h.migrateToS3)
 
 	return r
 }

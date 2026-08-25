@@ -1,11 +1,25 @@
 <script>
   import { onMount } from 'svelte';
-  import { api } from '$lib/api.js';
+  import { api, resetStorageInfo } from '$lib/api.js';
   import { theme } from '$lib/stores.js';
   import { STATUS_LABELS, ALL_STATUSES, loadStatusFilter, saveStatusFilter } from '$lib/statusPrefs.js';
   import { loadPref as loadJsonPref, savePref as saveJsonPref } from '$lib/prefs.js';
 
-  let settings = $state({ storage_type: 'local', theme: 'auto', image_format: 'avif' });
+  let settings = $state({
+    storage_type: 'local',
+    theme: 'auto',
+    image_format: 'avif',
+    allow_local_storage: true,
+    s3_endpoint: '',
+    s3_bucket: '',
+    s3_region: 'us-east-1',
+    s3_access_key: '',
+    s3_secret_key: '',
+    s3_public_url: ''
+  });
+  // GET /api/settings 返回的 secret 是掩码值（如 "sk12****"）；保存时若未改动
+  // 就不回传该字段，避免把掩码存成真实密钥（后端也会兜底忽略）。
+  let loadedS3Secret = $state('');
   let error = $state('');
   let saved = $state(false);
   let loading = $state(true);
@@ -19,6 +33,12 @@
   let aligning = $state(false);
   let alignResult = $state(null);
   let alignError = $state('');
+
+  // 本地封面 → S3 迁移（幂等，已存在的对象自动跳过）
+  let migrating = $state(false);
+  let migrateResult = $state(null);
+  let migrateError = $state('');
+  let migrateProgress = $state({ processed: 0, total: 0 });
 
   // 日历订阅链接（同源部署，取当前站点地址拼出完整 URL）
   let icsUrl = $state('');
@@ -82,6 +102,12 @@
       if (!settings.storage_type) settings.storage_type = 'local';
       if (!settings.theme) settings.theme = 'auto';
       if (!settings.image_format) settings.image_format = 'avif';
+      if (typeof settings.allow_local_storage !== 'boolean') settings.allow_local_storage = true;
+      for (const k of ['s3_endpoint', 's3_bucket', 's3_region', 's3_access_key', 's3_secret_key', 's3_public_url']) {
+        if (typeof settings[k] !== 'string') settings[k] = '';
+      }
+      if (!settings.s3_region) settings.s3_region = 'us-east-1';
+      loadedS3Secret = settings.s3_secret_key;
       if (typeof settings.show_friends !== 'boolean') settings.show_friends = true;
       if (typeof settings.show_pay_price !== 'boolean') settings.show_pay_price = true;
       if (typeof settings.show_other_cost !== 'boolean') settings.show_other_cost = true;
@@ -101,7 +127,7 @@
     error = '';
     saveMapPrefs();
     try {
-      await api.updateSettings({
+      const payload = {
         theme: currentTheme,
         storage_type: settings.storage_type,
         image_format: settings.image_format,
@@ -109,7 +135,20 @@
         show_pay_price: settings.show_pay_price,
         show_other_cost: settings.show_other_cost,
         multi_currency: settings.multi_currency
-      });
+      };
+      if (settings.storage_type === 's3') {
+        payload.s3_endpoint = settings.s3_endpoint.trim();
+        payload.s3_bucket = settings.s3_bucket.trim();
+        payload.s3_region = settings.s3_region.trim() || 'us-east-1';
+        payload.s3_access_key = settings.s3_access_key.trim();
+        payload.s3_public_url = settings.s3_public_url.trim();
+        // 掩码值（含 ****）说明用户没有改密钥，不回传；后端同样会忽略。
+        if (settings.s3_secret_key && !settings.s3_secret_key.includes('****')) {
+          payload.s3_secret_key = settings.s3_secret_key;
+        }
+      }
+      await api.updateSettings(payload);
+      resetStorageInfo();
       saved = true;
       setTimeout(() => (saved = false), 2400);
     } catch (e) {
@@ -155,6 +194,24 @@
       alignError = e.message;
     } finally {
       aligning = false;
+    }
+  }
+
+  async function runMigrateToS3() {
+    migrating = true;
+    migrateError = '';
+    migrateResult = null;
+    migrateProgress = { processed: 0, total: 0 };
+    try {
+      const r = await api.migrateCoversToS3((p) => {
+        if (typeof p.total === 'number') migrateProgress.total = p.total;
+        if (p.phase === 'item') migrateProgress.processed = p.processed;
+      });
+      migrateResult = r;
+    } catch (e) {
+      migrateError = e.message;
+    } finally {
+      migrating = false;
     }
   }
 
@@ -226,9 +283,83 @@
       <h3>存储</h3>
       <label>封面图片存储方式</label>
       <select class="input" bind:value={settings.storage_type} style="max-width: 280px;">
-        <option value="local">本地存储</option>
+        <option value="local" disabled={!settings.allow_local_storage}>本地存储</option>
         <option value="s3">S3 对象存储</option>
       </select>
+
+      {#if settings.storage_type === 's3'}
+        <div class="s3-grid">
+          <label class="field">
+            <span>S3 Endpoint</span>
+            <input class="input" type="text" bind:value={settings.s3_endpoint} placeholder="https://<accountid>.r2.cloudflarestorage.com" autocomplete="off" spellcheck="false" />
+            <span class="hint">兼容 AWS S3 / Cloudflare R2 / MinIO / OSS 等 S3 协议端点；AWS 官方 S3 可留空</span>
+          </label>
+          <label class="field">
+            <span>Bucket</span>
+            <input class="input" type="text" bind:value={settings.s3_bucket} placeholder="mujian" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="field">
+            <span>Region</span>
+            <input class="input" type="text" bind:value={settings.s3_region} placeholder="us-east-1" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="field">
+            <span>Access Key ID</span>
+            <input class="input" type="text" bind:value={settings.s3_access_key} autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="field">
+            <span>Secret Access Key</span>
+            <input class="input" type="password" bind:value={settings.s3_secret_key} placeholder={loadedS3Secret || '未设置'} autocomplete="new-password" />
+            <span class="hint">已配置的密钥会以掩码显示；保持不变即可保留原密钥，清空后保存可移除</span>
+          </label>
+          <label class="field">
+            <span>公网访问地址（Public URL）</span>
+            <input class="input" type="text" bind:value={settings.s3_public_url} placeholder="https://cdn.example.com/mujian" spellcheck="false" />
+            <span class="hint">前端从该地址直接加载封面，要求桶可公开读取或挂了 CDN；留空则回退到 /uploads/ 路径（仅当反向代理把该路径映射到桶时可用）</span>
+          </label>
+        </div>
+
+        {#if !settings.s3_bucket.trim() || !settings.s3_access_key.trim()}
+          <div class="banner error">⚠ Bucket 与 Access Key 未填写，重启后仍会退回本地存储</div>
+        {:else}
+          <p class="hint-row">✓ 配置已就绪，保存并重启服务后生效</p>
+        {/if}
+        <p class="hint-row">切换存储方式不会自动迁移已有封面：切到 S3 后旧图仍留在本地磁盘（配好 Public URL 前可能无法显示），新上传的才会写入 S3</p>
+
+        {#if settings.s3_bucket.trim() && settings.s3_access_key.trim()}
+          <div class="convert-actions">
+            <button
+              class="btn"
+              class:disabled={migrating}
+              onclick={runMigrateToS3}
+              disabled={migrating}
+            >
+              {#if migrating}
+                迁移中…
+              {:else}
+                把本地封面上传到 S3
+              {/if}
+            </button>
+            <span class="hint">按原 key 上传本地 covers/ 下的全部文件（含缩略图）；S3 中已存在的对象自动跳过，可重复执行。建议在切换存储方式前先运行，实现无缝衔接</span>
+          </div>
+
+          {#if migrating && migrateProgress.total > 0}
+            <div class="banner info">
+              <span>⏳ 迁移中… {migrateProgress.processed}/{migrateProgress.total}</span>
+            </div>
+          {/if}
+
+          {#if migrateResult}
+            <div class="banner success">
+              ✓ 共 {migrateResult.total} 个文件：新上传 {migrateResult.migrated}，已存在跳过 {migrateResult.skipped}{#if migrateResult.failed}，失败 {migrateResult.failed}{/if}
+            </div>
+          {/if}
+          {#if migrateError}
+            <div class="banner error">⚠ {migrateError}</div>
+          {/if}
+        {/if}
+      {:else}
+        <p class="hint-row">封面文件保存在服务器 uploads 目录中</p>
+      {/if}
     </div>
 
     <div class="card sec">
@@ -441,6 +572,13 @@
   .tico { font-size: 18px; display: inline-flex; align-items: center; justify-content: center; }
   .hint { font-weight: 400; color: var(--text-3); font-size: 12px; display: block; margin-top: 4px; }
   .hint-row { margin-top: 8px; font-size: 12.5px; color: var(--text-3); }
+  .s3-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px 16px;
+    margin-top: 14px;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--text-2); }
 
   .convert-actions {
     display: flex;

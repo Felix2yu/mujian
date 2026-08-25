@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -102,7 +103,11 @@ func (c *Config) Update(s *SettingsUpdate) {
 		c.S3AccessKey = *s.S3AccessKey
 	}
 	if s.S3SecretKey != nil {
-		c.S3SecretKey = *s.S3SecretKey
+		// GET /api/settings masks the secret (e.g. "sk12****"); a client that
+		// echoes the masked value back must not overwrite the real key.
+		if !strings.HasSuffix(*s.S3SecretKey, "****") {
+			c.S3SecretKey = *s.S3SecretKey
+		}
 	}
 	if s.S3PublicURL != nil {
 		c.S3PublicURL = *s.S3PublicURL

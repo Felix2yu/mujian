@@ -117,6 +117,19 @@ func TestUpdate(t *testing.T) {
 	if c3.Theme != "auto" {
 		t.Error("empty update should not change theme")
 	}
+
+	// Echoing the masked secret back must not clobber the real key.
+	c4 := &Config{S3SecretKey: "real-secret"}
+	masked := "real****"
+	c4.Update(&SettingsUpdate{S3SecretKey: &masked})
+	if c4.S3SecretKey != "real-secret" {
+		t.Errorf("masked secret should be ignored: %q", c4.S3SecretKey)
+	}
+	cleared := ""
+	c4.Update(&SettingsUpdate{S3SecretKey: &cleared})
+	if c4.S3SecretKey != "" {
+		t.Errorf("empty secret should clear the key: %q", c4.S3SecretKey)
+	}
 }
 
 func TestGetSettingsResponse(t *testing.T) {

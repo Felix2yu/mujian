@@ -170,6 +170,8 @@ export const api = {
   regenerateThumbs: (onProgress) =>
     streamRequest('/api/covers/thumbs', { method: 'POST' }, onProgress),
   convertCover: (key, format) => request('/api/covers/convert', { method: 'POST', body: JSON.stringify({ key, format }) }),
+  migrateCoversToS3: (onProgress) =>
+    streamRequest('/api/storage/migrate-to-s3', { method: 'POST' }, onProgress),
   convertBatchCovers: (format, onProgress) =>
     streamRequest('/api/covers/convert-batch', { method: 'POST', body: JSON.stringify({ format }) }, onProgress)
 };
@@ -189,6 +191,12 @@ async function ensureStorageInfo() {
 
 export async function initStorageInfo() {
   await ensureStorageInfo();
+}
+
+// Drop the cached storage info so subsequent coverUrl() calls re-read
+// /api/settings. Used after saving settings on the settings page.
+export function resetStorageInfo() {
+  storageLoaded = false;
 }
 
 export function coverUrl(coverFile) {
