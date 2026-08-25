@@ -169,11 +169,17 @@ jobs:
       # Pinned to the v0.36.0 commit SHA: trivy-action suffered a tag
       # force-push supply-chain attack in March 2026; never reference it by
       # mutable tag.
+      #
+      # The action has no "platform" input and its remote mode always resolves
+      # the amd64 manifest, so pull this job's arch first (auth comes from the
+      # earlier docker/login step) and scan it via the local daemon.
+      - name: Pull built image
+        run: docker pull --platform ${{ matrix.platform }} ghcr.io/${{ steps.repo.outputs.name }}:${{ matrix.label }}
+
       - name: Scan image for vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ghcr.io/${{ steps.repo.outputs.name }}:${{ matrix.label }}
-          platform: ${{ matrix.platform }}
           format: table
           scanners: vuln
           ignore-unfixed: true
