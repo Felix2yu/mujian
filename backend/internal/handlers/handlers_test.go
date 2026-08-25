@@ -551,6 +551,7 @@ func TestUploadExportImport(t *testing.T) {
 	res, _ = doJSON(t, "POST", ts.URL+"/api/backup/restore", nil)
 	expectStatus(t, res, 400, "backup restore no file")
 
+	bgCoverWG.Wait()
 	_ = store
 }
 
@@ -905,6 +906,7 @@ func TestImportAndroidZlib(t *testing.T) {
 	if !strings.Contains(string(b), `"covers_imported":1`) {
 		t.Fatalf("zlib import body: %s", b)
 	}
+	bgCoverWG.Wait()
 }
 
 // ---------- artists endpoints (entity table + reverse lookup) ----------

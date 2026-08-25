@@ -161,6 +161,11 @@ func TestImportCoversProcessedInBackground(t *testing.T) {
 	cv.Write(jpg)
 	zw.Close()
 
+	// Freeze background processing by holding coverMu (the goroutine blocks on
+	// it), so the "original bytes preserved" assertions below are deterministic
+	// instead of racing the converter.
+	coverMu.Lock()
+
 	res, body := uploadFile(t, ts.URL+"/api/records/import", "file", "bg.zip", zbuf.Bytes(), "")
 	if res.StatusCode != 200 {
 		t.Fatalf("import: status %d, body %s", res.StatusCode, body)
@@ -176,8 +181,10 @@ func TestImportCoversProcessedInBackground(t *testing.T) {
 		t.Fatalf("import response should not wait for conversion, ext already %q", filepath.Ext(rec.CoverFile))
 	}
 	if got, _ := store.ReadCover(rec.CoverFile); storage.DetectImageFormat(got) != "jpeg" {
+		coverMu.Unlock()
 		t.Fatal("original jpeg bytes should be preserved verbatim at import time")
 	}
+	coverMu.Unlock()
 
 	// Background processing converges to the preferred format + thumbnail.
 	deadline := time.Now().Add(15 * time.Second)
@@ -198,4 +205,5 @@ func TestImportCoversProcessedInBackground(t *testing.T) {
 	if _, err := store.ReadCover(rec.CoverThumb); err != nil {
 		t.Errorf("thumbnail not on disk: %v", err)
 	}
+	bgCoverWG.Wait()
 }

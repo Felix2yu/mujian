@@ -390,11 +390,18 @@ func (h *Handler) extractCovers(zr *zip.Reader, records []models.Record) ([]stri
 // repointing is idempotent). Best-effort by design: failures are logged and
 // leave valid original files behind; "regenerate thumbs" / "batch convert"
 // can redo any stragglers later.
+// bgCoverWG tracks in-flight background cover processing so tests can wait
+// for the goroutines to finish (and stop touching their temp dirs) instead of
+// racing them.
+var bgCoverWG sync.WaitGroup
+
 func (h *Handler) processCoversInBackground(keys []string, format string) {
 	if len(keys) == 0 {
 		return
 	}
+	bgCoverWG.Add(1)
 	go func() {
+		defer bgCoverWG.Done()
 		defer func() {
 			if p := recover(); p != nil {
 				slog.Error("background cover processing panic", "panic", p)
