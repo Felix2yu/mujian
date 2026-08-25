@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { api } from '$lib/api.js';
   import CategoryTags from '$lib/components/CategoryTags.svelte';
 
@@ -41,8 +41,8 @@
       error = e.message;
     } finally {
       loading = false;
-      // 等 DOM 渲染完毕后测量剧种标签
-      tick().then(() => requestAnimationFrame(measureCats));
+      // 等 Svelte 渲染 DOM + 浏览器完成布局后再测量
+      tick().then(() => setTimeout(measureCats, 0));
     }
   }
 
@@ -77,17 +77,23 @@
 
   // 剧种标签溢出检测：计算每个剧目能显示几个剧种标签
   let catVis = $state({});
-  let catEls = new Map();
 
   function measureCats() {
-    for (const [id, el] of catEls) {
-      if (!el) { catVis[id] = 0; continue; }
+    const grid = document.querySelector('.grid');
+    if (!grid) return;
+    const cards = grid.querySelectorAll('.drama');
+    for (const card of cards) {
+      const id = card.dataset?.id;
+      if (!id) continue;
+      const el = card.querySelector('.d-cats');
+      if (!el) continue;
       const cats = dramas.find(d => d.id === id)?.categoryNames || [];
       if (!cats.length) { catVis[id] = 0; continue; }
-      const W = el.clientWidth;
+      // 暂时移除溢出指示器，避免它参与子元素定位测量
+      const moreEl = el.querySelector('.d-cat.more');
+      if (moreEl) moreEl.remove();
       const ch = el.children;
-      if (!ch.length) { catVis[id] = 0; continue; }
-      // 找到最后一个右边界仍在容器内的标签
+      if (!ch.length) { catVis[id] = 0; if (moreEl) el.appendChild(moreEl); continue; }
       const elR = el.getBoundingClientRect().right;
       let n = 0;
       for (let i = 0; i < ch.length; i++) {
@@ -96,6 +102,7 @@
       if (n < 1) n = 1;
       if (n > cats.length) n = cats.length;
       catVis[id] = n;
+      if (moreEl) el.appendChild(moreEl);
     }
   }
 
@@ -133,18 +140,11 @@
 
   onMount(() => {
     load();
-    // 窗口大小变化时重新测量
     const ro = new ResizeObserver(() => measureCats());
     const gridEl = document.querySelector('.grid');
     if (gridEl) ro.observe(gridEl);
     return () => ro.disconnect();
   });
-
-  function setCatRef(el, id) {
-    catEls.set(id, el);
-    measureCats();
-    return { destroy() { catEls.delete(id); } };
-  }
 </script>
 <svelte:head><title>剧目 - 幕间</title></svelte:head>
 
@@ -199,6 +199,7 @@
       {#each visibleDramas as d, i (d.id)}
         <div
           class="card drama"
+          data-id={d.id}
           draggable="true"
           class:dragging={dragIdx === i}
           ondragstart={(e) => { onDragStart(i); e.dataTransfer.effectAllowed = 'move'; }}
@@ -211,7 +212,7 @@
             <div class="d-title">{d.name}</div>
             <div class="d-meta">
               {#if d.categoryNames?.length}
-                <div class="d-cats" use:setCatRef={d.id}>
+                <div class="d-cats">
                   {#each d.categoryNames as cn}<span class="d-cat">{cn}</span>{/each}
                   {#if catVis[d.id] != null && catVis[d.id] < d.categoryNames.length}
                     <span class="d-cat more" title={d.categoryNames.join(' / ')}>等</span>
