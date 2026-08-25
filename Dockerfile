@@ -3,15 +3,23 @@
 #   - `mujian-amd64`/`mujian-arm64` -> ./bin/mujian (Go binary built with CGO + libavif)
 #
 # The `build` job compiles everything; this Dockerfile only assembles the
-# runtime image. The CGO + libavif ABI matches the build runner because both
-# use ubuntu:24.04, so the dynamically linked libavif loads at runtime.
+# runtime image. The binary is built on the ubuntu:24.04 runner but runs on
+# ubuntu:26.04 here — that is safe because the only dynamic dependencies are
+# glibc's libc/libm (verified via ldd; libavif is linked statically into the
+# binary), and glibc is backward compatible. libavif16 is installed as a
+# defensive runtime dep for the dlopen path.
 #
 # The ubuntu base image already ships an `ubuntu` user at uid 1000, so we run
 # the app as that user instead of creating a colliding uid-1000 account.
 
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Upgrade base-image packages before installing ours: the published image
+# digest can lag behind the security pocket, and scanners flag the stale
+# snapshot even when fixes already exist upstream.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
       ca-certificates tzdata libavif16 curl \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /app/data/uploads \
