@@ -5,7 +5,7 @@
   import CoverPicker from '$lib/components/CoverPicker.svelte';
   import CategoryTags from '$lib/components/CategoryTags.svelte';
 
-  let { record = null, categories = [], onSubmit, onCancel } = $props();
+  let { record = null, categories = [], initialDate = '', onSubmit, onCancel } = $props();
 
   function emptyForm() {
     return {
@@ -24,7 +24,10 @@
 
   function fromRecord(r) {
     const f = emptyForm();
-    if (!r) return f;
+    if (!r) {
+      if (initialDate) f.date_local = `${initialDate}T19:30`;
+      return f;
+    }
     f.name = r.name || '';
     f.channel = r.channel || '';
     f.city = r.city || '';

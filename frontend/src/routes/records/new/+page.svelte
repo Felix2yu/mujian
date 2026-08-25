@@ -6,6 +6,7 @@
 
   let categories = $state([]);
   let error = $state('');
+  const initialDate = new URLSearchParams(location.search).get('date') || '';
 
   async function onSubmit(payload) {
     try {
@@ -31,7 +32,7 @@
     <p class="sub">记录一次现场演出</p>
   </div>
   {#if error}<div class="banner error">⚠ {error}</div>{/if}
-  <RecordForm {categories} onSubmit={onSubmit} onCancel={() => (location.href = '/')} />
+  <RecordForm {categories} {initialDate} onSubmit={onSubmit} onCancel={() => (location.href = '/')} />
 </div>
 
 <style>

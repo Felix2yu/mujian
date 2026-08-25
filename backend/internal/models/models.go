@@ -198,7 +198,9 @@ type CalendarEvent struct {
 	City           string   `json:"city"`
 	Address        string   `json:"address"`
 	CoverFile      string   `json:"coverFile"`
+	CoverThumb     string   `json:"coverThumb"`
 	Rating         int      `json:"rating"`
+	ActiveStatus   int      `json:"active_status"`
 	CategoryName   string   `json:"categoryName"`
 	CategoryNames  []string `json:"categoryNames"`
 }
