@@ -7,8 +7,11 @@ import (
 	"encoding/json"
 	"image"
 	"image/color"
+	"mujian/internal/config"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"mujian/internal/storage"
 )
@@ -127,5 +130,72 @@ func TestImportZIPMixedCoverOutcomes(t *testing.T) {
 				t.Errorf("mix-1 cover not on disk: %v", err)
 			}
 		}
+	}
+}
+
+// Re-encoding and thumbnail generation must NOT block the import response:
+// a JPEG cover imported under the WebP setting keeps its original bytes at
+// response time, then background processing converts it to .webp, repoints
+// the record, and fills in cover_thumb.
+func TestImportCoversProcessedInBackground(t *testing.T) {
+	ts, _, database, store := newTestServer(t, func(c *config.Config) {
+		c.ImageFormat = "webp"
+	})
+
+	jpg := imgBytes(t, "jpeg")
+	payload := map[string]interface{}{
+		"source":      "mujian",
+		"recordCount": 1,
+		"records": []map[string]interface{}{
+			{"id": "bg-1", "name": "后台转码", "coverFile": "covers/photo.jpg"},
+		},
+		"categories": []map[string]interface{}{},
+	}
+	dataJSON, _ := json.Marshal(payload)
+
+	var zbuf bytes.Buffer
+	zw := zip.NewWriter(&zbuf)
+	e, _ := zw.Create("data.json")
+	e.Write(dataJSON)
+	cv, _ := zw.Create("covers/photo.jpg")
+	cv.Write(jpg)
+	zw.Close()
+
+	res, body := uploadFile(t, ts.URL+"/api/records/import", "file", "bg.zip", zbuf.Bytes(), "")
+	if res.StatusCode != 200 {
+		t.Fatalf("import: status %d, body %s", res.StatusCode, body)
+	}
+
+	// Response is immediate: original bytes stored as-is (still .jpg),
+	// no blocking re-encode happened.
+	rec, err := database.GetRecord("bg-1")
+	if err != nil || rec.CoverFile == "" {
+		t.Fatalf("record after import: %v %v", rec, err)
+	}
+	if filepath.Ext(rec.CoverFile) != ".jpg" {
+		t.Fatalf("import response should not wait for conversion, ext already %q", filepath.Ext(rec.CoverFile))
+	}
+	if got, _ := store.ReadCover(rec.CoverFile); storage.DetectImageFormat(got) != "jpeg" {
+		t.Fatal("original jpeg bytes should be preserved verbatim at import time")
+	}
+
+	// Background processing converges to the preferred format + thumbnail.
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		rec, err = database.GetRecord("bg-1")
+		if err != nil {
+			t.Fatalf("record vanished: %v", err)
+		}
+		if filepath.Ext(rec.CoverFile) == ".webp" && rec.CoverThumb != "" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("background conversion did not finish in time: coverFile=%q thumb=%q",
+				rec.CoverFile, rec.CoverThumb)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if _, err := store.ReadCover(rec.CoverThumb); err != nil {
+		t.Errorf("thumbnail not on disk: %v", err)
 	}
 }

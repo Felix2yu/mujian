@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"mujian/internal/models"
 	"mujian/internal/storage"
 	"net/http"
@@ -134,9 +135,11 @@ func (h *Handler) importZIP(w http.ResponseWriter, file io.Reader) {
 		return
 	}
 
-	// extract covers first so each record's coverFile/coverThumb are derived
-	// before upsert; storage is content-addressed (auto-dedupe by hash).
-	imported, missing := h.extractCovers(zr, data.Records)
+	// extract covers first so each record's coverFile is derived before
+	// upsert; storage is content-addressed (auto-dedupe by hash). Only the
+	// cheap decode+store runs here; re-encoding and thumbnails continue in
+	// the background after the response.
+	keys, missing := h.extractCovers(zr, data.Records)
 
 	result, err := h.db.ImportData(&data)
 	if err != nil {
@@ -144,12 +147,19 @@ func (h *Handler) importZIP(w http.ResponseWriter, file io.Reader) {
 		return
 	}
 
+	format := h.cfg.ImageFormat
+	if !isSupportedImageFormat(format) {
+		format = "avif"
+	}
+	h.processCoversInBackground(keys, format)
+
 	jsonResp(w, 200, map[string]interface{}{
 		"message":         "import completed",
 		"records":         result.Records,
 		"categories":      result.Categories,
-		"covers_imported": imported,
+		"covers_imported": len(keys),
 		"covers_missing":  missing,
+		"background":      true,
 	})
 }
 
@@ -310,11 +320,15 @@ func stripExt(name string) string {
 
 // extractCovers materializes each record's cover from the zip (decoding
 // base64 when needed), stores it content-addressed via storage (auto-dedupe
-// by hash), derives coverFile, generates a thumbnail, and registers cover
-// metadata.
-func (h *Handler) extractCovers(zr *zip.Reader, records []models.Record) (int, int) {
+// by hash), derives coverFile, and registers cover metadata. It deliberately
+// does NOT re-encode to the preferred format or build thumbnails: both are
+// CPU-heavy per cover and used to block the import response for minutes on
+// large libraries. That work is deferred to processCoversInBackground after
+// the response is sent. Returns the stored cover keys and the missing count.
+func (h *Handler) extractCovers(zr *zip.Reader, records []models.Record) ([]string, int) {
 	idx := buildZipIndex(zr)
-	imported, missing := 0, 0
+	var imported []string
+	missing := 0
 
 	for i := range records {
 		rec := &records[i]
@@ -347,38 +361,57 @@ func (h *Handler) extractCovers(zr *zip.Reader, records []models.Record) (int, i
 			continue
 		}
 
-		format := h.cfg.ImageFormat
-		if !isSupportedImageFormat(format) {
-			format = "avif"
+		// Store the original bytes as-is; magic() has already verified the
+		// format is one we support. Re-encoding to the user's preferred
+		// format happens in the background (convertOneCover skips files that
+		// are already in the target format, so this stays cheap).
+		ext, ok := magic(data)
+		if !ok {
+			missing++
+			continue
 		}
-
-		// Re-encode the cover to the chosen format so imported libraries honor
-		// the user's encoding preference, then store it content-addressed.
-		// Skip the costly re-encode when the source is already in the target
-		// format — e.g. a library pre-converted to AVIF on a faster machine —
-		// so import is a no-op re-encode and just preserves the original bytes.
-		storeData, ext := data, storage.DetectExt(data)
-		if srcFmt := storage.DetectImageFormat(data); srcFmt == format {
-			ext = storage.ExtForImageFormat(format)
-		} else if img, derr := storage.DecodeImage(data); derr == nil {
-			if enc, eext, eerr := storage.EncodeImage(img, format); eerr == nil {
-				storeData, ext = enc, eext
-			}
-		}
-
-		key, _, err := h.storage.SaveCoverBytes(storeData, ext)
+		key, _, err := h.storage.SaveCoverBytes(data, ext)
 		if err != nil {
 			missing++
 			continue
 		}
 		rec.CoverFile = key
-		if tk, terr := h.storage.MakeThumbnail(key, storeData, 400, format); terr == nil {
-			rec.CoverThumb = tk
-		}
-		h.db.UpsertCoverMeta(storage.HashBytes(storeData), key, ext, int64(len(storeData)))
-		imported++
+		h.db.UpsertCoverMeta(storage.HashBytes(data), key, ext, int64(len(data)))
+		imported = append(imported, key)
 	}
 	return imported, missing
+}
+
+// processCoversInBackground re-encodes freshly imported covers to the user's
+// preferred image format and builds their thumbnails AFTER the import response
+// has been sent — the inline version of this work blocked imports for minutes.
+// Runs under coverMu so it cannot interleave with merge/cleanup/batch-convert.
+// A concurrent new import is still allowed (content-addressed writes dedupe,
+// repointing is idempotent). Best-effort by design: failures are logged and
+// leave valid original files behind; "regenerate thumbs" / "batch convert"
+// can redo any stragglers later.
+func (h *Handler) processCoversInBackground(keys []string, format string) {
+	if len(keys) == 0 {
+		return
+	}
+	go func() {
+		defer func() {
+			if p := recover(); p != nil {
+				slog.Error("background cover processing panic", "panic", p)
+			}
+		}()
+		coverMu.Lock()
+		defer coverMu.Unlock()
+
+		res := batchConvertResult{}
+		for _, k := range keys {
+			if _, err := h.convertOneCover(k, format, &res); err != nil {
+				slog.Warn("background cover conversion failed", "key", k, "err", err)
+			}
+		}
+		slog.Info("background cover processing done",
+			"covers", len(keys), "converted", res.Converted, "skipped", res.Skipped, "freed", res.Freed)
+	}()
 }
 
 // materializeCover returns binary image bytes, transparently handling both
