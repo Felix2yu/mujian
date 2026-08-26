@@ -195,6 +195,16 @@ select.input {
 }
 textarea.input { resize: vertical; min-height: 72px; line-height: 1.6; }
 
+/* iOS Safari：聚焦字号 <16px 的输入框会自动放大页面。
+   移动端统一提到 16px 规避；选择器特异性需压过组件内 scoped 样式。 */
+@media (max-width: 640px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='submit']):not([type='button']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 label { display: block; font-size: 13px; font-weight: 500; color: var(--text-2); margin: 14px 0 6px; }
 
 .row { display: flex; gap: 12px; flex-wrap: wrap; }

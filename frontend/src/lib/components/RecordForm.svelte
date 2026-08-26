@@ -487,6 +487,29 @@
     showChannelList = false;
   }
 
+  // 城市 / 场馆输入建议：子串匹配历史值，点击即补充
+  // （iOS Safari 对原生 datalist 支持差，基本不弹建议，故与渠道一致用自定义下拉）
+  let showCityList = $state(false);
+  let showAddrList = $state(false);
+  const filteredCities = $derived.by(() => {
+    const q = form.city.trim().toLowerCase();
+    if (!q) return ac.city.slice(0, 30);
+    return ac.city.filter((v) => v.toLowerCase().includes(q)).slice(0, 30);
+  });
+  const filteredAddresses = $derived.by(() => {
+    const q = form.address.trim().toLowerCase();
+    if (!q) return ac.address.slice(0, 30);
+    return ac.address.filter((v) => v.toLowerCase().includes(q)).slice(0, 30);
+  });
+  function pickCity(v) {
+    form.city = v;
+    showCityList = false;
+  }
+  function pickAddress(v) {
+    form.address = v; // 触发既有 effect 自动地理定位
+    showAddrList = false;
+  }
+
   async function createNewArtist(name) {
     name = (name || '').trim();
     if (!name || creatingArtist) return;
@@ -654,15 +677,42 @@
     <div class="row">
       <div class="f-sm">
         <label>城市</label>
-        <input class="input" bind:value={form.city} list="city-list" placeholder="如：上海" />
-        <datalist id="city-list">
-          {#each ac.city as v}<option value={v} />{/each}
-        </datalist>
+        <div class="combo">
+          <input
+            class="input"
+            bind:value={form.city}
+            placeholder="如：上海"
+            onfocus={() => (showCityList = true)}
+            onblur={() => setTimeout(() => (showCityList = false), 120)}
+          />
+          {#if showCityList && filteredCities.length}
+            <div class="combo-list">
+              {#each filteredCities as v (v)}
+                <button type="button" class="combo-item" onmousedown={(e) => e.preventDefault()} onclick={() => pickCity(v)}>{v}</button>
+              {/each}
+            </div>
+          {/if}
+        </div>
       </div>
       <div class="f-lg">
         <label>场馆 / 地址</label>
         <div class="addr-row">
-          <input class="input" bind:value={form.address} list="addr-list" placeholder="如：上海大剧院" />
+          <div class="combo addr-combo">
+            <input
+              class="input"
+              bind:value={form.address}
+              placeholder="如：上海大剧院"
+              onfocus={() => (showAddrList = true)}
+              onblur={() => setTimeout(() => (showAddrList = false), 120)}
+            />
+            {#if showAddrList && filteredAddresses.length}
+              <div class="combo-list">
+                {#each filteredAddresses as v (v)}
+                  <button type="button" class="combo-item" onmousedown={(e) => e.preventDefault()} onclick={() => pickAddress(v)}>{v}</button>
+                {/each}
+              </div>
+            {/if}
+          </div>
           <button
             type="button"
             class="loc-btn"
@@ -672,14 +722,11 @@
             title={showCoord ? '收起坐标' : '定位坐标（点击展开经纬度）'}
             aria-label="定位坐标"
             aria-expanded={showCoord}
-          ><svg class="loc-ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+             ><svg class="loc-ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 21c4.5-4.6 7-8.1 7-12a7 7 0 1 0-14 0c0 3.9 2.5 7.4 7 12z" />
               <circle cx="12" cy="9" r="2.4" fill="currentColor" stroke="none" />
             </svg></button>
         </div>
-        <datalist id="addr-list">
-          {#each ac.address as v}<option value={v} />{/each}
-        </datalist>
         {#if showCoord}
           <!-- 坐标：点击定位图标后才展开，平时不显示经纬度 -->
           <div class="sub-field">
@@ -1098,6 +1145,7 @@
   /* 场馆地址行：输入框 + 内联定位图标 */
   .addr-row { display: flex; align-items: stretch; gap: 8px; }
   .addr-row .input { flex: 1; min-width: 0; }
+  .addr-combo { flex: 1; min-width: 0; }
   .loc-btn {
     flex: 0 0 auto;
     width: 40px;

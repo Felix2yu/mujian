@@ -17,6 +17,8 @@
     { href: '/settings', label: '设置' }
   ];
 
+  let navEl;
+
   onMount(() => { initStorageInfo(); });
 
   function isActive(href) {
@@ -24,6 +26,19 @@
     if (href === '/') return p === '/';
     return p.startsWith(href);
   }
+
+  // 移动端导航横向滚动：路由切换后把 active 项滚入可视区
+  $effect(() => {
+    $page.url.pathname;
+    const el = navEl?.querySelector('.nav-link.active');
+    if (!el || !navEl) return;
+    const pad = 14;
+    if (el.offsetLeft < navEl.scrollLeft + pad) {
+      navEl.scrollTo({ left: Math.max(0, el.offsetLeft - pad), behavior: 'smooth' });
+    } else if (el.offsetLeft + el.offsetWidth > navEl.scrollLeft + navEl.clientWidth - pad) {
+      navEl.scrollTo({ left: el.offsetLeft + el.offsetWidth - navEl.clientWidth + pad, behavior: 'smooth' });
+    }
+  });
 </script>
 
 <div class="app">
@@ -33,7 +48,7 @@
         <span class="seal">幕</span>
         <span class="brand-name">幕间</span>
       </a>
-      <nav class="nav">
+      <nav class="nav" bind:this={navEl}>
         {#each nav as item}
           <a href={item.href} class="nav-link" class:active={isActive(item.href)}>
             {item.label}
@@ -102,6 +117,8 @@
     gap: 2px;
     overflow-x: auto;
     scrollbar-width: none;
+    /* offsetLeft 需以 nav 为定位上下文，供 active 项滚动计算使用 */
+    position: relative;
   }
   .nav::-webkit-scrollbar { display: none; }
   .nav-link {
@@ -136,8 +153,23 @@
   }
 
   @media (max-width: 640px) {
-    .bar-inner { padding: 0 14px; gap: 10px; height: 54px; }
-    .brand-name { display: none; }
+    /* 两行布局：品牌一行，导航独占第二行通栏横向滑动 */
+    .bar-inner {
+      flex-wrap: wrap;
+      height: auto;
+      padding: 9px 14px 0;
+      gap: 10px;
+      row-gap: 0;
+    }
+    .brand { padding-bottom: 2px; }
+    .nav {
+      flex: 1 1 100%;
+      margin: 0 -14px;
+      padding: 4px 14px 8px;
+      /* 两端渐隐提示可滑动 */
+      -webkit-mask-image: linear-gradient(to right, transparent, #000 18px, #000 calc(100% - 28px), transparent);
+      mask-image: linear-gradient(to right, transparent, #000 18px, #000 calc(100% - 28px), transparent);
+    }
     .content { padding: 16px 14px 36px; }
   }
 </style>

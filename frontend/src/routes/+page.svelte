@@ -248,10 +248,14 @@
       {#if filters.q}<button class="search-clear" onclick={() => clearChip('q')}>✕</button>{/if}
     </div>
     {#if selectionMode}
-      <button class="btn" onclick={toggleSelectMode}>完成</button>
+      <div class="hero-actions">
+        <button class="btn" onclick={toggleSelectMode}>完成</button>
+      </div>
     {:else}
-      <button class="btn ghost" onclick={toggleSelectMode}>批量</button>
-      <a class="btn primary" href="/records/new">＋ 新建记录</a>
+      <div class="hero-actions">
+        <button class="btn ghost" onclick={toggleSelectMode}>批量</button>
+        <a class="btn primary" href="/records/new">＋ 新建记录</a>
+      </div>
     {/if}
   </div>
 
@@ -356,6 +360,7 @@
   .home { display: flex; flex-direction: column; gap: 14px; }
 
   .hero { display: flex; gap: 10px; align-items: center; }
+  .hero-actions { display: flex; gap: 10px; flex-shrink: 0; }
   .search-wrap {
     position: relative;
     flex: 1;
@@ -545,6 +550,10 @@
 
   @media (max-width: 560px) {
     .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-    .hero { flex-direction: column; align-items: stretch; }
+    /* 搜索框整行，「批量 / 新建记录」并排同行 */
+    .hero { flex-wrap: wrap; }
+    .search-wrap { flex: 1 1 100%; }
+    .hero-actions { flex: 1; }
+    .hero-actions .btn { flex: 1; }
   }
 </style>
