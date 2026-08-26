@@ -140,12 +140,18 @@ jobs:
         with:
           name: frontend-dist
           path: dist
+          # v8 defaults digest-mismatch to "error", but our artifacts are
+          # uploaded by upload-artifact@v7 (no digest metadata), so the check
+          # trips even when the download itself succeeds. Keep the pre-v8
+          # behavior until upload-artifact gains matching support.
+          digest-mismatch: warn
 
       - name: Download prebuilt binary
         uses: actions/download-artifact@v8
         with:
           name: mujian-${{ matrix.label }}
           path: bin
+          digest-mismatch: warn
 
       - name: Build and push
         uses: docker/build-push-action@v7
