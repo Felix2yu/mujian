@@ -1319,8 +1319,15 @@ func (db *DB) UpdateRecord(id string, r models.RecordRequest) (*models.Record, e
 	rec := requestToRecord(r)
 	rec.ID = existing.ID
 	rec.Cover = existing.Cover
+	// 封面仅在请求携带非空且不同的 coverFile 时才更新：PUT 可能来自不带
+	// 封面字段的客户端，直接透传空值会把已有关联清空。更换新文件时缩略图
+	// 跟随请求值；同一张图则保留原有缩略图不被覆盖。
 	rec.CoverFile = existing.CoverFile
 	rec.CoverThumb = existing.CoverThumb
+	if r.CoverFile != "" && r.CoverFile != existing.CoverFile {
+		rec.CoverFile = r.CoverFile
+		rec.CoverThumb = r.CoverThumb
+	}
 	rec.CustomCategoryID = existing.CustomCategoryID // keep legacy mapping unless provided
 	_ = rec.CustomCategoryID
 	if r.CustomCategoryID != "" {

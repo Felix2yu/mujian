@@ -988,6 +988,52 @@ func TestArtistsEndpoints(t *testing.T) {
 	expectStatus(t, res, 404, "deleted artist gone")
 }
 
+// TestUpdateRecordCoverFile covers the edit-form upload path: the frontend
+// uploads a new cover, then PUTs the record with coverFile/coverThumb. This is
+// the regression test for the bug where UpdateRecord unconditionally restored
+// the existing cover, silently discarding freshly uploaded ones.
+func TestUpdateRecordCoverFile(t *testing.T) {
+	ts, h, database, _ := newTestServer(t, nil)
+
+	_ = h.db.UpsertRecord(models.Record{
+		ID: "cov-up", Name: "封面更新", Date: time.Now().Unix(),
+		CoverFile: "covers/a.avif", CoverThumb: "covers/a.thumb.400.webp",
+	})
+
+	// 1) New cover wins: file and thumb both follow the request.
+	res, _ := doJSON(t, "PUT", ts.URL+"/api/records/cov-up", map[string]interface{}{
+		"name": "封面更新", "coverFile": "covers/b.avif", "coverThumb": "covers/b.thumb.400.webp",
+	})
+	expectStatus(t, res, 200, "update with new cover")
+	got, err := database.GetRecord("cov-up")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CoverFile != "covers/b.avif" || got.CoverThumb != "covers/b.thumb.400.webp" {
+		t.Fatalf("new cover not persisted: coverFile=%q coverThumb=%q", got.CoverFile, got.CoverThumb)
+	}
+
+	// 2) Update without the field must not clear the existing cover
+	//    (clients like scripts/imports may omit it).
+	res, _ = doJSON(t, "PUT", ts.URL+"/api/records/cov-up", map[string]interface{}{"name": "改名"})
+	expectStatus(t, res, 200, "update without cover field")
+	got, _ = database.GetRecord("cov-up")
+	if got.CoverFile != "covers/b.avif" {
+		t.Fatalf("cover lost when field omitted: %q", got.CoverFile)
+	}
+
+	// 3) Same cover with empty thumb: keep the stored thumbnail instead of
+	//    wiping it (e.g. referencing an existing cover via the picker).
+	res, _ = doJSON(t, "PUT", ts.URL+"/api/records/cov-up", map[string]interface{}{
+		"name": "封面更新", "coverFile": "covers/b.avif",
+	})
+	expectStatus(t, res, 200, "update with same cover")
+	got, _ = database.GetRecord("cov-up")
+	if got.CoverFile != "covers/b.avif" || got.CoverThumb != "covers/b.thumb.400.webp" {
+		t.Fatalf("thumb should survive same-cover update: %q/%q", got.CoverFile, got.CoverThumb)
+	}
+}
+
 // TestRecordArtistIDsViaAPI covers the exact record-form path: the frontend
 // sends artist_ids (entity ids picked from the tree), NOT artist_names. This
 // is the regression test for the bug where RecordRequest dropped artist_ids on
