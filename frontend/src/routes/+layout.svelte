@@ -52,7 +52,7 @@
   <header class="topbar">
     <div class="bar-inner">
       <a class="brand" href="/">
-        <span class="seal">幕</span>
+        <img class="seal" src="/favicon.svg" alt="幕间" />
         <span class="brand-name">幕间</span>
       </a>
       <nav class="nav">
@@ -84,9 +84,9 @@
       aria-label="关闭菜单"
       transition:fade={{ duration: 140 }}
     ></button>
-    <aside class="drawer" transition:fly={{ x: -300, duration: 220, easing: cubicOut }} aria-label="站点导航">
+    <aside class="drawer" transition:fly={{ x: 300, duration: 220, easing: cubicOut }} aria-label="站点导航">
       <div class="drawer-head">
-        <span class="seal">幕</span>
+        <img class="seal" src="/favicon.svg" alt="幕间" />
         <span class="drawer-title">幕间</span>
         <button type="button" class="drawer-close" onclick={() => (drawerOpen = false)} aria-label="关闭菜单">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -138,18 +138,11 @@
 
   .brand { display: flex; align-items: center; gap: 9px; flex: 0 0 auto; }
   .seal {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     width: 30px;
     height: 30px;
     border-radius: 8px;
-    background: linear-gradient(155deg, var(--accent), var(--accent-strong));
-    color: #fff;
-    font-family: var(--font-serif);
-    font-weight: 700;
-    font-size: 16px;
-    box-shadow: 0 2px 6px -1px var(--accent);
+    overflow: hidden;
+    border: 1px solid var(--border);
     flex-shrink: 0;
     transition: transform var(--t-med) var(--ease);
   }
@@ -218,13 +211,13 @@
     position: fixed;
     top: 0;
     bottom: 0;
-    left: 0;
+    right: 0;
     z-index: 61;
     width: min(78vw, 300px);
     display: flex;
     flex-direction: column;
     background: var(--bg-elevated);
-    border-right: 1px solid var(--border);
+    border-left: 1px solid var(--border);
     box-shadow: var(--shadow-lg);
     padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   }

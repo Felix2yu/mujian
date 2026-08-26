@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
+  import { fade, scale } from 'svelte/transition';
   import { api, coverUrl, formatCurrency, formatDate } from '$lib/api.js';
   import { STATUS_LABELS } from '$lib/statusPrefs.js';
   import BackLink from '$lib/components/BackLink.svelte';
@@ -12,6 +13,25 @@
   let deleting = $state(false);
   let dramaMap = $state(new Map());
   let zheziMap = $state(new Map());
+
+  // 封面灯箱：点击放大查看
+  let lightbox = $state(false);
+  const coverSrc = $derived(rec?.coverFile || rec?.coverThumb || '');
+
+  // 灯箱打开时锁定背景滚动，Esc 关闭
+  $effect(() => {
+    if (!lightbox) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  });
+
+  function onWindowKeydown(e) {
+    if (e.key === 'Escape') lightbox = false;
+  }
+
+  function openLightbox() {
+    if (coverSrc) lightbox = true;
+  }
 
   function dramaName(id) {
     return dramaMap.get(id)?.name || '';
@@ -69,6 +89,7 @@
   onMount(load);
 </script>
 <svelte:head><title>{rec ? `${rec.name} - 幕间` : "演出 - 幕间"}</title></svelte:head>
+<svelte:window onkeydown={onWindowKeydown} />
 
 
 {#if loading}
@@ -88,7 +109,15 @@
     <BackLink />
 
     <div class="hero card">
-      <div class="cover">
+      <div
+        class="cover"
+        class:zoomable={!!coverSrc}
+        role={coverSrc ? 'button' : undefined}
+        tabindex={coverSrc ? 0 : undefined}
+        aria-label={coverSrc ? '放大查看封面' : undefined}
+        onclick={openLightbox}
+        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLightbox(); } }}
+      >
         {#if rec.coverFile}
           <img src={coverUrl(rec.coverFile)} alt={rec.name} />
         {:else if rec.coverThumb}
@@ -232,6 +261,12 @@
   </div>
 {/if}
 
+{#if lightbox && coverSrc}
+  <button type="button" class="lightbox" onclick={() => (lightbox = false)} aria-label="关闭大图" transition:fade={{ duration: 150 }}>
+    <img src={coverUrl(coverSrc)} alt={rec.name} transition:scale={{ start: 0.96, duration: 180 }} />
+  </button>
+{/if}
+
 <style>
   .back {
     display: inline-flex;
@@ -254,6 +289,31 @@
     box-shadow: var(--shadow-md);
   }
   .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cover.zoomable { cursor: zoom-in; }
+  .cover.zoomable:active { transform: scale(0.99); }
+
+  /* 封面灯箱 */
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    border: none;
+    padding: 24px;
+    margin: 0;
+    background: rgba(0, 0, 0, 0.86);
+    cursor: zoom-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lightbox img {
+    max-width: min(92vw, 720px);
+    max-height: 88vh;
+    width: auto;
+    height: auto;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+  }
   .no-cover {
     width: 100%; height: 100%;
     display: flex; align-items: center; justify-content: center;
