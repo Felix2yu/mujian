@@ -155,8 +155,8 @@
         html: count > 1
           ? `<div class="pin multi"><span>${count}</span></div>`
           : '<div class="pin"></div>',
-        iconSize: [36, 40],
-        iconAnchor: [18, 38],
+        iconSize: [38, 42],
+        iconAnchor: [19, 40],
         popupAnchor: [0, -38]
       });
 
@@ -276,15 +276,24 @@
   /* Leaflet 标记与弹窗（Leaflet 在组件外渲染，需全局） */
   :global(.muj-mark) { background: transparent; border: none; }
   :global(.muj-mark .pin) {
+    position: relative;
     width: 38px;
     height: 42px;
     background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='38' height='42' viewBox='0 0 38 42'%3E%3Cpath d='M19 1C9.6 1 2 8.5 2 18c0 12.6 17 23 17 23s17-10.4 17-23C36 8.5 28.4 1 19 1z' fill='%23b42318'/%3E%3Ccircle cx='19' cy='18' r='6' fill='white'/%3E%3C/svg%3E") no-repeat center / 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
   :global(.muj-mark .pin.multi) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='38' height='42' viewBox='0 0 38 42'%3E%3Cpath d='M19 1C9.6 1 2 8.5 2 18c0 12.6 17 23 17 23s17-10.4 17-23C36 8.5 28.4 1 19 1z' fill='%23991b1b'/%3E%3Ccircle cx='19' cy='18' r='7' fill='white'/%3E%3C/svg%3E"); }
-  :global(.muj-mark .pin.multi span) { color: #991b1b; font-weight: 800; font-size: 13px; transform: translateY(-26px); position: relative; z-index: 2; }
+  :global(.muj-mark .pin.multi span) {
+    position: absolute;
+    top: 18px;
+    left: 19px;
+    transform: translate(-50%, -50%);
+    color: #991b1b;
+    font-weight: 800;
+    font-size: 13px;
+    line-height: 1;
+    text-align: center;
+    z-index: 2;
+  }
 
   :global(.muj-popup .leaflet-popup-content-wrapper) {
     border-radius: 14px;
