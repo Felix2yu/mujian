@@ -136,13 +136,13 @@ jobs:
       # `build` job. The Docker build only assembles the final image — no
       # Node/pnpm toolchain, no Go compilation.
       - name: Download frontend dist
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: dist
 
       - name: Download prebuilt binary
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: mujian-${{ matrix.label }}
           path: bin
