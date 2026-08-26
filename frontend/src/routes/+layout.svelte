@@ -17,7 +17,11 @@
     { href: '/settings', label: '设置' }
   ];
 
-  let navEl;
+  // 移动端顶栏只直显高频入口，其余收进「⋯」二次菜单
+  const primaryNav = ['/', '/calendar', '/dramas', '/artists'];
+  const secondaryNav = nav.filter((n) => !primaryNav.includes(n.href));
+
+  let moreOpen = $state(false);
 
   onMount(() => { initStorageInfo(); });
 
@@ -27,17 +31,10 @@
     return p.startsWith(href);
   }
 
-  // 移动端导航横向滚动：路由切换后把 active 项滚入可视区
+  // 路由变化后收起「更多」面板
   $effect(() => {
     $page.url.pathname;
-    const el = navEl?.querySelector('.nav-link.active');
-    if (!el || !navEl) return;
-    const pad = 14;
-    if (el.offsetLeft < navEl.scrollLeft + pad) {
-      navEl.scrollTo({ left: Math.max(0, el.offsetLeft - pad), behavior: 'smooth' });
-    } else if (el.offsetLeft + el.offsetWidth > navEl.scrollLeft + navEl.clientWidth - pad) {
-      navEl.scrollTo({ left: el.offsetLeft + el.offsetWidth - navEl.clientWidth + pad, behavior: 'smooth' });
-    }
+    moreOpen = false;
   });
 </script>
 
@@ -48,14 +45,43 @@
         <span class="seal">幕</span>
         <span class="brand-name">幕间</span>
       </a>
-      <nav class="nav" bind:this={navEl}>
+      <nav class="nav">
         {#each nav as item}
-          <a href={item.href} class="nav-link" class:active={isActive(item.href)}>
+          <a
+            href={item.href}
+            class="nav-link"
+            class:active={isActive(item.href)}
+            class:secondary-entry={!primaryNav.includes(item.href)}
+          >
             {item.label}
           </a>
         {/each}
+        <button
+          type="button"
+          class="nav-link more-btn"
+          class:active={moreOpen}
+          onclick={() => (moreOpen = !moreOpen)}
+          aria-label="更多页面"
+          aria-expanded={moreOpen}
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <circle cx="5" cy="12" r="1.9" />
+            <circle cx="12" cy="12" r="1.9" />
+            <circle cx="19" cy="12" r="1.9" />
+          </svg>
+        </button>
       </nav>
     </div>
+    {#if moreOpen}
+      <button type="button" class="more-backdrop" onclick={() => (moreOpen = false)} aria-label="关闭菜单"></button>
+      <div class="more-panel" role="menu">
+        {#each secondaryNav as item (item.href)}
+          <a href={item.href} class="more-item" class:active={isActive(item.href)} role="menuitem">
+            {item.label}
+          </a>
+        {/each}
+      </div>
+    {/if}
   </header>
   <main class="content">
     <slot />
@@ -114,13 +140,9 @@
   .nav {
     flex: 1;
     display: flex;
+    justify-content: flex-end;
     gap: 2px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    /* offsetLeft 需以 nav 为定位上下文，供 active 项滚动计算使用 */
-    position: relative;
   }
-  .nav::-webkit-scrollbar { display: none; }
   .nav-link {
     display: inline-flex;
     align-items: center;
@@ -139,6 +161,53 @@
     font-weight: 600;
   }
 
+  /* 「⋯」按钮与二次面板：仅移动端 */
+  .more-btn { display: none; cursor: pointer; border: none; background: none; }
+  .more-btn svg { display: block; }
+
+  .more-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 49;
+    border: none;
+    background: transparent;
+    cursor: default;
+  }
+  .more-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: max(12px, calc((100% - 1120px) / 2 + 20px));
+    z-index: 60;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(104px, 1fr));
+    gap: 2px;
+    padding: 8px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    animation: panelIn 0.16s var(--ease) both;
+    transform-origin: top right;
+  }
+  @keyframes panelIn {
+    from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .more-item {
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    color: var(--text-2);
+    white-space: nowrap;
+    transition: all var(--t-fast) var(--ease);
+  }
+  .more-item:hover { background: var(--surface-3); color: var(--text); }
+  .more-item.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
   .content {
     flex: 1;
     width: 100%;
@@ -153,23 +222,13 @@
   }
 
   @media (max-width: 640px) {
-    /* 两行布局：品牌一行，导航独占第二行通栏横向滑动 */
-    .bar-inner {
-      flex-wrap: wrap;
-      height: auto;
-      padding: 9px 14px 0;
-      gap: 10px;
-      row-gap: 0;
-    }
-    .brand { padding-bottom: 2px; }
-    .nav {
-      flex: 1 1 100%;
-      margin: 0 -14px;
-      padding: 4px 14px 8px;
-      /* 两端渐隐提示可滑动 */
-      -webkit-mask-image: linear-gradient(to right, transparent, #000 18px, #000 calc(100% - 28px), transparent);
-      mask-image: linear-gradient(to right, transparent, #000 18px, #000 calc(100% - 28px), transparent);
-    }
+    .bar-inner { padding: 0 14px; gap: 10px; height: 54px; }
+    .brand-name { display: none; }
     .content { padding: 16px 14px 36px; }
+
+    /* 高频四项 + 「⋯」，一行放得下；低频入口收进二次面板 */
+    .nav-link { padding: 6px 10px; font-size: 13.5px; }
+    .nav-link.secondary-entry { display: none; }
+    .more-btn { display: inline-flex; }
   }
 </style>
