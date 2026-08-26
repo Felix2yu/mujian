@@ -168,7 +168,7 @@
         .slice(0, 8)
         .map(
           (r) => {
-            const cov = r.coverFile ? coverUrl(r.coverFile) : coverUrl(r.coverThumb);
+            const cov = r.coverThumb ? coverUrl(r.coverThumb) : coverUrl(r.coverFile);
             const dateStr = r.dateText ? r.dateText.split(' ')[0].replace('年', '.').replace('月', '.').replace('日', '') : '';
             const catStr = r.categoryName ? ' · ' + r.categoryName : '';
             return `
@@ -187,7 +187,7 @@
 
       mk.bindPopup(() =>
         createPopup(first, cityText, count, list, more),
-        { maxWidth: 340 }
+        { maxWidth: 340, className: 'muj-popup' }
       );
 
       clusterGroup.addLayer(mk);
@@ -196,7 +196,7 @@
   }
 
   function createPopup(first, cityText, count, list, more) {
-    const cover = first.coverFile ? coverUrl(first.coverFile) : coverUrl(first.coverThumb);
+    const cover = first.coverThumb ? coverUrl(first.coverThumb) : coverUrl(first.coverFile);
     const titleHtml = count > 1
       ? `<b>${cityText}</b> · ${count} 场`
       : `<b>${first.name}</b>`;
