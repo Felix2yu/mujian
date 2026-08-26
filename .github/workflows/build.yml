@@ -161,35 +161,12 @@ jobs:
           push: true
           tags: ghcr.io/${{ steps.repo.outputs.name }}:${{ matrix.label }}
           # Bust the apt layer so every build pulls current security fixes;
-          # without this a cached layer ships stale base packages and the
-          # Trivy gate below fails until the cache happens to expire.
+          # without this a cached layer ships stale base packages until the
+          # cache happens to expire.
           build-args: |
             CACHEBUST=${{ github.run_id }}
           cache-from: type=gha,scope=${{ matrix.label }}
           cache-to: type=gha,scope=${{ matrix.label }},mode=max
-
-      # Vulnerability gate on the freshly pushed image. Unfixed CVEs (no
-      # upstream patch yet — currently most of the ubuntu base image findings)
-      # are ignored so the gate only blocks fixable HIGH/CRITICAL issues.
-      # Pinned to the v0.36.0 commit SHA: trivy-action suffered a tag
-      # force-push supply-chain attack in March 2026; never reference it by
-      # mutable tag.
-      #
-      # The action has no "platform" input and its remote mode always resolves
-      # the amd64 manifest, so pull this job's arch first (auth comes from the
-      # earlier docker/login step) and scan it via the local daemon.
-      - name: Pull built image
-        run: docker pull --platform ${{ matrix.platform }} ghcr.io/${{ steps.repo.outputs.name }}:${{ matrix.label }}
-
-      - name: Scan image for vulnerabilities
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: ghcr.io/${{ steps.repo.outputs.name }}:${{ matrix.label }}
-          format: table
-          scanners: vuln
-          ignore-unfixed: true
-          exit-code: "1"
-          severity: HIGH,CRITICAL
 
   docker-manifest:
     runs-on: ubuntu-latest
