@@ -295,6 +295,39 @@
     z-index: 2;
   }
 
+  /* 聚合图钉：覆盖默认半透明配色，提升数字对比度（保留绿→黄→红量级的语义） */
+  :global(.marker-cluster) {
+    background-clip: padding-box;
+    border-radius: 22px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  }
+  :global(.marker-cluster div) {
+    width: 32px;
+    height: 32px;
+    margin-left: 4px;
+    margin-top: 4px;
+    border-radius: 16px;
+    font-family: var(--font-sans, sans-serif);
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 32px;
+    text-align: center;
+  }
+  :global(.marker-cluster-small div) {
+    background-color: rgba(46, 125, 50, 0.96);
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  }
+  :global(.marker-cluster-medium div) {
+    background-color: rgba(245, 205, 8, 0.98);
+    color: #4a3500;
+  }
+  :global(.marker-cluster-large div) {
+    background-color: rgba(198, 40, 40, 0.96);
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  }
+
   :global(.muj-popup .leaflet-popup-content-wrapper) {
     border-radius: 14px;
     box-shadow: var(--shadow-lg);
