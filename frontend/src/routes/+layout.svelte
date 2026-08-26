@@ -21,7 +21,41 @@
 
   let drawerOpen = $state(false);
 
-  onMount(() => { initStorageInfo(); });
+  // PWA 更新：检测到新 SW 就绪时提示用户刷新
+  let updateReady = $state(false);
+  let swReg = null;
+
+  onMount(() => {
+    initStorageInfo();
+
+    if ('serviceWorker' in navigator && !/^localhost$|^127\.0\.0\.1$|^\[::1\]$/.test(location.hostname)) {
+      navigator.serviceWorker.register('/sw.js').then((reg) => {
+        swReg = reg;
+        reg.addEventListener('updatefound', () => {
+          const installing = reg.installing;
+          installing?.addEventListener('statechange', () => {
+            if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+              updateReady = true;
+            }
+          });
+        });
+        // 打开页面时若已有一个等待中的新 SW（上一个标签页装好了），直接提示
+        if (reg.waiting && navigator.serviceWorker.controller) updateReady = true;
+      });
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!reloaded) {
+          reloaded = true;
+          location.reload();
+        }
+      });
+    }
+  });
+
+  function applyUpdate() {
+    if (swReg?.waiting) swReg.waiting.postMessage({ type: 'SKIP_WAITING' });
+    else location.reload();
+  }
 
   function isActive(href) {
     const p = $page.url.pathname;
@@ -112,6 +146,12 @@
   <footer class="foot">
     <span class="muted tiny">幕间 · 现场演出记录</span>
   </footer>
+
+  {#if updateReady}
+    <button type="button" class="update-banner" onclick={applyUpdate} transition:fly={{ y: 60, duration: 220 }}>
+      发现新版本，点击刷新
+    </button>
+  {/if}
 </div>
 
 <style>
@@ -295,6 +335,26 @@
     padding: 18px 20px 26px;
     text-align: center;
   }
+
+  /* PWA 更新提示横幅 */
+  .update-banner {
+    position: fixed;
+    left: 50%;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    z-index: 70;
+    border: none;
+    padding: 11px 22px;
+    border-radius: 999px;
+    background: var(--accent-strong);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: var(--shadow-lg);
+    transition: filter var(--t-fast) var(--ease);
+  }
+  .update-banner:hover { filter: brightness(1.08); }
 
   @media (max-width: 640px) {
     .bar-inner { padding: 0 14px; gap: 10px; height: 54px; }

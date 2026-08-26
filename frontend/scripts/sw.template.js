@@ -1,9 +1,9 @@
-const CACHE_NAME = 'mujian-v3';
-const STATIC_CACHE = 'mujian-static-v3';
-// v3: no longer caches /api/* at all. Search/filter results are
-// parameter-dependent — any cache replay returns wrong data (e.g. /api/records
-// cached once is incorrectly served for /api/records?q=蔡安, returning the
-// full 298-row list instead of the filtered empty result).
+const BUILD_VERSION = '__BUILD_VERSION__';
+const CACHE_NAME = 'mujian-' + BUILD_VERSION;
+const STATIC_CACHE = 'mujian-static-' + BUILD_VERSION;
+
+// 每次部署 BUILD_VERSION 随 git sha 变化，浏览器会检测到 sw.js 字节变化并重新
+// 安装本 SW，activate 阶段删除旧版本缓存，从而保证已安装的 PWA 能更新到新资源。
 
 const STATIC_ASSETS = [
   '/',
@@ -15,7 +15,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(cache => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
+      // 不自动 skipWaiting：等前端提示用户刷新后再接管，避免开着不关的页面被强制刷新
   );
 });
 
@@ -23,8 +23,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(
-        // Drop every cache from prior SW versions (incl. the now-unused API
-        // cache from v2) so any stale entries can't replay under a new key.
+        // 只保留当前版本的缓存，删除所有旧版本，避免旧资源被回放
         keys.filter(key => key !== STATIC_CACHE)
           .map(key => caches.delete(key))
       )
@@ -34,21 +33,20 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+  if (request.method !== 'GET') return; // 写操作（POST/PUT/DELETE）绝不缓存，直接走网络
+
   const url = new URL(request.url);
+  // 跨域资源（如地图瓦片）不接管，直接走网络
+  if (url.origin !== self.location.origin) return;
 
-  // API requests are NEVER intercepted — they're parameter-dependent, live
-  // data; serving a cached response would silently return stale results and
-  // break the UI (e.g. cached /api/records replayed as /api/records?q=…).
-  if (url.pathname.startsWith('/api/') || url.pathname === '/uploads/') {
-    return;
-  }
-
-  // Everything else (static SPA assets, covers served from /uploads/ via the
-  // catch-all in main.go): network-first, fall back to cache when offline.
-  if (request.method !== 'GET') return;
+  // 同源 GET 统一「网络优先 + 失败回退缓存」：
+  // - 页面外壳、静态资源、封面 → 离线可打开 App
+  // - /api/* 数据 → 离线可翻看上次加载过的演出/剧目/演员
+  // 缓存键为完整 URL（含 query），/api/records?q=蔡安 只命中它本身，不会串味
   event.respondWith(
     fetch(request)
       .then(response => {
+        // 仅缓存成功响应（2xx）；失败时回退到缓存中的旧数据
         if (response.ok) {
           const clone = response.clone();
           caches.open(STATIC_CACHE).then(cache => cache.put(request, clone));

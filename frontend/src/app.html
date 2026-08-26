@@ -20,6 +20,14 @@
 			else document.documentElement.classList.add('light');
 		})();
 	</script>
+	<script>
+		// 注册 Service Worker（仅线上环境，本地 dev 跳过以免缓存干扰热更新）
+		if ('serviceWorker' in navigator && !/^localhost$|^127\.0\.0\.1$|^\[::1\]$/.test(location.hostname)) {
+			window.addEventListener('load', function () {
+				navigator.serviceWorker.register('/sw.js').catch(function () {});
+			});
+		}
+	</script>
 	%sveltekit.head%
 </head>
 	<body data-sveltekit-preload-data="hover">
