@@ -2,6 +2,8 @@
   import { page } from '$app/stores';
   import { initStorageInfo } from '$lib/api.js';
   import { onMount } from 'svelte';
+  import { fade, fly } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
   import '$lib/app.css';
 
   const nav = [
@@ -17,11 +19,7 @@
     { href: '/settings', label: '设置' }
   ];
 
-  // 移动端顶栏只直显高频入口，其余收进「⋯」二次菜单
-  const primaryNav = ['/', '/calendar', '/dramas', '/artists'];
-  const secondaryNav = nav.filter((n) => !primaryNav.includes(n.href));
-
-  let moreOpen = $state(false);
+  let drawerOpen = $state(false);
 
   onMount(() => { initStorageInfo(); });
 
@@ -31,10 +29,22 @@
     return p.startsWith(href);
   }
 
-  // 路由变化后收起「更多」面板
+  // 路由变化后自动收起侧栏
   $effect(() => {
     $page.url.pathname;
-    moreOpen = false;
+    drawerOpen = false;
+  });
+
+  // 侧栏打开时锁定页面滚动，Esc 关闭
+  $effect(() => {
+    if (!drawerOpen) return;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => { if (e.key === 'Escape') drawerOpen = false; };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', onKey);
+    };
   });
 </script>
 
@@ -47,42 +57,55 @@
       </a>
       <nav class="nav">
         {#each nav as item}
-          <a
-            href={item.href}
-            class="nav-link"
-            class:active={isActive(item.href)}
-            class:secondary-entry={!primaryNav.includes(item.href)}
-          >
+          <a href={item.href} class="nav-link" class:active={isActive(item.href)}>
             {item.label}
           </a>
         {/each}
-        <button
-          type="button"
-          class="nav-link more-btn"
-          class:active={moreOpen}
-          onclick={() => (moreOpen = !moreOpen)}
-          aria-label="更多页面"
-          aria-expanded={moreOpen}
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
-            <circle cx="5" cy="12" r="1.9" />
-            <circle cx="12" cy="12" r="1.9" />
-            <circle cx="19" cy="12" r="1.9" />
+      </nav>
+      <button
+        type="button"
+        class="menu-btn"
+        onclick={() => (drawerOpen = true)}
+        aria-label="打开菜单"
+        aria-expanded={drawerOpen}
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 7h16M4 12h16M4 17h16" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  {#if drawerOpen}
+    <button
+      type="button"
+      class="drawer-backdrop"
+      onclick={() => (drawerOpen = false)}
+      aria-label="关闭菜单"
+      transition:fade={{ duration: 140 }}
+    ></button>
+    <aside class="drawer" transition:fly={{ x: -300, duration: 220, easing: cubicOut }} aria-label="站点导航">
+      <div class="drawer-head">
+        <span class="seal">幕</span>
+        <span class="drawer-title">幕间</span>
+        <button type="button" class="drawer-close" onclick={() => (drawerOpen = false)} aria-label="关闭菜单">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
           </svg>
         </button>
-      </nav>
-    </div>
-    {#if moreOpen}
-      <button type="button" class="more-backdrop" onclick={() => (moreOpen = false)} aria-label="关闭菜单"></button>
-      <div class="more-panel" role="menu">
-        {#each secondaryNav as item (item.href)}
-          <a href={item.href} class="more-item" class:active={isActive(item.href)} role="menuitem">
+      </div>
+      <nav class="drawer-nav">
+        {#each nav as item (item.href)}
+          <a href={item.href} class="drawer-link" class:active={isActive(item.href)}>
             {item.label}
+            {#if isActive(item.href)}<span class="dot" aria-hidden="true"></span>{/if}
           </a>
         {/each}
-      </div>
-    {/if}
-  </header>
+      </nav>
+      <div class="drawer-foot muted tiny">幕间 · 现场演出记录</div>
+    </aside>
+  {/if}
+
   <main class="content">
     <slot />
   </main>
@@ -127,6 +150,7 @@
     font-weight: 700;
     font-size: 16px;
     box-shadow: 0 2px 6px -1px var(--accent);
+    flex-shrink: 0;
     transition: transform var(--t-med) var(--ease);
   }
   .brand:hover .seal { transform: rotate(-6deg) scale(1.05); }
@@ -161,52 +185,110 @@
     font-weight: 600;
   }
 
-  /* 「⋯」按钮与二次面板：仅移动端 */
-  .more-btn { display: none; cursor: pointer; border: none; background: none; }
-  .more-btn svg { display: block; }
-
-  .more-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 49;
-    border: none;
-    background: transparent;
-    cursor: default;
-  }
-  .more-panel {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: max(12px, calc((100% - 1120px) / 2 + 20px));
-    z-index: 60;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(104px, 1fr));
-    gap: 2px;
-    padding: 8px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
-    animation: panelIn 0.16s var(--ease) both;
-    transform-origin: top right;
-  }
-  @keyframes panelIn {
-    from { opacity: 0; transform: translateY(-6px) scale(0.97); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-  }
-  .more-item {
-    padding: 10px 16px;
+  /* 汉堡按钮：仅移动端 */
+  .menu-btn {
+    display: none;
+    margin-left: auto;
+    width: 38px;
+    height: 38px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);
-    font-size: 14px;
-    color: var(--text-2);
-    white-space: nowrap;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    box-shadow: var(--shadow-xs);
     transition: all var(--t-fast) var(--ease);
   }
-  .more-item:hover { background: var(--surface-3); color: var(--text); }
-  .more-item.active {
+  .menu-btn:active { transform: scale(0.95); }
+  .menu-btn svg { display: block; }
+
+  /* ============ 移动端侧栏 ============ */
+  .drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    border: none;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.42);
+    cursor: default;
+  }
+  .drawer {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 61;
+    width: min(78vw, 300px);
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-elevated);
+    border-right: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .drawer-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .drawer-title {
+    font-family: var(--font-serif);
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    flex: 1;
+  }
+  .drawer-close {
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--t-fast) var(--ease);
+  }
+  .drawer-close:hover { background: var(--surface-3); color: var(--text); }
+
+  .drawer-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .drawer-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    color: var(--text-2);
+    transition: all var(--t-fast) var(--ease);
+  }
+  .drawer-link:hover { background: var(--surface-3); color: var(--text); }
+  .drawer-link.active {
     background: var(--accent-soft);
     color: var(--accent);
     font-weight: 600;
   }
+  .drawer-link .dot {
+    margin-left: auto;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .drawer-foot { padding: 10px 18px 0; text-align: center; }
 
   .content {
     flex: 1;
@@ -223,12 +305,9 @@
 
   @media (max-width: 640px) {
     .bar-inner { padding: 0 14px; gap: 10px; height: 54px; }
-    .brand-name { display: none; }
     .content { padding: 16px 14px 36px; }
-
-    /* 高频四项 + 「⋯」，一行放得下；低频入口收进二次面板 */
-    .nav-link { padding: 6px 10px; font-size: 13.5px; }
-    .nav-link.secondary-entry { display: none; }
-    .more-btn { display: inline-flex; }
+    /* 顶栏只留品牌 + 汉堡，全部入口进侧栏 */
+    .nav { display: none; }
+    .menu-btn { display: inline-flex; }
   }
 </style>
