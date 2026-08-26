@@ -160,6 +160,11 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: ghcr.io/${{ steps.repo.outputs.name }}:${{ matrix.label }}
+          # Bust the apt layer so every build pulls current security fixes;
+          # without this a cached layer ships stale base packages and the
+          # Trivy gate below fails until the cache happens to expire.
+          build-args: |
+            CACHEBUST=${{ github.run_id }}
           cache-from: type=gha,scope=${{ matrix.label }}
           cache-to: type=gha,scope=${{ matrix.label }},mode=max
 

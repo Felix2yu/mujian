@@ -17,6 +17,13 @@
 
 FROM debian:13-slim
 
+# Cache-buster for the package-refresh layer below: CI passes a unique value
+# per run so `apt-get upgrade` re-resolves against the live security pocket
+# instead of replaying a stale cached layer (base-image snapshots lag security
+# fixes — e.g. an openssl CVE published days after this layer was cached).
+# Only this layer and those after it rebuild; earlier layers stay cached.
+ARG CACHEBUST=0
+
 # Upgrade base-image packages before installing ours: the published image
 # digest can lag behind the security pocket, and scanners flag the stale
 # snapshot even when fixes already exist upstream.
