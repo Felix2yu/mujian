@@ -192,23 +192,25 @@
         {/if}
 
         {#if groupedZhezis.length}
-          <h3>剧目、折子</h3>
-          <div class="zhezis-line">
-            {#each groupedZhezis as g, gi (g.dramaId || g.dramaName)}
-              <!-- 这里 gi 是剧目组的索引，组间不需要分隔符 -->
-              <!-- 剧名：为非首个剧目添加左间距以区分 -->
-              {#if g.dramaId}
-                <a class="tag zhezi-tag zdrama {gi > 0 ? 'zdrama-gap' : ''}" href={`/dramas/${g.dramaId}`} title={`查看《${g.dramaName}》详情`}>
-                  {g.dramaName}
-                </a>
-              {:else}
-                <span class="tag zhezi-tag zdrama {gi > 0 ? 'zdrama-gap' : ''}">{g.dramaName}</span>
-              {/if}
-              <!-- 折子列表：内部用顿号分隔；无折子时仅显示剧名 -->
-              {#each g.zhezis as z, i (z.id)}
-                {#if i > 0}<span class="comma">、</span>{/if}
-                <a class="zlink" href={`/?zhezi=${encodeURIComponent(z.id)}`} title={`「${z.name}」演出列表`}>{z.name}</a>
-              {/each}
+          <h3>剧目与折子</h3>
+          <div class="zhezi-clusters">
+            {#each groupedZhezis as g (g.dramaId || g.dramaName)}
+              <div class="zhezi-cluster">
+                {#if g.dramaId}
+                  <a class="cluster-drama" href={`/dramas/${g.dramaId}`} title={`查看《${g.dramaName}》详情`}>《{g.dramaName}》</a>
+                {:else}
+                  <span class="cluster-drama">《{g.dramaName}》</span>
+                {/if}
+                {#if g.zhezis.length}
+                  <div class="cluster-zhezis">
+                    {#each g.zhezis as z (z.id)}
+                      <a class="ztag" href={`/?zhezi=${encodeURIComponent(z.id)}`} title={`「${z.name}」演出列表`}>{z.name}</a>
+                    {/each}
+                  </div>
+                {:else}
+                  <span class="cluster-full">整本</span>
+                {/if}
+              </div>
             {/each}
           </div>
         {:else if rec.play?.length}
@@ -251,17 +253,29 @@
 
       <div class="card section">
         <h3>费用</h3>
-        <dl class="kv">
-          <div class="kv-row"><dt>票价</dt><dd class="money">{rec.price ? formatCurrency(rec.price, rec.price_currency) : '—'}</dd></div>
-          <div class="kv-row"><dt>实付</dt><dd class="money">{rec.pay_price ? formatCurrency(rec.pay_price, rec.pay_price_currency) : '—'}</dd></div>
-          <div class="kv-row"><dt>其他花费</dt><dd class="money">{rec.other_cost ? formatCurrency(rec.other_cost, rec.other_cost_currency) : '—'}</dd></div>
-          {#if rec.pay_price || rec.other_cost}
-            <div class="kv-row total"><dt>合计</dt><dd class="money">{formatCurrency((rec.pay_price || 0) + (rec.other_cost || 0), rec.pay_price_currency || 'CNY')}</dd></div>
-          {/if}
-          {#if rec.channel}
-            <div class="kv-row"><dt>渠道</dt><dd><a class="flink" href={`/?q=${encodeURIComponent(rec.channel)}`}>{rec.channel}</a></dd></div>
-          {/if}
-        </dl>
+        <div class="fee-cards">
+          <div class="fee-card">
+            <span class="fee-label">票价</span>
+            <span class="fee-amount" class:is-empty={!rec.price}>{rec.price ? formatCurrency(rec.price, rec.price_currency) : '—'}</span>
+          </div>
+          <div class="fee-card">
+            <span class="fee-label">实付</span>
+            <span class="fee-amount" class:is-empty={!rec.pay_price}>{rec.pay_price ? formatCurrency(rec.pay_price, rec.pay_price_currency) : '—'}</span>
+          </div>
+          <div class="fee-card">
+            <span class="fee-label">其他花费</span>
+            <span class="fee-amount" class:is-empty={!rec.other_cost}>{rec.other_cost ? formatCurrency(rec.other_cost, rec.other_cost_currency) : '—'}</span>
+          </div>
+        </div>
+        {#if rec.pay_price || rec.other_cost}
+          <div class="fee-total">
+            <span class="fee-total-label">合计</span>
+            <span class="fee-total-amount">{formatCurrency((rec.pay_price || 0) + (rec.other_cost || 0), rec.pay_price_currency || 'CNY')}</span>
+          </div>
+        {/if}
+        {#if rec.channel}
+          <div class="fee-channel"><span class="fee-channel-key">渠道</span><a class="flink" href={`/?q=${encodeURIComponent(rec.channel)}`}>{rec.channel}</a></div>
+        {/if}
       </div>
     </div>
 
@@ -352,45 +366,46 @@
 
   .tags { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .section .tiny { margin: 14px 0 0; }
-  .zhezi-tag { display: inline-flex; align-items: center; gap: 6px; }
-  .zt-drama { font-size: 10.5px; background: var(--surface-3); color: var(--text-muted); border-radius: 999px; padding: 1px 7px; }
-  .sep { color: var(--text-3); margin: 0 2px; font-size: 12px; }
-  .comma { color: var(--text-muted); margin: 0 3px; font-size: 12px; }
 
-  /* 折子行内布局：剧名是胶囊tag，折子是纯文字链接，间用居中的小点分隔 */
-  .zhezis-line { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 0; font-size: 14px; line-height: 1.6; }
-  .zhezis-line .tag.zdrama {
-    background: var(--accent-soft);
+  /* 折子按剧目聚合成簇：剧名（书名号）为簇头，折子为独立标签 */
+  .zhezi-clusters { display: flex; flex-direction: column; gap: 16px; }
+  .zhezi-cluster { display: flex; flex-direction: column; gap: 8px; }
+  .cluster-drama {
+    font-family: var(--font-serif);
+    font-size: 15.5px;
+    font-weight: 600;
     color: var(--accent);
-    border-radius: 999px;
-    padding: 1px 9px;
-    font-weight: 500;
-    margin-right: 4px;
-  }
-  .zhezis-line .zlink {
-    color: var(--text-2);
     text-decoration: none;
-    border-bottom: 1px dashed transparent;
-    transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
-    padding: 0 2px;
+    width: fit-content;
+    transition: color var(--t-fast) var(--ease);
   }
-  .zhezis-line .zlink:hover {
-    color: var(--accent);
-    border-bottom-color: currentColor;
-  }
-  .zhezis-line .zdrama-gap {
-    margin-left: 12px;
-  }
-  .zhezis-line .grp-sep {
-    color: var(--text-3);
-    margin: 0 4px;
-    font-size: 14px;
-    line-height: 1;
-  }
-  .zhezis-line .comma {
+  a.cluster-drama:hover { color: var(--accent-strong); text-decoration: underline; text-underline-offset: 3px; }
+  .cluster-zhezis { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ztag {
+    display: inline-flex;
+    align-items: center;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
     color: var(--text-2);
-    margin: 0 4px;
-    font-size: 14px;
+    border-radius: var(--radius-sm);
+    padding: 4px 11px;
+    font-size: 13px;
+    text-decoration: none;
+    transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  }
+  .ztag:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .cluster-full {
+    font-size: 12px;
+    color: var(--text-3);
+    background: var(--surface-2);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    padding: 2px 9px;
+    width: fit-content;
   }
 
   .cards-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -406,12 +421,61 @@
     font-size: 14px;
   }
   .kv-row:last-child { border-bottom: none; }
-  .kv-row.total { border-top: 2px solid var(--border); font-weight: 600; margin-top: 4px; }
   dt { color: var(--text-muted); flex: 0 0 auto; }
   dd { margin: 0; text-align: right; }
   .flink { color: var(--text); border-bottom: 1px dashed var(--border-strong); transition: all var(--t-fast) var(--ease); }
   .flink:hover { color: var(--accent); border-color: var(--accent); }
   .money { font-variant-numeric: tabular-nums; }
+
+  /* 费用分卡：票价/实付/其他花费各自成卡，合计加粗强调 */
+  .fee-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .fee-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 13px;
+  }
+  .fee-label { font-size: 12px; color: var(--text-muted); }
+  .fee-amount {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  .fee-amount.is-empty { color: var(--text-3); font-weight: 500; }
+  .fee-total {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+  }
+  .fee-total-label { font-size: 14px; font-weight: 700; color: var(--accent); }
+  .fee-total-amount {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .fee-channel {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .fee-channel-key { flex: 0 0 auto; }
 
   .remark { margin: 0; white-space: pre-wrap; line-height: 1.75; color: var(--text-2); }
 
