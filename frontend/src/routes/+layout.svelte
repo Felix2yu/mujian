@@ -1,4 +1,5 @@
 <script>
+  import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { initStorageInfo } from '$lib/api.js';
   import { initTheme } from '$lib/stores.js';
@@ -103,18 +104,21 @@
           </a>
         {/each}
       </nav>
-      <!-- 移动端日历快捷入口：顶栏内、汉堡按钮左侧，不进侧栏菜单 -->
-      <a
-        href="/calendar"
+      <!-- 移动端日历快捷入口：顶栏内、汉堡按钮左侧，不进侧栏菜单。
+           再次点击（已在日历页）则退出日历返回首页。 -->
+      <button
+        type="button"
         class="topbar-cal"
         class:active={isActive('/calendar')}
-        aria-label="打开日历"
+        aria-label={isActive('/calendar') ? '退出日历，返回首页' : '打开日历'}
+        aria-pressed={isActive('/calendar')}
+        onclick={() => goto(isActive('/calendar') ? '/' : '/calendar')}
       >
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <rect x="3" y="4" width="18" height="18" rx="2" />
           <path d="M3 9h18M8 2v4M16 2v4M8 14h2M14 14h2M8 18h2M14 18h2" />
         </svg>
-      </a>
+      </button>
       <button
         type="button"
         class="menu-btn"

@@ -288,51 +288,6 @@
     </div>
   {/if}
 
-  {#if showFilter}
-    <div class="filter-mask" onclick={() => (showFilter = false)} transition:fade={{ duration: 140 }} aria-hidden="true"></div>
-    <div class="filter-panel card" role="dialog" aria-modal="true" aria-label="筛选选项" transition:fly={{ y: 40, duration: 200 }}>
-      <div class="filter-panel-head">
-        <span class="filter-panel-title">筛选</span>
-        <button type="button" class="filter-close" onclick={() => (showFilter = false)} aria-label="关闭筛选">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="M6 6l12 12M18 6L6 18" />
-          </svg>
-        </button>
-      </div>
-      <div class="filter-fields">
-        <label class="filter-field">
-          <span class="filter-label">分类</span>
-          <select class="input" bind:value={filters.category} onchange={load}>
-            <option value="">全部分类</option>
-            {#each categories as c}<option value={c.name}>{c.name}</option>{/each}
-          </select>
-        </label>
-        <label class="filter-field">
-          <span class="filter-label">城市</span>
-          <select class="input" bind:value={filters.city} onchange={load}>
-            <option value="">全部城市</option>
-            {#each cities as c}<option value={c}>{c}</option>{/each}
-          </select>
-        </label>
-        <label class="filter-field">
-          <span class="filter-label">年份</span>
-          <input class="input" type="number" placeholder="年份" bind:value={filters.year} onchange={load} />
-        </label>
-        <label class="filter-field">
-          <span class="filter-label">月份</span>
-          <select class="input" bind:value={filters.month} onchange={load}>
-            <option value="">月份</option>
-            {#each Array(12) as _, i}<option value={i + 1}>{i + 1} 月</option>{/each}
-          </select>
-        </label>
-      </div>
-      <div class="filter-panel-actions">
-        <button class="btn ghost" onclick={resetFilters}>清除全部</button>
-        <button class="btn primary" onclick={() => (showFilter = false)}>完成</button>
-      </div>
-    </div>
-  {/if}
-
   {#if activeChips.length}
     <div class="chips">
       {#each activeChips as chip}
@@ -383,6 +338,51 @@
         </div>
       {/if}
 </div>
+
+{#if showFilter}
+  <div class="filter-mask" onclick={() => (showFilter = false)} transition:fade={{ duration: 140 }} aria-hidden="true"></div>
+  <div class="filter-panel card" role="dialog" aria-modal="true" aria-label="筛选选项" transition:fly={{ y: 40, duration: 200 }}>
+    <div class="filter-panel-head">
+      <span class="filter-panel-title">筛选</span>
+      <button type="button" class="filter-close" onclick={() => (showFilter = false)} aria-label="关闭筛选">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>
+    </div>
+    <div class="filter-fields">
+      <label class="filter-field">
+        <span class="filter-label">分类</span>
+        <select class="input" bind:value={filters.category} onchange={load}>
+          <option value="">全部分类</option>
+          {#each categories as c}<option value={c.name}>{c.name}</option>{/each}
+        </select>
+      </label>
+      <label class="filter-field">
+        <span class="filter-label">城市</span>
+        <select class="input" bind:value={filters.city} onchange={load}>
+          <option value="">全部城市</option>
+          {#each cities as c}<option value={c}>{c}</option>{/each}
+        </select>
+      </label>
+      <label class="filter-field">
+        <span class="filter-label">年份</span>
+        <input class="input" type="number" placeholder="年份" bind:value={filters.year} onchange={load} />
+      </label>
+      <label class="filter-field">
+        <span class="filter-label">月份</span>
+        <select class="input" bind:value={filters.month} onchange={load}>
+          <option value="">月份</option>
+          {#each Array(12) as _, i}<option value={i + 1}>{i + 1} 月</option>{/each}
+        </select>
+      </label>
+    </div>
+    <div class="filter-panel-actions">
+      <button class="btn ghost" onclick={resetFilters}>清除全部</button>
+      <button class="btn primary" onclick={() => (showFilter = false)}>完成</button>
+    </div>
+  </div>
+{/if}
 
 {#if showJump && !loading && records.length && nowAnchorId}
   <button class="jump-now" onclick={() => jumpToNow()} title="定位到当前时间" aria-label="定位到当前时间">
@@ -486,9 +486,10 @@
   }
   .filter-panel {
     position: fixed;
-    left: 50%;
+    left: 0;
+    right: 0;
     bottom: 0;
-    transform: translateX(-50%);
+    margin: 0 auto;
     z-index: 61;
     width: min(560px, 100%);
     max-height: 80vh;
