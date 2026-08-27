@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api, coverUrl } from '$lib/api.js';
+  import OperaIcon from '$lib/components/OperaIcon.svelte';
 
   let artists = $state([]);
   let loading = $state(true);
@@ -109,7 +110,7 @@
     </div>
   {:else if artists.length === 0}
     <div class="empty card">
-      <div class="ico">🎭</div>
+      <div class="ico"><OperaIcon size={44} /></div>
       <div class="t">还没有演员</div>
       <div class="h">在上方输入姓名添加第一个演员档案</div>
     </div>
@@ -132,7 +133,7 @@
             {#if a.coverFile}
               <img class="avatar" src={coverUrl(a.coverFile)} alt={a.name} />
             {:else}
-              <div class="avatar placeholder">🎭</div>
+              <div class="avatar placeholder"><OperaIcon size={26} /></div>
             {/if}
             <div class="meta">
               <div class="name">{a.name}</div>

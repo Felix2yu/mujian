@@ -1,11 +1,13 @@
 <script>
   import { onMount, tick } from 'svelte';
+  import { fade, fly } from 'svelte/transition';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
   import { loadStatusFilter } from '$lib/statusPrefs.js';
   import { loadPref } from '$lib/prefs.js';
   import RecordCard from '$lib/components/RecordCard.svelte';
   import BatchEditModal from '$lib/components/BatchEditModal.svelte';
+  import OperaIcon from '$lib/components/OperaIcon.svelte';
 
   let records = $state([]);
   let categories = $state([]);
@@ -13,6 +15,7 @@
   let loading = $state(true);
   let error = $state('');
   let filters = $state({ q: '', category: '', city: '', year: '', month: '', drama: '', zhezi: '' });
+  let showFilter = $state(false);
   let zheziNames = $state(new Map());
   let searchTimer;
   let searchComposing = false;
@@ -247,16 +250,28 @@
       />
       {#if filters.q}<button class="search-clear" onclick={() => clearChip('q')}>✕</button>{/if}
     </div>
-    {#if selectionMode}
-      <div class="hero-actions">
-        <button class="btn" onclick={toggleSelectMode}>完成</button>
+      <div class="action-row">
+        <button
+          type="button"
+          class="btn ghost filter-toggle"
+          class:active={activeChips.length > 0}
+          onclick={() => (showFilter = !showFilter)}
+          aria-expanded={showFilter}
+          aria-haspopup="dialog"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 5h18M6 12h12M10 19h4" />
+          </svg>
+          <span>筛选</span>
+          {#if activeChips.length}<span class="filter-count">{activeChips.length}</span>{/if}
+        </button>
+        {#if selectionMode}
+          <button class="btn" onclick={toggleSelectMode}>完成</button>
+        {:else}
+          <button class="btn ghost" onclick={toggleSelectMode}>批量</button>
+          <a class="btn primary" href="/records/new">＋ 新建记录</a>
+        {/if}
       </div>
-    {:else}
-      <div class="hero-actions">
-        <button class="btn ghost" onclick={toggleSelectMode}>批量</button>
-        <a class="btn primary" href="/records/new">＋ 新建记录</a>
-      </div>
-    {/if}
   </div>
 
   {#if selectionMode}
@@ -273,24 +288,50 @@
     </div>
   {/if}
 
-  <div class="filter-bar card">
-    <select class="input" bind:value={filters.category} onchange={load}>
-      <option value="">全部分类</option>
-      {#each categories as c}<option value={c.name}>{c.name}</option>{/each}
-    </select>
-    <select class="input" bind:value={filters.city} onchange={load}>
-      <option value="">全部城市</option>
-      {#each cities as c}<option value={c}>{c}</option>{/each}
-    </select>
-    <input class="input" type="number" placeholder="年份" bind:value={filters.year} onchange={load} />
-    <select class="input" bind:value={filters.month} onchange={load}>
-      <option value="">月份</option>
-      {#each Array(12) as _, i}<option value={i + 1}>{i + 1} 月</option>{/each}
-    </select>
-    {#if activeChips.length}
-      <button class="btn ghost sm" onclick={resetFilters}>清除全部</button>
-    {/if}
-  </div>
+  {#if showFilter}
+    <div class="filter-mask" onclick={() => (showFilter = false)} transition:fade={{ duration: 140 }} aria-hidden="true"></div>
+    <div class="filter-panel card" role="dialog" aria-modal="true" aria-label="筛选选项" transition:fly={{ y: 40, duration: 200 }}>
+      <div class="filter-panel-head">
+        <span class="filter-panel-title">筛选</span>
+        <button type="button" class="filter-close" onclick={() => (showFilter = false)} aria-label="关闭筛选">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+      <div class="filter-fields">
+        <label class="filter-field">
+          <span class="filter-label">分类</span>
+          <select class="input" bind:value={filters.category} onchange={load}>
+            <option value="">全部分类</option>
+            {#each categories as c}<option value={c.name}>{c.name}</option>{/each}
+          </select>
+        </label>
+        <label class="filter-field">
+          <span class="filter-label">城市</span>
+          <select class="input" bind:value={filters.city} onchange={load}>
+            <option value="">全部城市</option>
+            {#each cities as c}<option value={c}>{c}</option>{/each}
+          </select>
+        </label>
+        <label class="filter-field">
+          <span class="filter-label">年份</span>
+          <input class="input" type="number" placeholder="年份" bind:value={filters.year} onchange={load} />
+        </label>
+        <label class="filter-field">
+          <span class="filter-label">月份</span>
+          <select class="input" bind:value={filters.month} onchange={load}>
+            <option value="">月份</option>
+            {#each Array(12) as _, i}<option value={i + 1}>{i + 1} 月</option>{/each}
+          </select>
+        </label>
+      </div>
+      <div class="filter-panel-actions">
+        <button class="btn ghost" onclick={resetFilters}>清除全部</button>
+        <button class="btn primary" onclick={() => (showFilter = false)}>完成</button>
+      </div>
+    </div>
+  {/if}
 
   {#if activeChips.length}
     <div class="chips">
@@ -316,7 +357,7 @@
         </div>
       {:else if records.length === 0}
         <div class="empty card">
-          <div class="ico">🎭</div>
+          <div class="ico"><OperaIcon size={44} /></div>
           <div class="t">{activeChips.length ? '没有符合条件的记录' : '还没有记录'}</div>
           <div class="h">{activeChips.length ? '试试调整筛选条件，或清除全部筛选' : '前往「导入」上传 recordlive_export 的 data.json，或点击右上角新建第一条记录'}</div>
           {#if activeChips.length}<button class="btn sm" onclick={resetFilters}>清除筛选</button>{/if}
@@ -364,11 +405,13 @@
 <style>
   .home { display: flex; flex-direction: column; gap: 14px; }
 
-  .hero { display: flex; gap: 10px; align-items: center; }
-  .hero-actions { display: flex; gap: 10px; flex-shrink: 0; }
+  .hero { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .action-row { display: flex; gap: 8px; align-items: center; flex-shrink: 0; flex-wrap: wrap; }
+  .action-row .btn { white-space: nowrap; }
   .search-wrap {
     position: relative;
-    flex: 1;
+    flex: 1 1 240px;
+    min-width: 0;
     display: flex;
     align-items: center;
   }
@@ -414,14 +457,82 @@
   }
   .search-clear:hover { background: var(--accent-soft); color: var(--accent); }
 
-  .filter-bar {
-    display: flex;
-    gap: 8px;
-    padding: 10px;
+  .filter-toggle { display: inline-flex; align-items: center; gap: 6px; }
+  .filter-toggle.active { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .filter-count {
+    display: inline-flex;
     align-items: center;
-    flex-wrap: wrap;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
   }
-  .filter-bar .input { width: auto; flex: 1 1 130px; padding: 7px 10px; font-size: 13.5px; }
+
+  /* 筛选弹出层（移动端/桌面端均为底部抽屉式） */
+  .filter-mask {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    border: none;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.42);
+    cursor: default;
+  }
+  .filter-panel {
+    position: fixed;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    z-index: 61;
+    width: min(560px, 100%);
+    max-height: 80vh;
+    overflow-y: auto;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding: 16px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+    box-shadow: var(--shadow-lg);
+  }
+  .filter-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .filter-panel-title { font-family: var(--font-serif); font-size: 17px; font-weight: 600; }
+  .filter-close {
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--t-fast) var(--ease);
+  }
+  .filter-close:hover { background: var(--surface-3); color: var(--text); }
+  .filter-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .filter-field { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+  .filter-label { font-size: 13px; font-weight: 500; color: var(--text-2); }
+  .filter-field .input { width: 100%; }
+  .filter-panel-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 16px;
+  }
 
   .chips { display: flex; gap: 6px; flex-wrap: wrap; }
   .chip {
@@ -555,10 +666,9 @@
 
   @media (max-width: 560px) {
     .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-    /* 搜索框整行，「批量 / 新建记录」并排同行 */
-    .hero { flex-wrap: wrap; }
+    /* 搜索框整行，筛选 / 批量 / 新建 同行水平排列 */
     .search-wrap { flex: 1 1 100%; }
-    .hero-actions { flex: 1; }
-    .hero-actions .btn { flex: 1; }
+    .action-row { flex: 1 1 100%; }
+    .action-row .btn { flex: 1 1 auto; justify-content: center; }
   }
 </style>

@@ -1,10 +1,13 @@
 <script>
   import { page } from '$app/stores';
   import { initStorageInfo } from '$lib/api.js';
+  import { initTheme } from '$lib/stores.js';
   import { onMount } from 'svelte';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import '$lib/app.css';
+
+  let { children } = $props();
 
   const nav = [
     { href: '/', label: '记录' },
@@ -19,6 +22,9 @@
     { href: '/settings', label: '设置' }
   ];
 
+  // 移动端侧栏不列「日历」：日历改为悬浮快捷入口，避免与侧栏菜单重复。
+  const drawerNav = nav.filter(item => item.href !== '/calendar');
+
   let drawerOpen = $state(false);
 
   // PWA 更新：检测到新 SW 就绪时提示用户刷新
@@ -26,6 +32,7 @@
   let swReg = null;
 
   onMount(() => {
+    initTheme();
     initStorageInfo();
 
     if ('serviceWorker' in navigator && !/^localhost$|^127\.0\.0\.1$|^\[::1\]$/.test(location.hostname)) {
@@ -96,6 +103,18 @@
           </a>
         {/each}
       </nav>
+      <!-- 移动端日历快捷入口：顶栏内、汉堡按钮左侧，不进侧栏菜单 -->
+      <a
+        href="/calendar"
+        class="topbar-cal"
+        class:active={isActive('/calendar')}
+        aria-label="打开日历"
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="18" rx="2" />
+          <path d="M3 9h18M8 2v4M16 2v4M8 14h2M14 14h2M8 18h2M14 18h2" />
+        </svg>
+      </a>
       <button
         type="button"
         class="menu-btn"
@@ -129,7 +148,7 @@
         </button>
       </div>
       <nav class="drawer-nav">
-        {#each nav as item (item.href)}
+        {#each drawerNav as item (item.href)}
           <a href={item.href} class="drawer-link" class:active={isActive(item.href)}>
             {item.label}
             {#if isActive(item.href)}<span class="dot" aria-hidden="true"></span>{/if}
@@ -141,7 +160,7 @@
   {/if}
 
   <main class="content">
-    <slot />
+    {@render children()}
   </main>
   <footer class="foot">
     <span class="muted tiny">幕间 · 现场演出记录</span>
@@ -221,7 +240,6 @@
   /* 汉堡按钮：仅移动端 */
   .menu-btn {
     display: none;
-    margin-left: auto;
     width: 38px;
     height: 38px;
     align-items: center;
@@ -356,11 +374,37 @@
   }
   .update-banner:hover { filter: brightness(1.08); }
 
+  /* 移动端日历快捷入口：顶栏按钮，位于汉堡左侧 */
+  .topbar-cal {
+    display: none;
+    margin-left: auto;
+    width: 38px;
+    height: 38px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    box-shadow: var(--shadow-xs);
+    transition: all var(--t-fast) var(--ease);
+  }
+  .topbar-cal:active { transform: scale(0.95); }
+  .topbar-cal svg { display: block; }
+  .topbar-cal.active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
   @media (max-width: 640px) {
     .bar-inner { padding: 0 14px; gap: 10px; height: 54px; }
     .content { padding: 16px 14px 36px; }
-    /* 顶栏只留品牌 + 汉堡，全部入口进侧栏 */
+    /* 顶栏只留品牌 + 日历 + 汉堡，全部入口进侧栏 */
     .nav { display: none; }
     .menu-btn { display: inline-flex; }
+    /* 移动端显示顶栏日历入口（在汉堡左侧） */
+    .topbar-cal { display: inline-flex; }
   }
 </style>

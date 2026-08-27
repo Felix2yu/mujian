@@ -4,6 +4,7 @@
   import { api, coverUrl } from '$lib/api.js';
   import BackLink from '$lib/components/BackLink.svelte';
   import RecordCard from '$lib/components/RecordCard.svelte';
+  import OperaIcon from '$lib/components/OperaIcon.svelte';
 
   const id = $page.params.id;
   let artist = $state(null);
@@ -130,7 +131,7 @@
             {#if form.coverFile}
               <img class="avatar lg" src={coverUrl(form.coverFile)} alt="头像预览" />
             {:else}
-              <div class="avatar lg placeholder">🎭</div>
+              <div class="avatar lg placeholder"><OperaIcon size={64} /></div>
             {/if}
             <div class="edit-fields">
               <input class="input" placeholder="演员姓名" bind:value={form.name} />
@@ -153,7 +154,7 @@
             {#if artist.coverFile}
               <img class="avatar lg" src={coverUrl(artist.coverFile)} alt={artist.name} />
             {:else}
-              <div class="avatar lg placeholder">🎭</div>
+              <div class="avatar lg placeholder"><OperaIcon size={64} /></div>
             {/if}
             <div>
               <h1>{artist.name}</h1>
