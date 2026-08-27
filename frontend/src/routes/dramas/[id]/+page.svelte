@@ -119,9 +119,17 @@
   // 拖拽排序状态
   let dragIdx = $state(-1);
   let overIdx = $state(-1);
+  let overBefore = $state(true);
 
   function onDragStart(i) {
     dragIdx = i;
+  }
+
+  function onDragOver(e, i) {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    overIdx = i;
+    overBefore = e.clientY < rect.top + rect.height / 2;
   }
 
   function onDrop(targetIdx) {
@@ -209,9 +217,10 @@
             draggable={editingId === z.id ? 'false' : 'true'}
             class:editing={editingId === z.id}
             class:dragging={dragIdx === i}
-            class:drop-target={overIdx === i}
+            class:drop-before={overIdx === i && dragIdx !== i && overBefore}
+            class:drop-after={overIdx === i && dragIdx !== i && !overBefore}
             ondragstart={(e) => { onDragStart(i); e.dataTransfer.effectAllowed = 'move'; }}
-            ondragover={(e) => { e.preventDefault(); overIdx = i; }}
+            ondragover={(e) => onDragOver(e, i)}
             ondragleave={() => { if (overIdx === i) overIdx = -1; }}
             ondrop={(e) => { e.preventDefault(); onDrop(i); }}
             ondragend={() => resetDrag()}
@@ -305,12 +314,26 @@
   .sec-head .muted { display: block; margin-top: 4px; }
 
   .zhezis { display: flex; flex-direction: column; gap: 8px; }
-  .z-row { display: flex; align-items: center; gap: 8px; padding: 12px 14px; margin-bottom: 0; cursor: grab; }
+  .z-row { position: relative; display: flex; align-items: center; gap: 8px; padding: 12px 14px; margin-bottom: 0; cursor: grab; }
   .z-row .grow { flex: 1 1 auto; min-width: 0; }
   .z-row:active { cursor: grabbing; }
   .z-row.editing { cursor: default; }
   .z-row.dragging { opacity: 0.4; cursor: grabbing; }
-  .z-row.drop-target { outline: 2px dashed var(--accent); outline-offset: 2px; }
+  /* 拖拽插入指示 */
+  .z-row.drop-before::before,
+  .z-row.drop-after::after {
+    content: '';
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .z-row.drop-before::before { top: -6px; }
+  .z-row.drop-after::after { bottom: -6px; }
   .grip {
     flex: 0 0 auto; color: var(--text-3); font-size: 14px; line-height: 1; cursor: grab;
     padding: 4px 2px; user-select: none;

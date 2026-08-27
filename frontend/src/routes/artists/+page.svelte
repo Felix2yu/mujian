@@ -50,9 +50,17 @@
   // 拖拽排序
   let dragIdx = $state(-1);
   let overIdx = $state(-1);
+  let overBefore = $state(true);
 
   function onDragStart(i) {
     dragIdx = i;
+  }
+
+  function onDragOver(e, i) {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    overIdx = i;
+    overBefore = e.clientY < rect.top + rect.height / 2;
   }
 
   function onDrop(targetIdx) {
@@ -112,8 +120,10 @@
           class="card actor"
           draggable="true"
           class:dragging={dragIdx === i}
+          class:drop-before={overIdx === i && dragIdx !== i && overBefore}
+          class:drop-after={overIdx === i && dragIdx !== i && !overBefore}
           ondragstart={(e) => { onDragStart(i); e.dataTransfer.effectAllowed = 'move'; }}
-          ondragover={(e) => { e.preventDefault(); overIdx = i; }}
+          ondragover={(e) => onDragOver(e, i)}
           ondragleave={() => { if (overIdx === i) overIdx = -1; }}
           ondrop={() => onDrop(i)}
           ondragend={() => resetDrag()}
@@ -148,6 +158,21 @@
     cursor: grab;
   }
   .actor.dragging { opacity: 0.4; cursor: grabbing; }
+  /* 拖拽插入指示 */
+  .actor.drop-before::before,
+  .actor.drop-after::after {
+    content: '';
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .actor.drop-before::before { top: -6px; }
+  .actor.drop-after::after { bottom: -6px; }
   .actor-link { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; text-decoration: none; color: inherit; }
   .avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--surface-3); }
   .avatar.placeholder { display: flex; align-items: center; justify-content: center; font-size: 22px; }

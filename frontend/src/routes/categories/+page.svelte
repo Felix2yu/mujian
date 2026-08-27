@@ -50,9 +50,17 @@
   // 拖拽排序状态
   let dragIdx = $state(-1);
   let overIdx = $state(-1);
+  let overBefore = $state(true);
 
   function onDragStart(i) {
     dragIdx = i;
+  }
+
+  function onDragOver(e, i) {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    overIdx = i;
+    overBefore = e.clientY < rect.top + rect.height / 2;
   }
 
   function onDrop(targetIdx) {
@@ -112,8 +120,10 @@
           class="card cat"
           draggable="true"
           class:dragging={dragIdx === i}
+          class:drop-before={overIdx === i && dragIdx !== i && overBefore}
+          class:drop-after={overIdx === i && dragIdx !== i && !overBefore}
           ondragstart={(e) => { onDragStart(i); e.dataTransfer.effectAllowed = 'move'; }}
-          ondragover={(e) => { e.preventDefault(); overIdx = i; }}
+          ondragover={(e) => onDragOver(e, i)}
           ondragleave={() => { if (overIdx === i) overIdx = -1; }}
           ondrop={() => onDrop(i)}
           ondragend={() => resetDrag()}
@@ -164,6 +174,21 @@
     flex: 0 0 auto;
   }
   .del:hover { background: var(--danger-soft); color: var(--danger); }
-  .cat { cursor: grab; }
+  .cat { position: relative; cursor: grab; }
   .cat.dragging { opacity: 0.4; cursor: grabbing; }
+  /* 拖拽插入指示 */
+  .cat.drop-before::before,
+  .cat.drop-after::after {
+    content: '';
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .cat.drop-before::before { top: -6px; }
+  .cat.drop-after::after { bottom: -6px; }
 </style>

@@ -69,12 +69,20 @@
     }
   }
 
-  // 拖拽排序状态（与折子页一致）
+  // 拖拽排序状态
   let dragIdx = $state(-1);
   let overIdx = $state(-1);
+  let overBefore = $state(true);
 
   function onDragStart(i) {
     dragIdx = i;
+  }
+
+  function onDragOver(e, i) {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    overIdx = i;
+    overBefore = e.clientY < rect.top + rect.height / 2;
   }
 
   function onDrop(targetIdx) {
@@ -162,8 +170,10 @@
           class="card drama"
           draggable="true"
           class:dragging={dragIdx === i}
+          class:drop-before={overIdx === i && dragIdx !== i && overBefore}
+          class:drop-after={overIdx === i && dragIdx !== i && !overBefore}
           ondragstart={(e) => { onDragStart(i); e.dataTransfer.effectAllowed = 'move'; }}
-          ondragover={(e) => { e.preventDefault(); overIdx = i; }}
+          ondragover={(e) => onDragOver(e, i)}
           ondragleave={() => { if (overIdx === i) overIdx = -1; }}
           ondrop={() => onDrop(i)}
           ondragend={() => resetDrag()}
@@ -205,7 +215,7 @@
   .filter-bar .grow { flex: 1 1 180px; }
   .filter-bar select { max-width: 150px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-  .drama { display: flex; align-items: center; gap: 8px; padding: 14px 16px; }
+  .drama { position: relative; display: flex; align-items: center; gap: 8px; padding: 14px 16px; }
   .drama-main { flex: 1; min-width: 0; text-decoration: none; transition: color var(--t-fast) var(--ease); }
   .drama-main:hover .d-title { color: var(--accent); }
   .d-title { font-weight: 600; font-size: 15.5px; font-family: var(--font-serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -232,6 +242,21 @@
   .del:hover { background: var(--danger-soft); color: var(--danger); }
   .drama.dragging { opacity: 0.4; cursor: grabbing; }
   .drama { cursor: grab; }
+  /* 拖拽插入指示：目标上方/下方显示横线，表示松手后的插入位置 */
+  .drama.drop-before::before,
+  .drama.drop-after::after {
+    content: '';
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .drama.drop-before::before { top: -6px; }
+  .drama.drop-after::after { bottom: -6px; }
 
   @media (max-width: 560px) {
     .grid { grid-template-columns: 1fr; }
