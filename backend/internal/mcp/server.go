@@ -13,6 +13,7 @@ import (
 	"mujian/internal/db"
 	"net/http"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -120,6 +121,37 @@ func (s *Server) registerTools() {
 	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "create_record",
 		Description: "创建一条新的演出记录。name 必填，其余字段可选。dry_run=true 时只预览不创建。",
+		InputSchema: toolSchema([]string{"name"}, map[string]*jsonschema.Schema{
+			"name":              strProp(),
+			"channel":           strProp(),
+			"city":              strProp(),
+			"address":           strProp(),
+			"cover_file":        strProp(),
+			"cover_thumb":       strProp(),
+			"category_name":     strProp(),
+			"category_names":    arrayProp("string"),
+			"artist_ids":        arrayProp("string"),
+			"artist_names":      arrayProp("string"),
+			"guest":             arrayProp("string"),
+			"play":              arrayProp("string"),
+			"drama_ids":         arrayProp("string"),
+			"zhezi_ids":         arrayProp("string"),
+			"tag_ids":           arrayProp("string"),
+			"date_text":         strProp(),
+			"rating":            intProp(),
+			"seat":              strProp(),
+			"friends":           strProp(),
+			"company":           strProp(),
+			"remark":            strProp(),
+			"active_status":     intProp(),
+			"price":             numProp(),
+			"price_currency":    strProp(),
+			"pay_price":         numProp(),
+			"pay_price_currency": strProp(),
+			"other_cost":        numProp(),
+			"other_cost_currency": strProp(),
+			"dry_run":           boolProp(),
+		}),
 	}, s.handleCreateRecord)
 
 	mcp.AddTool(s.server, &mcp.Tool{
@@ -141,6 +173,13 @@ func (s *Server) registerTools() {
 	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "create_drama",
 		Description: "创建新剧目档案。name 必填，剧种默认由关联演出自动聚合。dry_run=true 时只预览不创建。",
+		InputSchema: toolSchema([]string{"name"}, map[string]*jsonschema.Schema{
+			"name":           strProp(),
+			"category_name":  strProp(),
+			"category_names": arrayProp("string"),
+			"remark":         strProp(),
+			"dry_run":        boolProp(),
+		}),
 	}, s.handleCreateDrama)
 
 	mcp.AddTool(s.server, &mcp.Tool{
@@ -157,6 +196,13 @@ func (s *Server) registerTools() {
 	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "batch_create_zhezis",
 		Description: "为剧目批量创建折子（自动跳过该剧目下已存在的同名折子）。配合网络搜索到的「常演折子」清单一次性写入。返回新建与跳过的清单。dry_run=true 时只预览不创建。",
+		InputSchema: toolSchema([]string{"names"}, map[string]*jsonschema.Schema{
+			"drama_id":   strProp(),
+			"drama_name": strProp(),
+			"names":      arrayProp("string"),
+			"remark":     strProp(),
+			"dry_run":    boolProp(),
+		}),
 	}, s.handleBatchCreateZhezis)
 
 	mcp.AddTool(s.server, &mcp.Tool{
@@ -173,6 +219,13 @@ func (s *Server) registerTools() {
 	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "create_artist",
 		Description: "创建新演员档案。name 必填，可附带别名和简介。dry_run=true 时只预览不创建。",
+		InputSchema: toolSchema([]string{"name"}, map[string]*jsonschema.Schema{
+			"name":    strProp(),
+			"aliases": arrayProp("string"),
+			"remark":  strProp(),
+			"bio":     strProp(),
+			"dry_run": boolProp(),
+		}),
 	}, s.handleCreateArtist)
 
 	mcp.AddTool(s.server, &mcp.Tool{
@@ -251,4 +304,52 @@ func errResult(format string, args ...any) (*mcp.CallToolResult, any, error) {
 		IsError: true,
 		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf(format, args...)}},
 	}, nil, nil
+}
+
+// arrayProp returns a clean array property schema (type "array", not
+// ["null","array"]) so MCP clients handle it correctly.
+func arrayProp(itemType string) *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Type: "array",
+		Items: &jsonschema.Schema{
+			Type: itemType,
+		},
+	}
+}
+
+// strProp returns a string property schema.
+func strProp() *jsonschema.Schema {
+	return &jsonschema.Schema{Type: "string"}
+}
+
+// numProp returns a number property schema.
+func numProp() *jsonschema.Schema {
+	return &jsonschema.Schema{Type: "number"}
+}
+
+// intProp returns an integer property schema.
+func intProp() *jsonschema.Schema {
+	return &jsonschema.Schema{Type: "integer"}
+}
+
+// boolProp returns a boolean property schema.
+func boolProp() *jsonschema.Schema {
+	return &jsonschema.Schema{Type: "boolean"}
+}
+
+// objProp returns an object property schema with the given properties.
+func objProp(props map[string]*jsonschema.Schema) *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Type:       "object",
+		Properties: props,
+	}
+}
+
+// toolSchema creates a JSON Schema for a tool with the given properties.
+func toolSchema(required []string, props map[string]*jsonschema.Schema) *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Type:       "object",
+		Required:   required,
+		Properties: props,
+	}
 }
