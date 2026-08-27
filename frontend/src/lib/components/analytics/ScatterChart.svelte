@@ -1,5 +1,6 @@
 <script>
   // Scatter plot for correlation exploration (e.g. ticket price vs rating).
+  // Hover tooltips are shown via a floating layer (see `tip` state).
   let { points = [], xLabel = '', yLabel = '', height = 260, yMax = 5 } = $props();
 
   const W = 760;
@@ -20,6 +21,15 @@
   }
   let yTicks = $derived([0, yMax / 2, yMax].map((t) => Math.round(t * 10) / 10));
   let xTicks = $derived([0, maxX / 2, maxX].map((t) => Math.round(t)));
+
+  // ---- floating tooltip ----
+  let tip = $state(null);
+  function showTip(e, title, lines) {
+    tip = { x: e.clientX, y: e.clientY, title, lines };
+  }
+  function hideTip() {
+    tip = null;
+  }
 </script>
 
 {#if points.length === 0}
@@ -39,11 +49,23 @@
     <text x={W - padR} y={height - 2} text-anchor="end" class="axis-title">{xLabel}</text>
     <text x={padL} y={padTop - 2} class="axis-title">{yLabel}</text>
     {#each points as p}
-      <circle cx={px(p.x)} cy={py(p.y)} r="3.4" fill="var(--accent)" opacity="0.55">
-        <title>票价 {p.x} · 评分 {p.y}★</title>
-      </circle>
+      <circle cx={px(p.x)} cy={py(p.y)} r="3.4" fill="var(--accent)" opacity="0.55" pointer-events="none" />
+      <circle
+        cx={px(p.x)} cy={py(p.y)} r="9" fill="transparent" style="pointer-events:all;cursor:pointer"
+        role="img" aria-label={`票价 ${p.x} · 评分 ${p.y}★`}
+        onmouseenter={(e) => showTip(e, '单场记录', [`票价 ${p.x}`, `评分 ${p.y}★`])}
+        onmousemove={(e) => showTip(e, '单场记录', [`票价 ${p.x}`, `评分 ${p.y}★`])}
+        onmouseleave={hideTip}
+      />
     {/each}
   </svg>
+{/if}
+
+{#if tip}
+  <div class="chart-tip" style="left:{tip.x + 12}px; top:{tip.y + 12}px">
+    <div class="t-title">{tip.title}</div>
+    {#each tip.lines as l}<div class="t-line">{l}</div>{/each}
+  </div>
 {/if}
 
 <style>
@@ -51,4 +73,12 @@
   .axis-lbl { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
   .axis-title { font-size: 11px; fill: var(--text-2); }
   .empty { padding: 30px 10px; text-align: center; color: var(--text-muted); font-size: 13px; }
+  .chart-tip {
+    position: fixed; z-index: 60; pointer-events: none;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 10px; font-size: 12px; color: var(--text);
+    box-shadow: var(--shadow-md); max-width: 240px;
+  }
+  .chart-tip .t-title { font-weight: 700; margin-bottom: 2px; }
+  .chart-tip .t-line { color: var(--text-2); font-variant-numeric: tabular-nums; }
 </style>

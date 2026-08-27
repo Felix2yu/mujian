@@ -379,7 +379,8 @@ type AnalyticsData struct {
 	TopVenues      []RankItem        `json:"top_venues"`
 
 	// 行为与经济的扩展维度
-	PriceBuckets  []DistItem        `json:"price_buckets"`  // 票价分桶
+	PriceBuckets      []DistItem        `json:"price_buckets"`       // 实付票价分桶
+	OtherCostBuckets  []DistItem        `json:"other_cost_buckets"`  // 其他花费分桶
 	TopZhezis     []RankItem        `json:"top_zhezis"`     // 常看折子
 	Rewatch       *RewatchStats     `json:"rewatch"`        // 复看率
 	Discovery     []DiscoverPoint   `json:"discovery"`      // 每月新发现

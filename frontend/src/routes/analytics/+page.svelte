@@ -95,6 +95,7 @@
 
   // ---- new dimensions derived ----
   let priceBars = $derived((data?.price_buckets ?? []).map((d) => ({ label: d.name, value: d.count })));
+  let otherCostBars = $derived((data?.other_cost_buckets ?? []).map((d) => ({ label: d.name, value: d.count })));
   let weekdayBars = $derived((data?.weekday_dist ?? []).map((w) => ({ label: w.name, value: w.count })));
   let intervalBars = $derived((data?.intervals?.buckets ?? []).map((d) => ({ label: d.name, value: d.count })));
   let discoveryLabels = $derived((data?.discovery ?? []).map((d) => d.period.slice(2)));
@@ -316,14 +317,22 @@
 
     <!-- ============ 票价与剧目结构 ============ -->
     <section class="block">
-      <h2 class="sec-title">💸 票价与剧目结构</h2>
-      <div class="grid-2">
+      <h2 class="sec-title">💸 票价与剧目结构 <span class="hint">实付票价 / 其他花费 分桶分布</span></h2>
+      <div class="grid-3">
         <div class="card sec">
-          <h3>票价分布</h3>
+          <h3>实付票价分布</h3>
           {#if data.price_buckets.length === 0}
-            <p class="tiny">暂无票价记录</p>
+            <p class="tiny">暂无实付票价记录</p>
           {:else}
             <VBarChart data={priceBars} height={200} labelEvery={1} unit=" 场" color="var(--gold)" />
+          {/if}
+        </div>
+        <div class="card sec">
+          <h3>其他花费分布</h3>
+          {#if (data.other_cost_buckets ?? []).length === 0}
+            <p class="tiny">暂无其他花费记录</p>
+          {:else}
+            <VBarChart data={otherCostBars} height={200} labelEvery={1} unit=" 场" color="#0e7490" />
           {/if}
         </div>
         <div class="card sec">
@@ -368,7 +377,8 @@
   .block { margin-top: 22px; }
   .sec-title { font-size: 17px; margin: 0 0 12px; display: flex; align-items: baseline; gap: 10px; }
   .sec-title .hint { font-size: 12px; font-weight: 400; color: var(--text-muted); font-family: var(--font-sans, system-ui, sans-serif); }
-  .card.sec { padding: 18px 20px; }
+  .card.sec { padding: 18px 20px; transition: box-shadow 0.2s ease, transform 0.2s ease; }
+  .card.sec:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
   .card.sec h3 { margin: 0 0 14px; font-size: 15px; }
 
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }

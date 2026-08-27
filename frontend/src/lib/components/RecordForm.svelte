@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { api, coverUrl } from '$lib/api.js';
   import { geocodeAddress } from '$lib/geocode.js';
   import CoverPicker from '$lib/components/CoverPicker.svelte';
@@ -1042,12 +1042,12 @@
           <!-- 内联新增折子：无需跳到剧目详情页 -->
           {#if addZheziFor === d.id}
             <div class="zhezi-add">
-              <input class="input" placeholder="新折子名称" bind:value={newZheziName} onkeydown={(e) => e.key === 'Enter' && createZheziFor(d.id)} />
+              <input bind:this={zheziInput} class="input" placeholder="新折子名称" bind:value={newZheziName} onkeydown={(e) => e.key === 'Enter' && createZheziFor(d.id)} />
               <button type="button" class="btn primary sm" onclick={() => createZheziFor(d.id)} disabled={savingZhezi || !newZheziName.trim()}>{savingZhezi ? '添加中…' : '添加'}</button>
               <button type="button" class="btn ghost sm" onclick={() => { addZheziFor = ''; newZheziName = ''; }}>取消</button>
             </div>
           {:else}
-            <button type="button" class="zhezi-add-btn" onclick={() => { addZheziFor = d.id; newZheziName = ''; }}>＋ 添加折子</button>
+            <button type="button" class="zhezi-add-btn" onclick={() => { addZheziFor = d.id; newZheziName = ''; tick().then(() => zheziInput?.focus()); }}>＋ 添加折子</button>
           {/if}
           {/if}
         </div>

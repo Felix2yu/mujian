@@ -140,6 +140,7 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 	out.TopDramas = []models.RankItem{}
 	out.TopVenues = []models.RankItem{}
 	out.PriceBuckets = []models.DistItem{}
+	out.OtherCostBuckets = []models.DistItem{}
 	out.TopZhezis = []models.RankItem{}
 	out.Discovery = []models.DiscoverPoint{}
 	out.WeekdayDist = []models.WeekdayItem{}
@@ -262,23 +263,38 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 		}
 	}
 
-	// ---- Anomaly detection (z-score over the 24-month count series) ----
+	// ---- Anomaly detection (z-score over the active window only) ----
+	// Only the "active window" (first non-empty month → last non-empty month)
+	// is scored. Leading/trailing all-zero months mean "not yet recording" /
+	// "stopped recording" and must not be flagged as a drop nor inflate the mean.
 	counts := make([]float64, len(out.Trends))
 	for i, t := range out.Trends {
 		counts[i] = float64(t.Count)
 	}
-	mean, std := meanStd(counts)
-	if std > 0 {
-		for i, t := range out.Trends {
-			z := (counts[i] - mean) / std
-			if math.Abs(z) > 1.5 {
-				out.Anomalies = append(out.Anomalies, models.Anomaly{
-					Period:   t.Period,
-					Count:    t.Count,
-					Expected: round1(mean),
-					ZScore:   round2(z),
-					Type:     ternary(z > 0, "spike", "drop"),
-				})
+	firstIdx, lastIdx := -1, -1
+	for i, c := range counts {
+		if c > 0 {
+			if firstIdx == -1 {
+				firstIdx = i
+			}
+			lastIdx = i
+		}
+	}
+	if firstIdx != -1 {
+		active := counts[firstIdx : lastIdx+1]
+		mean, std := meanStd(active)
+		if std > 0 {
+			for i := firstIdx; i <= lastIdx; i++ {
+				z := (counts[i] - mean) / std
+				if math.Abs(z) > 1.5 {
+					out.Anomalies = append(out.Anomalies, models.Anomaly{
+						Period:   out.Trends[i].Period,
+						Count:    out.Trends[i].Count,
+						Expected: round1(mean),
+						ZScore:   round2(z),
+						Type:     ternary(z > 0, "spike", "drop"),
+					})
+				}
 			}
 		}
 	}
@@ -326,6 +342,7 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 
 	// ---- New behavioural / economic dimensions ----
 	out.PriceBuckets = db.priceBucketDist()
+	out.OtherCostBuckets = db.otherCostBucketDist()
 	out.TopZhezis = db.topZhezis()
 	out.Rewatch = db.rewatchStats()
 	out.Discovery = db.discoverySeries()
@@ -498,6 +515,50 @@ func (db *DB) priceBucketDist() []models.DistItem {
 			COUNT(*) AS cnt
 		FROM records
 		WHERE pay_price > 0
+		GROUP BY bucket`)
+	if err != nil {
+		return []models.DistItem{}
+	}
+	defer rows.Close()
+	m := map[string]int{}
+	total := 0
+	for rows.Next() {
+		var b string
+		var c int
+		if rows.Scan(&b, &c) != nil {
+			continue
+		}
+		m[b] = c
+		total += c
+	}
+	if total == 0 {
+		return []models.DistItem{}
+	}
+	out := []models.DistItem{}
+	for _, b := range order {
+		if c, ok := m[b]; ok {
+			out = append(out, models.DistItem{Name: b, Count: c, Pct: pctOf(float64(total), float64(c))})
+		}
+	}
+	return out
+}
+
+// otherCostBucketDist buckets other_cost into the same standard ranges as
+// priceBucketDist, so the two economic dimensions are visually comparable.
+func (db *DB) otherCostBucketDist() []models.DistItem {
+	order := []string{"0–99", "100–199", "200–399", "400–799", "800+"}
+	rows, err := db.conn.Query(`
+		SELECT
+			CASE
+				WHEN other_cost < 100 THEN '0–99'
+				WHEN other_cost < 200 THEN '100–199'
+				WHEN other_cost < 400 THEN '200–399'
+				WHEN other_cost < 800 THEN '400–799'
+				ELSE '800+'
+			END AS bucket,
+			COUNT(*) AS cnt
+		FROM records
+		WHERE other_cost > 0
 		GROUP BY bucket`)
 	if err != nil {
 		return []models.DistItem{}
