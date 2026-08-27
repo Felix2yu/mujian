@@ -666,11 +666,34 @@
     for (const c of commonCurrencies) if (c !== v) out.push(c);
     return out;
   }
+
+  // 双列等高：动态调整备注框高度，使左右列总高一致
+  let colLeftEl = $state(null);
+  let colRightEl = $state(null);
+  let remarkSectionEl = $state(null);
+  let remarkH = $state(160);
+
+  $effect(() => {
+    if (!colLeftEl || !colRightEl || !remarkSectionEl) return;
+    const ro = new ResizeObserver(() => {
+      const leftH = colLeftEl.offsetHeight;
+      const rightH = colRightEl.offsetHeight;
+      if (leftH > rightH) {
+        const diff = leftH - rightH;
+        remarkH = Math.max(80, 160 + diff);
+      } else {
+        remarkH = 160;
+      }
+    });
+    ro.observe(colLeftEl);
+    ro.observe(colRightEl);
+    return () => ro.disconnect();
+  });
 </script>
 
 <form class="form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} onkeydown={(e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault(); }}>
 <div class="two-col">
-  <div class="col-left">
+  <div class="col-left" bind:this={colLeftEl}>
   <!-- ============ 基本信息 ============ -->
   <div class="card section">
     <h3>基本信息</h3>
@@ -1071,11 +1094,11 @@
   </div>
 
   </div><!-- .col-left -->
-  <div class="col-right">
+  <div class="col-right" bind:this={colRightEl}>
   <!-- ============ 备注 ============ -->
-  <div class="card section">
+  <div class="card section" bind:this={remarkSectionEl}>
     <h3>备注</h3>
-    <textarea class="input" rows="8" bind:value={form.remark} placeholder="剧评、观感、备忘…"></textarea>
+    <textarea class="input" rows="8" style:min-height={remarkH + 'px'} bind:value={form.remark} placeholder="剧评、观感、备忘…"></textarea>
   </div>
 
   <!-- ============ 封面 ============ -->
