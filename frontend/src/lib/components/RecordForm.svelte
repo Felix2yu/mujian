@@ -667,26 +667,27 @@
     return out;
   }
 
-  // 双列等高：直接操作 DOM 设置备注框高度，避免状态更新引起 ResizeObserver 循环
+  // 双列等高：仅观察左列，计算备注框应有高度，直接操作 DOM
   let colLeftEl = $state(null);
   let colRightEl = $state(null);
   let remarkTextarea = $state(null);
+  let coverSectionEl = $state(null);
 
   $effect(() => {
-    if (!colLeftEl || !colRightEl || !remarkTextarea) return;
+    if (!colLeftEl || !remarkTextarea || !coverSectionEl) return;
+    let raf = 0;
     const ro = new ResizeObserver(() => {
-      const leftH = colLeftEl.offsetHeight;
-      const rightH = colRightEl.offsetHeight;
-      const diff = leftH - rightH;
-      if (diff > 0) {
-        remarkTextarea.style.minHeight = (160 + diff) + 'px';
-      } else {
-        remarkTextarea.style.minHeight = '';
-      }
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const leftH = colLeftEl.offsetHeight;
+        const coverH = coverSectionEl.offsetHeight;
+        const gap = 14;
+        const target = leftH - coverH - gap * 2;
+        remarkTextarea.style.minHeight = target > 80 ? target + 'px' : '';
+      });
     });
     ro.observe(colLeftEl);
-    ro.observe(colRightEl);
-    return () => ro.disconnect();
+    return () => { ro.disconnect(); cancelAnimationFrame(raf); };
   });
 </script>
 
@@ -1093,7 +1094,7 @@
   </div>
 
   </div><!-- .col-left -->
-  <div class="col-right" bind:this={colRightEl}>
+  <div class="col-right">
   <!-- ============ 备注 ============ -->
   <div class="card section">
     <h3>备注</h3>
@@ -1101,7 +1102,7 @@
   </div>
 
   <!-- ============ 封面 ============ -->
-  <div class="card section">
+  <div class="card section" bind:this={coverSectionEl}>
     <h3>封面</h3>
     <div class="cover-layout">
       {#if form.coverFile}
