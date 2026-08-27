@@ -1,4 +1,5 @@
 <script>
+  import ChartTip from './ChartTip.svelte';
   // Grouped bar chart for year-over-year comparison: current vs previous.
   // Hover tooltips are shown via a floating layer (see `tip` state).
   let { data = [], height = 200, labelEvery = 2, unit = '' } = $props();
@@ -50,23 +51,10 @@
   {/each}
 </svg>
 
-{#if tip}
-  <div class="chart-tip" style="left:{tip.x + 12}px; top:{tip.y + 12}px">
-    <div class="t-title">{tip.title}</div>
-    {#each tip.lines as l}<div class="t-line">{l}</div>{/each}
-  </div>
-{/if}
+<ChartTip {tip} />
 
 <style>
   svg { display: block; }
   .y-label { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
   .x-label { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
-  .chart-tip {
-    position: fixed; z-index: 60; pointer-events: none;
-    background: var(--surface-2); border: 1px solid var(--border);
-    border-radius: 8px; padding: 7px 10px; font-size: 12px; color: var(--text);
-    box-shadow: var(--shadow-md); max-width: 240px;
-  }
-  .chart-tip .t-title { font-weight: 700; margin-bottom: 2px; }
-  .chart-tip .t-line { color: var(--text-2); font-variant-numeric: tabular-nums; }
 </style>
