@@ -133,6 +133,7 @@ export const api = {
 
   getStats: () => request('/api/stats'),
   getDashboard: () => request('/api/dashboard'),
+  getAnalytics: () => request('/api/analytics'),
   getCalendar: (year, month) => request(`/api/calendar?year=${year}&month=${month}`),
   getICSUrl: () => `${API_BASE}/api/calendar.ics`,
 

@@ -245,6 +245,149 @@ type DashboardStats struct {
 	RecentRecords []Record       `json:"recent_records"`
 }
 
+// ---------- Analytics ----------
+
+// AnalyticsOverview holds headline KPIs plus period-over-period deltas
+// (last 365 days vs the preceding 365 days) to surface comparison differences.
+type AnalyticsOverview struct {
+	TotalRecords    int     `json:"total_records"`
+	TotalCost       float64 `json:"total_cost"`
+	AvgRating       float64 `json:"avg_rating"`
+	TotalCities     int     `json:"total_cities"`
+	TotalArtists    int     `json:"total_artists"`
+	TotalDramas     int     `json:"total_dramas"`
+	RecordsDeltaPct float64 `json:"records_delta_pct"` // % change vs previous 365d
+	CostDeltaPct    float64 `json:"cost_delta_pct"`
+	RatingDelta     float64 `json:"rating_delta"` // absolute avg rating change
+}
+
+// TrendPoint is one month in the trend series.
+type TrendPoint struct {
+	Period    string  `json:"period"` // YYYY-MM
+	Count     int     `json:"count"`
+	Cost      float64 `json:"cost"`
+	AvgRating float64 `json:"avg_rating"`
+}
+
+// DistItem is a single slice of a proportion/ distribution.
+type DistItem struct {
+	Name  string  `json:"name"`
+	Count int     `json:"count"`
+	Pct   float64 `json:"pct"` // share within its own distribution (0-100)
+}
+
+// ComparePoint contrasts the same calendar month across two years.
+type ComparePoint struct {
+	Period   string  `json:"period"` // YYYY-MM
+	Current  float64 `json:"current"`
+	Previous float64 `json:"previous"`
+	DeltaPct float64 `json:"delta_pct"`
+}
+
+// Anomaly flags a month whose count deviates markedly from the series mean.
+type Anomaly struct {
+	Period   string  `json:"period"`
+	Count    int     `json:"count"`
+	Expected float64 `json:"expected"` // series mean
+	ZScore   float64 `json:"zscore"`
+	Type     string  `json:"type"` // "spike" | "drop"
+}
+
+// CorrPair is a Pearson correlation between two numeric fields.
+type CorrPair struct {
+	X string  `json:"x"` // human label
+	Y string  `json:"y"` // human label
+	R float64 `json:"r"` // -1..1
+	N int     `json:"n"` // sample size
+}
+
+// ScatterPoint is one (x, y) pair for the correlation scatter plot.
+type ScatterPoint struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+// RankItem is one entry in a top-N ranking.
+type RankItem struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+// WeekdayItem is the show count for a given weekday.
+type WeekdayItem struct {
+	Weekday int    `json:"weekday"` // 0=周日 .. 6=周六
+	Name    string `json:"name"`
+	Count   int    `json:"count"`
+}
+
+// RewatchStats measures how often dramas / artists are seen more than once.
+type RewatchStats struct {
+	TotalDramas      int     `json:"total_dramas"`
+	RewatchedDramas  int     `json:"rewatched_dramas"`
+	DramaRate        float64 `json:"drama_rate"` // % of dramas seen >=2 times
+	TotalArtists     int     `json:"total_artists"`
+	RewatchedArtists int     `json:"rewatched_artists"`
+	ArtistRate       float64 `json:"artist_rate"` // % of artists seen >=2 times
+}
+
+// DiscoverPoint is one month's count of first-time-seen artists / dramas.
+type DiscoverPoint struct {
+	Period     string `json:"period"` // YYYY-MM
+	NewArtists int    `json:"new_artists"`
+	NewDramas  int    `json:"new_dramas"`
+}
+
+// DiversityIndex captures Shannon entropy / evenness of category, artist and
+// drama distributions — a high evenness means viewing is well balanced rather
+// than concentrated on a few favourites.
+type DiversityIndex struct {
+	CategoryEntropy  float64 `json:"category_entropy"`
+	CategoryEvenness float64 `json:"category_evenness"` // 0..1
+	ArtistEntropy    float64 `json:"artist_entropy"`
+	ArtistEvenness   float64 `json:"artist_evenness"`
+	DramaEntropy     float64 `json:"drama_entropy"`
+	DramaEvenness    float64 `json:"drama_evenness"`
+}
+
+// IntervalStats summarises gaps (in days) between consecutive performances.
+type IntervalStats struct {
+	Avg     float64    `json:"avg"`     // 平均间隔(天)
+	Median  float64    `json:"median"`  // 中位间隔(天)
+	Max     float64    `json:"max"`     // 最长间隔(天)
+	Buckets []DistItem `json:"buckets"` // 间隔分桶
+}
+
+// AnalyticsData is the full payload returned by /api/analytics, covering
+// trend, distribution, comparison, anomaly, correlation and ranking views.
+type AnalyticsData struct {
+	GeneratedAt    int64             `json:"generated_at"`
+	Overview       AnalyticsOverview `json:"overview"`
+	Trends         []TrendPoint      `json:"trends"`          // last 24 months
+	CategoryDist   []DistItem        `json:"category_dist"`   // multi-category expansion
+	ChannelDist    []DistItem        `json:"channel_dist"`    // 渠道占比
+	CompanyDist    []DistItem        `json:"company_dist"`    // 剧团占比
+	CityDist       []DistItem        `json:"city_dist"`       // 城市占比
+	RatingDist     []DistItem        `json:"rating_dist"`     // 评分分布 1..5
+	YearDist       []DistItem        `json:"year_dist"`       // 按年分布
+	CompareMonthly []ComparePoint    `json:"compare_monthly"` // 近12月同比
+	Anomalies      []Anomaly         `json:"anomalies"`       // 异常波动
+	CorrPairs      []CorrPair        `json:"corr_pairs"`      // 相关性
+	Scatter        []ScatterPoint    `json:"scatter"`         // 票价 vs 评分 散点
+	TopArtists     []RankItem        `json:"top_artists"`
+	TopDramas      []RankItem        `json:"top_dramas"`
+	TopVenues      []RankItem        `json:"top_venues"`
+
+	// 行为与经济的扩展维度
+	PriceBuckets  []DistItem        `json:"price_buckets"`  // 票价分桶
+	TopZhezis     []RankItem        `json:"top_zhezis"`     // 常看折子
+	Rewatch       *RewatchStats     `json:"rewatch"`        // 复看率
+	Discovery     []DiscoverPoint   `json:"discovery"`      // 每月新发现
+	Diversity     *DiversityIndex   `json:"diversity"`      // 多样性指数
+	Intervals     *IntervalStats    `json:"intervals"`      // 观演间隔
+	WeekdayDist   []WeekdayItem     `json:"weekday_dist"`   // 周几分布
+}
+
 // Settings / request structures are reused from config.
 type Settings struct {
 	Theme       string `json:"theme"`
