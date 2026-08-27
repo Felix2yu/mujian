@@ -140,6 +140,14 @@
 
   let dramaDragIdx = $state(-1);
   let dramaOverIdx = $state(-1);
+  let dramaOverBefore = $state(true);
+
+  function onDramaDragOver(e, i) {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    dramaOverIdx = i;
+    dramaOverBefore = e.clientY < rect.top + rect.height / 2;
+  }
 
   // 已关联剧目的内联编辑：不离开表单即可改名。剧种交由后端按「单独演出」自动聚合，
   // 这里不再暴露剧种编辑，避免改一场演出就污染该剧目的全部剧种展示（footgun）。
@@ -962,9 +970,10 @@
           class="ply-item"
           draggable={editingDramaId !== d.id ? 'true' : 'false'}
           class:dragging={dramaDragIdx === di}
-          class:drop-target={dramaOverIdx === di && dramaDragIdx !== di}
+          class:drop-before={dramaOverIdx === di && dramaDragIdx !== di && dramaOverBefore}
+          class:drop-after={dramaOverIdx === di && dramaDragIdx !== di && !dramaOverBefore}
           ondragstart={(e) => { dramaDragIdx = di; e.dataTransfer.effectAllowed = 'move'; }}
-          ondragover={(e) => { e.preventDefault(); dramaOverIdx = di; }}
+          ondragover={(e) => onDramaDragOver(e, di)}
           ondragleave={() => { if (dramaOverIdx === di) dramaOverIdx = -1; }}
           ondrop={(e) => { e.preventDefault(); onDramaDropAt(di); }}
           ondragend={() => { dramaDragIdx = -1; dramaOverIdx = -1; }}
@@ -1267,10 +1276,24 @@
   /* 剧目 / 折子 picker */
   .ply { display: flex; flex-direction: column; gap: 10px; }
   .ply-empty { padding: 8px 2px; }
-  .ply-item { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; background: var(--surface); cursor: grab; }
+  .ply-item { position: relative; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; background: var(--surface); cursor: grab; }
   .ply-item:active { cursor: grabbing; }
   .ply-item.dragging { opacity: 0.4; }
-  .ply-item.drop-target { outline: 2px dashed var(--accent); outline-offset: 2px; }
+  /* 拖拽插入指示 */
+  .ply-item.drop-before::before,
+  .ply-item.drop-after::after {
+    content: '';
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .ply-item.drop-before::before { top: -6px; }
+  .ply-item.drop-after::after { bottom: -6px; }
   .ply-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .ply-name { font-weight: 600; font-size: 14.5px; }
   .ply-ops { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; }
