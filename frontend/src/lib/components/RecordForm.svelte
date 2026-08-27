@@ -669,6 +669,8 @@
 </script>
 
 <form class="form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} onkeydown={(e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault(); }}>
+<div class="two-col">
+  <div class="col-left">
   <!-- ============ 基本信息 ============ -->
   <div class="card section">
     <h3>基本信息</h3>
@@ -1068,6 +1070,8 @@
     </div>
   </div>
 
+  </div><!-- .col-left -->
+  <div class="col-right">
   <!-- ============ 备注 ============ -->
   <div class="card section">
     <h3>备注</h3>
@@ -1096,6 +1100,8 @@
       </div>
     </div>
   </div>
+  </div><!-- .col-right -->
+</div><!-- .two-col -->
 
   {#if error}<div class="banner error">⚠ {error}</div>{/if}
 
@@ -1108,7 +1114,14 @@
 <CoverPicker open={pickerOpen} onSelect={pickCover} onClose={() => (pickerOpen = false)} />
 
 <style>
-  .form { display: flex; flex-direction: column; gap: 14px; max-width: 860px; margin: 0 auto; }
+  .form { display: flex; flex-direction: column; gap: 14px; max-width: 1100px; margin: 0 auto; }
+  /* 桌面端双列：左列放表单主体，右列放备注+封面 */
+  .two-col { display: flex; flex-direction: column; gap: 14px; }
+  @media (min-width: 860px) {
+    .two-col { flex-direction: row; gap: 16px; align-items: flex-start; }
+    .col-left { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+    .col-right { flex: 0 1 320px; min-width: 260px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 72px; }
+  }
   .section { padding: 18px 20px; }
   .section h3 { margin: 0 0 6px; font-size: 15.5px; color: var(--text-2); }
   .req { color: var(--accent); }
