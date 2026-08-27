@@ -668,7 +668,7 @@
   }
 </script>
 
-<form class="form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+<form class="form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} onkeydown={(e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault(); }}>
   <!-- ============ 基本信息 ============ -->
   <div class="card section">
     <h3>基本信息</h3>
