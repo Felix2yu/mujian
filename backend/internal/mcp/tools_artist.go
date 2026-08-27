@@ -15,7 +15,7 @@ type CreateArtistInput struct {
 	Aliases StringOrArray `json:"aliases,omitempty"`
 	Remark  string        `json:"remark,omitempty"`
 	Bio     string        `json:"bio,omitempty"`
-	DryRun  bool          `json:"dry_run,omitempty"`
+	DryRun *bool          `json:"dry_run,omitempty"`
 }
 
 type UpdateArtistInput struct {
@@ -24,12 +24,12 @@ type UpdateArtistInput struct {
 	Aliases *ArrayOp  `json:"aliases,omitempty"`
 	Remark  *string   `json:"remark,omitempty"`
 	Bio     *string   `json:"bio,omitempty"`
-	DryRun  bool      `json:"dry_run,omitempty"`
+	DryRun *bool      `json:"dry_run,omitempty"`
 }
 
 type DeleteArtistInput struct {
 	ID     string `json:"id"`
-	DryRun bool   `json:"dry_run,omitempty"`
+	DryRun *bool   `json:"dry_run,omitempty"`
 }
 
 // ---------- 工具实现 ----------
@@ -46,7 +46,7 @@ func (s *Server) handleCreateArtist(ctx context.Context, req *mcp.CallToolReques
 		Bio:     in.Bio,
 	}
 
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
 			"dry_run": true,
 			"artist":  a,
@@ -88,7 +88,7 @@ func (s *Server) handleUpdateArtist(ctx context.Context, req *mcp.CallToolReques
 		existing.Bio = *in.Bio
 	}
 
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
 			"dry_run":          true,
 			"artist_id":        existing.ID,
@@ -118,7 +118,7 @@ func (s *Server) handleDeleteArtist(ctx context.Context, req *mcp.CallToolReques
 	if err != nil {
 		return errResult("未找到演员「%s」", in.ID)
 	}
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
 			"dry_run":     true,
 			"artist_id":   a.ID,

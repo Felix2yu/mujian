@@ -15,7 +15,7 @@ type CreateDramaInput struct {
 	CategoryName  string        `json:"category_name,omitempty"`
 	CategoryNames StringOrArray `json:"category_names,omitempty"`
 	Remark        string        `json:"remark,omitempty"`
-	DryRun        bool          `json:"dry_run,omitempty"`
+	DryRun *bool          `json:"dry_run,omitempty"`
 }
 
 type UpdateDramaInput struct {
@@ -23,7 +23,7 @@ type UpdateDramaInput struct {
 	Name          *string  `json:"name,omitempty"`
 	CategoryNames []string `json:"category_names,omitempty"`
 	Remark        *string  `json:"remark,omitempty"`
-	DryRun        bool     `json:"dry_run,omitempty"`
+	DryRun *bool     `json:"dry_run,omitempty"`
 }
 
 // handleUpdateDrama updates a drama's editable fields via SaveDrama (upsert).
@@ -49,7 +49,7 @@ func (s *Server) handleUpdateDrama(ctx context.Context, req *mcp.CallToolRequest
 		d.Remark = *in.Remark
 	}
 
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
 			"dry_run":        true,
 			"drama_id":       d.ID,
@@ -80,7 +80,7 @@ func (s *Server) handleCreateDrama(ctx context.Context, req *mcp.CallToolRequest
 		Remark:        in.Remark,
 	}
 
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
 			"dry_run":        true,
 			"drama":          d,
@@ -96,7 +96,7 @@ func (s *Server) handleCreateDrama(ctx context.Context, req *mcp.CallToolRequest
 
 type DeleteDramaInput struct {
 	ID     string `json:"id"`
-	DryRun bool   `json:"dry_run,omitempty"`
+	DryRun *bool   `json:"dry_run,omitempty"`
 }
 
 // handleDeleteDrama deletes a drama and its zhezis.
@@ -108,7 +108,7 @@ func (s *Server) handleDeleteDrama(ctx context.Context, req *mcp.CallToolRequest
 	if err != nil {
 		return errResult("未找到剧目「%s」", in.ID)
 	}
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
 			"dry_run":   true,
 			"drama_id":  d.ID,

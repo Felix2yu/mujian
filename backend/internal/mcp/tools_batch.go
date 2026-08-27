@@ -13,14 +13,14 @@ import (
 type BatchCompanyByArtistInput struct {
 	ArtistName string `json:"artist_name"`
 	Company    string `json:"company"`
-	DryRun     bool   `json:"dry_run,omitempty"`
+	DryRun *bool   `json:"dry_run,omitempty"`
 }
 
 type BatchMergeVenuesInput struct {
 	SourceAddress   string `json:"source_address"`
 	TargetAddress   string `json:"target_address"`
 	SyncCoordinates bool   `json:"sync_coordinates,omitempty"`
-	DryRun          bool   `json:"dry_run,omitempty"`
+	DryRun *bool   `json:"dry_run,omitempty"`
 }
 
 type ArrayOp struct {
@@ -61,7 +61,7 @@ type BatchUpdateRecordsInput struct {
 	ArtistNames *ArrayOp `json:"artist_names,omitempty"`
 	TagIDs      *ArrayOp `json:"tag_ids,omitempty"`
 
-	DryRun bool `json:"dry_run,omitempty"`
+	DryRun *bool `json:"dry_run,omitempty"`
 }
 
 // ---------- 工具实现 ----------
@@ -99,7 +99,7 @@ func (s *Server) handleBatchUpdateCompanyByArtist(ctx context.Context, req *mcp.
 		ids = append(ids, r.ID)
 	}
 
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		type preview struct {
 			ID      string `json:"id"`
 			Name    string `json:"name"`
@@ -170,7 +170,7 @@ func (s *Server) handleBatchMergeVenues(ctx context.Context, req *mcp.CallToolRe
 		"target_records": targetCount,
 	}
 
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		summary["dry_run"] = true
 		return jsonResult(summary)
 	}
@@ -199,7 +199,7 @@ func (s *Server) handleBatchUpdateRecords(ctx context.Context, req *mcp.CallTool
 	}
 
 	// 收集非零的更新字段名，用于 dry_run 预览
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		type fieldChange struct {
 			Field string `json:"field"`
 			Value any    `json:"value"`

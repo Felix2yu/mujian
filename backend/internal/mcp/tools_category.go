@@ -14,18 +14,18 @@ type ListCategoriesInput struct{}
 
 type CreateCategoryInput struct {
 	Name   string `json:"name"`
-	DryRun bool   `json:"dry_run,omitempty"`
+	DryRun *bool   `json:"dry_run,omitempty"`
 }
 
 type UpdateCategoryInput struct {
 	ID     string  `json:"id"`
 	Name   *string `json:"name,omitempty"`
-	DryRun bool    `json:"dry_run,omitempty"`
+	DryRun *bool    `json:"dry_run,omitempty"`
 }
 
 type DeleteCategoryInput struct {
 	ID     string `json:"id"`
-	DryRun bool   `json:"dry_run,omitempty"`
+	DryRun *bool   `json:"dry_run,omitempty"`
 }
 
 // ---------- 工具实现 ----------
@@ -43,7 +43,7 @@ func (s *Server) handleCreateCategory(ctx context.Context, req *mcp.CallToolRequ
 		return errResult("name 不能为空")
 	}
 	c := &models.Category{Name: strings.TrimSpace(in.Name)}
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
 			"dry_run":  true,
 			"category": c,
@@ -77,7 +77,7 @@ func (s *Server) handleUpdateCategory(ctx context.Context, req *mcp.CallToolRequ
 	if in.Name != nil {
 		existing.Name = strings.TrimSpace(*in.Name)
 	}
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
 			"dry_run":        true,
 			"category_id":    existing.ID,
@@ -109,7 +109,7 @@ func (s *Server) handleDeleteCategory(ctx context.Context, req *mcp.CallToolRequ
 	if existing == nil {
 		return errResult("未找到分类「%s」", in.ID)
 	}
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
 			"dry_run":     true,
 			"category_id": existing.ID,

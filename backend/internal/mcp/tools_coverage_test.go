@@ -102,6 +102,7 @@ func TestMutationHandlers(t *testing.T) {
 		Price:    fltPtrT(199),
 		TagIDs:   &ArrayOp{Op: "append", Value: []string{"晚场"}},
 		CategoryNames: &ArrayOp{Op: "append", Value: []string{"苏剧"}},
+		DryRun:  boolPtr(false),
 	})
 	if err != nil || res.IsError {
 		t.Fatalf("batch_update_records: %v %v", res, err)
@@ -115,6 +116,7 @@ func TestMutationHandlers(t *testing.T) {
 	newName := "游园·惊梦"
 	if res, _, err := s.handleUpdateZhezi(ctx, nil, UpdateZheziInput{
 		ID: zheziID, Name: &newName, Aliases: []string{"堆花"}, Remark: strPtrT("经典折子"),
+		DryRun: boolPtr(false),
 	}); err != nil || res.IsError {
 		t.Fatalf("update_zhezi: %v %v", res, err)
 	}
@@ -123,10 +125,10 @@ func TestMutationHandlers(t *testing.T) {
 		t.Fatalf("zhezi after update: %+v %v", z, err)
 	}
 
-	if res, _, err := s.handleDeleteZhezi(ctx, nil, DeleteZheziInput{ID: zheziID}); err != nil || res.IsError {
+	if res, _, err := s.handleDeleteZhezi(ctx, nil, DeleteZheziInput{ID: zheziID, DryRun: boolPtr(false)}); err != nil || res.IsError {
 		t.Fatalf("delete_zhezi: %v %v", res, err)
 	}
-	if res, _, _ := s.handleDeleteZhezi(ctx, nil, DeleteZheziInput{ID: zheziID}); !res.IsError {
+	if res, _, _ := s.handleDeleteZhezi(ctx, nil, DeleteZheziInput{ID: zheziID, DryRun: boolPtr(false)}); !res.IsError {
 		t.Fatal("deleting twice should error")
 	}
 }

@@ -20,13 +20,13 @@ type CoverDuplicatesInput struct{}
 type MergeCoversInput struct {
 	Target string   `json:"target"`
 	Sources []string `json:"sources"`
-	DryRun  bool     `json:"dry_run,omitempty"`
+	DryRun *bool     `json:"dry_run,omitempty"`
 }
 
 type CoverOrphansInput struct{}
 
 type CleanupCoversInput struct {
-	DryRun bool `json:"dry_run,omitempty"`
+	DryRun *bool `json:"dry_run,omitempty"`
 }
 
 // ---------- 工具实现 ----------
@@ -77,7 +77,7 @@ func (s *Server) handleMergeCovers(ctx context.Context, req *mcp.CallToolRequest
 		merged = append(merged, map[string]any{"source": src, "ref_count": refs})
 	}
 
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
 			"dry_run":   true,
 			"target":    in.Target,
@@ -144,7 +144,7 @@ func (s *Server) handleCleanupCovers(ctx context.Context, req *mcp.CallToolReque
 		if err != nil || refs > 0 {
 			continue
 		}
-		if in.DryRun {
+		if dryRun(in.DryRun) {
 			cleaned = append(cleaned, c.FileName)
 			continue
 		}
@@ -155,7 +155,7 @@ func (s *Server) handleCleanupCovers(ctx context.Context, req *mcp.CallToolReque
 		"cleaned": cleaned,
 		"count":   len(cleaned),
 	}
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		result["dry_run"] = true
 	}
 	return jsonResult(result)

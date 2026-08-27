@@ -30,7 +30,7 @@
 
 ### 注意事项
 
-- 所有批量修改类工具都带 `dry_run` 参数（默认 false）；数据变更前先用 dry_run 展示影响范围，经用户确认再执行。
+- 所有变更类工具（增删改、批量更新、合并、清理等）都带 `dry_run` 参数，**默认 true（仅预览、不落库）**。调用方需显式传 `dry_run:false` 才会真正执行。即：不传 dry_run 先预览影响范围，确认无误后再以 `dry_run:false` 执行。
 - 场馆没有独立实体表，以 `records.address` 为隐式标识；剧团是 `records.company` 文本字段。
 - 演员、剧目、折子是一等实体（artists/dramas/zhezis 表 + 关联表）。
 - 数据库为 SQLite（WAL），MCP 进程与 HTTP 服务可同时运行。

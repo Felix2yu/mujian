@@ -101,7 +101,7 @@ func TestBatchUpdateCompanyByArtistDryRunThenApply(t *testing.T) {
 
 	// dry_run：只预览不写入。
 	res, _, err := s.handleBatchUpdateCompanyByArtist(context.Background(), nil,
-		BatchCompanyByArtistInput{ArtistName: "张军", Company: "上海昆剧团", DryRun: true})
+		BatchCompanyByArtistInput{ArtistName: "张军", Company: "上海昆剧团", DryRun: boolPtr(true)})
 	if err != nil {
 		t.Fatalf("dry run: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestBatchUpdateCompanyByArtistDryRunThenApply(t *testing.T) {
 
 	// 正式执行。
 	res, _, err = s.handleBatchUpdateCompanyByArtist(context.Background(), nil,
-		BatchCompanyByArtistInput{ArtistName: "张军", Company: "上海昆剧团"})
+		BatchCompanyByArtistInput{ArtistName: "张军", Company: "上海昆剧团", DryRun: boolPtr(false)})
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestBatchMergeVenues(t *testing.T) {
 
 	// dry_run。
 	res, _, err := s.handleBatchMergeVenues(context.Background(), nil,
-		BatchMergeVenuesInput{SourceAddress: "上海大剧院（西店）", TargetAddress: "上海大剧院", SyncCoordinates: true, DryRun: true})
+		BatchMergeVenuesInput{SourceAddress: "上海大剧院（西店）", TargetAddress: "上海大剧院", SyncCoordinates: true, DryRun: boolPtr(true)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestBatchMergeVenues(t *testing.T) {
 
 	// 执行合并 + 坐标同步。
 	res, _, err = s.handleBatchMergeVenues(context.Background(), nil,
-		BatchMergeVenuesInput{SourceAddress: "上海大剧院（西店）", TargetAddress: "上海大剧院", SyncCoordinates: true})
+		BatchMergeVenuesInput{SourceAddress: "上海大剧院（西店）", TargetAddress: "上海大剧院", SyncCoordinates: true, DryRun: boolPtr(false)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestBatchCreateZhezisSkipsExisting(t *testing.T) {
 	}
 
 	res, _, err := s.handleBatchCreateZhezis(context.Background(), nil,
-		BatchCreateZhezisInput{DramaID: drama.ID, Names: []string{"游园", "惊梦", "冥判", "拾画"}})
+		BatchCreateZhezisInput{DramaID: drama.ID, Names: []string{"游园", "惊梦", "冥判", "拾画"}, DryRun: boolPtr(false)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestBatchCreateZhezisSkipsExisting(t *testing.T) {
 
 	// 按名称解析剧目再写一次，别名也不应重复创建。
 	res, _, err = s.handleBatchCreateZhezis(context.Background(), nil,
-		BatchCreateZhezisInput{DramaName: "牡丹亭", Names: []string{"游园惊梦"}})
+		BatchCreateZhezisInput{DramaName: "牡丹亭", Names: []string{"游园惊梦"}, DryRun: boolPtr(false)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,6 +430,7 @@ func TestUpdateDrama(t *testing.T) {
 	res, _, err := s.handleUpdateDrama(context.Background(), nil, UpdateDramaInput{
 		ID:  d.ID,
 		Name: strPtrT("牡丹亭·珍藏版"),
+		DryRun: boolPtr(false),
 	})
 	if err != nil {
 		t.Fatalf("update_drama: %v", err)

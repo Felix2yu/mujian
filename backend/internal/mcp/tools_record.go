@@ -41,7 +41,7 @@ type CreateRecordInput struct {
 	PayPriceCurrency string `json:"pay_price_currency,omitempty"`
 	OtherCost    float64  `json:"other_cost,omitempty"`
 	OtherCostCurrency string `json:"other_cost_currency,omitempty"`
-	DryRun       bool     `json:"dry_run,omitempty"`
+	DryRun *bool     `json:"dry_run,omitempty"`
 }
 
 type UpdateRecordInput struct {
@@ -75,17 +75,17 @@ type UpdateRecordInput struct {
 	PayPriceCurrency *string `json:"pay_price_currency,omitempty"`
 	OtherCost    *float64 `json:"other_cost,omitempty"`
 	OtherCostCurrency *string `json:"other_cost_currency,omitempty"`
-	DryRun       bool     `json:"dry_run,omitempty"`
+	DryRun *bool     `json:"dry_run,omitempty"`
 }
 
 type DeleteRecordInput struct {
 	ID     string `json:"id"`
-	DryRun bool   `json:"dry_run,omitempty"`
+	DryRun *bool   `json:"dry_run,omitempty"`
 }
 
 type BatchDeleteRecordsInput struct {
 	IDs    []string `json:"ids"`
-	DryRun bool     `json:"dry_run,omitempty"`
+	DryRun *bool     `json:"dry_run,omitempty"`
 }
 
 // ---------- 工具实现 ----------
@@ -127,7 +127,7 @@ func (s *Server) handleCreateRecord(ctx context.Context, req *mcp.CallToolReques
 		OtherCostCurrency: in.OtherCostCurrency,
 	}
 
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
 			"dry_run": true,
 			"record":  r,
@@ -271,7 +271,7 @@ func (s *Server) handleUpdateRecord(ctx context.Context, req *mcp.CallToolReques
 		r.OtherCostCurrency = *in.OtherCostCurrency
 	}
 
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
 			"dry_run":  true,
 			"id":       in.ID,
@@ -295,7 +295,7 @@ func (s *Server) handleDeleteRecord(ctx context.Context, req *mcp.CallToolReques
 	if err != nil {
 		return errResult("未找到演出记录「%s」", in.ID)
 	}
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
 			"dry_run": true,
 			"id":      rec.ID,
@@ -313,7 +313,7 @@ func (s *Server) handleBatchDeleteRecords(ctx context.Context, req *mcp.CallTool
 	if len(in.IDs) == 0 {
 		return errResult("ids 不能为空")
 	}
-	if in.DryRun {
+	if dryRun(in.DryRun) {
 		var items []map[string]any
 		for _, id := range in.IDs {
 			if rec, err := s.db.GetRecord(id); err == nil {
