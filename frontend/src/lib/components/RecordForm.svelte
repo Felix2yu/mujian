@@ -1114,13 +1114,13 @@
 <CoverPicker open={pickerOpen} onSelect={pickCover} onClose={() => (pickerOpen = false)} />
 
 <style>
-  .form { display: flex; flex-direction: column; gap: 14px; max-width: 1100px; margin: 0 auto; }
+  .form { display: flex; flex-direction: column; gap: 14px; max-width: 1200px; margin: 0 auto; }
   /* 桌面端双列：左列放表单主体，右列放备注+封面 */
   .two-col { display: flex; flex-direction: column; gap: 14px; }
   @media (min-width: 860px) {
     .two-col { flex-direction: row; gap: 16px; align-items: flex-start; }
     .col-left { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
-    .col-right { flex: 0 1 320px; min-width: 260px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 72px; }
+    .col-right { flex: 0 1 400px; min-width: 300px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 72px; }
   }
   .section { padding: 18px 20px; }
   .section h3 { margin: 0 0 6px; font-size: 15.5px; color: var(--text-2); }
