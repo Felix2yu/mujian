@@ -10,11 +10,17 @@ import (
 
 // ---------- 输入类型 ----------
 
+type DeleteZheziInput struct {
+	ID     string `json:"id"`
+	DryRun bool   `json:"dry_run,omitempty"`
+}
+
 type BatchCreateZhezisInput struct {
 	DramaID   string   `json:"drama_id,omitempty"`
 	DramaName string   `json:"drama_name,omitempty"`
 	Names     []string `json:"names"`
 	Remark    string   `json:"remark,omitempty"`
+	DryRun    bool     `json:"dry_run,omitempty"`
 }
 
 type UpdateZheziInput struct {
@@ -22,6 +28,7 @@ type UpdateZheziInput struct {
 	Name    *string  `json:"name,omitempty"`
 	Aliases []string `json:"aliases,omitempty"`
 	Remark  *string  `json:"remark,omitempty"`
+	DryRun  bool     `json:"dry_run,omitempty"`
 }
 
 // ---------- 工具实现 ----------
@@ -60,6 +67,11 @@ func (s *Server) handleBatchCreateZhezis(ctx context.Context, req *mcp.CallToolR
 			skipped = append(skipped, name)
 			continue
 		}
+		if in.DryRun {
+			created = append(created, name)
+			have[name] = true
+			continue
+		}
 		z := models.Zhezi{DramaID: drama.ID, Name: name, Aliases: []string{}, Remark: in.Remark}
 		if _, err := s.db.CreateZhezi(z); err != nil {
 			return errResult("创建折子「%s」失败：%v", name, err)
@@ -68,12 +80,17 @@ func (s *Server) handleBatchCreateZhezis(ctx context.Context, req *mcp.CallToolR
 		created = append(created, name)
 	}
 
-	return jsonResult(map[string]any{
+	summary := map[string]any{
 		"drama":          drama.Name,
 		"created":        created,
 		"skipped_exists": skipped,
-		"total_zhezis":   len(existing) + len(created),
-	})
+	}
+	if in.DryRun {
+		summary["dry_run"] = true
+	} else {
+		summary["total_zhezis"] = len(existing) + len(created)
+	}
+	return jsonResult(summary)
 }
 
 // handleUpdateZhezi partially updates a zhezi: only provided fields change.
@@ -82,6 +99,9 @@ func (s *Server) handleUpdateZhezi(ctx context.Context, req *mcp.CallToolRequest
 	if err != nil {
 		return errResult("折子不存在：%v", err)
 	}
+	origName := current.Name
+	origAliases := current.Aliases
+	origRemark := current.Remark
 	if in.Name != nil && strings.TrimSpace(*in.Name) != "" {
 		current.Name = strings.TrimSpace(*in.Name)
 	}
@@ -91,6 +111,20 @@ func (s *Server) handleUpdateZhezi(ctx context.Context, req *mcp.CallToolRequest
 	if in.Remark != nil {
 		current.Remark = *in.Remark
 	}
+
+	if in.DryRun {
+		return jsonResult(map[string]any{
+			"dry_run":          true,
+			"zhezi_id":         current.ID,
+			"original_name":    origName,
+			"name":             current.Name,
+			"original_aliases": origAliases,
+			"aliases":          current.Aliases,
+			"original_remark":  origRemark,
+			"remark":           current.Remark,
+		})
+	}
+
 	updated, err := s.db.UpdateZhezi(models.Zhezi{
 		ID:      current.ID,
 		Name:    current.Name,
@@ -103,9 +137,19 @@ func (s *Server) handleUpdateZhezi(ctx context.Context, req *mcp.CallToolRequest
 	return jsonResult(updated)
 }
 
-func (s *Server) handleDeleteZhezi(ctx context.Context, req *mcp.CallToolRequest, in IDInput) (*mcp.CallToolResult, any, error) {
-	if _, err := s.db.GetZhezi(in.ID); err != nil {
+func (s *Server) handleDeleteZhezi(ctx context.Context, req *mcp.CallToolRequest, in DeleteZheziInput) (*mcp.CallToolResult, any, error) {
+	z, err := s.db.GetZhezi(in.ID)
+	if err != nil {
 		return errResult("折子不存在：%v", err)
+	}
+	if in.DryRun {
+		return jsonResult(map[string]any{
+			"dry_run":   true,
+			"zhezi_id":  z.ID,
+			"name":      z.Name,
+			"drama_id":  z.DramaID,
+			"aliases":   z.Aliases,
+		})
 	}
 	if err := s.db.DeleteZhezi(in.ID); err != nil {
 		return errResult("删除失败：%v", err)

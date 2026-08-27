@@ -16,7 +16,9 @@
 
   // 封面灯箱：点击放大查看
   let lightbox = $state(false);
-  const coverSrc = $derived(rec?.coverFile || rec?.coverThumb || '');
+  // 列表/详情显示缩略图优先，灯箱使用原图
+  const thumbSrc = $derived(rec?.coverThumb || rec?.coverFile || '');
+  const fullSrc = $derived(rec?.coverFile || rec?.coverThumb || '');
 
   // 灯箱打开时锁定背景滚动，Esc 关闭
   $effect(() => {
@@ -30,7 +32,7 @@
   }
 
   function openLightbox() {
-    if (coverSrc) lightbox = true;
+    if (fullSrc) lightbox = true;
   }
 
   function dramaName(id) {
@@ -111,17 +113,17 @@
     <div class="hero card">
       <div
         class="cover"
-        class:zoomable={!!coverSrc}
-        role={coverSrc ? 'button' : undefined}
-        tabindex={coverSrc ? 0 : undefined}
-        aria-label={coverSrc ? '放大查看封面' : undefined}
+        class:zoomable={!!fullSrc}
+        role={fullSrc ? 'button' : undefined}
+        tabindex={fullSrc ? 0 : undefined}
+        aria-label={fullSrc ? '放大查看封面' : undefined}
         onclick={openLightbox}
         onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLightbox(); } }}
       >
-        {#if rec.coverFile}
-          <img src={coverUrl(rec.coverFile)} alt={rec.name} />
-        {:else if rec.coverThumb}
+        {#if rec.coverThumb}
           <img src={coverUrl(rec.coverThumb)} alt={rec.name} />
+        {:else if rec.coverFile}
+          <img src={coverUrl(rec.coverFile)} alt={rec.name} />
         {:else}
           <div class="no-cover"><span>{(rec.name || '?').slice(0, 1)}</span></div>
         {/if}
@@ -261,9 +263,9 @@
   </div>
 {/if}
 
-{#if lightbox && coverSrc}
+{#if lightbox && fullSrc}
   <button type="button" class="lightbox" onclick={() => (lightbox = false)} aria-label="关闭大图" transition:fade={{ duration: 150 }}>
-    <img src={coverUrl(coverSrc)} alt={rec.name} transition:scale={{ start: 0.96, duration: 180 }} />
+    <img src={coverUrl(fullSrc)} alt={rec.name} transition:scale={{ start: 0.96, duration: 180 }} />
   </button>
 {/if}
 

@@ -123,10 +123,10 @@ func TestMutationHandlers(t *testing.T) {
 		t.Fatalf("zhezi after update: %+v %v", z, err)
 	}
 
-	if res, _, err := s.handleDeleteZhezi(ctx, nil, IDInput{ID: zheziID}); err != nil || res.IsError {
+	if res, _, err := s.handleDeleteZhezi(ctx, nil, DeleteZheziInput{ID: zheziID}); err != nil || res.IsError {
 		t.Fatalf("delete_zhezi: %v %v", res, err)
 	}
-	if res, _, _ := s.handleDeleteZhezi(ctx, nil, IDInput{ID: zheziID}); !res.IsError {
+	if res, _, _ := s.handleDeleteZhezi(ctx, nil, DeleteZheziInput{ID: zheziID}); !res.IsError {
 		t.Fatal("deleting twice should error")
 	}
 }

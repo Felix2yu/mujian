@@ -113,30 +113,124 @@ func (s *Server) registerTools() {
 
 	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "batch_update_records",
-		Description: "通用批量更新演出记录（按 ID 列表）。标量字段直接赋值（name/分类/评分/状态/城市/场馆/渠道/剧团/同行/备注/座位/date_text 演出时间/coordinate 坐标/票价等金额字段）；数组字段（drama_ids/zhezi_ids/artist_names/play/guest/tag_ids/category_names 多剧种）支持 set/append/remove 三种操作。",
+		Description: "通用批量更新演出记录（按 ID 列表）。标量字段直接赋值（name/分类/评分/状态/城市/场馆/渠道/剧团/同行/备注/座位/date_text 演出时间/coordinate 坐标/票价等金额字段）；数组字段（drama_ids/zhezi_ids/artist_names/play/guest/tag_ids/category_names 多剧种）支持 set/append/remove 三种操作。dry_run=true 时只预览变更而不修改。",
 	}, s.handleBatchUpdateRecords)
+
+	// ---- 演出记录 CRUD ----
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "create_record",
+		Description: "创建一条新的演出记录。name 必填，其余字段可选。dry_run=true 时只预览不创建。",
+	}, s.handleCreateRecord)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "update_record",
+		Description: "更新单条演出记录的任意字段（nil 保持不变）。支持标量字段直接赋值和数组字段 set/append/remove。dry_run=true 时只预览不修改。",
+	}, s.handleUpdateRecord)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "delete_record",
+		Description: "删除单条演出记录。dry_run=true 时只预览不删除。",
+	}, s.handleDeleteRecord)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "batch_delete_records",
+		Description: "批量删除多条演出记录（按 ID 列表）。dry_run=true 时只预览不删除。",
+	}, s.handleBatchDeleteRecords)
 
 	// ---- 剧目管理 ----
 	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "create_drama",
+		Description: "创建新剧目档案。name 必填，剧种默认由关联演出自动聚合。dry_run=true 时只预览不创建。",
+	}, s.handleCreateDrama)
+
+	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "update_drama",
-		Description: "更新剧目档案的名称/备注/剧种。剧种默认由关联演出自动聚合；category_names 提供非空列表时手动覆盖（用于修正拼盘演出导致的聚合偏差），空数组则清除覆盖回到自动。未提供的字段保持不变。",
+		Description: "更新剧目档案的名称/备注/剧种。剧种默认由关联演出自动聚合；category_names 提供非空列表时手动覆盖（用于修正拼盘演出导致的聚合偏差），空数组则清除覆盖回到自动。未提供的字段保持不变。dry_run=true 时只预览不修改。",
 	}, s.handleUpdateDrama)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "delete_drama",
+		Description: "删除剧目及其所有折子。dry_run=true 时只预览不删除。",
+	}, s.handleDeleteDrama)
 
 	// ---- 折子管理 ----
 	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "batch_create_zhezis",
-		Description: "为剧目批量创建折子（自动跳过该剧目下已存在的同名折子）。配合网络搜索到的「常演折子」清单一次性写入。返回新建与跳过的清单。",
+		Description: "为剧目批量创建折子（自动跳过该剧目下已存在的同名折子）。配合网络搜索到的「常演折子」清单一次性写入。返回新建与跳过的清单。dry_run=true 时只预览不创建。",
 	}, s.handleBatchCreateZhezis)
 
 	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "update_zhezi",
-		Description: "更新折子的名称/别名/备注。",
+		Description: "更新折子的名称/别名/备注。dry_run=true 时只预览不修改。",
 	}, s.handleUpdateZhezi)
 
 	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "delete_zhezi",
-		Description: "删除折子（同时解除与所有演出记录的关联）。",
+		Description: "删除折子（同时解除与所有演出记录的关联）。dry_run=true 时只预览不删除。",
 	}, s.handleDeleteZhezi)
+
+	// ---- 演员管理 ----
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "create_artist",
+		Description: "创建新演员档案。name 必填，可附带别名和简介。dry_run=true 时只预览不创建。",
+	}, s.handleCreateArtist)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "update_artist",
+		Description: "更新演员的名称/别名/备注/简介。未提供的字段保持不变。dry_run=true 时只预览不修改。",
+	}, s.handleUpdateArtist)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "delete_artist",
+		Description: "删除演员档案（同时解除与演出记录的关联）。dry_run=true 时只预览不删除。",
+	}, s.handleDeleteArtist)
+
+	// ---- 分类管理 ----
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "list_categories",
+		Description: "列出所有分类（剧种），含演出计数和排序。",
+	}, s.handleListCategories)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "create_category",
+		Description: "创建新分类。name 必填。dry_run=true 时只预览不创建。",
+	}, s.handleCreateCategory)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "update_category",
+		Description: "更新分类名称。dry_run=true 时只预览不修改。",
+	}, s.handleUpdateCategory)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "delete_category",
+		Description: "删除分类。dry_run=true 时只预览不删除。",
+	}, s.handleDeleteCategory)
+
+	// ---- 封面管理 ----
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "list_covers",
+		Description: "列出封面（去重），支持按文件名查询，含引用计数。",
+	}, s.handleListCovers)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "cover_duplicates",
+		Description: "查找内容哈希相同的重复封面分组。",
+	}, s.handleCoverDuplicates)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "merge_covers",
+		Description: "合并重复封面：将 sources 的引用全部指向 target，然后删除 sources。dry_run=true 时只预览不修改。",
+	}, s.handleMergeCovers)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "cover_orphans",
+		Description: "查找没有被任何演出记录引用的孤立封面文件。",
+	}, s.handleCoverOrphans)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "cleanup_covers",
+		Description: "清理所有孤立封面（无引用的文件）。dry_run=true 时只预览不删除。",
+	}, s.handleCleanupCovers)
 }
 
 // jsonResult renders v as pretty JSON text content for the model.

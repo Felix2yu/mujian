@@ -60,6 +60,8 @@ type BatchUpdateRecordsInput struct {
 	Guest       *ArrayOp `json:"guest,omitempty"`
 	ArtistNames *ArrayOp `json:"artist_names,omitempty"`
 	TagIDs      *ArrayOp `json:"tag_ids,omitempty"`
+
+	DryRun bool `json:"dry_run,omitempty"`
 }
 
 // ---------- 工具实现 ----------
@@ -195,6 +197,100 @@ func (s *Server) handleBatchUpdateRecords(ctx context.Context, req *mcp.CallTool
 	if len(in.IDs) == 0 {
 		return errResult("ids 不能为空")
 	}
+
+	// 收集非零的更新字段名，用于 dry_run 预览
+	if in.DryRun {
+		type fieldChange struct {
+			Field string `json:"field"`
+			Value any    `json:"value"`
+		}
+		var changes []fieldChange
+		if in.Name != nil {
+			changes = append(changes, fieldChange{"name", *in.Name})
+		}
+		if in.CategoryName != nil {
+			changes = append(changes, fieldChange{"category_name", *in.CategoryName})
+		}
+		if in.CategoryNames != nil {
+			changes = append(changes, fieldChange{"category_names", in.CategoryNames})
+		}
+		if in.Rating != nil {
+			changes = append(changes, fieldChange{"rating", *in.Rating})
+		}
+		if in.ActiveStatus != nil {
+			changes = append(changes, fieldChange{"active_status", *in.ActiveStatus})
+		}
+		if in.City != nil {
+			changes = append(changes, fieldChange{"city", *in.City})
+		}
+		if in.Address != nil {
+			changes = append(changes, fieldChange{"address", *in.Address})
+		}
+		if in.Channel != nil {
+			changes = append(changes, fieldChange{"channel", *in.Channel})
+		}
+		if in.Company != nil {
+			changes = append(changes, fieldChange{"company", *in.Company})
+		}
+		if in.Friends != nil {
+			changes = append(changes, fieldChange{"friends", *in.Friends})
+		}
+		if in.Remark != nil {
+			changes = append(changes, fieldChange{"remark", *in.Remark})
+		}
+		if in.Seat != nil {
+			changes = append(changes, fieldChange{"seat", *in.Seat})
+		}
+		if in.DateText != nil {
+			changes = append(changes, fieldChange{"date_text", *in.DateText})
+		}
+		if in.Coordinate != nil {
+			changes = append(changes, fieldChange{"coordinate", in.Coordinate})
+		}
+		if in.Price != nil {
+			changes = append(changes, fieldChange{"price", *in.Price})
+		}
+		if in.PriceCurrency != nil {
+			changes = append(changes, fieldChange{"price_currency", *in.PriceCurrency})
+		}
+		if in.PayPrice != nil {
+			changes = append(changes, fieldChange{"pay_price", *in.PayPrice})
+		}
+		if in.PayPriceCurrency != nil {
+			changes = append(changes, fieldChange{"pay_price_currency", *in.PayPriceCurrency})
+		}
+		if in.OtherCost != nil {
+			changes = append(changes, fieldChange{"other_cost", *in.OtherCost})
+		}
+		if in.OtherCostCurrency != nil {
+			changes = append(changes, fieldChange{"other_cost_currency", *in.OtherCostCurrency})
+		}
+		if in.DramaIDs != nil {
+			changes = append(changes, fieldChange{"drama_ids", in.DramaIDs})
+		}
+		if in.ZheziIDs != nil {
+			changes = append(changes, fieldChange{"zhezi_ids", in.ZheziIDs})
+		}
+		if in.Play != nil {
+			changes = append(changes, fieldChange{"play", in.Play})
+		}
+		if in.Guest != nil {
+			changes = append(changes, fieldChange{"guest", in.Guest})
+		}
+		if in.ArtistNames != nil {
+			changes = append(changes, fieldChange{"artist_names", in.ArtistNames})
+		}
+		if in.TagIDs != nil {
+			changes = append(changes, fieldChange{"tag_ids", in.TagIDs})
+		}
+		return jsonResult(map[string]any{
+			"dry_run":  true,
+			"requested": len(in.IDs),
+			"ids":      in.IDs,
+			"changes":  changes,
+		})
+	}
+
 	params := models.BatchUpdateParams{
 		IDs:               in.IDs,
 		Name:              in.Name,
