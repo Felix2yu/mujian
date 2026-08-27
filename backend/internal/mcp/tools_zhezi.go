@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"mujian/internal/models"
 	"strings"
 
@@ -10,17 +11,44 @@ import (
 
 // ---------- 输入类型 ----------
 
+// StringOrArray accepts both a JSON array and a comma-separated string,
+// normalizing to []string. This works around MCP clients that stringify
+// array parameters.
+type StringOrArray []string
+
+func (s *StringOrArray) UnmarshalJSON(data []byte) error {
+	// Try array first.
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err == nil {
+		*s = arr
+		return nil
+	}
+	// Fall back to comma-separated string.
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	var result []string
+	for _, part := range strings.Split(str, ",") {
+		if t := strings.TrimSpace(part); t != "" {
+			result = append(result, t)
+		}
+	}
+	*s = result
+	return nil
+}
+
 type DeleteZheziInput struct {
 	ID     string `json:"id"`
 	DryRun bool   `json:"dry_run,omitempty"`
 }
 
 type BatchCreateZhezisInput struct {
-	DramaID   string   `json:"drama_id,omitempty"`
-	DramaName string   `json:"drama_name,omitempty"`
-	Names     []string `json:"names"`
-	Remark    string   `json:"remark,omitempty"`
-	DryRun    bool     `json:"dry_run,omitempty"`
+	DramaID   string        `json:"drama_id,omitempty"`
+	DramaName string        `json:"drama_name,omitempty"`
+	Names     StringOrArray `json:"names"`
+	Remark    string        `json:"remark,omitempty"`
+	DryRun    bool          `json:"dry_run,omitempty"`
 }
 
 type UpdateZheziInput struct {

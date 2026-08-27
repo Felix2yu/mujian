@@ -11,11 +11,11 @@ import (
 // ---------- 输入类型 ----------
 
 type CreateArtistInput struct {
-	Name    string   `json:"name"`
-	Aliases []string `json:"aliases,omitempty"`
-	Remark  string   `json:"remark,omitempty"`
-	Bio     string   `json:"bio,omitempty"`
-	DryRun  bool     `json:"dry_run,omitempty"`
+	Name    string        `json:"name"`
+	Aliases StringOrArray `json:"aliases,omitempty"`
+	Remark  string        `json:"remark,omitempty"`
+	Bio     string        `json:"bio,omitempty"`
+	DryRun  bool          `json:"dry_run,omitempty"`
 }
 
 type UpdateArtistInput struct {

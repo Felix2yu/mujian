@@ -11,11 +11,11 @@ import (
 // ---------- 输入类型 ----------
 
 type CreateDramaInput struct {
-	Name          string   `json:"name"`
-	CategoryName  string   `json:"category_name,omitempty"`
-	CategoryNames []string `json:"category_names,omitempty"`
-	Remark        string   `json:"remark,omitempty"`
-	DryRun        bool     `json:"dry_run,omitempty"`
+	Name          string        `json:"name"`
+	CategoryName  string        `json:"category_name,omitempty"`
+	CategoryNames StringOrArray `json:"category_names,omitempty"`
+	Remark        string        `json:"remark,omitempty"`
+	DryRun        bool          `json:"dry_run,omitempty"`
 }
 
 type UpdateDramaInput struct {

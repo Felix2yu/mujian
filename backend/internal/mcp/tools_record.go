@@ -20,14 +20,14 @@ type CreateRecordInput struct {
 	CoverFile    string   `json:"cover_file,omitempty"`
 	CoverThumb   string   `json:"cover_thumb,omitempty"`
 	CategoryName string   `json:"category_name,omitempty"`
-	CategoryNames []string `json:"category_names,omitempty"`
-	ArtistIDs    []string `json:"artist_ids,omitempty"`
-	ArtistNames  []string `json:"artist_names,omitempty"`
-	Guest        []string `json:"guest,omitempty"`
-	Play         []string `json:"play,omitempty"`
-	DramaIDs     []string `json:"drama_ids,omitempty"`
-	ZheziIDs     []string `json:"zhezi_ids,omitempty"`
-	TagIDs       []string `json:"tag_ids,omitempty"`
+	CategoryNames StringOrArray `json:"category_names,omitempty"`
+	ArtistIDs    StringOrArray `json:"artist_ids,omitempty"`
+	ArtistNames  StringOrArray `json:"artist_names,omitempty"`
+	Guest        StringOrArray `json:"guest,omitempty"`
+	Play         StringOrArray `json:"play,omitempty"`
+	DramaIDs     StringOrArray `json:"drama_ids,omitempty"`
+	ZheziIDs     StringOrArray `json:"zhezi_ids,omitempty"`
+	TagIDs       StringOrArray `json:"tag_ids,omitempty"`
 	DateText     string   `json:"date_text,omitempty"`
 	Rating       int      `json:"rating,omitempty"`
 	Seat         string   `json:"seat,omitempty"`
