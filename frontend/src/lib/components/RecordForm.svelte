@@ -667,22 +667,21 @@
     return out;
   }
 
-  // 双列等高：动态调整备注框高度，使左右列总高一致
+  // 双列等高：直接操作 DOM 设置备注框高度，避免状态更新引起 ResizeObserver 循环
   let colLeftEl = $state(null);
   let colRightEl = $state(null);
-  let remarkSectionEl = $state(null);
-  let remarkH = $state(160);
+  let remarkTextarea = $state(null);
 
   $effect(() => {
-    if (!colLeftEl || !colRightEl || !remarkSectionEl) return;
+    if (!colLeftEl || !colRightEl || !remarkTextarea) return;
     const ro = new ResizeObserver(() => {
       const leftH = colLeftEl.offsetHeight;
       const rightH = colRightEl.offsetHeight;
-      if (leftH > rightH) {
-        const diff = leftH - rightH;
-        remarkH = Math.max(80, 160 + diff);
+      const diff = leftH - rightH;
+      if (diff > 0) {
+        remarkTextarea.style.minHeight = (160 + diff) + 'px';
       } else {
-        remarkH = 160;
+        remarkTextarea.style.minHeight = '';
       }
     });
     ro.observe(colLeftEl);
@@ -1096,9 +1095,9 @@
   </div><!-- .col-left -->
   <div class="col-right" bind:this={colRightEl}>
   <!-- ============ 备注 ============ -->
-  <div class="card section" bind:this={remarkSectionEl}>
+  <div class="card section">
     <h3>备注</h3>
-    <textarea class="input" rows="8" style:min-height={remarkH + 'px'} bind:value={form.remark} placeholder="剧评、观感、备忘…"></textarea>
+    <textarea class="input" rows="8" bind:this={remarkTextarea} bind:value={form.remark} placeholder="剧评、观感、备忘…"></textarea>
   </div>
 
   <!-- ============ 封面 ============ -->
