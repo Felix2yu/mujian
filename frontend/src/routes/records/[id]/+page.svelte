@@ -40,19 +40,34 @@
   }
 
   // 按剧名分组折子：[{ dramaName, dramaId, zhezis: [{id, name}] }]
+  // 同时包含有折子和无折子的剧目（从 drama_ids 补齐）
   const groupedZhezis = $derived.by(() => {
-    if (!rec?.zhezi_ids?.length) return [];
     const groups = [];
-    for (const zid of rec.zhezi_ids) {
+    const groupMap = new Map();
+
+    // 先从 drama_ids 建立所有剧目的空组
+    for (const did of rec?.drama_ids || []) {
+      const d = dramaMap.get(did);
+      if (!d) continue;
+      const g = { dramaName: d.name, dramaId: d.id, zhezis: [] };
+      groups.push(g);
+      groupMap.set(d.id, g);
+    }
+
+    // 将折子归入对应剧目组
+    for (const zid of rec?.zhezi_ids || []) {
       const z = zheziMap.get(zid);
       if (!z) continue;
-      let g = groups.find((g) => g.dramaName === z.dramaName);
+      let g = groupMap.get(z.dramaId);
       if (!g) {
+        // 折子所属剧目不在 drama_ids 中（数据不一致），兜底新建组
         g = { dramaName: z.dramaName, dramaId: z.dramaId, zhezis: [] };
         groups.push(g);
+        groupMap.set(z.dramaId, g);
       }
       g.zhezis.push({ id: z.id, name: z.name });
     }
+
     return groups;
   });
 
@@ -179,7 +194,7 @@
         {#if groupedZhezis.length}
           <h3>剧目、折子</h3>
           <div class="zhezis-line">
-            {#each groupedZhezis as g, gi (g.dramaName)}
+            {#each groupedZhezis as g, gi (g.dramaId || g.dramaName)}
               <!-- 这里 gi 是剧目组的索引，组间不需要分隔符 -->
               <!-- 剧名：为非首个剧目添加左间距以区分 -->
               {#if g.dramaId}
@@ -189,25 +204,19 @@
               {:else}
                 <span class="tag zhezi-tag zdrama {gi > 0 ? 'zdrama-gap' : ''}">{g.dramaName}</span>
               {/if}
-              <!-- 折子列表：内部用顿号分隔 -->
+              <!-- 折子列表：内部用顿号分隔；无折子时仅显示剧名 -->
               {#each g.zhezis as z, i (z.id)}
                 {#if i > 0}<span class="comma">、</span>{/if}
                 <a class="zlink" href={`/?zhezi=${encodeURIComponent(z.id)}`} title={`「${z.name}」演出列表`}>{z.name}</a>
               {/each}
             {/each}
           </div>
-        {:else if rec.drama_ids?.length || rec.play?.length}
+        {:else if rec.play?.length}
           <h3>剧目</h3>
           <div class="tags">
-            {#if rec.drama_ids?.length}
-              {#each rec.drama_ids as did}
-                <a class="tag" href={`/dramas/${did}`} title="查看剧目详情">{dramaMap.get(did)?.name || '剧目'}</a>
-              {/each}
-            {:else}
-              {#each rec.play as p}
-                <a class="tag" href={`/?q=${encodeURIComponent(p)}`}>{p}</a>
-              {/each}
-            {/if}
+            {#each rec.play as p}
+              <a class="tag" href={`/?q=${encodeURIComponent(p)}`}>{p}</a>
+            {/each}
           </div>
         {/if}
       </div>
