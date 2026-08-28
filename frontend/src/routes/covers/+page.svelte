@@ -260,7 +260,7 @@
   }
   .grow:hover { border-color: var(--accent); }
   .grow input, .orow input { accent-color: var(--accent); width: 16px; height: 16px; flex: 0 0 auto; }
-  .grow img { width: 44px; height: 60px; object-fit: cover; border-radius: 6px; flex: 0 0 auto; }
+  .grow img { width: 44px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 6px; flex: 0 0 auto; }
   .ginfo { min-width: 0; }
   .gname { font-weight: 600; font-size: 14px; }
   .grecs { font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -277,7 +277,7 @@
     transition: background var(--t-fast) var(--ease);
   }
   .orow:hover { background: var(--surface-2); }
-  .orow img { width: 30px; height: 40px; object-fit: cover; border-radius: 5px; flex: 0 0 auto; }
+  .orow img { width: 30px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 5px; flex: 0 0 auto; }
   .oname { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono, monospace); }
   .osize { flex: 0 0 auto; }
 </style>

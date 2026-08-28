@@ -97,10 +97,33 @@ body {
   transition: background var(--t-med) var(--ease), color var(--t-med) var(--ease);
 }
 a { color: inherit; text-decoration: none; }
-button { font-family: inherit; }
-h1, h2, h3, h4 { font-family: var(--font-serif); font-weight: 600; letter-spacing: 0.01em; }
+  button { font-family: inherit; }
+  h1, h2, h3, h4 {
+    font-family: var(--font-serif); font-weight: 600; letter-spacing: 0.01em;
+    scroll-margin-top: 80px; /* sticky 顶栏不遮挡锚点跳转 */
+    text-wrap: balance;
+  }
+  h1 { text-wrap: pretty; }
 
-::selection { background: var(--accent-soft); }
+  /* 触控优化：禁用双击缩放延迟 + 移动端 tap 高亮 */
+  button, a, .card-hover, .pill, .tag, [role='button'] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* 全局键盘聚焦样式 —— 鼠标点击不触发，键盘 Tab 才显环 */
+  :focus { outline: none; }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  button:focus-visible, a:focus-visible { border-radius: var(--radius-sm); }
+  input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: none; /* 让 .input:focus 的 accent ring 生效即可 */
+  }
+
+  ::selection { background: var(--accent-soft); }
 
 /* ============ 卡片 ============ */
 .card {
@@ -120,22 +143,25 @@ h1, h2, h3, h4 { font-family: var(--font-serif); font-weight: 600; letter-spacin
 
 /* ============ 按钮 ============ */
 .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all var(--t-fast) var(--ease);
-  box-shadow: var(--shadow-xs);
-}
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease),
+      background var(--t-fast) var(--ease),
+      transform var(--t-fast) var(--ease);
+    box-shadow: var(--shadow-xs);
+  }
 .btn:hover { border-color: var(--accent); color: var(--accent); }
 .btn:active { transform: scale(0.97); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
@@ -176,12 +202,16 @@ h1, h2, h3, h4 { font-family: var(--font-serif); font-weight: 600; letter-spacin
     background var(--t-fast) var(--ease);
 }
 .input:hover { border-color: var(--border-strong); }
-.input:focus {
-  outline: none;
-  border-color: var(--accent);
-  background: var(--surface);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
+  .input:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--surface);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .input:focus {
+    /* 保留 :focus 兼容程序化 focus()，但视觉效果与 :focus-visible 一致，由后者决定出不出环 */
+    outline: none;
+  }
 .input::placeholder { color: var(--text-3); }
 .input:not(textarea) { height: 40px; }
 select.input {
@@ -227,17 +257,20 @@ label { display: block; font-size: 13px; font-weight: 500; color: var(--text-2);
 a.pill:hover { background: var(--accent); color: #fff; }
 
 .tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-3);
-  color: var(--text-2);
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  transition: all var(--t-fast) var(--ease);
-}
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--surface-3);
+    color: var(--text-2);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease),
+      border-color var(--t-fast) var(--ease),
+      transform var(--t-fast) var(--ease);
+  }
 a.tag:hover { background: var(--accent-soft); color: var(--accent); }
 
 /* ============ 文本 / 工具 ============ */
@@ -315,3 +348,32 @@ a.tag:hover { background: var(--accent-soft); color: var(--accent); }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; border: 2px solid var(--bg); }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ============ Skip Link ============ */
+.skip-link {
+  position: absolute;
+  top: -100px; left: 16px;
+  z-index: 9999;
+  background: var(--accent);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: var(--shadow-md);
+  transition: top 0.2s var(--ease);
+}
+.skip-link:focus { top: 12px; }
+
+/* ============ prefers-reduced-motion ============ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton { animation: none !important; }
+  .fade-up, .stagger > * { animation: none !important; opacity: 1 !important; transform: none !important; }
+}

@@ -115,4 +115,5 @@
   .legend .lg-val { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; display: flex; align-items: baseline; gap: 5px; }
   .legend .lg-pct { font-size: 11px; color: var(--text-muted); font-weight: 500; }
   .empty-state { width: 100%; padding: 42px 10px; text-align: center; color: var(--text-muted); font-size: 13px; }
+  svg circle[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 999px; }
 </style>

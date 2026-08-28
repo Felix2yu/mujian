@@ -237,7 +237,7 @@
   .del {
     border: none; background: none; color: var(--text-3); cursor: pointer; font-size: 12px;
     width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-    transition: all var(--t-fast) var(--ease); flex: 0 0 auto; align-self: flex-start;
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease); flex: 0 0 auto; align-self: flex-start;
   }
   .del:hover { background: var(--danger-soft); color: var(--danger); }
   .drama.dragging { opacity: 0.4; cursor: grabbing; }

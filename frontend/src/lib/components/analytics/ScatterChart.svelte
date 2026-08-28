@@ -36,7 +36,7 @@
 {#if points.length === 0}
   <div class="empty">暂无花费数据，无法绘制相关性散点（录入票价后将自动启用）。</div>
 {:else}
-  <svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img">
+  <svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="xMidYMid meet" aria-label="散点相关图表">
     <!-- axes -->
     <line x1={padL} y1={padTop} x2={padL} y2={padTop + plotH} stroke="var(--border-strong)" stroke-width="1" />
     <line x1={padL} y1={padTop + plotH} x2={W - padR} y2={padTop + plotH} stroke="var(--border-strong)" stroke-width="1" />
@@ -69,4 +69,5 @@
   .axis-lbl { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
   .axis-title { font-size: 11px; fill: var(--text-2); }
   .empty { padding: 30px 10px; text-align: center; color: var(--text-muted); font-size: 13px; }
+  svg circle[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-radius: 999px; }
 </style>

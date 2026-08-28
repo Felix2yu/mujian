@@ -198,7 +198,7 @@
   .head-card { padding: 18px 20px; margin-bottom: 14px; }
   .head-main { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
   .head-left { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: start; min-width: 0; flex: 1; }
-  .avatar { width: 160px; height: 160px; border-radius: 50%; object-fit: cover; background: var(--surface-3); }
+  .avatar { width: 160px; aspect-ratio: 1 / 1; border-radius: 50%; object-fit: cover; background: var(--surface-3); }
   .avatar.placeholder { display: flex; align-items: center; justify-content: center; font-size: 56px; }
   h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.25; }
   .sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

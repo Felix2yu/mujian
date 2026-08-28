@@ -5,7 +5,7 @@
   let max = $derived(Math.max(1, ...items.map((i) => i.count || 0)));
 </script>
 
-<ol class="rank">
+<ol class="rank" role="list">
   {#each items as it, i}
     <li>
       <span class="rk" class:top={i < 3}>{i + 1}</span>
@@ -25,7 +25,7 @@
 
 <style>
   .rank { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
-  .rank li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+  .rank li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; min-width: 0; }
   .rk {
     width: 20px; height: 20px; flex: 0 0 auto; border-radius: 6px;
     display: grid; place-items: center; font-size: 11px; font-weight: 700;

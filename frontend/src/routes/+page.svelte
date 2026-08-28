@@ -431,7 +431,7 @@
     color: var(--text);
     font-size: 14.5px;
     box-shadow: var(--shadow-xs);
-    transition: all var(--t-fast) var(--ease);
+    transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
   }
   .search:focus {
     outline: none;
@@ -453,7 +453,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: all var(--t-fast) var(--ease);
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
   }
   .search-clear:hover { background: var(--accent-soft); color: var(--accent); }
 
@@ -517,7 +517,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: all var(--t-fast) var(--ease);
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
   }
   .filter-close:hover { background: var(--surface-3); color: var(--text); }
   .filter-fields {
@@ -544,7 +544,7 @@
     color: var(--accent);
     font-size: 12.5px;
     cursor: pointer;
-    transition: all var(--t-fast) var(--ease);
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
   }
   .chip:hover { background: var(--accent); color: #fff; }
 
@@ -623,7 +623,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: all var(--t-fast) var(--ease);
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
   }
   .jump-now:hover {
     background: var(--accent);

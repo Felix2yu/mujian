@@ -312,6 +312,7 @@
   .pimg {
     width: 100%;
     height: 100%;
+    aspect-ratio: 3 / 4;
     object-fit: cover;
     display: block;
   }
@@ -383,7 +384,7 @@
   .day-item:hover { background: var(--accent-soft); transform: translateX(2px); }
   .day-item img, .diph {
     width: 42px;
-    height: 56px;
+    aspect-ratio: 3 / 4;
     object-fit: cover;
     border-radius: 4px;
     flex-shrink: 0;

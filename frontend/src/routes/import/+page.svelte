@@ -132,7 +132,7 @@
     border: 2px dashed var(--border-strong);
     border-radius: var(--radius-lg);
     cursor: pointer;
-    transition: all var(--t-med) var(--ease);
+    transition: border-color var(--t-med) var(--ease), background var(--t-med) var(--ease);
     box-shadow: none;
     background: var(--surface-2);
   }

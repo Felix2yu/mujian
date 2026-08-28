@@ -361,7 +361,7 @@
   .sub { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; color: var(--text-2); margin-bottom: 4px; }
   .sub .date { color: var(--text-muted); }
   .dot { opacity: 0.4; }
-  .loc { color: var(--text-2); border-bottom: 1px dashed var(--border-strong); transition: all var(--t-fast) var(--ease); }
+  .loc { color: var(--text-2); border-bottom: 1px dashed var(--border-strong); transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
   .loc:hover { color: var(--accent); border-color: var(--accent); }
   .actions { display: flex; gap: 8px; margin-top: auto; padding-top: 16px; }
 
@@ -428,7 +428,7 @@
   .kv-row:last-child { border-bottom: none; }
   dt { color: var(--text-muted); flex: 0 0 auto; }
   dd { margin: 0; text-align: right; }
-  .flink { color: var(--text); border-bottom: 1px dashed var(--border-strong); transition: all var(--t-fast) var(--ease); }
+  .flink { color: var(--text); border-bottom: 1px dashed var(--border-strong); transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
   .flink:hover { color: var(--accent); border-color: var(--accent); }
   .money { font-variant-numeric: tabular-nums; }
 

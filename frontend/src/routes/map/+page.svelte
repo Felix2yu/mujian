@@ -266,7 +266,7 @@
     border-radius: 999px;
     font-size: 13px;
     cursor: pointer;
-    transition: all var(--t-fast) var(--ease);
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
   }
   .seg-btn:hover { color: var(--text); }
   .seg-btn.active { background: var(--surface); color: var(--accent); font-weight: 600; box-shadow: var(--shadow-sm); }
@@ -336,7 +336,7 @@
   :global(.muj-popup .leaflet-popup-content) { margin: 0; width: 320px !important; }
   :global(.muj-popup .pc) { padding: 0; }
   :global(.muj-popup .phead) { display: flex; gap: 10px; padding: 12px 14px; align-items: center; border-bottom: 1px solid var(--border); }
-  :global(.muj-popup .phead img) { width: 40px; height: 52px; object-fit: cover; border-radius: 6px; flex: 0 0 auto; }
+  :global(.muj-popup .phead img) { width: 40px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 6px; flex: 0 0 auto; }
   :global(.muj-popup .ptext b) { font-family: var(--font-serif); font-size: 15px; }
   :global(.muj-popup .paddr) { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
   :global(.muj-popup .plist) { padding: 4px 6px; max-height: 260px; overflow-y: auto; }
@@ -354,7 +354,7 @@
   :global(.muj-popup .mrow:hover) { background: var(--surface-3); }
   :global(.muj-popup .mcov) {
     width: 36px;
-    height: 48px;
+    aspect-ratio: 1 / 1;
     object-fit: cover;
     border-radius: 5px;
     flex: 0 0 auto;

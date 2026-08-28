@@ -559,7 +559,7 @@
     cursor: pointer;
     font-size: 13.5px;
     color: var(--text-2);
-    transition: all var(--t-fast) var(--ease);
+    transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
   }
   .theme-opt:hover { border-color: var(--border-strong); }
   .theme-opt.on {
@@ -617,7 +617,7 @@
     cursor: pointer;
     font-size: 13.5px;
     color: var(--text-2);
-    transition: all var(--t-fast) var(--ease);
+    transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
     user-select: none;
   }
   .status-opt input { accent-color: var(--accent); cursor: pointer; }

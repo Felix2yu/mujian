@@ -88,7 +88,43 @@
       window.removeEventListener('keydown', onKey);
     };
   });
+
+  // 侧栏打开后 trap focus（Tab / Shift+Tab 不出侧栏）
+  $effect(() => {
+    if (!drawerOpen) return;
+    const trapSelector = 'button, a, [tabindex]:not([tabindex="-1"])';
+    const focusable = () => Array.from(document.querySelectorAll(`.drawer ${trapSelector}`)).filter(
+      (el) => !el.hasAttribute('disabled') && el.offsetParent !== null
+    );
+    const nodes = focusable();
+    if (nodes.length === 0) return;
+    const first = nodes[0], last = nodes[nodes.length - 1];
+    // 打开时先聚焦第一个可交互元素（关闭按钮）
+    // first.focus({ preventScroll: true });  // 让按钮/链接通过过渡接管
+    const onKey = (e) => {
+      if (e.key !== 'Tab') return;
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || !nodes.includes(active)) {
+          e.preventDefault(); last.focus({ preventScroll: true });
+        }
+      } else {
+        if (active === last) {
+          e.preventDefault(); first.focus({ preventScroll: true });
+        }
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    // 过渡结束后把焦点送入 drawer
+    const t = setTimeout(() => first.focus({ preventScroll: true }), 180);
+    return () => {
+      document.removeEventListener('keydown', onKey, true);
+      clearTimeout(t);
+    };
+  });
 </script>
+
+<a class="skip-link" href="#main">跳到主要内容</a>
 
 <div class="app">
   <header class="topbar">
@@ -141,7 +177,7 @@
       aria-label="关闭菜单"
       transition:fade={{ duration: 140 }}
     ></button>
-    <aside class="drawer" transition:fly={{ x: 300, duration: 220, easing: cubicOut }} aria-label="站点导航">
+    <aside class="drawer" transition:fly={{ x: 300, duration: 220, easing: cubicOut }} aria-label="站点导航" role="dialog" aria-modal="true">
       <div class="drawer-head">
         <img class="seal" src="/favicon.svg" alt="幕间" />
         <span class="drawer-title">幕间</span>
@@ -163,7 +199,7 @@
     </aside>
   {/if}
 
-  <main class="content">
+  <main id="main" class="content">
     {@render children()}
   </main>
   <footer class="foot">
@@ -171,7 +207,7 @@
   </footer>
 
   {#if updateReady}
-    <button type="button" class="update-banner" onclick={applyUpdate} transition:fly={{ y: 60, duration: 220 }}>
+    <button type="button" class="update-banner" onclick={applyUpdate} transition:fly={{ y: 60, duration: 220 }} role="status" aria-live="polite">
       发现新版本，点击刷新
     </button>
   {/if}
@@ -232,7 +268,7 @@
     font-size: 14px;
     color: var(--text-muted);
     white-space: nowrap;
-    transition: all var(--t-fast) var(--ease);
+    transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
   }
   .nav-link:hover { color: var(--text); background: var(--surface-3); }
   .nav-link.active {
@@ -254,7 +290,7 @@
     color: var(--text);
     cursor: pointer;
     box-shadow: var(--shadow-xs);
-    transition: all var(--t-fast) var(--ease);
+    transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
   }
   .menu-btn:active { transform: scale(0.95); }
   .menu-btn svg { display: block; }
@@ -268,6 +304,7 @@
     padding: 0;
     background: rgba(0, 0, 0, 0.42);
     cursor: default;
+    overscroll-behavior: contain;
   }
   .drawer {
     position: fixed;
@@ -282,6 +319,7 @@
     border-left: 1px solid var(--border);
     box-shadow: var(--shadow-lg);
     padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    overscroll-behavior: contain;
   }
   .drawer-head {
     display: flex;
@@ -308,13 +346,14 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: all var(--t-fast) var(--ease);
+    transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
   }
   .drawer-close:hover { background: var(--surface-3); color: var(--text); }
 
   .drawer-nav {
     flex: 1;
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 10px 12px;
     display: flex;
     flex-direction: column;
@@ -328,7 +367,7 @@
     border-radius: var(--radius-sm);
     font-size: 15px;
     color: var(--text-2);
-    transition: all var(--t-fast) var(--ease);
+    transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
   }
   .drawer-link:hover { background: var(--surface-3); color: var(--text); }
   .drawer-link.active {
@@ -392,7 +431,7 @@
     color: var(--text);
     cursor: pointer;
     box-shadow: var(--shadow-xs);
-    transition: all var(--t-fast) var(--ease);
+    transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
   }
   .topbar-cal:active { transform: scale(0.95); }
   .topbar-cal svg { display: block; }

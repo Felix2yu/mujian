@@ -679,7 +679,7 @@
     <div class="row">
       <div class="f-lg">
         <label>名称 <span class="req">*</span></label>
-        <input class="input" bind:value={form.name} placeholder="演出名称" />
+        <input class="input" spellcheck="false" bind:value={form.name} placeholder="演出名称" />
       </div>
       <div class="f-sm">
         <label>剧种（可多个）</label>
@@ -692,6 +692,7 @@
         <div class="combo">
           <input
             class="input"
+            spellcheck="false"
             bind:value={form.city}
             placeholder="如：上海"
             onfocus={() => (showCityList = true)}
@@ -712,6 +713,7 @@
           <div class="combo addr-combo">
             <input
               class="input"
+              spellcheck="false"
               bind:value={form.address}
               placeholder="如：上海大剧院"
               onfocus={() => (showAddrList = true)}
@@ -762,8 +764,8 @@
             <details class="geo-manual" open={geoStatus === 'nokey' || geoStatus === 'notfound' || geoStatus === 'error' || manualOverride}>
               <summary class="small">手动校正</summary>
               <div class="row" style="margin-top:6px;">
-                <input class="input" type="number" step="0.000001" bind:value={form.lat} placeholder="纬度 31.230416" oninput={() => { manualOverride = true; geoStatus = 'ok'; }} />
-                <input class="input" type="number" step="0.000001" bind:value={form.lng} placeholder="经度 121.473700" oninput={() => { manualOverride = true; geoStatus = 'ok'; }} />
+                <input class="input" type="number" inputmode="decimal" step="0.000001" bind:value={form.lat} placeholder="纬度 31.230416" oninput={() => { manualOverride = true; geoStatus = 'ok'; }} />
+                <input class="input" type="number" inputmode="decimal" step="0.000001" bind:value={form.lng} placeholder="经度 121.473700" oninput={() => { manualOverride = true; geoStatus = 'ok'; }} />
               </div>
             </details>
           </div>
@@ -778,7 +780,7 @@
     <div class="row">
       <div class="f-md">
         <label>演出时间</label>
-        <input class="input" type="datetime-local" bind:value={form.date_local} />
+        <input class="input" type="datetime-local" bind:value={form.date_local} autocomplete="off" />
       </div>
       <div class="f-xs">
         <label>状态</label>
@@ -802,7 +804,7 @@
     <div class="row">
       <div class="f-sm">
         <label>座位</label>
-        <input class="input" bind:value={form.seat} list="seat-list" placeholder="如：3排15座" />
+        <input class="input" spellcheck="false" bind:value={form.seat} list="seat-list" placeholder="如：3排15座" />
         <datalist id="seat-list">
           {#each ac.seat as v}<option value={v} />{/each}
         </datalist>
@@ -810,7 +812,7 @@
       {#if settings.show_friends}
       <div class="f-md">
         <label>同行</label>
-        <input class="input" bind:value={form.friends} list="friends-list" placeholder="同行人，多个用逗号分隔" />
+        <input class="input" spellcheck="false" bind:value={form.friends} list="friends-list" placeholder="同行人，多个用逗号分隔" />
         <datalist id="friends-list">
           {#each ac.friends as v}<option value={v} />{/each}
         </datalist>
@@ -828,6 +830,7 @@
         <div class="combo">
           <input
             class="input"
+            spellcheck="false"
             bind:value={form.channel}
             placeholder="如：大麦"
             onfocus={() => (showChannelList = true)}
@@ -844,14 +847,14 @@
       </div>
       <div class="f-sm">
         <label>票价</label>
-        <div class="money"><input class="input" type="number" step="0.01" min="0" bind:value={form.price} />{#if settings.multi_currency}<input class="input cur" bind:value={form.price_currency} />{/if}</div>
+        <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.price} />{#if settings.multi_currency}<input class="input cur" spellcheck="false" bind:value={form.price_currency} />{/if}</div>
       </div>
     </div>
     {#if settings.show_pay_price}
       <div class="row">
         <div class="f-sm">
           <label>实付</label>
-          <div class="money"><input class="input" type="number" step="0.01" min="0" bind:value={form.pay_price} />{#if settings.multi_currency}<select class="input cur" bind:value={form.pay_price_currency}>{#each currencyOptions(form.pay_price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
+          <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.pay_price} />{#if settings.multi_currency}<select class="input cur" bind:value={form.pay_price_currency}>{#each currencyOptions(form.pay_price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
         </div>
       </div>
     {/if}
@@ -859,7 +862,7 @@
       <div class="row">
         <div class="f-sm">
         <label>其他花费</label>
-        <div class="money"><input class="input" type="number" step="0.01" min="0" bind:value={form.other_cost} />{#if settings.multi_currency}<select class="input cur" bind:value={form.other_cost_currency}>{#each currencyOptions(form.other_cost_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
+        <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.other_cost} />{#if settings.multi_currency}<select class="input cur" bind:value={form.other_cost_currency}>{#each currencyOptions(form.other_cost_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
         </div>
       </div>
     {/if}
@@ -893,6 +896,7 @@
           </span>
         {/each}
         <input
+          spellcheck="false"
           placeholder={chosenArtists.length || freeNames.length ? '' : '输入演员姓名，回车确认…'}
           bind:value={artistQuery}
           onfocus={() => (showArtistList = true)}
@@ -943,6 +947,7 @@
               </span>
             {/each}
             <input
+              spellcheck="false"
               placeholder={companyTags.length ? '' : '如：上海昆剧团'}
               bind:value={companyQuery}
               onfocus={() => (showCompanyList = true)}
@@ -984,7 +989,7 @@
         >
           {#if editingDramaId === d.id}
             <div class="ply-edit">
-              <input class="input" placeholder="剧目名称" bind:value={dramaEdit.name} />
+              <input class="input" spellcheck="false" placeholder="剧目名称" bind:value={dramaEdit.name} />
               <div class="ply-edit-actions">
                 <button type="button" class="btn primary sm" onclick={saveDramaEdit} disabled={savingDramaEdit || !dramaEdit.name.trim()}>
                   {savingDramaEdit ? '保存中…' : '保存'}
@@ -1021,7 +1026,7 @@
           <!-- 内联新增折子：无需跳到剧目详情页 -->
           {#if addZheziFor === d.id}
             <div class="zhezi-add">
-              <input bind:this={zheziInput} class="input" placeholder="新折子名称" bind:value={newZheziName} onkeydown={(e) => e.key === 'Enter' && createZheziFor(d.id)} />
+              <input spellcheck="false" bind:this={zheziInput} class="input" placeholder="新折子名称" bind:value={newZheziName} onkeydown={(e) => e.key === 'Enter' && createZheziFor(d.id)} />
               <button type="button" class="btn primary sm" onclick={() => createZheziFor(d.id)} disabled={savingZhezi || !newZheziName.trim()}>{savingZhezi ? '添加中…' : '添加'}</button>
               <button type="button" class="btn ghost sm" onclick={() => { addZheziFor = ''; newZheziName = ''; }}>取消</button>
             </div>
@@ -1036,6 +1041,7 @@
       <div class="combo">
         <input
           class="input"
+          spellcheck="false"
           placeholder="🔍 搜索并关联已有剧目…"
           bind:value={dramaQuery}
           onfocus={() => (showDramaList = true)}
@@ -1064,7 +1070,7 @@
         <summary class="small">＋ 新建剧目档案</summary>
         <div class="ply-new-body">
           <div class="row">
-            <input class="input" placeholder="剧目，如：牡丹亭" bind:value={newDrama.name} onkeydown={(e) => e.key === 'Enter' && createNewDrama()} />
+            <input class="input" spellcheck="false" placeholder="剧目，如：牡丹亭" bind:value={newDrama.name} onkeydown={(e) => e.key === 'Enter' && createNewDrama()} />
             <button type="button" class="btn sm" onclick={createNewDrama} disabled={creatingDrama || !newDrama.name.trim()}>{creatingDrama ? '创建中…' : '创建并关联'}</button>
           </div>
         </div>
@@ -1097,7 +1103,7 @@
   <div class="remark-sticky">
     <div class="card section remark-card">
       <h3>备注</h3>
-      <textarea class="input" rows="8" bind:value={form.remark} placeholder="剧评、观感、备忘…"></textarea>
+      <textarea class="input" spellcheck="false" rows="8" bind:value={form.remark} placeholder="剧评、观感、备忘…"></textarea>
     </div>
   </div>
   </div><!-- .col-right -->
@@ -1183,7 +1189,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: all var(--t-fast) var(--ease);
+    transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
   }
   .loc-btn:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
   .loc-btn.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
@@ -1279,7 +1285,7 @@
   .upload-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
   .preview {
     width: 180px;
-    height: 240px;
+    aspect-ratio: 3 / 4;
     object-fit: cover;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border);
@@ -1328,7 +1334,7 @@
   .zhezi {
     display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
     border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px;
-    font-size: 13px; color: var(--text-2); transition: all var(--t-fast) var(--ease);
+    font-size: 13px; color: var(--text-2); transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
     user-select: none;
   }
   .zhezi:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
@@ -1350,7 +1356,7 @@
     padding: 4px 12px;
     font-size: 12.5px;
     cursor: pointer;
-    transition: all var(--t-fast) var(--ease);
+    transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
   }
   .zhezi-add-btn:hover { background: var(--accent-soft); border-color: var(--accent); }
   .ply-add { display: flex; gap: 10px; align-items: stretch; margin-top: 4px; flex-wrap: wrap; }

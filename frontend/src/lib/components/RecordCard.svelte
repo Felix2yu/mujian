@@ -76,9 +76,7 @@
   .rec { display: flex; flex-direction: column; overflow: hidden; }
   .cover {
     position: relative;
-    /* 固定 3:4 宽高比：padding-top % 基于元素自身宽度，兼容性最强 */
-    padding-top: 133.33%;
-    height: 0;
+    aspect-ratio: 3 / 4;
     background: var(--surface-3);
     overflow: hidden;
     min-width: 0;

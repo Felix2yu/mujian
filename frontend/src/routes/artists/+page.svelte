@@ -175,7 +175,7 @@
   .actor.drop-before::before { top: -6px; }
   .actor.drop-after::after { bottom: -6px; }
   .actor-link { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; text-decoration: none; color: inherit; }
-  .avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--surface-3); }
+  .avatar { width: 48px; aspect-ratio: 1 / 1; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--surface-3); }
   .avatar.placeholder { display: flex; align-items: center; justify-content: center; font-size: 22px; }
   .meta { min-width: 0; }
   .name { font-weight: 600; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -183,7 +183,7 @@
   .del {
     border: none; background: none; color: var(--text-3); cursor: pointer; font-size: 12px;
     width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-    transition: all var(--t-fast) var(--ease); flex-shrink: 0;
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease); flex-shrink: 0;
   }
   .del:hover { background: var(--danger-soft); color: var(--danger); }
 </style>

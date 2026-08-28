@@ -118,7 +118,7 @@
   .x {
     border: none; background: none; font-size: 15px; cursor: pointer;
     color: var(--text-muted); width: 30px; height: 30px; border-radius: 50%;
-    transition: all var(--t-fast) var(--ease);
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
   }
   .x:hover { background: var(--surface-3); color: var(--text); }
 
@@ -140,7 +140,7 @@
     cursor: pointer;
     display: flex;
     flex-direction: column;
-    transition: all var(--t-fast) var(--ease);
+    transition: border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
     text-align: left;
   }
   .item:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow-md); }

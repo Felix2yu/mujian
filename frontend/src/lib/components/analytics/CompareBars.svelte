@@ -29,7 +29,7 @@
   }
 </script>
 
-<svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img">
+<svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="xMidYMid meet" aria-label="对比柱状图表">
   <line x1={padX} y1={padTop + plotH} x2={W - padX} y2={padTop + plotH} stroke="var(--border)" stroke-width="1" />
   <!-- max value label -->
   <text x={padX - 4} y={padTop + 3} text-anchor="end" class="y-label">{max}{unit}</text>
@@ -57,4 +57,5 @@
   svg { display: block; }
   .y-label { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
   .x-label { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+  svg rect[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 2px; }
 </style>

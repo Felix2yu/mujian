@@ -59,7 +59,7 @@
       <span class="lg"><span class="sw" style="background:{s.color}"></span>{s.name}</span>
     {/each}
   </div>
-  <svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img">
+  <svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="xMidYMid meet" aria-label="趋势折线图表">
     <!-- y gridlines + labels -->
     {#each ticks as t, i}
       <line x1={padL} y1={y(t)} x2={W - padR} y2={y(t)} stroke="var(--border)" stroke-width="1" stroke-dasharray={i === 1 ? '0' : '3 3'} opacity="0.7" />
@@ -98,4 +98,5 @@
   svg { display: block; }
   .y-label { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
   .x-label { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+  svg circle[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-radius: 999px; }
 </style>

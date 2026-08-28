@@ -42,7 +42,7 @@
   }
 </script>
 
-<svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img">
+<svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="xMidYMid meet" aria-label="柱状图表">
   <!-- y gridlines + labels -->
   {#each yTicks as t}
     <line x1={padLeft} y1={y(t)} x2={W - padX} y2={y(t)} stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3" opacity="0.5" />
@@ -83,4 +83,5 @@
   svg { display: block; }
   .y-label { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
   .x-label { font-size: 12px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+  svg rect[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 2px; }
 </style>
