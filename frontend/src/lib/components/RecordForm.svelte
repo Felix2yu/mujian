@@ -667,33 +667,12 @@
     return out;
   }
 
-  // 双列等高：仅观察左列，计算备注框应有高度，直接操作 DOM
-  let colLeftEl = $state(null);
-  let colRightEl = $state(null);
-  let remarkTextarea = $state(null);
-  let coverSectionEl = $state(null);
 
-  $effect(() => {
-    if (!colLeftEl || !remarkTextarea || !coverSectionEl) return;
-    let raf = 0;
-    const ro = new ResizeObserver(() => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const leftH = colLeftEl.offsetHeight;
-        const coverH = coverSectionEl.offsetHeight;
-        const gap = 14;
-        const target = leftH - coverH - gap * 2;
-        remarkTextarea.style.minHeight = target > 80 ? target + 'px' : '';
-      });
-    });
-    ro.observe(colLeftEl);
-    return () => { ro.disconnect(); cancelAnimationFrame(raf); };
-  });
 </script>
 
 <form class="form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} onkeydown={(e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault(); }}>
 <div class="two-col">
-  <div class="col-left" bind:this={colLeftEl}>
+  <div class="col-left">
   <!-- ============ 基本信息 ============ -->
   <div class="card section">
     <h3>基本信息</h3>
@@ -1095,14 +1074,8 @@
 
   </div><!-- .col-left -->
   <div class="col-right">
-  <!-- ============ 备注 ============ -->
-  <div class="card section">
-    <h3>备注</h3>
-    <textarea class="input" rows="8" bind:this={remarkTextarea} bind:value={form.remark} placeholder="剧评、观感、备忘…"></textarea>
-  </div>
-
   <!-- ============ 封面 ============ -->
-  <div class="card section" bind:this={coverSectionEl}>
+  <div class="card section">
     <h3>封面</h3>
     <div class="cover-layout">
       {#if form.coverFile}
@@ -1116,11 +1089,15 @@
           <input type="file" accept="image/*" onchange={handleUpload} disabled={uploading} hidden bind:this={fileInput} />
           <button type="button" class="btn sm" onclick={() => (pickerOpen = true)}>▦ 从已有演出引用</button>
         </div>
-        <div class="cover-url">
-          <label>封面 URL</label>
-          <input class="input" bind:value={form.coverFile} placeholder="covers/xxx.jpg 或上传图片" />
-        </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ============ 备注（sticky 浮动） ============ -->
+  <div class="remark-sticky">
+    <div class="card section remark-card">
+      <h3>备注</h3>
+      <textarea class="input" rows="8" bind:value={form.remark} placeholder="剧评、观感、备忘…"></textarea>
     </div>
   </div>
   </div><!-- .col-right -->
@@ -1138,12 +1115,15 @@
 
 <style>
   .form { display: flex; flex-direction: column; gap: 14px; max-width: 1200px; margin: 0 auto; }
-  /* 桌面端双列：左列放表单主体，右列放备注+封面 */
+  /* 桌面端双列：左列放表单主体，右列放封面+备注 */
   .two-col { display: flex; flex-direction: column; gap: 14px; }
   @media (min-width: 860px) {
-    .two-col { flex-direction: row; gap: 16px; align-items: stretch; }
-    .col-left { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
-    .col-right { flex: 0 1 400px; min-width: 300px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 72px; }
+    .two-col { display: grid; grid-template-columns: 1fr 400px; gap: 16px; }
+    .col-left { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+    .col-right { min-width: 300px; display: flex; flex-direction: column; gap: 14px; }
+    .remark-sticky { position: sticky; top: 72px; flex: 1; display: flex; flex-direction: column; }
+    .remark-card { flex: 1; display: flex; flex-direction: column; }
+    .remark-card textarea { flex: 1; resize: none; min-height: 80px; }
   }
   .section { padding: 18px 20px; }
   .section h3 { margin: 0 0 6px; font-size: 15.5px; color: var(--text-2); }
@@ -1296,8 +1276,7 @@
 
   .cover-layout { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
   .cover-main { display: flex; flex-direction: column; gap: 14px; flex: 1; min-width: 220px; }
-  .upload-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
-  .cover-url label { display: block; font-size: 13px; font-weight: 500; color: var(--text-2); margin: 0 0 6px; }
+  .upload-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
   .preview {
     width: 180px;
     height: 240px;
