@@ -120,7 +120,7 @@
     </div>
   {:else if error}
     <div class="banner error">⚠ {error}</div>
-    <a class="btn ghost" href="/artists">← 返回演员列表</a>
+    <BackLink fallback="/artists" label="← 返回演员列表" />
   {:else if artist}
     {#if error}<div class="banner error">⚠ {error}</div>{/if}
 

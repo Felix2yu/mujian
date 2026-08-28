@@ -125,7 +125,7 @@
   </div>
 {:else if error}
   <div class="banner error">⚠ {error}</div>
-  <a class="btn ghost" href="/">← 返回列表</a>
+  <BackLink fallback="/" label="← 返回列表" />
 {:else if rec}
   <div class="detail fade-up">
     <BackLink />

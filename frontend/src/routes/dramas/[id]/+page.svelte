@@ -172,7 +172,7 @@
     </div>
   {:else if error}
     <div class="banner error">⚠ {error}</div>
-    <a class="btn ghost" href="/dramas">← 返回剧目列表</a>
+    <BackLink fallback="/dramas" label="← 返回剧目列表" />
   {:else if drama}
     {#if error}<div class="banner error">⚠ {error}</div>{/if}
 
