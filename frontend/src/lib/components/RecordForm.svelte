@@ -1121,7 +1121,7 @@
     .two-col { display: grid; grid-template-columns: 1fr 400px; gap: 16px; }
     .col-left { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
     .col-right { min-width: 300px; display: flex; flex-direction: column; gap: 14px; }
-    .remark-sticky { position: sticky; top: 72px; margin-top: auto; }
+    .remark-sticky { position: sticky; top: 72px; }
     .remark-card textarea { resize: none; }
   }
   .section { padding: 18px 20px; }
