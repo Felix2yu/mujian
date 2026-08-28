@@ -179,7 +179,7 @@
   .avatar.placeholder { display: flex; align-items: center; justify-content: center; font-size: 22px; }
   .meta { min-width: 0; }
   .name { font-weight: 600; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cnt { font-size: 12px; color: var(--text-muted); }
+  .cnt { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
   .del {
     border: none; background: none; color: var(--text-3); cursor: pointer; font-size: 12px;
     width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;

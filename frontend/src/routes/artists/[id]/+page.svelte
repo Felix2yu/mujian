@@ -203,7 +203,7 @@
   h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.25; }
   .sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .aliases { font-size: 12.5px; color: var(--text-muted); }
-  .muted { color: var(--text-muted); font-size: 13px; }
+  .muted { color: var(--text-muted); font-size: 13px; white-space: nowrap; }
   .remark { margin: 10px 0 0; color: var(--text-2); white-space: pre-wrap; line-height: 1.6; }
   .head-actions { display: flex; gap: 8px; flex: 0 0 auto; }
   .edit-fields { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
