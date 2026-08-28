@@ -758,12 +758,19 @@ func (db *DB) intervalStats() *models.IntervalStats {
 		median = (sorted[len(sorted)/2-1] + sorted[len(sorted)/2]) / 2
 	}
 	maxv := sorted[len(sorted)-1]
-	labels := []string{"≤7天", "8–30天", "31–90天", "91–365天", ">365天"}
-	bounds := []float64{7, 30, 90, 365, math.MaxFloat64}
-	bc := make([]int, len(labels))
+	type bucket struct {
+		label string
+		upper float64
+	}
+	defs := []bucket{
+		{"1天", 1}, {"2天", 2}, {"3天", 3}, {"4天", 4}, {"5天", 5}, {"6天", 6}, {"7天", 7},
+		{"8–14天", 14}, {"15–30天", 30}, {"31–60天", 60}, {"61–90天", 90},
+		{"91–180天", 180}, {"181–365天", 365}, {">365天", math.MaxFloat64},
+	}
+	bc := make([]int, len(defs))
 	for _, g := range gaps {
-		for i, b := range bounds {
-			if g <= b {
+		for i, d := range defs {
+			if g <= d.upper {
 				bc[i]++
 				break
 			}
@@ -771,8 +778,11 @@ func (db *DB) intervalStats() *models.IntervalStats {
 	}
 	total := len(gaps)
 	buckets := []models.DistItem{}
-	for i, l := range labels {
-		buckets = append(buckets, models.DistItem{Name: l, Count: bc[i], Pct: pctOf(float64(total), float64(bc[i]))})
+	for i, d := range defs {
+		if bc[i] == 0 {
+			continue
+		}
+		buckets = append(buckets, models.DistItem{Name: d.label, Count: bc[i], Pct: pctOf(float64(total), float64(bc[i]))})
 	}
 	return &models.IntervalStats{
 		Avg:     round1(avg),
