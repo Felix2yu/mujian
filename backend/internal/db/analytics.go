@@ -221,7 +221,7 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 		WHERE city != '' GROUP BY city ORDER BY cnt DESC`)
 	out.YearDist = db.distFromQuery(`
 		SELECT strftime('%Y', datetime(date, 'unixepoch')) AS name, COUNT(*) AS cnt
-		FROM records GROUP BY 1 ORDER BY 1`)
+		FROM records WHERE date > 0 GROUP BY 1 ORDER BY 1`)
 
 	// Rating distribution: counts for stars 1..5.
 	ratedTotal := 0

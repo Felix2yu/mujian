@@ -45,7 +45,7 @@
     { name: '月度花费', color: 'var(--gold)', values: (data?.trends ?? []).map((t) => Math.round(t.cost)) }
   ]);
   let ratingSeries = $derived([
-    { name: '平均评分', color: '#0e7490', values: (data?.trends ?? []).map((t) => t.avgRating) }
+    { name: '平均评分', color: '#0e7490', values: (data?.trends ?? []).map((t) => t.avg_rating) }
   ]);
   let monthLabels = $derived((data?.trends ?? []).map((t) => t.period.slice(2)));
 
