@@ -150,7 +150,7 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 
 	// ---- Overview KPIs ----
 	db.conn.QueryRow("SELECT COUNT(*) FROM records").Scan(&out.Overview.TotalRecords)
-	db.conn.QueryRow("SELECT COALESCE(SUM(COALESCE(pay_price,0) + COALESCE(other_cost,0)), 0) FROM records").Scan(&out.Overview.TotalCost)
+	db.conn.QueryRow("SELECT COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0) FROM records").Scan(&out.Overview.TotalCost)
 	db.conn.QueryRow("SELECT COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE rating IS NOT NULL AND rating != 0").Scan(&out.Overview.AvgRating)
 	db.conn.QueryRow("SELECT COUNT(DISTINCT city) FROM records WHERE city != ''").Scan(&out.Overview.TotalCities)
 	db.conn.QueryRow("SELECT COUNT(*) FROM artists").Scan(&out.Overview.TotalArtists)
@@ -162,8 +162,8 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 	var curCount, prevCount int
 	var curCost, prevCost float64
 	var curRating, prevRating float64
-	db.conn.QueryRow("SELECT COUNT(*), COALESCE(SUM(COALESCE(pay_price,0)+COALESCE(other_cost,0)),0), COALESCE(AVG(CAST(rating AS REAL)),0) FROM records WHERE date >= ?", curStart).Scan(&curCount, &curCost, &curRating)
-	db.conn.QueryRow("SELECT COUNT(*), COALESCE(SUM(COALESCE(pay_price,0)+COALESCE(other_cost,0)),0), COALESCE(AVG(CAST(rating AS REAL)),0) FROM records WHERE date >= ? AND date < ?", prevStart, curStart).Scan(&prevCount, &prevCost, &prevRating)
+	db.conn.QueryRow("SELECT COUNT(*), COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0), COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE date >= ?", curStart).Scan(&curCount, &curCost, &curRating)
+	db.conn.QueryRow("SELECT COUNT(*), COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0), COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE date >= ? AND date < ?", prevStart, curStart).Scan(&prevCount, &prevCost, &prevRating)
 	out.Overview.RecordsDeltaPct = pctChange(float64(prevCount), float64(curCount))
 	out.Overview.CostDeltaPct = pctChange(prevCost, curCost)
 	out.Overview.RatingDelta = round1(curRating - prevRating)
@@ -178,7 +178,7 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 	rows, err := db.conn.Query(`
 		SELECT strftime('%Y-%m', datetime(date, 'unixepoch')) AS m,
 		       COUNT(*),
-		       COALESCE(SUM(COALESCE(pay_price,0) + COALESCE(other_cost,0)), 0),
+		       COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0),
 		       COALESCE(AVG(CAST(rating AS REAL)), 0)
 		FROM records
 		WHERE date >= ?
@@ -303,19 +303,19 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 	})
 
 	// ---- Correlations (Pearson r on numeric pairs) ----
-	out.CorrPairs = append(out.CorrPairs, db.pearsonPair("实付票价", "评分",
-		"SELECT pay_price, rating FROM records WHERE pay_price > 0 AND rating > 0"))
+	out.CorrPairs = append(out.CorrPairs, db.pearsonPair("有效票价", "评分",
+		"SELECT CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price, rating FROM records WHERE (pay_price > 0 OR price > 0) AND rating > 0"))
 	out.CorrPairs = append(out.CorrPairs, db.pearsonPair("其他花费", "评分",
 		"SELECT other_cost, rating FROM records WHERE other_cost > 0 AND rating > 0"))
-	out.CorrPairs = append(out.CorrPairs, db.pearsonPair("标价", "实付票价",
-		"SELECT price, pay_price FROM records WHERE price > 0 AND pay_price > 0"))
-	out.CorrPairs = append(out.CorrPairs, db.pearsonPair("实付票价", "其他花费",
-		"SELECT pay_price, other_cost FROM records WHERE pay_price > 0 AND other_cost > 0"))
+	out.CorrPairs = append(out.CorrPairs, db.pearsonPair("标价", "有效票价",
+		"SELECT price, CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price FROM records WHERE price > 0"))
+	out.CorrPairs = append(out.CorrPairs, db.pearsonPair("有效票价", "其他花费",
+		"SELECT CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price, other_cost FROM records WHERE (pay_price > 0 OR price > 0) AND other_cost > 0"))
 
-	// Scatter sample: pay_price vs rating (most recent 150 with both values).
+	// Scatter sample: effective price vs rating (most recent 150 with both values).
 	srows, serr := db.conn.Query(`
-		SELECT pay_price, rating FROM records
-		WHERE pay_price > 0 AND rating > 0
+		SELECT CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price, rating FROM records
+		WHERE (pay_price > 0 OR price > 0) AND rating > 0
 		ORDER BY date DESC LIMIT 150`)
 	if serr == nil {
 		defer srows.Close()
@@ -498,23 +498,23 @@ func ternary(cond bool, a, b string) string {
 
 // ---------- new behavioural / economic analytics ----------
 
-// priceBucketDist buckets pay_price into standard ranges. Only records with a
-// positive price are considered; an empty slice is returned when no price data
-// exists.
+// priceBucketDist buckets effective price (pay_price if > 0, else price) into
+// standard ranges. Only records with a positive effective price are considered;
+// an empty slice is returned when no price data exists.
 func (db *DB) priceBucketDist() []models.DistItem {
 	order := []string{"0–99", "100–199", "200–399", "400–799", "800+"}
 	rows, err := db.conn.Query(`
 		SELECT
 			CASE
-				WHEN pay_price < 100 THEN '0–99'
-				WHEN pay_price < 200 THEN '100–199'
-				WHEN pay_price < 400 THEN '200–399'
-				WHEN pay_price < 800 THEN '400–799'
+				WHEN effective_price < 100 THEN '0–99'
+				WHEN effective_price < 200 THEN '100–199'
+				WHEN effective_price < 400 THEN '200–399'
+				WHEN effective_price < 800 THEN '400–799'
 				ELSE '800+'
 			END AS bucket,
 			COUNT(*) AS cnt
-		FROM records
-		WHERE pay_price > 0
+		FROM (SELECT CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price FROM records)
+		WHERE effective_price > 0
 		GROUP BY bucket`)
 	if err != nil {
 		return []models.DistItem{}

@@ -2495,7 +2495,7 @@ func setMetaExec(exec sqlExecutor, m *models.Meta) error {
 func (db *DB) GetStats() (*models.Stats, error) {
 	s := &models.Stats{}
 	db.conn.QueryRow("SELECT COUNT(*) FROM records").Scan(&s.TotalRecords)
-	db.conn.QueryRow("SELECT COALESCE(SUM(COALESCE(pay_price,0) + COALESCE(other_cost,0)), 0) FROM records").Scan(&s.TotalCost)
+	db.conn.QueryRow("SELECT COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0) FROM records").Scan(&s.TotalCost)
 	db.conn.QueryRow("SELECT COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE rating IS NOT NULL AND rating != 0").Scan(&s.AvgRating)
 	db.conn.QueryRow("SELECT COUNT(DISTINCT city) FROM records WHERE city != ''").Scan(&s.TotalCities)
 	return s, nil
@@ -2512,7 +2512,7 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 	s.RecentRecords = []models.Record{}
 
 	db.conn.QueryRow("SELECT COUNT(*) FROM records").Scan(&s.TotalRecords)
-	db.conn.QueryRow("SELECT COALESCE(SUM(COALESCE(pay_price,0) + COALESCE(other_cost,0)), 0) FROM records").Scan(&s.TotalCost)
+	db.conn.QueryRow("SELECT COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0) FROM records").Scan(&s.TotalCost)
 	db.conn.QueryRow("SELECT COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE rating IS NOT NULL AND rating != 0").Scan(&s.AvgRating)
 	db.conn.QueryRow("SELECT COUNT(DISTINCT city) FROM records WHERE city != ''").Scan(&s.TotalCities)
 
@@ -2559,7 +2559,7 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 
 	rows4, err := db.conn.Query(`
 		SELECT strftime('%Y-%m', datetime(date, 'unixepoch')) as month,
-		       SUM(COALESCE(pay_price,0) + COALESCE(other_cost,0)) as cost
+		       SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)) as cost
 		FROM records
 		WHERE date >= strftime('%s', 'now', '-12 months')
 		GROUP BY month ORDER BY month`)
