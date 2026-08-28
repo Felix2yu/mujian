@@ -46,6 +46,7 @@ type Record struct {
 	PayPriceCurrency  string      `json:"pay_price_currency"`
 	OtherCost         float64     `json:"other_cost"`
 	OtherCostCurrency string      `json:"other_cost_currency"`
+	TotalCost         float64     `json:"total_cost"` // pay_price > 0 ? pay_price : price + other_cost
 }
 
 // Category mirrors the export's top-level `categories` array.

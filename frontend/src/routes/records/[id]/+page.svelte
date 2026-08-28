@@ -267,10 +267,10 @@
             <span class="fee-amount" class:is-empty={!rec.other_cost}>{rec.other_cost ? formatCurrency(rec.other_cost, rec.other_cost_currency) : '—'}</span>
           </div>
         </div>
-        {#if rec.pay_price || rec.other_cost || rec.price}
+        {#if rec.total_cost > 0}
           <div class="fee-total">
             <span class="fee-total-label">合计</span>
-            <span class="fee-total-amount">{formatCurrency((rec.pay_price > 0 ? rec.pay_price : (rec.price || 0)) + (rec.other_cost || 0), rec.pay_price_currency || 'CNY')}</span>
+            <span class="fee-total-amount">{formatCurrency(rec.total_cost, rec.pay_price_currency || 'CNY')}</span>
           </div>
         {/if}
         {#if rec.channel}

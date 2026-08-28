@@ -151,7 +151,8 @@ func (db *DB) migrate() error {
 			pay_price REAL NOT NULL DEFAULT 0,
 			pay_price_currency TEXT NOT NULL DEFAULT 'CNY',
 			other_cost REAL NOT NULL DEFAULT 0,
-			other_cost_currency TEXT NOT NULL DEFAULT 'CNY'
+			other_cost_currency TEXT NOT NULL DEFAULT 'CNY',
+			total_cost REAL NOT NULL DEFAULT 0
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_records_date ON records(date)`,
 		`CREATE INDEX IF NOT EXISTS idx_records_category ON records(category_name)`,
@@ -289,6 +290,14 @@ func (db *DB) migrate() error {
 	// Drama aliases: different 剧种 may have different names for the same play.
 	if err := db.addColumn("dramas", "aliases", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
 		return err
+	}
+	// Total cost: pre-computed sum of effective price + other_cost for quick display.
+	if err := db.addColumn("records", "total_cost", "REAL NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	// Backfill total_cost for existing records.
+	if _, err := db.conn.Exec(`UPDATE records SET total_cost = CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)`); err != nil {
+		return fmt.Errorf("backfill records.total_cost: %w", err)
 	}
 	if err := db.addColumn("categories", "sort_order", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
@@ -617,7 +626,7 @@ const recordColumns = `records.id, records.name, records.channel, records.city, 
 	records.zhezi_ids, records.tag_ids, records.date, records.date_text, records.rating,
 	records.seat, records.friends, records.company, records.remark, records.active_status,
 	records.price, records.price_currency, records.pay_price, records.pay_price_currency,
-	records.other_cost, records.other_cost_currency`
+	records.other_cost, records.other_cost_currency, records.total_cost`
 
 func scanRecord(rows *sql.Rows) (*models.Record, error) {
 	var r models.Record
@@ -628,7 +637,7 @@ func scanRecord(rows *sql.Rows) (*models.Record, error) {
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
 		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &categoryNames, &guest, &play, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
-		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency,
+		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency, &r.TotalCost,
 	)
 	if err != nil {
 		return nil, err
@@ -855,7 +864,7 @@ func scanRecordRow(row *sql.Row) (*models.Record, error) {
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
 		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &categoryNames, &guest, &play, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
-		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency,
+		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency, &r.TotalCost,
 	)
 	if err != nil {
 		return nil, err
@@ -895,8 +904,8 @@ const recordUpsertSQL = `
 		id, name, channel, city, address, coordinate, cover, cover_file, cover_thumb,
 		custom_category_id, category_name, category_names, artist_names, guest, play, drama_ids, zhezi_ids, tag_ids,
 		date, date_text, rating, seat, friends, company, remark, active_status,
-		price, price_currency, pay_price, pay_price_currency, other_cost, other_cost_currency
-	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		price, price_currency, pay_price, pay_price_currency, other_cost, other_cost_currency, total_cost
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 	ON CONFLICT(id) DO UPDATE SET
 		name=excluded.name, channel=excluded.channel, city=excluded.city, address=excluded.address,
 		coordinate=excluded.coordinate, cover=excluded.cover, cover_file=excluded.cover_file, cover_thumb=excluded.cover_thumb,
@@ -907,7 +916,8 @@ const recordUpsertSQL = `
 		date=excluded.date, date_text=excluded.date_text, rating=excluded.rating, seat=excluded.seat,
 		friends=excluded.friends, company=excluded.company, remark=excluded.remark, active_status=excluded.active_status,
 		price=excluded.price, price_currency=excluded.price_currency, pay_price=excluded.pay_price,
-		pay_price_currency=excluded.pay_price_currency, other_cost=excluded.other_cost, other_cost_currency=excluded.other_cost_currency
+		pay_price_currency=excluded.pay_price_currency, other_cost=excluded.other_cost, other_cost_currency=excluded.other_cost_currency,
+		total_cost=excluded.total_cost
 `
 
 // normalizeCategories reconciles the scalar primary category with the
@@ -960,12 +970,19 @@ func (db *DB) UpsertRecord(r models.Record) error {
 		r.ID = newID()
 	}
 	normalizeCategories(&r)
+	// Compute total_cost: effective price + other_cost
+	r.TotalCost = (func() float64 {
+		if r.PayPrice > 0 {
+			return r.PayPrice
+		}
+		return r.Price
+	})() + r.OtherCost
 	if _, err := db.stmtUpsertRecord.Exec(
 		r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
 		r.CustomCategoryID, r.CategoryName, marshalJSON(r.CategoryNames), marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
 		marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
 		r.Date, r.DateText, r.Rating, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
-		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency,
+		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency, r.TotalCost,
 	); err != nil {
 		return err
 	}
@@ -989,12 +1006,19 @@ func (db *DB) UpsertRecordTx(tx *sql.Tx, r models.Record) error {
 		r.ID = newID()
 	}
 	normalizeCategories(&r)
+	// Compute total_cost: effective price + other_cost
+	r.TotalCost = (func() float64 {
+		if r.PayPrice > 0 {
+			return r.PayPrice
+		}
+		return r.Price
+	})() + r.OtherCost
 	if _, err := tx.Exec(recordUpsertSQL,
 		r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
 		r.CustomCategoryID, r.CategoryName, marshalJSON(r.CategoryNames), marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
 		marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
 		r.Date, r.DateText, r.Rating, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
-		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency,
+		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency, r.TotalCost,
 	); err != nil {
 		return err
 	}

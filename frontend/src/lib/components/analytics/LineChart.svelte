@@ -96,6 +96,6 @@
   .legend .lg { font-size: 12px; color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; }
   .legend .sw { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
   svg { display: block; }
-  .y-label { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
-  .x-label { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .y-label { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .x-label { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
 </style>

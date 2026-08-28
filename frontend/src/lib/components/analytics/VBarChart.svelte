@@ -14,15 +14,19 @@
 
   const W = 760;
   const padTop = 14;
-  const padBottom = 26;
+  const padBottom = 32;
   const padX = 8;
+  const padLeft = 40;
 
   let max = $derived(
     Math.max(maxValue ?? 1, ...data.map((d) => d.value || 0), 1)
   );
   let plotH = $derived(height - padTop - padBottom);
-  let slot = $derived((W - padX * 2) / Math.max(data.length, 1));
+  let plotW = $derived(W - padLeft - padX);
+  let slot = $derived(plotW / Math.max(data.length, 1));
   let barW = $derived(Math.max(2, Math.min(slot * 0.62, 34)));
+
+  let yTicks = $derived([0, Math.round(max / 2), max]);
 
   function y(v) {
     return padTop + plotH - (v / max) * plotH;
@@ -39,10 +43,15 @@
 </script>
 
 <svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img">
+  <!-- y gridlines + labels -->
+  {#each yTicks as t}
+    <line x1={padLeft} y1={y(t)} x2={W - padX} y2={y(t)} stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3" opacity="0.5" />
+    <text x={padLeft - 6} y={y(t) + 4} text-anchor="end" class="y-label">{t}{unit}</text>
+  {/each}
   <!-- baseline -->
-  <line x1={padX} y1={padTop + plotH} x2={W - padX} y2={padTop + plotH} stroke="var(--border)" stroke-width="1" />
+  <line x1={padLeft} y1={padTop + plotH} x2={W - padX} y2={padTop + plotH} stroke="var(--border)" stroke-width="1" />
   {#each data as d, i}
-    {@const bx = padX + slot * i + (slot - barW) / 2}
+    {@const bx = padLeft + slot * i + (slot - barW) / 2}
     {@const top = y(d.value || 0)}
     {@const h = padTop + plotH - top}
     <!-- transparent full-column hit area for reliable hover -->
@@ -63,7 +72,7 @@
       />
     {/if}
     {#if i % labelEvery === 0}
-      <text x={bx + barW / 2} y={height - 8} text-anchor="middle" class="x-label">{d.label}</text>
+      <text x={bx + barW / 2} y={height - 10} text-anchor="middle" class="x-label">{d.label}</text>
     {/if}
   {/each}
 </svg>
@@ -72,5 +81,6 @@
 
 <style>
   svg { display: block; }
-  .x-label { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .y-label { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .x-label { font-size: 12px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
 </style>
