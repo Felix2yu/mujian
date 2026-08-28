@@ -1141,7 +1141,7 @@
   /* 桌面端双列：左列放表单主体，右列放备注+封面 */
   .two-col { display: flex; flex-direction: column; gap: 14px; }
   @media (min-width: 860px) {
-    .two-col { flex-direction: row; gap: 16px; align-items: flex-start; }
+    .two-col { flex-direction: row; gap: 16px; align-items: stretch; }
     .col-left { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
     .col-right { flex: 0 1 400px; min-width: 300px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 72px; }
   }
