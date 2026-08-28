@@ -1121,9 +1121,8 @@
     .two-col { display: grid; grid-template-columns: 1fr 400px; gap: 16px; }
     .col-left { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
     .col-right { min-width: 300px; display: flex; flex-direction: column; gap: 14px; }
-    .remark-sticky { position: sticky; top: 72px; flex: 1; display: flex; flex-direction: column; }
-    .remark-card { flex: 1; display: flex; flex-direction: column; }
-    .remark-card textarea { flex: 1; resize: none; min-height: 80px; }
+    .remark-sticky { position: sticky; top: 72px; margin-top: auto; }
+    .remark-card textarea { resize: none; }
   }
   .section { padding: 18px 20px; }
   .section h3 { margin: 0 0 6px; font-size: 15.5px; color: var(--text-2); }
