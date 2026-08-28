@@ -12,11 +12,22 @@
     unit = ''
   } = $props();
 
-  const W = 760;
+  let wrap = $state(null);
+  let containerW = $state(400);
+  $effect(() => {
+    if (!wrap) return;
+    const ro = new ResizeObserver((entries) => {
+      containerW = Math.round(entries[0].contentRect.width);
+    });
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  });
+
   const padL = 44;
   const padR = 12;
   const padTop = 14;
   const padBottom = 26;
+  let W = $derived(Math.max(containerW, padL + labels.length * 28 + padR));
 
   function allVals() {
     const vs = [];
@@ -59,7 +70,7 @@
       <span class="lg"><span class="sw" style="background:{s.color}"></span>{s.name}</span>
     {/each}
   </div>
-  <svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="xMidYMid meet" aria-label="趋势折线图表">
+  <div bind:this={wrap} class="chart-wrap"><svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="none" aria-label="趋势折线图表">
     <!-- y gridlines + labels -->
     {#each ticks as t, i}
       <line x1={padL} y1={y(t)} x2={W - padR} y2={y(t)} stroke="var(--border)" stroke-width="1" stroke-dasharray={i === 1 ? '0' : '3 3'} opacity="0.7" />
@@ -87,15 +98,17 @@
       {/each}
     {/each}
   </svg>
+  </div>
   <ChartTip {tip} />
 </div>
 
 <style>
   .line-wrap { width: 100%; }
+  .chart-wrap { width: 100%; overflow-x: auto; }
   .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
   .legend .lg { font-size: 12px; color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; }
   .legend .sw { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
-  svg { display: block; }
+  svg { display: block; width: 100%; height: auto; }
   .y-label { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
   .x-label { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
   svg circle[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-radius: 999px; }

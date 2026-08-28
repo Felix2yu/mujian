@@ -17,10 +17,21 @@
   const padX = 8;
   const padLeft = 40;
 
+  let wrap = $state(null);
+  let containerW = $state(400);
+  $effect(() => {
+    if (!wrap) return;
+    const ro = new ResizeObserver((entries) => {
+      containerW = Math.round(entries[0].contentRect.width);
+    });
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  });
+
   let max = $derived(
     Math.max(maxValue ?? 1, ...data.map((d) => d.value || 0), 1)
   );
-  let W = $derived(Math.max(360, data.length * 60 + padLeft + padX));
+  let W = $derived(Math.max(containerW, padLeft + data.length * 60 + padX));
   let plotH = $derived(height - padTop - padBottom);
   let plotW = $derived(W - padLeft - padX);
   let slot = $derived(plotW / Math.max(data.length, 1));
@@ -42,7 +53,7 @@
   }
 </script>
 
-<svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="xMidYMid meet" aria-label="柱状图表">
+<div bind:this={wrap} class="chart-wrap"><svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="none" aria-label="柱状图表">
   <!-- y gridlines + labels -->
   {#each yTicks as t}
     <line x1={padLeft} y1={y(t)} x2={W - padX} y2={y(t)} stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3" opacity="0.5" />
@@ -75,12 +86,13 @@
       <text x={bx + barW / 2} y={height - 10} text-anchor="middle" class="x-label">{d.label}</text>
     {/if}
   {/each}
-</svg>
+</svg></div>
 
 <ChartTip {tip} />
 
 <style>
-  svg { display: block; }
+  .chart-wrap { width: 100%; overflow-x: auto; }
+  svg { display: block; width: 100%; height: auto; }
   .y-label { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
   .x-label { font-size: 12px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
   svg rect[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 2px; }

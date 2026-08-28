@@ -4,11 +4,22 @@
   // Hover tooltips are shown via a floating layer (see `tip` state).
   let { points = [], xLabel = '', yLabel = '', height = 260, yMax = 5 } = $props();
 
-  const W = 760;
+  let wrap = $state(null);
+  let containerW = $state(400);
+  $effect(() => {
+    if (!wrap) return;
+    const ro = new ResizeObserver((entries) => {
+      containerW = Math.round(entries[0].contentRect.width);
+    });
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  });
+
   const padL = 48;
   const padR = 14;
   const padTop = 14;
   const padBottom = 34;
+  let W = $derived(Math.max(containerW, 360));
 
   let plotW = $derived(W - padL - padR);
   let plotH = $derived(height - padTop - padBottom);
@@ -36,7 +47,7 @@
 {#if points.length === 0}
   <div class="empty">暂无花费数据，无法绘制相关性散点（录入票价后将自动启用）。</div>
 {:else}
-  <svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="xMidYMid meet" aria-label="散点相关图表">
+  <div bind:this={wrap} class="chart-wrap"><svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="none" aria-label="散点相关图表">
     <!-- axes -->
     <line x1={padL} y1={padTop} x2={padL} y2={padTop + plotH} stroke="var(--border-strong)" stroke-width="1" />
     <line x1={padL} y1={padTop + plotH} x2={W - padR} y2={padTop + plotH} stroke="var(--border-strong)" stroke-width="1" />
@@ -60,12 +71,14 @@
       />
     {/each}
   </svg>
+  </div>
 {/if}
 
 <ChartTip {tip} />
 
 <style>
-  svg { display: block; }
+  .chart-wrap { width: 100%; overflow-x: auto; }
+  svg { display: block; width: 100%; height: auto; }
   .axis-lbl { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
   .axis-title { font-size: 11px; fill: var(--text-2); }
   .empty { padding: 30px 10px; text-align: center; color: var(--text-muted); font-size: 13px; }

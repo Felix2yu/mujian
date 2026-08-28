@@ -4,14 +4,27 @@
   // Hover tooltips are shown via a floating layer (see `tip` state).
   let { data = [], height = 200, labelEvery = 2, unit = '' } = $props();
 
-  const W = 760;
+  // 让 SVG 坐标系宽度等于容器实际像素宽度，避免等比缩放导致文字不可读
+  let wrap = $state(null);
+  let containerW = $state(400);
+  $effect(() => {
+    if (!wrap) return;
+    const ro = new ResizeObserver((entries) => {
+      containerW = Math.round(entries[0].contentRect.width);
+    });
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  });
+
+  let innerMinW = 320;
+  let slot = $derived(Math.max(60, (containerW - 60) / Math.max(data.length, 1)));
+  let W = $derived(Math.max(innerMinW, containerW));
   const padTop = 16;
   const padBottom = 28;
-  const padX = 10;
+  const padX = 30;   /* 给 y 轴数字留出空间 */
 
   let max = $derived(Math.max(1, ...data.flatMap((d) => [d.current || 0, d.previous || 0])));
   let plotH = $derived(height - padTop - padBottom);
-  let slot = $derived((W - padX * 2) / Math.max(data.length, 1));
   let pairW = $derived(Math.min(slot * 0.7, 30));
   let barW = $derived(pairW / 2 - 1.5);
 
@@ -29,7 +42,7 @@
   }
 </script>
 
-<svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="xMidYMid meet" aria-label="对比柱状图表">
+<div bind:this={wrap} class="chart-wrap"><svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="none" aria-label="对比柱状图表">
   <line x1={padX} y1={padTop + plotH} x2={W - padX} y2={padTop + plotH} stroke="var(--border)" stroke-width="1" />
   <!-- max value label -->
   <text x={padX - 4} y={padTop + 3} text-anchor="end" class="y-label">{max}{unit}</text>
@@ -49,13 +62,14 @@
       <text x={cx} y={height - 9} text-anchor="middle" class="x-label">{d.label}</text>
     {/if}
   {/each}
-</svg>
+</svg></div>
 
 <ChartTip {tip} />
 
 <style>
-  svg { display: block; }
-  .y-label { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
-  .x-label { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .chart-wrap { width: 100%; overflow-x: auto; }
+  svg { display: block; width: 100%; height: auto; }
+  .y-label { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .x-label { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
   svg rect[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 2px; }
 </style>
