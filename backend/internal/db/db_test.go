@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding/json"
+	"fmt"
 	"mujian/internal/models"
 	"mujian/internal/storage"
 	"os"
@@ -1742,5 +1743,115 @@ func TestBatchArrayOpsSyncRelations(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("artist detail should still include rel1 after append")
+	}
+}
+
+func TestListRecordsPagination(t *testing.T) {
+	db := newTestDB(t)
+	base := time.Date(2026, 8, 1, 19, 0, 0, 0, time.UTC)
+
+	// 插入 25 条不同日期的记录，按 date DESC 排序后应是 r25..r0
+	for i := 0; i < 25; i++ {
+		date := base.AddDate(0, 0, i).Unix()
+		r := sampleRecord(fmt.Sprintf("page-rec-%02d", i), date)
+		r.Name = fmt.Sprintf("第 %d 场演出", i)
+		if err := db.UpsertRecord(r); err != nil {
+			t.Fatalf("Upsert %d: %v", i, err)
+		}
+	}
+
+	// CountRecords 无筛选 = 25
+	total, err := db.CountRecords(RecordFilter{})
+	if err != nil {
+		t.Fatalf("CountRecords: %v", err)
+	}
+	if total != 25 {
+		t.Fatalf("CountRecords 无筛选 = %d, want 25", total)
+	}
+
+	// CountRecords 带筛选
+	totalSh, _ := db.CountRecords(RecordFilter{City: "上海"})
+	if totalSh != 25 {
+		t.Fatalf("CountRecords city=上海 = %d, want 25", totalSh)
+	}
+
+	// Limit=0、Offset=0 等价于全量（不截断）
+	all, err := db.ListRecords(RecordFilter{})
+	if err != nil {
+		t.Fatalf("ListRecords all: %v", err)
+	}
+	if len(all) != 25 {
+		t.Fatalf("ListRecords 无 limit/offset = %d, want 25", len(all))
+	}
+
+	// Limit=10 → 返回 10 条
+	page10, err := db.ListRecords(RecordFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("ListRecords limit=10: %v", err)
+	}
+	if len(page10) != 10 {
+		t.Fatalf("len(limit=10) = %d, want 10", len(page10))
+	}
+	// 按日期倒序，第一条应是最后插入的（日期最新）
+	if page10[0].ID != "page-rec-24" {
+		t.Errorf("limit=10 首条 = %s, want page-rec-24", page10[0].ID)
+	}
+	if page10[9].ID != "page-rec-15" {
+		t.Errorf("limit=10 末条 = %s, want page-rec-15", page10[9].ID)
+	}
+
+	// Offset=10, Limit=10 → 翻到第二页
+	page2, err := db.ListRecords(RecordFilter{Limit: 10, Offset: 10})
+	if err != nil {
+		t.Fatalf("ListRecords limit=10 offset=10: %v", err)
+	}
+	if len(page2) != 10 {
+		t.Fatalf("len(page2) = %d, want 10", len(page2))
+	}
+	if page2[0].ID != "page-rec-14" {
+		t.Errorf("page2 首条 = %s, want page-rec-14", page2[0].ID)
+	}
+	if page2[9].ID != "page-rec-05" {
+		t.Errorf("page2 末条 = %s, want page-rec-05", page2[9].ID)
+	}
+
+	// Offset=20, Limit=10 → 最后只剩 5 条
+	page3, err := db.ListRecords(RecordFilter{Limit: 10, Offset: 20})
+	if err != nil {
+		t.Fatalf("ListRecords limit=10 offset=20: %v", err)
+	}
+	if len(page3) != 5 {
+		t.Fatalf("len(page3) = %d, want 5", len(page3))
+	}
+	if page3[0].ID != "page-rec-04" {
+		t.Errorf("page3 首条 = %s, want page-rec-04", page3[0].ID)
+	}
+	if page3[4].ID != "page-rec-00" {
+		t.Errorf("page3 末条 = %s, want page-rec-00", page3[4].ID)
+	}
+
+	// Offset 超过 total → 空列表
+	empty, err := db.ListRecords(RecordFilter{Limit: 10, Offset: 100})
+	if err != nil {
+		t.Fatalf("ListRecords offset=100: %v", err)
+	}
+	if len(empty) != 0 {
+		t.Errorf("offset 超出应返回空列表, got %d", len(empty))
+	}
+
+	// CountRecords 带筛选 + ListRecords 带筛选 + limit/offset
+	// 改几个城市做过滤测试
+	_, _ = db.UpdateRecord("page-rec-00", models.RecordRequest{City: "北京"})
+	_, _ = db.UpdateRecord("page-rec-01", models.RecordRequest{City: "北京"})
+	totalBj, _ := db.CountRecords(RecordFilter{City: "北京"})
+	if totalBj != 2 {
+		t.Fatalf("CountRecords city=北京 = %d, want 2", totalBj)
+	}
+	bjPage, err := db.ListRecords(RecordFilter{City: "北京", Limit: 1})
+	if err != nil {
+		t.Fatalf("ListRecords 筛选+limit: %v", err)
+	}
+	if len(bjPage) != 1 {
+		t.Fatalf("筛选+limit len = %d, want 1", len(bjPage))
 	}
 }

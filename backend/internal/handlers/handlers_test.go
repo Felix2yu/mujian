@@ -1306,3 +1306,84 @@ func TestBatchUpdateAllFields(t *testing.T) {
 	res, _ = doJSON(t, "POST", ts.URL+"/api/records/batch", map[string]interface{}{"ids": []string{}})
 	expectStatus(t, res, 400, "batch empty ids")
 }
+
+func TestListRecordsPaginationAPI(t *testing.T) {
+	ts, _, _, _ := newTestServer(t, nil)
+
+	// 先插入 15 条演出
+	for i := 0; i < 15; i++ {
+		res, _ := doJSON(t, "POST", ts.URL+"/api/records", map[string]interface{}{
+			"name":  fmt.Sprintf("分页测试 %d", i),
+			"city":  "上海",
+			"date":  time.Date(2026, 8, i+1, 19, 30, 0, 0, time.UTC).Unix(),
+			"price": 100 + i*10,
+		})
+		expectStatus(t, res, 201, "create record")
+	}
+
+	// 无 limit/offset → 返回全部 15 条 + total=15
+	res, b := doJSON(t, "GET", ts.URL+"/api/records", nil)
+	expectStatus(t, res, 200, "list all")
+	list, total := decodeRecordsPage(t, b)
+	if total != 15 {
+		t.Errorf("total=%d, want 15", total)
+	}
+	if len(list) != 15 {
+		t.Errorf("len(records)=%d, want 15", len(list))
+	}
+
+	// limit=5 → 返回 5 条，total 仍为 15
+	res, b = doJSON(t, "GET", ts.URL+"/api/records?limit=5", nil)
+	expectStatus(t, res, 200, "list limit=5")
+	list, total = decodeRecordsPage(t, b)
+	if total != 15 {
+		t.Errorf("limit=5: total=%d, want 15", total)
+	}
+	if len(list) != 5 {
+		t.Errorf("limit=5: len=%d, want 5", len(list))
+	}
+
+	// offset=5, limit=5 → 返回 5 条，且是第 6-10 条
+	res, b = doJSON(t, "GET", ts.URL+"/api/records?offset=5&limit=5", nil)
+	expectStatus(t, res, 200, "list offset=5 limit=5")
+	list, total = decodeRecordsPage(t, b)
+	if total != 15 {
+		t.Errorf("offset=5: total=%d, want 15", total)
+	}
+	if len(list) != 5 {
+		t.Errorf("offset=5: len=%d, want 5", len(list))
+	}
+
+	// offset=14, limit=5 → 只剩最后 1 条
+	res, b = doJSON(t, "GET", ts.URL+"/api/records?offset=14&limit=5", nil)
+	expectStatus(t, res, 200, "list offset=14 limit=5")
+	list, total = decodeRecordsPage(t, b)
+	if total != 15 {
+		t.Errorf("offset=14: total=%d, want 15", total)
+	}
+	if len(list) != 1 {
+		t.Errorf("offset=14: len=%d, want 1", len(list))
+	}
+
+	// offset=100 → 空列表
+	res, b = doJSON(t, "GET", ts.URL+"/api/records?offset=100&limit=5", nil)
+	expectStatus(t, res, 200, "list offset=100")
+	list, total = decodeRecordsPage(t, b)
+	if total != 15 {
+		t.Errorf("offset=100: total=%d, want 15", total)
+	}
+	if len(list) != 0 {
+		t.Errorf("offset=100: len=%d, want 0", len(list))
+	}
+
+	// 筛选 + 分页：city=上海 + limit=3
+	res, b = doJSON(t, "GET", ts.URL+"/api/records?city=上海&limit=3", nil)
+	expectStatus(t, res, 200, "list with filter+limit")
+	list, total = decodeRecordsPage(t, b)
+	if total != 15 {
+		t.Errorf("filter+limit: total=%d, want 15", total)
+	}
+	if len(list) != 3 {
+		t.Errorf("filter+limit: len=%d, want 3", len(list))
+	}
+}
