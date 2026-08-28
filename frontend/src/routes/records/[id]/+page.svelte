@@ -7,6 +7,11 @@
   import BackLink from '$lib/components/BackLink.svelte';
 
   const id = $page.params.id;
+  const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  function weekday(ts) {
+    if (!ts) return '';
+    return WEEKDAYS[new Date(ts * 1000).getDay()];
+  }
   let rec = $state(null);
   let loading = $state(true);
   let error = $state('');
@@ -156,7 +161,7 @@
         </div>
         <h1>{rec.name}</h1>
         <div class="sub">
-          <span class="date">{rec.dateText || formatDate(rec.date)}</span>
+          <span class="date">{rec.dateText || formatDate(rec.date)} {weekday(rec.date)}</span>
         </div>
         <div class="sub">
           {#if rec.city}
@@ -453,16 +458,14 @@
     justify-content: space-between;
     gap: 12px;
     margin-top: 12px;
-    padding: 12px 14px;
-    background: var(--accent-soft);
-    border: 1px solid var(--accent);
-    border-radius: var(--radius);
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
   }
-  .fee-total-label { font-size: 14px; font-weight: 700; color: var(--accent); }
+  .fee-total-label { font-size: 14px; font-weight: 600; color: var(--text-2); }
   .fee-total-amount {
     font-size: 20px;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
   }
   .fee-channel {
