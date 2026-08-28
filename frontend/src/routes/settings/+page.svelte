@@ -540,7 +540,6 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
     gap: 14px;
-    align-items: start;
     margin-bottom: 14px;
   }
   .sec { padding: 18px 20px; margin-bottom: 0; }
