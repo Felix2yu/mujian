@@ -180,6 +180,7 @@ func (db *DB) migrate() error {
 		`CREATE TABLE IF NOT EXISTS dramas (
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
+			aliases TEXT NOT NULL DEFAULT '[]',
 			category_name TEXT NOT NULL DEFAULT '',
 			category_names TEXT NOT NULL DEFAULT '[]',
 			remark TEXT NOT NULL DEFAULT '',
@@ -283,6 +284,10 @@ func (db *DB) migrate() error {
 	}
 	// Manual ordering for dramas/categories (0 = alphabetical).
 	if err := db.addColumn("dramas", "sort_order", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	// Drama aliases: different 剧种 may have different names for the same play.
+	if err := db.addColumn("dramas", "aliases", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
 		return err
 	}
 	if err := db.addColumn("categories", "sort_order", "INTEGER NOT NULL DEFAULT 0"); err != nil {
@@ -680,9 +685,13 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 		like := "%" + f.Query + "%"
 		// actor names now live in the artists entity table; search them via a
 		// JOIN so we don't need instr() over a JSON text column.
-		query += " LEFT JOIN record_artists ra_q ON ra_q.record_id = records.id LEFT JOIN artists a_q ON a_q.id = ra_q.artist_id"
-		where = append(where, `(records.name LIKE ? OR records.city LIKE ? OR records.address LIKE ? OR records.company LIKE ? OR records.channel LIKE ? OR records.remark LIKE ? OR records.friends LIKE ? OR records.category_name LIKE ? OR records.category_names LIKE ? OR a_q.name LIKE ? OR records.play LIKE ?)`)
-		for range 11 {
+		// Also search drama aliases via a JOIN to the dramas table.
+		query += ` LEFT JOIN record_artists ra_q ON ra_q.record_id = records.id
+			LEFT JOIN artists a_q ON a_q.id = ra_q.artist_id
+			LEFT JOIN record_dramas rd_q ON rd_q.record_id = records.id
+			LEFT JOIN dramas d_q ON d_q.id = rd_q.drama_id`
+		where = append(where, `(records.name LIKE ? OR records.city LIKE ? OR records.address LIKE ? OR records.company LIKE ? OR records.channel LIKE ? OR records.remark LIKE ? OR records.friends LIKE ? OR records.category_name LIKE ? OR records.category_names LIKE ? OR a_q.name LIKE ? OR records.play LIKE ? OR d_q.aliases LIKE ?)`)
+		for range 12 {
 			args = append(args, like)
 		}
 	}
@@ -1925,7 +1934,7 @@ func (db *DB) ListDramas() ([]models.Drama, error) {
 		return nil, err
 	}
 	rows, err := db.conn.Query(`
-		SELECT d.id, d.name, d.category_names, d.remark, d.sort_order,
+		SELECT d.id, d.name, d.aliases, d.category_names, d.remark, d.sort_order,
 			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id) AS zhezi_count,
 			(SELECT COUNT(*) FROM record_dramas rd WHERE rd.drama_id = d.id) AS record_count
 		FROM dramas d ORDER BY d.sort_order ASC, d.name COLLATE NOCASE`)
@@ -1935,9 +1944,11 @@ func (db *DB) ListDramas() ([]models.Drama, error) {
 	var raw []rawDrama
 	for rows.Next() {
 		var r rawDrama
-		if err := rows.Scan(&r.d.ID, &r.d.Name, &r.manual, &r.d.Remark, &r.d.SortOrder, &r.d.ZheziCount, &r.d.RecordCount); err != nil {
+		var aliases string
+		if err := rows.Scan(&r.d.ID, &r.d.Name, &aliases, &r.manual, &r.d.Remark, &r.d.SortOrder, &r.d.ZheziCount, &r.d.RecordCount); err != nil {
 			continue
 		}
+		r.d.Aliases = unmarshalStrings(aliases)
 		raw = append(raw, r)
 	}
 	if err := rows.Close(); err != nil {
@@ -1957,15 +1968,17 @@ func (db *DB) ListDramas() ([]models.Drama, error) {
 func (db *DB) GetDrama(id string) (*models.Drama, error) {
 	var d models.Drama
 	var manual string
+	var aliases string
 	err := db.conn.QueryRow(`
-		SELECT d.id, d.name, d.category_names, d.remark, d.sort_order,
+		SELECT d.id, d.name, d.aliases, d.category_names, d.remark, d.sort_order,
 			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id),
 			(SELECT COUNT(*) FROM record_dramas rd WHERE rd.drama_id = d.id)
 		FROM dramas d WHERE d.id = ?`, id).
-		Scan(&d.ID, &d.Name, &manual, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount)
+		Scan(&d.ID, &d.Name, &aliases, &manual, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount)
 	if err != nil {
 		return nil, fmt.Errorf("drama not found: %w", err)
 	}
+	d.Aliases = unmarshalStrings(aliases)
 	cats, err := db.dramaCategoriesFor(id)
 	if err != nil {
 		return nil, err
@@ -2052,7 +2065,7 @@ func (db *DB) ListDramaTree() ([]models.DramaTree, error) {
 		if err != nil {
 			continue
 		}
-		out = append(out, models.DramaTree{ID: d.ID, Name: d.Name, CategoryName: d.CategoryName, CategoryNames: d.CategoryNames, Zhezis: zs})
+		out = append(out, models.DramaTree{ID: d.ID, Name: d.Name, Aliases: d.Aliases, CategoryName: d.CategoryName, CategoryNames: d.CategoryNames, Zhezis: zs})
 	}
 	if out == nil {
 		out = []models.DramaTree{}
@@ -2085,10 +2098,10 @@ func (db *DB) SaveDrama(d models.Drama) (*models.Drama, error) {
 		db.conn.QueryRow("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM dramas").Scan(&d.SortOrder)
 	}
 	_, err := db.conn.Exec(`
-		INSERT INTO dramas (id, name, category_name, category_names, remark, sort_order) VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET name=excluded.name, category_name=excluded.category_name,
+		INSERT INTO dramas (id, name, aliases, category_name, category_names, remark, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET name=excluded.name, aliases=excluded.aliases, category_name=excluded.category_name,
 			category_names=excluded.category_names, remark=excluded.remark`,
-		d.ID, d.Name, d.CategoryName, marshalJSON(d.CategoryNames), d.Remark, d.SortOrder)
+		d.ID, d.Name, marshalJSON(d.Aliases), d.CategoryName, marshalJSON(d.CategoryNames), d.Remark, d.SortOrder)
 	if err != nil {
 		return nil, fmt.Errorf("save drama: %w", err)
 	}

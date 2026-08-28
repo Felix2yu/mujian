@@ -58,10 +58,13 @@ type Category struct {
 }
 
 // Drama is a 剧目 (a play/drama), a first-class entity that owns an ordered
-// list of 折子 (zhezi / sub-scenes).
+// list of 折子 (zhezi / sub-scenes). Because different 剧种 may have different
+// names for the same play (e.g. 评弹 vs 戏剧), each drama keeps an ordered
+// list of allowed aliases.
 type Drama struct {
 	ID            string   `json:"id"`
 	Name          string   `json:"name"`
+	Aliases       []string `json:"aliases"`
 	CategoryName  string   `json:"categoryName"`  // 主剧种 = CategoryNames[0]，kept in sync for compatibility
 	CategoryNames []string `json:"categoryNames"` // 剧目可跨多个剧种, e.g. [昆剧 苏剧]
 	Remark        string   `json:"remark"`
@@ -96,6 +99,7 @@ type DramaDetail struct {
 type DramaTree struct {
 	ID            string   `json:"id"`
 	Name          string   `json:"name"`
+	Aliases       []string `json:"aliases"`
 	CategoryName  string   `json:"categoryName"`
 	CategoryNames []string `json:"categoryNames"`
 	Zhezis        []Zhezi  `json:"zhezis"`

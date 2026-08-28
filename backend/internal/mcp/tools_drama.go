@@ -12,18 +12,20 @@ import (
 
 type CreateDramaInput struct {
 	Name          string        `json:"name"`
+	Aliases       StringOrArray `json:"aliases,omitempty"`
 	CategoryName  string        `json:"category_name,omitempty"`
 	CategoryNames StringOrArray `json:"category_names,omitempty"`
 	Remark        string        `json:"remark,omitempty"`
-	DryRun *bool          `json:"dry_run,omitempty"`
+	DryRun        *bool         `json:"dry_run,omitempty"`
 }
 
 type UpdateDramaInput struct {
-	ID            string   `json:"id"`
-	Name          *string  `json:"name,omitempty"`
-	CategoryNames []string `json:"category_names,omitempty"`
-	Remark        *string  `json:"remark,omitempty"`
-	DryRun *bool     `json:"dry_run,omitempty"`
+	ID            string     `json:"id"`
+	Name          *string    `json:"name,omitempty"`
+	Aliases       *ArrayOp   `json:"aliases,omitempty"`
+	CategoryNames []string   `json:"category_names,omitempty"`
+	Remark        *string    `json:"remark,omitempty"`
+	DryRun        *bool      `json:"dry_run,omitempty"`
 }
 
 // handleUpdateDrama updates a drama's editable fields via SaveDrama (upsert).
@@ -42,6 +44,9 @@ func (s *Server) handleUpdateDrama(ctx context.Context, req *mcp.CallToolRequest
 		}
 		d.Name = strings.TrimSpace(*in.Name)
 	}
+	if in.Aliases != nil {
+		d.Aliases = applyArrayOp(d.Aliases, in.Aliases)
+	}
 	if in.CategoryNames != nil {
 		d.CategoryNames = in.CategoryNames
 	}
@@ -55,6 +60,7 @@ func (s *Server) handleUpdateDrama(ctx context.Context, req *mcp.CallToolRequest
 			"drama_id":       d.ID,
 			"original_name":  origName,
 			"drama_name":     d.Name,
+			"aliases":        d.Aliases,
 			"category_names": d.CategoryNames,
 			"remark":         d.Remark,
 		})
@@ -75,6 +81,7 @@ func (s *Server) handleCreateDrama(ctx context.Context, req *mcp.CallToolRequest
 
 	d := models.Drama{
 		Name:          strings.TrimSpace(in.Name),
+		Aliases:       in.Aliases,
 		CategoryName:  in.CategoryName,
 		CategoryNames: in.CategoryNames,
 		Remark:        in.Remark,

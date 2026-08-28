@@ -110,8 +110,26 @@ func (s *Server) resolveDrama(id, name string) (*models.Drama, error) {
 			exact = d
 			break
 		}
+		// Check aliases for exact match
+		for _, alias := range d.Aliases {
+			if alias == name {
+				exact = d
+				break
+			}
+		}
+		if exact != nil {
+			break
+		}
 		if strings.Contains(strings.ToLower(d.Name), lower) {
 			partial = append(partial, fmt.Sprintf("%s (id=%s)", d.Name, d.ID))
+			continue
+		}
+		// Check aliases for partial match
+		for _, alias := range d.Aliases {
+			if strings.Contains(strings.ToLower(alias), lower) {
+				partial = append(partial, fmt.Sprintf("%s (id=%s)", d.Name, d.ID))
+				break
+			}
 		}
 	}
 	if exact != nil {

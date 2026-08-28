@@ -175,6 +175,7 @@ func (s *Server) registerTools() {
 		Description: "创建新剧目档案。name 必填，剧种默认由关联演出自动聚合。dry_run 默认为 true（仅预览，不真正修改；显式传 dry_run=false 才执行）；预览不创建。",
 		InputSchema: toolSchema([]string{"name"}, map[string]*jsonschema.Schema{
 			"name":           strProp(),
+			"aliases":        arrayProp("string"),
 			"category_name":  strProp(),
 			"category_names": arrayProp("string"),
 			"remark":         strProp(),
@@ -184,7 +185,7 @@ func (s *Server) registerTools() {
 
 	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "update_drama",
-		Description: "更新剧目档案的名称/备注/剧种。剧种默认由关联演出自动聚合；category_names 提供非空列表时手动覆盖（用于修正拼盘演出导致的聚合偏差），空数组则清除覆盖回到自动。未提供的字段保持不变。dry_run 默认为 true（仅预览，不真正修改；显式传 dry_run=false 才执行）；预览不修改。",
+		Description: "更新剧目档案的名称/别名/备注/剧种。剧种默认由关联演出自动聚合；category_names 提供非空列表时手动覆盖（用于修正拼盘演出导致的聚合偏差），空数组则清除覆盖回到自动。未提供的字段保持不变。dry_run 默认为 true（仅预览，不真正修改；显式传 dry_run=false 才执行）；预览不修改。",
 	}, s.handleUpdateDrama)
 
 	mcp.AddTool(s.server, &mcp.Tool{

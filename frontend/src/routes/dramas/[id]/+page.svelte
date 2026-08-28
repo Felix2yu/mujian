@@ -16,7 +16,7 @@
 
   // inline drama editing
   let editingInfo = $state(false);
-  let info = $state({ name: '', categoryNames: [], remark: '' });
+  let info = $state({ name: '', aliases: '', categoryNames: [], remark: '' });
 
   // zhezi creation / editing
   let form = $state({ name: '', aliases: '', remark: '' });
@@ -34,7 +34,7 @@
       drama = d;
       zhezis = d.zhezis || [];
       records = d.records || [];
-      info = { name: d.name, categoryNames: [], remark: d.remark };
+      info = { name: d.name, aliases: (d.aliases || []).join(', '), categoryNames: [], remark: d.remark };
       api.listCategories().then((cs) => (categories = cs)).catch(() => {});
     } catch (e) {
       error = e.message;
@@ -45,7 +45,7 @@
 
   function startEdit() {
     // 编辑框显示当前生效剧种；清空保存则回到「按演出自动聚合」
-    info = { name: drama.name, categoryNames: (drama.categoryNames || []).slice(), remark: drama.remark };
+    info = { name: drama.name, aliases: (drama.aliases || []).join(', '), categoryNames: (drama.categoryNames || []).slice(), remark: drama.remark };
     editingInfo = true;
   }
 
@@ -54,7 +54,8 @@
     saving = true;
     error = '';
     try {
-      drama = await api.updateDrama(id, { name: info.name.trim(), categoryNames: info.categoryNames.slice(), remark: info.remark.trim() });
+      const aliases = splitList(info.aliases);
+      drama = await api.updateDrama(id, { name: info.name.trim(), aliases, categoryNames: info.categoryNames.slice(), remark: info.remark.trim() });
       editingInfo = false;
     } catch (e) {
       error = e.message;
@@ -178,6 +179,7 @@
     <div class="card head-card">
       {#if editingInfo}
         <input class="input" placeholder="剧目名称" bind:value={info.name} />
+        <input class="input" placeholder="别名（逗号分隔），如：三国志, 桃园三结义" bind:value={info.aliases} />
         <div class="row">
           <CategoryTags bind:values={info.categoryNames} {categories} placeholder="剧种（可多个）；清空则按演出自动统计" />
         </div>
@@ -192,6 +194,9 @@
           <div>
             <h1>{drama.name}</h1>
             <div class="sub">
+              {#if drama.aliases && drama.aliases.length}
+                <span class="aliases">别名：{drama.aliases.join(' / ')}</span>
+              {/if}
               {#each drama.categoryNames || [] as cn}<span class="pill" title="由关联演出自动统计">{cn}</span>{/each}
               <span class="muted">{drama.zheziCount} 折 · {drama.recordCount} 场演出</span>
             </div>
