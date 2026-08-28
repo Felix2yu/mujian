@@ -103,6 +103,20 @@ func decodeResp(t *testing.T, b []byte, v interface{}) {
 	}
 }
 
+type recordsPage struct {
+	Records []models.Record `json:"records"`
+	Total   int             `json:"total"`
+}
+
+func decodeRecordsPage(t *testing.T, b []byte) ([]models.Record, int) {
+	t.Helper()
+	var p recordsPage
+	if err := json.Unmarshal(b, &p); err != nil {
+		t.Fatalf("decode records page %s: %v", b, err)
+	}
+	return p.Records, p.Total
+}
+
 func jpgFixture() []byte {
 	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
 	for y := 0; y < 32; y++ {
@@ -136,8 +150,7 @@ func TestRecordsEndpoints(t *testing.T) {
 	// Empty list.
 	res, b := doJSON(t, "GET", ts.URL+"/api/records", nil)
 	expectStatus(t, res, 200, "list records")
-	var list []models.Record
-	decodeResp(t, b, &list)
+	list, _ := decodeRecordsPage(t, b)
 	if len(list) != 0 {
 		t.Fatalf("expected empty list, got %v", list)
 	}

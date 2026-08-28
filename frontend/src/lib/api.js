@@ -80,12 +80,17 @@ export async function streamRequest(path, options = {}, onLine) {
 }
 
 export const api = {
-  listRecords: (params = {}) => {
+  listRecords: async (params = {}) => {
     const q = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) {
       if (v !== '' && v != null) q.set(k, v);
     }
-    return request(`/api/records?${q.toString()}`);
+    const data = await request(`/api/records?${q.toString()}`);
+    // 后端返回 {records: [...], total: N}；兼容旧版返回纯数组
+    if (Array.isArray(data)) {
+      return { records: data, total: data.length };
+    }
+    return { records: data.records ?? [], total: data.total ?? 0 };
   },
   getRecord: (id) => request(`/api/records/${id}`),
   createRecord: (data) => request('/api/records', { method: 'POST', body: JSON.stringify(data) }),

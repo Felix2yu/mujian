@@ -679,6 +679,8 @@ type RecordFilter struct {
 	DramaID  string // a record whose drama_ids contains this id
 	ZheziID  string // a record whose zhezi_ids contains this id
 	ArtistID string // a record whose artist_ids contains this id
+	Limit    int
+	Offset   int
 }
 
 func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
@@ -756,6 +758,12 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
 	query += " ORDER BY date DESC"
+	if f.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", f.Limit)
+	}
+	if f.Offset > 0 {
+		query += fmt.Sprintf(" OFFSET %d", f.Offset)
+	}
 
 	rows, err := db.conn.Query(query, args...)
 	if err != nil {
@@ -785,6 +793,72 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 		slog.Warn("backfill artist ids", "err", err)
 	}
 	return out, nil
+}
+
+// CountRecords returns the total number of records matching the filter.
+// Used for pagination alongside ListRecords.
+func (db *DB) CountRecords(f RecordFilter) (int, error) {
+	query := `SELECT COUNT(DISTINCT records.id) FROM records`
+	where := []string{}
+	args := []interface{}{}
+
+	if f.Query != "" {
+		like := "%" + f.Query + "%"
+		query += ` LEFT JOIN record_artists ra_q ON ra_q.record_id = records.id
+			LEFT JOIN artists a_q ON a_q.id = ra_q.artist_id
+			LEFT JOIN record_dramas rd_q ON rd_q.record_id = records.id
+			LEFT JOIN dramas d_q ON d_q.id = rd_q.drama_id`
+		where = append(where, `(records.name LIKE ? OR records.city LIKE ? OR records.address LIKE ? OR records.company LIKE ? OR records.channel LIKE ? OR records.remark LIKE ? OR records.friends LIKE ? OR records.category_name LIKE ? OR records.category_names LIKE ? OR a_q.name LIKE ? OR records.play LIKE ? OR d_q.aliases LIKE ?)`)
+		for range 12 {
+			args = append(args, like)
+		}
+	}
+	if f.Category != "" {
+		query += " JOIN json_each(records.category_names) je_cat ON je_cat.value = ?"
+		args = append(args, f.Category)
+	}
+	if f.City != "" {
+		where = append(where, "city = ?")
+		args = append(args, f.City)
+	}
+	if f.DramaID != "" {
+		query += " JOIN record_dramas rd ON rd.record_id = records.id"
+		where = append(where, "rd.drama_id = ?")
+		args = append(args, f.DramaID)
+	}
+	if f.ZheziID != "" {
+		query += " JOIN record_zhezis rz ON rz.record_id = records.id"
+		where = append(where, "rz.zhezi_id = ?")
+		args = append(args, f.ZheziID)
+	}
+	if f.ArtistID != "" {
+		query += " JOIN record_artists ra ON ra.record_id = records.id"
+		where = append(where, "ra.artist_id = ?")
+		args = append(args, f.ArtistID)
+	}
+	if f.Year > 0 && f.Month > 0 {
+		start := time.Date(f.Year, time.Month(f.Month), 1, 0, 0, 0, 0, db.loc)
+		end := start.AddDate(0, 1, 0)
+		where = append(where, "date >= ? AND date < ?")
+		args = append(args, start.Unix(), end.Unix())
+	} else if f.Start != "" || f.End != "" {
+		if t, ok := parseTimeArg(f.Start, db.loc); ok {
+			where = append(where, "date >= ?")
+			args = append(args, t.Unix())
+		}
+		if t, ok := parseTimeArg(f.End, db.loc); ok {
+			where = append(where, "date < ?")
+			args = append(args, t.AddDate(0, 0, 1).Unix())
+		}
+	}
+
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+
+	var total int
+	err := db.conn.QueryRow(query, args...).Scan(&total)
+	return total, err
 }
 
 func parseTimeArg(s string, loc *time.Location) (time.Time, bool) {

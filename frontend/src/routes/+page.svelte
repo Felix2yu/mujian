@@ -13,12 +13,19 @@
   let categories = $state([]);
   let cities = $state([]);
   let loading = $state(true);
+  let loadingMore = $state(false);
   let error = $state('');
+  let total = $state(0);
+  const PAGE_SIZE = 30;
+  let offset = 0;
+  let hasMore = $state(false);
   let filters = $state({ q: '', category: '', city: '', year: '', month: '', drama: '', zhezi: '' });
   let showFilter = $state(false);
   let zheziNames = $state(new Map());
   let searchTimer;
   let searchComposing = false;
+  let sentinelEl = $state(null);
+  let sentinelObserver = null;
 
   // 定位到当前时间：锚点为最近已发生（含今天）的演出；全为未来演出时取最接近现在的
   let showJump = $state(false);
@@ -159,17 +166,42 @@
     if (url !== cur) history.replaceState(history.state, '', url);
   });
 
+  // 合并筛选参数 + 分页参数
+  function buildQuery(off = 0, limit = PAGE_SIZE) {
+    return { ...filters, offset: off, limit };
+  }
+
   async function load() {
     loading = true;
+    loadingMore = false;
+    offset = 0;
     error = '';
     try {
-      const all = await api.listRecords(filters);
+      const { records: page, total: t } = await api.listRecords(buildQuery(0, PAGE_SIZE));
       const visible = new Set(loadStatusFilter());
-      records = all.filter((r) => visible.has(r.active_status));
+      records = page.filter((r) => visible.has(r.active_status));
+      total = t;
+      hasMore = PAGE_SIZE < t;
     } catch (e) {
       error = e.message;
     } finally {
       loading = false;
+    }
+  }
+
+  async function loadMore() {
+    if (loading || loadingMore || !hasMore) return;
+    loadingMore = true;
+    try {
+      const { records: page } = await api.listRecords(buildQuery(offset + PAGE_SIZE, PAGE_SIZE));
+      offset += PAGE_SIZE;
+      const visible = new Set(loadStatusFilter());
+      records = [...records, ...page.filter((r) => visible.has(r.active_status))];
+      hasMore = offset + PAGE_SIZE < total;
+    } catch (e) {
+      // 静默失败，保留已加载的
+    } finally {
+      loadingMore = false;
     }
   }
 
@@ -215,6 +247,29 @@
     filters = { q: '', category: '', city: '', year: '', month: '', drama: '', zhezi: '' };
     load();
   }
+
+  function setupSentinelObserver() {
+    if (sentinelObserver) return;
+    sentinelObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && hasMore && !loading && !loadingMore) {
+            loadMore();
+          }
+        }
+      },
+      { rootMargin: '400px 0px' }
+    );
+  }
+
+  // sentinelEl 就绪后开始观察（列表渲染完才会有 sentinelEl）
+  $effect(() => {
+    if (sentinelEl) {
+      setupSentinelObserver();
+      sentinelObserver.disconnect();
+      sentinelObserver.observe(sentinelEl);
+    }
+  });
 
   onMount(() => {
     const sp = new URLSearchParams($page.url.search);
@@ -297,7 +352,7 @@
   {/if}
 
   <div class="count-row">
-    <h2>记录 <span class="num">{records.length}</span></h2>
+    <h2>记录 <span class="num">{records.length}</span> / {total}</h2>
   </div>
 
       {#if batchError}
@@ -336,6 +391,14 @@
             </div>
           {/each}
         </div>
+        <!-- 无限滚动哨兵 -->
+        {#if hasMore}
+          <div bind:this={sentinelEl} class="sentinel" aria-hidden="true">
+            {#if loadingMore}
+              <div class="sentinel-loader"><span></span><span></span><span></span></div>
+            {/if}
+          </div>
+        {/if}
       {/if}
 </div>
 
@@ -671,5 +734,35 @@
     .search-wrap { flex: 1 1 100%; }
     .action-row { flex: 1 1 100%; }
     .action-row .btn { flex: 1 1 auto; justify-content: center; }
+  }
+
+  /* 无限滚动哨兵 */
+  .sentinel {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 48px;
+    padding: 16px 0 32px;
+  }
+  .sentinel-loader {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+  }
+  .sentinel-loader span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: 0.3;
+    animation: sentinel-pulse 1.2s ease-in-out infinite;
+  }
+  .sentinel-loader span:nth-child(2) { animation-delay: 0.15s; }
+  .sentinel-loader span:nth-child(3) { animation-delay: 0.3s; }
+
+  @keyframes sentinel-pulse {
+    0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); }
+    40% { opacity: 1; transform: scale(1.1); }
   }
 </style>

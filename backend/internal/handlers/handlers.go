@@ -153,9 +153,21 @@ func (h *Handler) listRecords(w http.ResponseWriter, r *http.Request) {
 	f.End = q.Get("end")
 	f.DramaID = q.Get("drama")
 	f.ZheziID = q.Get("zhezi")
+	if v := q.Get("limit"); v != "" {
+		f.Limit, _ = strconv.Atoi(v)
+	}
+	if v := q.Get("offset"); v != "" {
+		f.Offset, _ = strconv.Atoi(v)
+	}
 
-	if f.Query != "" && f.Category == "" && f.City == "" && f.Year == 0 && f.Start == "" && f.End == "" {
-		// pure search uses the dedicated search path but list supports it too
+	// total 计数不受 limit/offset 影响，始终返回完整匹配数
+	countFilter := f
+	countFilter.Limit = 0
+	countFilter.Offset = 0
+	total, err := h.db.CountRecords(countFilter)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
 	}
 
 	recs, err := h.db.ListRecords(f)
@@ -163,7 +175,10 @@ func (h *Handler) listRecords(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 500, err.Error())
 		return
 	}
-	jsonResp(w, 200, recs)
+	jsonResp(w, 200, map[string]interface{}{
+		"records": recs,
+		"total":   total,
+	})
 }
 
 func (h *Handler) listAllRecords(w http.ResponseWriter, r *http.Request) {
