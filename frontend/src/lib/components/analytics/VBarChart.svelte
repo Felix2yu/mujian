@@ -12,7 +12,6 @@
     unit = ''
   } = $props();
 
-  const W = 760;
   const padTop = 14;
   const padBottom = 32;
   const padX = 8;
@@ -21,6 +20,7 @@
   let max = $derived(
     Math.max(maxValue ?? 1, ...data.map((d) => d.value || 0), 1)
   );
+  let W = $derived(Math.max(360, data.length * 60 + padLeft + padX));
   let plotH = $derived(height - padTop - padBottom);
   let plotW = $derived(W - padLeft - padX);
   let slot = $derived(plotW / Math.max(data.length, 1));

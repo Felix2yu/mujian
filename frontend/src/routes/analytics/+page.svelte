@@ -94,8 +94,13 @@
   let dramaHref = (it) => `/dramas/${it.id}`;
 
   // ---- new dimensions derived ----
-  let priceBars = $derived((data?.price_buckets ?? []).map((d) => ({ label: d.name, value: d.count })));
-  let otherCostBars = $derived((data?.other_cost_buckets ?? []).map((d) => ({ label: d.name, value: d.count })));
+  // 合并票价 / 其他花费 到统一分桶（后端已保证桶序一致，前端再按固定顺序对齐并补零）
+  const expenseBucketOrder = ['0–99', '100–199', '200–399', '400–799', '800+'];
+  let expenseBars = $derived.by(() => {
+    const pm = Object.fromEntries((data?.price_buckets ?? []).map((d) => [d.name, d.count]));
+    const om = Object.fromEntries((data?.other_cost_buckets ?? []).map((d) => [d.name, d.count]));
+    return expenseBucketOrder.map((b) => ({ label: b, current: pm[b] ?? 0, previous: om[b] ?? 0 }));
+  });
   let weekdayBars = $derived((data?.weekday_dist ?? []).map((w) => ({ label: w.name, value: w.count })));
   let intervalBars = $derived((data?.intervals?.buckets ?? []).map((d) => ({ label: d.name, value: d.count })));
   let discoveryLabels = $derived((data?.discovery ?? []).map((d) => d.period.slice(2)));
@@ -317,22 +322,18 @@
 
     <!-- ============ 票价与剧目结构 ============ -->
     <section class="block">
-      <h2 class="sec-title">💸 票价与剧目结构 <span class="hint">实付票价 / 其他花费 分桶分布</span></h2>
-      <div class="grid-3">
+      <h2 class="sec-title">💸 票价与剧目结构 <span class="hint">实付票价 / 其他花费 合并分桶分布</span></h2>
+      <div class="grid-2">
         <div class="card sec">
-          <h3>实付票价分布</h3>
-          {#if data.price_buckets.length === 0}
-            <p class="tiny">暂无实付票价记录</p>
+          <h3>开支分布</h3>
+          {#if data.price_buckets.length === 0 && (data.other_cost_buckets ?? []).length === 0}
+            <p class="tiny">暂无开支记录</p>
           {:else}
-            <VBarChart data={priceBars} height={200} labelEvery={1} unit=" 场" color="var(--gold)" />
-          {/if}
-        </div>
-        <div class="card sec">
-          <h3>其他花费分布</h3>
-          {#if (data.other_cost_buckets ?? []).length === 0}
-            <p class="tiny">暂无其他花费记录</p>
-          {:else}
-            <VBarChart data={otherCostBars} height={200} labelEvery={1} unit=" 场" color="#0e7490" />
+            <CompareBars data={expenseBars} height={210} labelEvery={1} unit=" 场" />
+            <div class="legend-compare">
+              <span><i class="sw cur"></i>实付票价</span>
+              <span><i class="sw prev"></i>其他花费</span>
+            </div>
           {/if}
         </div>
         <div class="card sec">
