@@ -1855,3 +1855,265 @@ func TestListRecordsPagination(t *testing.T) {
 		t.Fatalf("筛选+limit len = %d, want 1", len(bjPage))
 	}
 }
+
+func TestGetAnalytics(t *testing.T) {
+	db := newTestDB(t)
+
+	// 空库也能返回合法结构体（不是 nil，各 slice 已初始化）
+	a, err := db.GetAnalytics()
+	if err != nil {
+		t.Fatalf("empty GetAnalytics: %v", err)
+	}
+	if a == nil {
+		t.Fatal("empty GetAnalytics 返回 nil")
+	}
+	if a.Overview.TotalRecords != 0 {
+		t.Errorf("empty TotalRecords = %d, want 0", a.Overview.TotalRecords)
+	}
+	if len(a.Trends) != 24 {
+		t.Errorf("empty Trends len = %d, want 24", len(a.Trends))
+	}
+	if len(a.RatingDist) != 0 {
+		t.Errorf("empty RatingDist should be empty slice when no rated records, got %d", len(a.RatingDist))
+	}
+	if a.Rewatch == nil {
+		t.Error("empty Rewatch should not be nil")
+	}
+
+	// 先插入 dramas / zhezis / artists 实体（让 UpsertRecord 能关联到它们）
+	dramas := []string{"牡丹亭", "长生殿", "西厢记", "玉簪记", "赵氏孤儿", "雷峰塔"}
+	for _, name := range dramas {
+		id := fmt.Sprintf("d-%s", name)
+		db.conn.Exec("INSERT OR IGNORE INTO dramas (id, name, aliases) VALUES (?, ?, '[]')", id, name)
+	}
+	zhezis := []string{"惊梦", "寻梦", "叫画", "琴挑", "断桥", "哭塔"}
+	for _, name := range zhezis {
+		id := fmt.Sprintf("z-%s", name)
+		db.conn.Exec("INSERT OR IGNORE INTO zhezis (id, name, drama_id) VALUES (?, ?, 'd-牡丹亭')", id, name)
+	}
+	artists := []string{"张军", "王芳", "沈昳丽", "黎安", "余彬", "倪徐浩", "罗晨雪", "袁国良"}
+	for _, name := range artists {
+		id := fmt.Sprintf("a-%s", name)
+		db.conn.Exec("INSERT OR IGNORE INTO artists (id, name) VALUES (?, ?)", id, name)
+	}
+
+	// 插入多样化演出（跨城市、评分、价格、时间、演员、剧目）
+	base := time.Now()
+	cities := []string{"上海", "北京", "广州", "杭州"}
+	// 用真实存在的 drama/zhezi/artist id
+	dramaIDs := []string{"d-牡丹亭", "d-长生殿", "d-西厢记", "d-玉簪记", "d-赵氏孤儿", "d-雷峰塔"}
+	zheziIDs := []string{"z-惊梦", "z-寻梦", "z-叫画", "z-琴挑", "z-断桥", "z-哭塔"}
+	artistIDs := []string{"a-张军", "a-王芳", "a-沈昳丽", "a-黎安", "a-余彬", "a-倪徐浩", "a-罗晨雪", "a-袁国良"}
+	for i := 0; i < 60; i++ {
+		// 分布在过去 24 个月内
+		date := base.AddDate(0, -int(i%24), -i%28)
+		r := models.Record{
+			ID:              fmt.Sprintf("ana-%03d", i),
+			Name:            dramas[i%len(dramas)],
+			Channel:         []string{"大麦", "永乐票务", "微店", "其它"}[i%4],
+			City:            cities[i%len(cities)],
+			Address:         fmt.Sprintf("剧院 %02d", i%15),
+			Coordinate:      &models.Coordinate{Latitude: 30.0 + float64(i%10), Longitude: 120.0 + float64(i%10)},
+			Date:            date.Unix(),
+			DateText:        date.Format("2006-01-02 15:04"),
+			Rating:          []int{1, 2, 3, 4, 5, 0}[i%6], // 含未评分
+			Price:           float64(50 + i*5),
+			PayPrice:        float64(30 + i*4),
+			OtherCost:       float64(i * 2),
+			PriceCurrency:   "CNY",
+			Company:         []string{"上昆", "苏昆", "浙昆", "京昆"}[i%4],
+			ActiveStatus:    1,
+			ArtistNames:     []string{artists[i%8], artists[(i+3)%8]},
+			Play:            []string{zhezis[i%6]},
+			DramaIDs:        []string{dramaIDs[i%len(dramas)]},
+			ZheziIDs:        []string{zheziIDs[i%6]},
+			ArtistIDs:       []string{artistIDs[i%8], artistIDs[(i+3)%8]},
+			CategoryName:    []string{"昆曲", "京剧", "越剧", "其他"}[i%4],
+		}
+		if err := db.UpsertRecord(r); err != nil {
+			t.Fatalf("Upsert %d: %v", i, err)
+		}
+	}
+
+	// 再来几个没有评分/没有价格的边缘记录
+	edges := []models.Record{
+		{ID: "edge-no-rating", Name: "无评分", City: "上海", Channel: "大麦", Date: base.AddDate(0, -2, 0).Unix(), DateText: base.AddDate(0, -2, 0).Format("2006-01-02 15:04"), Price: 200, PayPrice: 200, CategoryName: "昆曲", ActiveStatus: 1, ArtistNames: []string{"张军"}},
+		{ID: "edge-zero-price", Name: "零票价", City: "南京", Channel: "现场", Date: base.AddDate(0, -1, 0).Unix(), DateText: base.AddDate(0, -1, 0).Format("2006-01-02 15:04"), Price: 0, PayPrice: 0, CategoryName: "昆曲", ActiveStatus: 1},
+		{ID: "edge-old", Name: "老记录", City: "苏州", Channel: "朋友送", Date: time.Now().AddDate(-3, 0, 0).Unix(), DateText: time.Now().AddDate(-3, 0, 0).Format("2006-01-02 15:04"), Rating: 4, Price: 800, PayPrice: 500, CategoryName: "昆曲", ActiveStatus: 1},
+	}
+	for _, r := range edges {
+		if err := db.UpsertRecord(r); err != nil {
+			t.Fatalf("Upsert edge: %v", err)
+		}
+	}
+
+	a, err = db.GetAnalytics()
+	if err != nil {
+		t.Fatalf("GetAnalytics: %v", err)
+	}
+
+	// ---- Overview ----
+	if a.Overview.TotalRecords != 60+len(edges) {
+		t.Errorf("TotalRecords = %d, want %d", a.Overview.TotalRecords, 60+len(edges))
+	}
+	if a.Overview.TotalCost <= 0 {
+		t.Error("TotalCost should be > 0 with data")
+	}
+	if a.Overview.AvgRating <= 0 || a.Overview.AvgRating > 5 {
+		t.Errorf("AvgRating = %v, should be in (0,5]", a.Overview.AvgRating)
+	}
+	if a.Overview.TotalCities < 4 {
+		t.Errorf("TotalCities = %d, want >= 4", a.Overview.TotalCities)
+	}
+
+	// ---- Trends: 24 个月，每个 TrendPoint.Period 格式 YYYY-MM ----
+	if len(a.Trends) != 24 {
+		t.Errorf("Trends len = %d, want 24", len(a.Trends))
+	}
+	for _, tp := range a.Trends {
+		if len(tp.Period) != 7 || tp.Period[4] != '-' {
+			t.Errorf("Trends Period = %q, want YYYY-MM", tp.Period)
+		}
+	}
+
+	// ---- 分布 ----
+	if len(a.CategoryDist) == 0 {
+		t.Error("CategoryDist 不应为空")
+	}
+	if len(a.ChannelDist) == 0 {
+		t.Error("ChannelDist 不应为空")
+	}
+	if len(a.CityDist) == 0 {
+		t.Error("CityDist 不应为空")
+	}
+	if len(a.YearDist) == 0 {
+		t.Error("YearDist 不应为空（含 edge-old 的跨年数据）")
+	}
+	// RatingDist: 5 颗星都应该有对应条目（哪怕 0）
+	if len(a.RatingDist) != 5 {
+		t.Errorf("RatingDist len = %d, want 5 (1..5★)", len(a.RatingDist))
+	}
+
+	// ---- 比较 / 异常 / 排名 / 其他 ----
+	// CompareMonthly 基于 24 个月，取后 12 个 → 12 条
+	if len(a.CompareMonthly) != 12 {
+		t.Errorf("CompareMonthly len = %d, want 12", len(a.CompareMonthly))
+	}
+	// TopArtists / TopDramas / TopVenues 都应有数据
+	if len(a.TopArtists) == 0 {
+		t.Error("TopArtists 不应为空")
+	}
+	if len(a.TopDramas) == 0 {
+		t.Error("TopDramas 不应为空")
+	}
+	if len(a.TopVenues) == 0 {
+		t.Error("TopVenues 不应为空")
+	}
+
+	// CorrPairs 固定 4 条
+	if len(a.CorrPairs) != 4 {
+		t.Errorf("CorrPairs len = %d, want 4", len(a.CorrPairs))
+	}
+
+	// Scatter 应有数据（有 rating > 0 且 price > 0 的记录）
+	if len(a.Scatter) == 0 {
+		t.Error("Scatter 不应为空")
+	}
+
+	// 价格/其他花费 buckets、rewatch、discovery、diversity、interval、weekday
+	// 应至少有非 nil 结果
+	if a.Rewatch == nil {
+		t.Error("Rewatch 不应为 nil")
+	}
+	if a.Diversity == nil {
+		t.Error("Diversity 不应为 nil")
+	}
+	if a.Intervals == nil {
+		t.Error("Intervals 不应为 nil")
+	}
+
+	// ---- TopZhezis / Discovery / WeekdayDist 等数组 ----
+	if len(a.TopZhezis) == 0 {
+		t.Error("TopZhezis 不应为空")
+	}
+	if len(a.Discovery) == 0 {
+		t.Error("Discovery 不应为空")
+	}
+	if len(a.WeekdayDist) == 0 {
+		t.Error("WeekdayDist 不应为空")
+	}
+
+	// ---- PriceBuckets / OtherCostBuckets ----
+	if len(a.PriceBuckets) == 0 {
+		t.Error("PriceBuckets 不应为空")
+	}
+	if len(a.OtherCostBuckets) == 0 {
+		t.Error("OtherCostBuckets 不应为空")
+	}
+
+	// ---- Anomalies（z-score 检测）：数据跨 24 个月，有波动就应能检测到 ----
+	// 不是必须有 anomaly，但如果活跃窗口有足够 variance，应该产生
+	// 我们只验证：这个字段存在且不会 panic
+	_ = a.Anomalies
+}
+
+// TestCountRecordsBranches 专门覆盖 CountRecords 的所有筛选分支
+func TestCountRecordsBranches(t *testing.T) {
+	db := newTestDB(t)
+
+	// 先插入 dramas / zhezis / artists 实体
+	db.conn.Exec("INSERT OR IGNORE INTO dramas (id, name, aliases) VALUES ('d-1', '牡丹亭', '[]'), ('d-2', '长生殿', '[]')")
+	db.conn.Exec("INSERT OR IGNORE INTO zhezis (id, name, drama_id) VALUES ('z-1', '惊梦', 'd-1'), ('z-2', '寻梦', 'd-1')")
+	db.conn.Exec("INSERT OR IGNORE INTO artists (id, name) VALUES ('a-1', '张军'), ('a-2', '王芳')")
+
+	// 6 条记录，覆盖不同组合
+	now := time.Now()
+	recs := []models.Record{
+		{ID: "c1", Name: "牡丹亭", City: "上海", Channel: "大麦", Company: "上昆", CategoryName: "昆曲", ActiveStatus: 1, DramaIDs: []string{"d-1"}, ZheziIDs: []string{"z-1"}, ArtistIDs: []string{"a-1"}, ArtistNames: []string{"张军"}, Date: now.Unix(), DateText: now.Format("2006-01-02 15:04")},
+		{ID: "c2", Name: "牡丹亭", City: "北京", Channel: "现场", Company: "上昆", CategoryName: "昆曲", ActiveStatus: 1, DramaIDs: []string{"d-1"}, ZheziIDs: []string{"z-2"}, ArtistIDs: []string{"a-2"}, ArtistNames: []string{"王芳"}, Date: now.AddDate(0, -1, 0).Unix(), DateText: now.AddDate(0, -1, 0).Format("2006-01-02 15:04")},
+		{ID: "c3", Name: "长生殿", City: "上海", Channel: "大麦", Company: "苏昆", CategoryName: "昆曲", ActiveStatus: 1, DramaIDs: []string{"d-2"}, ArtistIDs: []string{"a-1"}, ArtistNames: []string{"张军"}, Date: now.AddDate(0, -2, 0).Unix(), DateText: now.AddDate(0, -2, 0).Format("2006-01-02 15:04")},
+		{ID: "c4", Name: "长生殿", City: "杭州", Channel: "微店", Company: "苏昆", CategoryName: "昆曲", ActiveStatus: 1, DramaIDs: []string{"d-2"}, ArtistIDs: []string{"a-2"}, ArtistNames: []string{"王芳"}, Date: now.AddDate(0, -3, 0).Unix(), DateText: now.AddDate(0, -3, 0).Format("2006-01-02 15:04")},
+		{ID: "c5", Name: "京剧白蛇传", City: "北京", Channel: "大麦", Company: "京昆", CategoryName: "京剧", ActiveStatus: 1, Date: now.AddDate(0, -4, 0).Unix(), DateText: now.AddDate(0, -4, 0).Format("2006-01-02 15:04")},
+		{ID: "c6", Name: "越剧红楼梦", City: "上海", Channel: "现场", Company: "越剧院", CategoryName: "越剧", ActiveStatus: 1, Date: now.AddDate(0, -5, 0).Unix(), DateText: now.AddDate(0, -5, 0).Format("2006-01-02 15:04")},
+	}
+	for _, r := range recs {
+		if err := db.UpsertRecord(r); err != nil {
+			t.Fatalf("Upsert %s: %v", r.ID, err)
+		}
+	}
+
+	// 表驱动测试：每个 Case 设一个或多个筛选字段，验证总数
+	cases := []struct {
+		name  string
+		f     RecordFilter
+		want  int
+	}{
+		{"全量", RecordFilter{}, 6},
+		{"Query: 牡丹亭", RecordFilter{Query: "牡丹亭"}, 2},
+		{"Query: 张军 (演员)", RecordFilter{Query: "张军"}, 2},
+		{"Query: 大麦 (channel)", RecordFilter{Query: "大麦"}, 3},
+		{"City=上海", RecordFilter{City: "上海"}, 3},
+		{"City=北京", RecordFilter{City: "北京"}, 2},
+		{"DramaID=d-1 (牡丹亭)", RecordFilter{DramaID: "d-1"}, 2},
+		{"DramaID=d-2 (长生殿)", RecordFilter{DramaID: "d-2"}, 2},
+		{"ZheziID=z-1", RecordFilter{ZheziID: "z-1"}, 1},
+		{"ArtistID=a-1 (张军)", RecordFilter{ArtistID: "a-1"}, 2},
+		{"ArtistID=a-2 (王芳)", RecordFilter{ArtistID: "a-2"}, 2},
+		{"Year+Month 当月", RecordFilter{Year: now.Year(), Month: int(now.Month())}, 1}, // c1
+		{"City+Drama 联合", RecordFilter{City: "上海", DramaID: "d-1"}, 1},            // c1
+		{"Artist+City 联合", RecordFilter{ArtistID: "a-1", City: "上海"}, 2},           // c1, c3
+		{"Start 从今天起", RecordFilter{Start: now.Format("2006-01-02")}, 1},          // c1
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := db.CountRecords(tc.f)
+			if err != nil {
+				t.Fatalf("CountRecords(%+v): %v", tc.f, err)
+			}
+			if got != tc.want {
+				t.Errorf("CountRecords(%+v) = %d, want %d", tc.f, got, tc.want)
+			}
+		})
+	}
+}
