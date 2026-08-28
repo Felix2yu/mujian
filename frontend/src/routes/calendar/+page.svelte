@@ -16,6 +16,24 @@
   let loading = $state(true);
   let error = $state('');
   let modalDay = $state(null);
+  let showYearPicker = $state(false);
+  let pickerYear = $state(year);
+
+  function openYearPicker() {
+    pickerYear = year;
+    showYearPicker = true;
+  }
+
+  function shiftYear(dy) {
+    pickerYear += dy;
+  }
+
+  function selectMonth(m) {
+    year = pickerYear;
+    month = m;
+    showYearPicker = false;
+    load();
+  }
 
   async function load() {
     loading = true;
@@ -132,7 +150,7 @@
   onMount(load);
 </script>
 
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape') modalDay = null; }} />
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape') { modalDay = null; showYearPicker = false; } }} />
 <svelte:head><title>日历 - 幕间</title></svelte:head>
 
 <div class="fade-up">
@@ -158,11 +176,20 @@
           </svg>
         </button>
       </div>
-      <div class="ym-display">
+      <button
+        class="ym-display"
+        type="button"
+        onclick={openYearPicker}
+        aria-label={`选择年份与月份，当前 ${year} 年 ${month} 月`}
+        aria-haspopup="dialog"
+      >
         <span class="y">{year}</span>
         <span class="sep">·</span>
         <span class="m">{pad(month)}</span>
-      </div>
+        <svg class="ym-caret" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
       <div class="cal-stats">
         {#if !loading}
           <span class="stat-num">{events.length}</span>
@@ -325,6 +352,50 @@
   </div>
 {/if}
 
+{#if showYearPicker}
+  <div
+    class="mask"
+    role="presentation"
+    onclick={() => (showYearPicker = false)}
+    transition:fade={{ duration: 180 }}
+  >
+    <div
+      class="year-modal card"
+      role="dialog"
+      aria-modal="true"
+      aria-label="选择年份与月份"
+      onclick={(e) => e.stopPropagation()}
+      transition:scale={{ duration: 200, start: 0.94 }}
+    >
+      <header class="ym-head">
+        <button class="nav-btn" type="button" onclick={() => shiftYear(-1)} aria-label="上一年">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <span class="ym-title">{pickerYear} 年</span>
+        <button class="nav-btn" type="button" onclick={() => shiftYear(1)} aria-label="下一年">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+      </header>
+      <div class="month-grid">
+        {#each Array(12) as _, i (i)}
+          <button
+            class="month-cell"
+            class:current={pickerYear === year && i + 1 === month}
+            type="button"
+            onclick={() => selectMonth(i + 1)}
+            aria-label={`${pickerYear} 年 ${i + 1} 月`}
+            aria-current={pickerYear === year && i + 1 === month ? 'true' : undefined}
+          >{i + 1} 月</button>
+        {/each}
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   /* ============ 外层卡片 ============ */
   .calendar-card {
@@ -400,6 +471,31 @@
     gap: 6px;
     justify-content: center;
     font-family: var(--font-serif);
+    background: transparent;
+    border: none;
+    margin: 0;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    color: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    cursor: pointer;
+    transition: background var(--t-fast) var(--ease),
+      box-shadow var(--t-fast) var(--ease);
+  }
+  .ym-display:hover {
+    background: var(--accent-soft);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .ym-display:active { transform: scale(0.97); }
+  .ym-caret {
+    align-self: center;
+    color: var(--text-3);
+    transition: transform var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  }
+  .ym-display:hover .ym-caret {
+    color: var(--accent);
+    transform: translateY(1px);
   }
   .ym-display .y {
     font-size: 15px;
@@ -435,6 +531,70 @@
     font-size: 12px;
     color: var(--text-3);
     letter-spacing: 0.04em;
+  }
+
+  /* ============ 年历选择弹窗 ============ */
+  .year-modal {
+    width: min(360px, 100%);
+    padding: 0;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+  }
+  .ym-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
+  }
+  .ym-title {
+    font-family: var(--font-serif);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 0.04em;
+  }
+  .month-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    padding: 18px;
+  }
+  .month-cell {
+    padding: 15px 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text-2);
+    font-family: var(--font-serif);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition: background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease),
+      border-color var(--t-fast) var(--ease),
+      transform var(--t-fast) var(--ease),
+      box-shadow var(--t-fast) var(--ease);
+  }
+  .month-cell:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-softer);
+    box-shadow: 0 2px 8px -2px var(--accent-soft);
+    transform: translateY(-1px);
+  }
+  .month-cell:active { transform: translateY(0) scale(0.97); }
+  .month-cell.current {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    box-shadow: 0 2px 8px -2px var(--accent);
+  }
+  .month-cell.current:hover {
+    background: var(--accent);
+    color: #fff;
   }
 
   /* ============ 星期标题 ============ */
@@ -908,5 +1068,7 @@
     .ym-display .y { display: none; }
     .ym-display .sep { display: none; }
     .ym-display .m { font-size: 22px; }
+    .month-grid { gap: 6px; padding: 14px; }
+    .month-cell { padding: 13px 0; font-size: 14px; }
   }
 </style>
