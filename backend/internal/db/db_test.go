@@ -2166,3 +2166,59 @@ func TestListRecordsContext(t *testing.T) {
 		t.Error("cancelled context should abort CountRecordsContext")
 	}
 }
+
+// Statuses (the client's multi-select status preferences) must filter BOTH
+// the list and the total the same way, so the "已加载 X / 共 Y" counter adds
+// up to exactly what the user sees. Takes precedence over ActiveStatus.
+func TestRecordFilterStatuses(t *testing.T) {
+	d := newTestDB(t)
+	// 2 normal (0), 1 cancelled (2), 1 wishlist (1); sampleRecord defaults to 1.
+	r1 := sampleRecord("s-0a", 1755000000)
+	r1.ActiveStatus = 0
+	if err := d.UpsertRecord(r1); err != nil {
+		t.Fatal(err)
+	}
+	r2 := sampleRecord("s-0b", 1754900000)
+	r2.ActiveStatus = 0
+	if err := d.UpsertRecord(r2); err != nil {
+		t.Fatal(err)
+	}
+	r3 := sampleRecord("s-2", 1754800000)
+	r3.ActiveStatus = 2
+	if err := d.UpsertRecord(r3); err != nil {
+		t.Fatal(err)
+	}
+	r4 := sampleRecord("s-1", 1754700000)
+	r4.ActiveStatus = 1
+	if err := d.UpsertRecord(r4); err != nil {
+		t.Fatal(err)
+	}
+
+	f := RecordFilter{Statuses: []int{0, 2}}
+	recs, err := d.ListRecordsContext(context.Background(), f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	total, err := d.CountRecordsContext(context.Background(), f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recs) != 3 || total != 3 {
+		t.Fatalf("statuses [0,2]: got %d records / total %d, want 3/3", len(recs), total)
+	}
+
+	// Single-status shorthand still works and yields the same count.
+	f1 := RecordFilter{ActiveStatus: 1}
+	total1, _ := d.CountRecordsContext(context.Background(), f1)
+	recs1, _ := d.ListRecordsContext(context.Background(), f1)
+	if total1 != 1 || len(recs1) != 1 {
+		t.Fatalf("single status 1: got %d records / total %d, want 1/1", len(recs1), total1)
+	}
+
+	// Multi-select wins when both are set.
+	fboth := RecordFilter{ActiveStatus: 1, Statuses: []int{0, 2}}
+	totalBoth, _ := d.CountRecordsContext(context.Background(), fboth)
+	if totalBoth != 3 {
+		t.Fatalf("Statuses should take precedence: total %d, want 3", totalBoth)
+	}
+}

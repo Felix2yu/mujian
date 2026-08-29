@@ -220,6 +220,15 @@ func (h *Handler) listRecords(w http.ResponseWriter, r *http.Request) {
 	if v := q.Get("status"); v != "" {
 		f.ActiveStatus, _ = strconv.Atoi(v)
 	}
+	// active_status=0,2 — multi-select from the client's status preferences.
+	// Applied server-side so `total` only counts statuses the user displays.
+	if v := q.Get("active_status"); v != "" {
+		for _, p := range strings.Split(v, ",") {
+			if n, err := strconv.Atoi(strings.TrimSpace(p)); err == nil {
+				f.Statuses = append(f.Statuses, n)
+			}
+		}
+	}
 	if q.Get("exact") == "1" || q.Get("exact") == "true" {
 		f.Exact = true
 	}

@@ -3,7 +3,7 @@
   import { fade, fly } from 'svelte/transition';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
-  import { loadStatusFilter } from '$lib/statusPrefs.js';
+  import { loadStatusFilter, ALL_STATUSES } from '$lib/statusPrefs.js';
   import { loadPref } from '$lib/prefs.js';
   import RecordCard from '$lib/components/RecordCard.svelte';
   import OperaIcon from '$lib/components/OperaIcon.svelte';
@@ -19,6 +19,8 @@
   const PAGE_SIZE = 30;
   let offset = 0;
   let hasMore = $state(false);
+  // 所有演出总数（不受筛选影响），来自 /api/stats.total_records。
+  let allTotal = $state(0);
   let filters = $state({
     q: '', category: '', city: '', year: '', month: '',
     drama: '', zhezi: '', artist: '',
@@ -233,6 +235,12 @@
     filters.missing.map((m) => ({ k: 'missing:' + m, label: `缺失：${missingLabel(m)}` }))
   );
   let activeChips = $derived([...baseChips, ...missingChips]);
+  // 是否处于筛选状态（筛选面板的条件，或设置里的状态偏好未全选）。
+  // 只有筛选时才显示「筛选总数 / 全部总数」。
+  const statusPrefsNow = loadStatusFilter();
+  let isFiltered = $derived(
+    activeChips.length > 0 || statusPrefsNow.length < ALL_STATUSES.length
+  );
 
   // 将当前筛选条件同步进 URL（不新增历史记录），使点开某条演出后「← 返回」
   // 能回到带筛选的首页，而不是未筛选页面。
@@ -270,6 +278,12 @@
     for (const k of keys) if (filters[k]) q[k] = filters[k];
     if (filters.exact) q.exact = '1';
     if (filters.missing.length) q.missing = filters.missing.join(',');
+    // 状态偏好（设置里勾选要显示的状态）交给服务端过滤：这样 total 只统计
+    // 用户真正会看到的记录，列表计数不再与滚动加载后的条数对不上。
+    const statusPrefs = loadStatusFilter();
+    if (statusPrefs.length && statusPrefs.length < ALL_STATUSES.length) {
+      q.active_status = statusPrefs.join(',');
+    }
     q.offset = off;
     q.limit = limit;
     return q;
@@ -286,12 +300,15 @@
     offset = 0;
     error = '';
     try {
-      const { records: page, total: t } = await api.listRecords(buildQuery(0, PAGE_SIZE));
+      const [listRes, stats] = await Promise.all([
+        api.listRecords(buildQuery(0, PAGE_SIZE)),
+        api.getStats().catch(() => null) // 全部总数拿不到时只隐藏第二个数字
+      ]);
       if (seq !== listReqSeq) return; // 已有更新的请求，丢弃本次响应
-      const visible = filters.status ? null : new Set(loadStatusFilter());
-      records = page.filter((r) => !visible || visible.has(r.active_status));
-      total = t;
-      hasMore = PAGE_SIZE < t;
+      records = listRes.records;
+      total = listRes.total;
+      if (stats) allTotal = stats.total_records ?? 0;
+      hasMore = PAGE_SIZE < listRes.total;
     } catch (e) {
       if (seq === listReqSeq) error = e.message;
     } finally {
@@ -307,8 +324,7 @@
       const { records: page } = await api.listRecords(buildQuery(offset + PAGE_SIZE, PAGE_SIZE));
       if (seq !== listReqSeq) return; // 期间筛选已变，旧页不得 append
       offset += PAGE_SIZE;
-      const visible = filters.status ? null : new Set(loadStatusFilter());
-      records = [...records, ...page.filter((r) => !visible || visible.has(r.active_status))];
+      records = [...records, ...page];
       hasMore = offset + PAGE_SIZE < total;
     } catch (e) {
       // 静默失败，保留已加载的
@@ -532,7 +548,7 @@
   {/if}
 
   <div class="count-row">
-    <h2>记录 <span class="num">{records.length}</span> / {total}</h2>
+    <h2>记录 <span class="num">{total}</span>{#if isFiltered && allTotal > 0} / {allTotal}{/if}</h2>
   </div>
 
       {#if batchError}

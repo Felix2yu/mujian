@@ -706,9 +706,14 @@ type RecordFilter struct {
 	PriceMin     float64 // 票价下限（含）
 	PriceMax     float64 // 票价上限（含）；仅当 >0 时生效
 	ActiveStatus int     // 演出状态：0=正常 1=想看 2=已取消 3=未赴约；仅当 >0 时生效
-	Exact        bool    // 关键词精确匹配（按 name 全等，而非模糊 LIKE）
-	Limit        int
-	Offset       int
+	// Statuses is a multi-select of active_status values (the client's status
+	// preferences). When non-empty it takes precedence over ActiveStatus and
+	// is applied to BOTH listing and counting, so the UI's "已加载 X / 共 Y"
+	// counter agrees with what the user actually sees.
+	Statuses []int
+	Exact    bool // 关键词精确匹配（按 name 全等，而非模糊 LIKE）
+	Limit    int
+	Offset   int
 	// NoLimit disables the default/hard row caps applied by ListRecords.
 	// Only for endpoints whose contract is "everything": /api/export,
 	// /api/calendar.ics and the explicit /api/records/all.
@@ -741,6 +746,27 @@ const searchLikeCols = `(records.name LIKE ? OR records.city LIKE ? OR records.a
 // callers should prefer ListRecordsContext so client cancellation propagates.
 func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 	return db.ListRecordsContext(context.Background(), f)
+}
+
+// appendStatusPredicate adds the active_status predicate for the filter.
+// Statuses (multi-select from the client's status preferences) takes
+// precedence over the single-value ActiveStatus param. Shared by
+// ListRecordsContext and CountRecordsContext so the list and its total always
+// agree on which statuses are visible.
+func appendStatusPredicate(f RecordFilter, where *[]string, args *[]interface{}) {
+	if len(f.Statuses) > 0 {
+		ph := make([]string, len(f.Statuses))
+		for i := range f.Statuses {
+			ph[i] = "?"
+			*args = append(*args, f.Statuses[i])
+		}
+		*where = append(*where, "active_status IN ("+strings.Join(ph, ",")+")")
+		return
+	}
+	if f.ActiveStatus > 0 {
+		*where = append(*where, "active_status = ?")
+		*args = append(*args, f.ActiveStatus)
+	}
 }
 
 // ListRecordsContext is ListRecords bound to ctx: the SQLite driver honors
@@ -853,10 +879,7 @@ func (db *DB) ListRecordsContext(ctx context.Context, f RecordFilter) ([]models.
 		where = append(where, "price <= ?")
 		args = append(args, f.PriceMax)
 	}
-	if f.ActiveStatus > 0 {
-		where = append(where, "active_status = ?")
-		args = append(args, f.ActiveStatus)
-	}
+	appendStatusPredicate(f, &where, &args)
 
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
@@ -1005,10 +1028,7 @@ func (db *DB) CountRecordsContext(ctx context.Context, f RecordFilter) (int, err
 		where = append(where, "price <= ?")
 		args = append(args, f.PriceMax)
 	}
-	if f.ActiveStatus > 0 {
-		where = append(where, "active_status = ?")
-		args = append(args, f.ActiveStatus)
-	}
+	appendStatusPredicate(f, &where, &args)
 
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
