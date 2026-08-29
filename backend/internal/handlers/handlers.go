@@ -24,14 +24,36 @@ type Handler struct {
 	db      *db.DB
 	cfg     *config.Config
 	storage storage.Storage
+	// TTL caches for the read-only aggregate endpoints; invalidated by
+	// statsInvalidationMiddleware after every successful mutation.
+	statsCache     *statsCache[*models.Stats]
+	dashboardCache *statsCache[*models.DashboardStats]
+	analyticsCache *statsCache[*models.AnalyticsData]
 }
 
 func New(database *db.DB, cfg *config.Config, st storage.Storage) *Handler {
-	return &Handler{db: database, cfg: cfg, storage: st}
+	return &Handler{
+		db:             database,
+		cfg:            cfg,
+		storage:        st,
+		statsCache:     newStatsCache[*models.Stats](5 * time.Second),
+		dashboardCache: newStatsCache[*models.DashboardStats](5 * time.Second),
+		analyticsCache: newStatsCache[*models.AnalyticsData](5 * time.Second),
+	}
+}
+
+// invalidateStats drops all aggregate caches (called after mutations).
+func (h *Handler) invalidateStats() {
+	h.statsCache.invalidate()
+	h.dashboardCache.invalidate()
+	h.analyticsCache.invalidate()
 }
 
 func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
+
+	// Clear the aggregate caches after any successful mutating request.
+	r.Use(statsInvalidationMiddleware(h.invalidateStats))
 
 	r.Get("/records", h.listRecords)
 	r.Get("/records/all", h.listAllRecords)
@@ -76,6 +98,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/analytics", h.getAnalytics)
 	r.Get("/calendar", h.getCalendar)
 	r.Get("/calendar.ics", h.getICS)
+	r.Get("/map/points", h.getMapPoints)
 
 	r.Route("/covers", func(r chi.Router) {
 		r.Get("/", h.listCovers)
@@ -182,7 +205,8 @@ func (h *Handler) listRecords(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) listAllRecords(w http.ResponseWriter, r *http.Request) {
-	recs, err := h.db.ListRecords(db.RecordFilter{})
+	// Explicit "everything" endpoint: exempt from the list row caps.
+	recs, err := h.db.ListRecords(db.RecordFilter{NoLimit: true})
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -748,30 +772,58 @@ func (h *Handler) reorderCategories(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getStats(w http.ResponseWriter, r *http.Request) {
+	if s, ok := h.statsCache.get(); ok {
+		jsonResp(w, 200, s)
+		return
+	}
 	stats, err := h.db.GetStats()
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
+	h.statsCache.set(stats)
 	jsonResp(w, 200, stats)
 }
 
 func (h *Handler) getDashboard(w http.ResponseWriter, r *http.Request) {
+	if s, ok := h.dashboardCache.get(); ok {
+		jsonResp(w, 200, s)
+		return
+	}
 	stats, err := h.db.GetDashboardStats()
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
+	h.dashboardCache.set(stats)
 	jsonResp(w, 200, stats)
 }
 
 func (h *Handler) getAnalytics(w http.ResponseWriter, r *http.Request) {
+	if d, ok := h.analyticsCache.get(); ok {
+		jsonResp(w, 200, d)
+		return
+	}
 	data, err := h.db.GetAnalytics()
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
+	h.analyticsCache.set(data)
 	jsonResp(w, 200, data)
+}
+
+// getMapPoints serves the lightweight payload for the map page: only records
+// that carry coordinates, and only the fields the map renders. The generic
+// /api/records response is ~12x larger for the same data (720KB vs ~60KB),
+// most of it remark/artist JSON the map never reads.
+func (h *Handler) getMapPoints(w http.ResponseWriter, r *http.Request) {
+	pts, err := h.db.ListMapPoints()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, pts)
 }
 
 func (h *Handler) getCalendar(w http.ResponseWriter, r *http.Request) {
@@ -799,7 +851,8 @@ func (h *Handler) getCalendar(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getICS(w http.ResponseWriter, r *http.Request) {
-	recs, err := h.db.ListRecords(db.RecordFilter{})
+	// Calendar subscription must contain every record: bypass the row caps.
+	recs, err := h.db.ListRecords(db.RecordFilter{NoLimit: true})
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return

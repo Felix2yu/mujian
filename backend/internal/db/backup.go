@@ -11,7 +11,8 @@ import (
 // Export builds an ExportData that is byte-for-byte compatible with the
 // recordlive_export/data.json source format.
 func (db *DB) Export() (*models.ExportData, error) {
-	records, err := db.ListRecords(RecordFilter{})
+	// Export must contain every record: bypass the list row caps.
+	records, err := db.ListRecords(RecordFilter{NoLimit: true})
 	if err != nil {
 		return nil, fmt.Errorf("export records: %w", err)
 	}

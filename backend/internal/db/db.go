@@ -92,6 +92,12 @@ func (db *DB) SetLocation(loc *time.Location) {
 	db.loc = loc
 }
 
+// SQLStats exposes the underlying database/sql pool statistics for the
+// /metrics endpoint (in-use, idle, wait counts...). Read-only.
+func (db *DB) SQLStats() sql.DBStats {
+	return db.conn.Stats()
+}
+
 func (db *DB) Ping() error {
 	return db.conn.Ping()
 }
@@ -160,6 +166,13 @@ func (db *DB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_records_cover_file ON records(cover_file)`,
 		`CREATE INDEX IF NOT EXISTS idx_records_active_status ON records(active_status)`,
 		`CREATE INDEX IF NOT EXISTS idx_records_name ON records(name)`,
+		// Group-by / order-by columns used by stats and venue listing. On the
+		// current data volume a scan is cheaper, but the record count grows
+		// linearly and these turn quadratic group-bys into index scans.
+		`CREATE INDEX IF NOT EXISTS idx_records_company ON records(company)`,
+		`CREATE INDEX IF NOT EXISTS idx_records_channel ON records(channel)`,
+		`CREATE INDEX IF NOT EXISTS idx_records_address ON records(address)`,
+		`CREATE INDEX IF NOT EXISTS idx_records_rating ON records(rating)`,
 		`CREATE TABLE IF NOT EXISTS covers (
 			hash TEXT NOT NULL,
 			file_name TEXT PRIMARY KEY,
@@ -681,29 +694,60 @@ type RecordFilter struct {
 	ArtistID string // a record whose artist_ids contains this id
 	Limit    int
 	Offset   int
+	// NoLimit disables the default/hard row caps applied by ListRecords.
+	// Only for endpoints whose contract is "everything": /api/export,
+	// /api/calendar.ics and the explicit /api/records/all.
+	NoLimit bool
 }
 
+// Default row caps for paginated list endpoints. They exist so a growing
+// table degrades into "many pages" instead of "one multi-megabyte response".
+const (
+	defaultListLimit = 500
+	hardListLimit    = 2000
+)
+
+// slowQueryMs above which a hot-path query is logged at WARN level. Chosen so
+// normal single-user traffic (sub-ms to a few ms) never logs, while a missing
+// index or table growth shows up in the server log / metrics immediately.
+const slowQueryMs = 100
+
+// searchLikeWhere builds the keyword-search predicate. Actor and drama-alias
+// search use EXISTS subqueries instead of LEFT JOINs: joining record_artists
+// (≈9.6 artists per record) against record_dramas produced a ~24× row
+// cartesian blowup that DISTINCT then had to collapse over 30 columns.
+// The actor/drama predicates are appended to `args` after the 10 record-column
+// placeholders, in the order: artists LIKE, dramas aliases LIKE.
+const searchLikeCols = `(records.name LIKE ? OR records.city LIKE ? OR records.address LIKE ? OR records.company LIKE ? OR records.channel LIKE ? OR records.remark LIKE ? OR records.friends LIKE ? OR records.category_name LIKE ? OR records.category_names LIKE ? OR records.play LIKE ?
+	OR EXISTS (SELECT 1 FROM record_artists ra_q JOIN artists a_q ON a_q.id = ra_q.artist_id WHERE ra_q.record_id = records.id AND a_q.name LIKE ?)
+	OR EXISTS (SELECT 1 FROM record_dramas rd_q JOIN dramas d_q ON d_q.id = rd_q.drama_id WHERE rd_q.record_id = records.id AND d_q.aliases LIKE ?))`
+
 func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
-	// DISTINCT is required because the search/filter JOINs (record_artists,
-	// record_dramas, record_zhezis) multiply rows when a record has multiple
-	// linked entities. Since every SELECTed column comes from the `records`
-	// table itself, the duplicate rows are identical and DISTINCT collapses them.
-	query := `SELECT DISTINCT ` + recordColumns + ` FROM records`
+	started := time.Now()
+	defer func() {
+		if ms := time.Since(started).Milliseconds(); ms >= slowQueryMs {
+			slog.Warn("slow query", "op", "ListRecords", "ms", ms)
+		}
+	}()
+
+	// DISTINCT is only needed when a filter can multiply rows: the
+	// json_each category expansion, or the drama/zhezi/artist relation JOINs
+	// (a record matching two such JOINs at once cross-products). The search
+	// predicate no longer joins anything (EXISTS subqueries), so the common
+	// keyword-search path skips the DISTINCT temp B-tree entirely.
+	needsDistinct := f.Category != "" || f.DramaID != "" || f.ZheziID != "" || f.ArtistID != ""
+	query := `SELECT `
+	if needsDistinct {
+		query += `DISTINCT `
+	}
+	query += recordColumns + ` FROM records`
 	where := []string{}
 	args := []interface{}{}
 
 	if f.Query != "" {
-		like := "%" + f.Query + "%"
-		// actor names now live in the artists entity table; search them via a
-		// JOIN so we don't need instr() over a JSON text column.
-		// Also search drama aliases via a JOIN to the dramas table.
-		query += ` LEFT JOIN record_artists ra_q ON ra_q.record_id = records.id
-			LEFT JOIN artists a_q ON a_q.id = ra_q.artist_id
-			LEFT JOIN record_dramas rd_q ON rd_q.record_id = records.id
-			LEFT JOIN dramas d_q ON d_q.id = rd_q.drama_id`
-		where = append(where, `(records.name LIKE ? OR records.city LIKE ? OR records.address LIKE ? OR records.company LIKE ? OR records.channel LIKE ? OR records.remark LIKE ? OR records.friends LIKE ? OR records.category_name LIKE ? OR records.category_names LIKE ? OR a_q.name LIKE ? OR records.play LIKE ? OR d_q.aliases LIKE ?)`)
+		where = append(where, searchLikeCols)
 		for range 12 {
-			args = append(args, like)
+			args = append(args, "%"+f.Query+"%")
 		}
 	}
 	if f.Category != "" {
@@ -758,6 +802,17 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
 	query += " ORDER BY date DESC"
+	if !f.NoLimit {
+		// Row caps: unlimited queries would return one multi-megabyte
+		// response as the table grows. Explicit "all" endpoints opt out
+		// via NoLimit; everything else gets a sane default and a hard cap.
+		if f.Limit <= 0 {
+			f.Limit = defaultListLimit
+		}
+		if f.Limit > hardListLimit {
+			f.Limit = hardListLimit
+		}
+	}
 	if f.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", f.Limit)
 	}
@@ -798,19 +853,20 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 // CountRecords returns the total number of records matching the filter.
 // Used for pagination alongside ListRecords.
 func (db *DB) CountRecords(f RecordFilter) (int, error) {
+	started := time.Now()
+	defer func() {
+		if ms := time.Since(started).Milliseconds(); ms >= slowQueryMs {
+			slog.Warn("slow query", "op", "CountRecords", "ms", ms)
+		}
+	}()
 	query := `SELECT COUNT(DISTINCT records.id) FROM records`
 	where := []string{}
 	args := []interface{}{}
 
 	if f.Query != "" {
-		like := "%" + f.Query + "%"
-		query += ` LEFT JOIN record_artists ra_q ON ra_q.record_id = records.id
-			LEFT JOIN artists a_q ON a_q.id = ra_q.artist_id
-			LEFT JOIN record_dramas rd_q ON rd_q.record_id = records.id
-			LEFT JOIN dramas d_q ON d_q.id = rd_q.drama_id`
-		where = append(where, `(records.name LIKE ? OR records.city LIKE ? OR records.address LIKE ? OR records.company LIKE ? OR records.channel LIKE ? OR records.remark LIKE ? OR records.friends LIKE ? OR records.category_name LIKE ? OR records.category_names LIKE ? OR a_q.name LIKE ? OR records.play LIKE ? OR d_q.aliases LIKE ?)`)
+		where = append(where, searchLikeCols)
 		for range 12 {
-			args = append(args, like)
+			args = append(args, "%"+f.Query+"%")
 		}
 	}
 	if f.Category != "" {
@@ -2709,6 +2765,36 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 	}
 
 	return s, nil
+}
+
+// ListMapPoints returns the slim projection for the map page: only records
+// with coordinates and only the fields the map renders. Returns an empty
+// (non-nil) slice when there are no geocoded records.
+func (db *DB) ListMapPoints() ([]models.MapPoint, error) {
+	rows, err := db.conn.Query(`
+		SELECT id, name, city, address, coordinate, cover_file, cover_thumb,
+		       date_text, rating, active_status, category_name
+		FROM records
+		WHERE coordinate != '' AND coordinate != 'null'
+		ORDER BY date DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []models.MapPoint{}
+	for rows.Next() {
+		var p models.MapPoint
+		var coord string
+		if err := rows.Scan(&p.ID, &p.Name, &p.City, &p.Address, &coord, &p.CoverFile,
+			&p.CoverThumb, &p.DateText, &p.Rating, &p.ActiveStatus, &p.CategoryName); err != nil {
+			slog.Warn("scan map point", "err", err)
+			continue
+		}
+		p.Coordinate = unmarshalCoordinate(coord)
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 // ---------- Calendar ----------

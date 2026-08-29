@@ -210,6 +210,24 @@ type CalendarEvent struct {
 	CategoryNames  []string `json:"categoryNames"`
 }
 
+// MapPoint is the projection served by GET /api/map/points: only records that
+// carry coordinates, and only the fields the map page renders. JSON tags
+// intentionally reuse the Record naming so the frontend can consume both
+// shapes interchangeably.
+type MapPoint struct {
+	ID           string      `json:"id"`
+	Name         string      `json:"name"`
+	City         string      `json:"city"`
+	Address      string      `json:"address"`
+	Coordinate   *Coordinate `json:"coordinate"`
+	CoverFile    string      `json:"coverFile"`
+	CoverThumb   string      `json:"coverThumb"`
+	DateText     string      `json:"dateText"`
+	Rating       int         `json:"rating"`
+	ActiveStatus int         `json:"active_status"`
+	CategoryName string      `json:"categoryName"`
+}
+
 type Stats struct {
 	TotalRecords int     `json:"total_records"`
 	TotalCost    float64 `json:"total_cost"`
