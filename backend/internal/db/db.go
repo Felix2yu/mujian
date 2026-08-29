@@ -692,6 +692,12 @@ type RecordFilter struct {
 	DramaID  string // a record whose drama_ids contains this id
 	ZheziID  string // a record whose zhezi_ids contains this id
 	ArtistID string // a record whose artist_ids contains this id
+	// Missing is a comma-separated list of field tokens; a record matches if
+	// ANY listed field is empty. Drives data-hygiene queries such as "find
+	// records without a category". Supported tokens: category, city, address,
+	// company, channel, rating, price, cover, coordinate, artist, drama, zhezi,
+	// friends, remark, seat, play.
+	Missing string
 	Limit    int
 	Offset   int
 	// NoLimit disables the default/hard row caps applied by ListRecords.
@@ -795,6 +801,12 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 		if t, ok := parseTimeArg(f.End, db.loc); ok {
 			where = append(where, "date < ?")
 			args = append(args, t.AddDate(0, 0, 1).Unix())
+		}
+	}
+
+	if f.Missing != "" {
+		if p := buildMissingPredicate(f.Missing); p != "" {
+			where = append(where, p)
 		}
 	}
 
@@ -908,6 +920,12 @@ func (db *DB) CountRecords(f RecordFilter) (int, error) {
 		}
 	}
 
+	if f.Missing != "" {
+		if p := buildMissingPredicate(f.Missing); p != "" {
+			where = append(where, p)
+		}
+	}
+
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
@@ -915,6 +933,59 @@ func (db *DB) CountRecords(f RecordFilter) (int, error) {
 	var total int
 	err := db.conn.QueryRow(query, args...).Scan(&total)
 	return total, err
+}
+
+// missingFieldPredicates maps a "missing <field>" token to a SQL predicate that
+// is TRUE when that field is empty. Numeric (rating) and JSON-array (category,
+// guest) fields need dedicated handling; cover needs both the inline blob and
+// the stored key to be absent before it counts as missing.
+var missingFieldPredicates = map[string]string{
+	"category":   "COALESCE(json_array_length(category_names), 0) = 0 AND (category_name IS NULL OR category_name = '')",
+	"city":       "city IS NULL OR city = ''",
+	"address":    "address IS NULL OR address = ''",
+	"company":    "company IS NULL OR company = ''",
+	"channel":    "channel IS NULL OR channel = ''",
+	"rating":     "rating IS NULL OR rating = 0",
+	"price":      "price IS NULL OR price = ''",
+	"cover":      "(cover IS NULL OR cover = '') AND (cover_file IS NULL OR cover_file = '')",
+	"coordinate": "coordinate IS NULL OR coordinate = ''",
+	"friends":    "friends IS NULL OR friends = ''",
+	"remark":     "remark IS NULL OR remark = ''",
+	"seat":       "seat IS NULL OR seat = ''",
+	"play":       "play IS NULL OR play = ''",
+	"guest":      "COALESCE(json_array_length(guest), 0) = 0",
+}
+
+// missingRelPredicates tests relation-backed fields via NOT EXISTS. These tables
+// are kept in sync by backfill, so they are the canonical source for "does this
+// record reference an artist/drama/zhezi".
+var missingRelPredicates = map[string]string{
+	"artist": "NOT EXISTS (SELECT 1 FROM record_artists ra WHERE ra.record_id = records.id)",
+	"drama":  "NOT EXISTS (SELECT 1 FROM record_dramas rd WHERE rd.record_id = records.id)",
+	"zhezi":  "NOT EXISTS (SELECT 1 FROM record_zhezis rz WHERE rz.record_id = records.id)",
+}
+
+// buildMissingPredicate turns a comma-separated Missing token list into a single
+// parenthesized OR predicate (or "" when no known token is present). A record
+// matches the filter when ANY listed field is empty — this is the data-hygiene
+// query ("show me records missing a category", etc.).
+func buildMissingPredicate(missing string) string {
+	parts := make([]string, 0, 4)
+	for _, raw := range strings.Split(missing, ",") {
+		tok := strings.TrimSpace(raw)
+		if tok == "" {
+			continue
+		}
+		if p, ok := missingFieldPredicates[tok]; ok {
+			parts = append(parts, "("+p+")")
+		} else if p, ok := missingRelPredicates[tok]; ok {
+			parts = append(parts, "("+p+")")
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "(" + strings.Join(parts, " OR ") + ")"
 }
 
 func parseTimeArg(s string, loc *time.Location) (time.Time, bool) {

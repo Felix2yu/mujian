@@ -176,6 +176,7 @@ func (h *Handler) listRecords(w http.ResponseWriter, r *http.Request) {
 	f.End = q.Get("end")
 	f.DramaID = q.Get("drama")
 	f.ZheziID = q.Get("zhezi")
+	f.Missing = q.Get("missing")
 	if v := q.Get("limit"); v != "" {
 		f.Limit, _ = strconv.Atoi(v)
 	}

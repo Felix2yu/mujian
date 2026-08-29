@@ -19,7 +19,29 @@
   const PAGE_SIZE = 30;
   let offset = 0;
   let hasMore = $state(false);
-  let filters = $state({ q: '', category: '', city: '', year: '', month: '', drama: '', zhezi: '' });
+  let filters = $state({ q: '', category: '', city: '', year: '', month: '', drama: '', zhezi: '', missing: [] });
+
+  // 可筛选的「缺失字段」清单。value 必须与后端 buildMissingPredicate 的 token 一致。
+  // 用于数据治理：快速找出某项未填写的演出（例如未填分类、未传封面）。
+  const MISSING_FIELDS = [
+    { value: 'category', label: '分类' },
+    { value: 'city', label: '城市' },
+    { value: 'cover', label: '封面' },
+    { value: 'rating', label: '评分' },
+    { value: 'price', label: '票价' },
+    { value: 'company', label: '剧团' },
+    { value: 'channel', label: '渠道' },
+    { value: 'artist', label: '演员' },
+    { value: 'drama', label: '剧目' },
+    { value: 'zhezi', label: '折子' },
+    { value: 'coordinate', label: '坐标' },
+    { value: 'remark', label: '备注' },
+    { value: 'friends', label: '戏友' },
+    { value: 'guest', label: '嘉宾' },
+    { value: 'play', label: '剧目别名' },
+    { value: 'seat', label: '座位' }
+  ];
+  const missingLabel = (v) => (MISSING_FIELDS.find((x) => x.value === v) || {}).label || v;
   let showFilter = $state(false);
   let zheziNames = $state(new Map());
   let searchTimer;
@@ -140,7 +162,7 @@
     return z ? `${z.dramaName} · ${z.name}` : '折子';
   }
 
-  let activeChips = $derived(
+  let baseChips = $derived(
     [
       filters.q ? { k: 'q', label: `搜索：${filters.q}` } : null,
       filters.category ? { k: 'category', label: `分类：${filters.category}` } : null,
@@ -151,6 +173,11 @@
       filters.zhezi ? { k: 'zhezi', label: `折子：${zheziLabel(filters.zhezi)}` } : null
     ].filter(Boolean)
   );
+  // 每个被勾选的「缺失字段」各占一个独立 chip，可单独取消。
+  let missingChips = $derived(
+    filters.missing.map((m) => ({ k: 'missing:' + m, label: `缺失：${missingLabel(m)}` }))
+  );
+  let activeChips = $derived([...baseChips, ...missingChips]);
 
   // 将当前筛选条件同步进 URL（不新增历史记录），使点开某条演出后「← 返回」
   // 能回到带筛选的首页，而不是未筛选页面。
@@ -165,6 +192,7 @@
     if (filters.month) params.set('month', filters.month);
     if (filters.drama) params.set('drama', filters.drama);
     if (filters.zhezi) params.set('zhezi', filters.zhezi);
+    if (filters.missing.length) params.set('missing', filters.missing.join(','));
     return params.toString();
   }
 
@@ -172,7 +200,7 @@
   $effect(() => {
     if (!urlReady) return;
     // 依赖：读取全部筛选项以触发更新
-    const _ = [filters.q, filters.category, filters.city, filters.year, filters.month, filters.drama, filters.zhezi];
+    const _ = [filters.q, filters.category, filters.city, filters.year, filters.month, filters.drama, filters.zhezi, filters.missing.join(',')];
     const qs = buildFilterQuery();
     const url = qs ? `/?${qs}` : '/';
     const cur = location.pathname + location.search;
@@ -181,7 +209,7 @@
 
   // 合并筛选参数 + 分页参数
   function buildQuery(off = 0, limit = PAGE_SIZE) {
-    return { ...filters, offset: off, limit };
+    return { ...filters, missing: filters.missing.join(','), offset: off, limit };
   }
 
   async function load() {
@@ -264,12 +292,27 @@
   }
 
   function clearChip(k) {
+    if (k.startsWith('missing:')) {
+      const m = k.slice('missing:'.length);
+      filters = { ...filters, missing: filters.missing.filter((x) => x !== m) };
+      load();
+      return;
+    }
     filters = { ...filters, [k]: '' };
     load();
   }
 
+  function toggleMissing(v) {
+    const has = filters.missing.includes(v);
+    filters = {
+      ...filters,
+      missing: has ? filters.missing.filter((x) => x !== v) : [...filters.missing, v]
+    };
+    load();
+  }
+
   function resetFilters() {
-    filters = { q: '', category: '', city: '', year: '', month: '', drama: '', zhezi: '' };
+    filters = { q: '', category: '', city: '', year: '', month: '', drama: '', zhezi: '', missing: [] };
     load();
   }
 
@@ -305,7 +348,8 @@
       year: sp.get('year') || '',
       month: sp.get('month') || '',
       drama: sp.get('drama') || '',
-      zhezi: sp.get('zhezi') || ''
+      zhezi: sp.get('zhezi') || '',
+      missing: (sp.get('missing') || '').split(',').map((s) => s.trim()).filter(Boolean)
     };
     urlReady = true;
     loadMeta();
@@ -466,6 +510,17 @@
         </select>
       </label>
     </div>
+    <div class="filter-section">
+      <span class="filter-section-title">缺失字段（数据治理）</span>
+      <div class="missing-grid">
+        {#each MISSING_FIELDS as f}
+          <label class="missing-opt">
+            <input type="checkbox" checked={filters.missing.includes(f.value)} onchange={() => toggleMissing(f.value)} />
+            <span>{f.label}</span>
+          </label>
+        {/each}
+      </div>
+    </div>
     <div class="filter-panel-actions">
       <button class="btn ghost" onclick={resetFilters}>清除全部</button>
       <button class="btn primary" onclick={() => (showFilter = false)}>完成</button>
@@ -617,6 +672,43 @@
   .filter-field { display: flex; flex-direction: column; gap: 6px; margin: 0; }
   .filter-label { font-size: 13px; font-weight: 500; color: var(--text-2); }
   .filter-field .input { width: 100%; }
+
+  /* 缺失字段分组 */
+  .filter-section {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .filter-section-title {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-2);
+    margin-bottom: 8px;
+  }
+  .missing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: 6px 10px;
+  }
+  .missing-opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    line-height: 1.2;
+    color: var(--text);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .missing-opt input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    accent-color: var(--accent);
+    flex-shrink: 0;
+  }
   .filter-panel-actions {
     display: flex;
     gap: 10px;
