@@ -13,14 +13,14 @@ import (
 type BatchCompanyByArtistInput struct {
 	ArtistName string `json:"artist_name"`
 	Company    string `json:"company"`
-	DryRun *bool   `json:"dry_run,omitempty"`
+	DryRun     *bool  `json:"dry_run,omitempty"`
 }
 
 type BatchMergeVenuesInput struct {
 	SourceAddress   string `json:"source_address"`
 	TargetAddress   string `json:"target_address"`
 	SyncCoordinates bool   `json:"sync_coordinates,omitempty"`
-	DryRun *bool   `json:"dry_run,omitempty"`
+	DryRun          *bool  `json:"dry_run,omitempty"`
 }
 
 type ArrayOp struct {
@@ -284,10 +284,10 @@ func (s *Server) handleBatchUpdateRecords(ctx context.Context, req *mcp.CallTool
 			changes = append(changes, fieldChange{"tag_ids", in.TagIDs})
 		}
 		return jsonResult(map[string]any{
-			"dry_run":  true,
+			"dry_run":   true,
 			"requested": len(in.IDs),
-			"ids":      in.IDs,
-			"changes":  changes,
+			"ids":       in.IDs,
+			"changes":   changes,
 		})
 	}
 

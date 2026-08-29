@@ -16,9 +16,9 @@ func seedCoverageData(t *testing.T, s *Server) (recordID, artistID, dramaID stri
 	mustUpsert(t, s, models.Record{
 		ID: "rec-cov", Name: "牡丹亭", City: "上海",
 		Address: "上海大剧院", CategoryName: "昆曲", CategoryNames: []string{"昆曲"},
-		ArtistNames:  []string{"张军"},
-		Coordinate:   &models.Coordinate{Latitude: 31.2, Longitude: 121.4},
-		Date:         base,
+		ArtistNames: []string{"张军"},
+		Coordinate:  &models.Coordinate{Latitude: 31.2, Longitude: 121.4},
+		Date:        base,
 	})
 	a, err := s.db.SaveArtist(models.Artist{Name: "张军"})
 	if err != nil {
@@ -97,12 +97,12 @@ func TestMutationHandlers(t *testing.T) {
 
 	// batch_update_records 标量 + 数组混合更新。
 	res, _, err := s.handleBatchUpdateRecords(ctx, nil, BatchUpdateRecordsInput{
-		IDs:      []string{recID},
-		Name:     strPtrT("牡丹亭·纪念场"),
-		Price:    fltPtrT(199),
-		TagIDs:   &ArrayOp{Op: "append", Value: []string{"晚场"}},
+		IDs:           []string{recID},
+		Name:          strPtrT("牡丹亭·纪念场"),
+		Price:         fltPtrT(199),
+		TagIDs:        &ArrayOp{Op: "append", Value: []string{"晚场"}},
 		CategoryNames: &ArrayOp{Op: "append", Value: []string{"苏剧"}},
-		DryRun:  boolPtr(false),
+		DryRun:        boolPtr(false),
 	})
 	if err != nil || res.IsError {
 		t.Fatalf("batch_update_records: %v %v", res, err)

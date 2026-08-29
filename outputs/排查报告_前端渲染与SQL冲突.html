@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>前端渲染 / 查询 / SQL 冲突排查</title>
+<style>
+  :root { --bg:#fff; --panel:#f7f7f9; --card:#fff; --border:#e3e3e8; --text:#1d1d1f; --muted:#6b6f76; --red:#d92020; --green:#1a8a3a; --accent:#e0533d; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); padding:28px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 22px; font-size:14px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px 18px; }
+  .card h3 { margin:0 0 8px; font-size:15px; }
+  .row { display:flex; justify-content:space-between; font-size:13px; padding:5px 0; border-bottom:1px dashed #eee; }
+  .row:last-child { border-bottom:none; }
+  .ok { color:var(--green); font-weight:700; }
+  .bad { color:var(--red); font-weight:700; }
+  .tag { font-size:12px; padding:2px 8px; border-radius:999px; }
+  .tag.ok { background:#e8f6ec; color:var(--green); }
+  .tag.fix { background:#fdeceb; color:var(--red); }
+  .sec { margin-top:24px; }
+  .sec h2 { font-size:17px; border-left:4px solid var(--accent); padding-left:10px; }
+  code { background:#f0f0f3; padding:2px 6px; border-radius:5px; font-size:12px; }
+  .note { background:var(--panel); border-radius:10px; padding:14px 16px; font-size:13.5px; line-height:1.7; color:#333; }
+</style>
+</head>
+<body>
+  <h1>前端渲染 / 查询 / SQL 冲突排查</h1>
+  <p class="sub">项目：mujian（SvelteKit + Go）· 排查日期：2026-08-22 · 验证内核：WebKit（Safari 同款）</p>
+
+  <div class="grid">
+    <div class="card">
+      <h3>搜索「黎安」（核心 Bug）</h3>
+      <div class="row"><span>修复前返回</span><span class="bad">194 条（大量重复 id）</span></div>
+      <div class="row"><span>修复后返回</span><span class="ok">17 条（唯一）</span></div>
+      <div class="row"><span>前端渲染</span><span class="ok">17 卡，无骨架残留</span></div>
+      <span class="tag fix">已修复 SELECT DISTINCT</span>
+    </div>
+    <div class="card">
+      <h3>首页 / 无筛选</h3>
+      <div class="row"><span>记录数</span><span class="ok">298（唯一）</span></div>
+      <div class="row"><span>骨架屏残留</span><span class,ok>无</span></div>
+      <span class="tag ok">正常</span>
+    </div>
+    <div class="card">
+      <h3>搜索「上海」</h3>
+      <div class="row"><span>返回</span><span class="ok">75 条（唯一）</span></div>
+      <span class="tag ok">正常</span>
+    </div>
+    <div class="card">
+      <h3>分类筛选</h3>
+      <div class="row"><span>返回</span><span class="ok">按 category_name 过滤，唯一</span></div>
+      <span class="tag ok">正常</span>
+    </div>
+    <div class="card">
+      <h3>Drama 详情页</h3>
+      <div class="row"><span>七侠五义 records</span><span class="ok">经 ListRecords，已去重</span></div>
+      <span class="tag ok">正常</span>
+    </div>
+    <div class="card">
+      <h3>Artist 详情页</h3>
+      <div class="row"><span>沈昳丽 records</span><span class="ok">经 ListRecords，已去重</span></div>
+      <span class="tag ok">正常</span>
+    </div>
+    <div class="card">
+      <h3>Covers 管理页</h3>
+      <div class="row"><span>groups / orphans</span><span class="ok">无 JOIN 放大</span></div>
+      <span class="tag ok">正常</span>
+    </div>
+    <div class="card">
+      <h3>全局 JS 运行时</h3>
+      <div class="row"><span>WebKit pageerror</span><span class="ok">0</span></div>
+      <div class="row"><span>Chromium pageerror</span><span class="ok">0</span></div>
+      <span class="tag ok">无报错</span>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>根因结论</h2>
+    <div class="note">
+      <b>唯一真正的冲突：</b> <code>ListRecords</code> 在做关键词/分类/剧目/折子/演员筛选时，通过 <code>LEFT JOIN record_artists / record_dramas / record_zhezis</code> 做过滤。当一条记录关联多个实体（如多个演员）时，JOIN 把同一行复制成多份。<br><br>
+      <b>为什么 Safari 暴露、Chromium 没暴露：</b> 前端用 <code>{#each records as r (r.id)}</code> 做 keyed 渲染。Safari/WebKit 遇到重复 key 会直接抛 <code>each_key_duplicate</code> 并中止渲染（页面卡在骨架屏/空白）；Chromium 只是静默重复卡片，不易察觉。<br><br>
+      <b>修复：</b> 在 <code>backend/internal/db/db.go</code> 的 <code>ListRecords</code> 起始处改为 <code>SELECT DISTINCT</code>。所有被 SELECT 的列都来自 <code>records</code> 主表本身，JOIN 仅用于 WHERE 过滤，重复行数据完全一致，DISTINCT 安全折叠。该修复一次性覆盖了所有调用方（首页、搜索、分类、城市、Drama/Artist 详情）。
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>其余已确认无风险的点</h2>
+    <div class="note">
+      • <b>统计/仪表盘/日历：</b> 均为 <code>COUNT(*)</code> / <code>GROUP BY</code> 聚合，无 JOIN 放大。<br>
+      • <b>backfill*</b> 系列（DramaIDs/ZheziIDs/ArtistIDs）：先收集唯一 id → <code>IN</code> 子查询 → 按 record_id 映射，与行数无关、安全。<br>
+      • <b>前端 keyed each：</b> 所有用了 key 的列表均基于 <code>.id</code>（categories/dramas/artists/records/zhezis），后端这些列表 id 唯一；无 key 的 each（artist_names、covers 等）即使有重复值也不会触发 duplicate 报错。<br>
+      • <b>排序/分页：</b> 当前前端一次性加载全量（无分页），<code>ORDER BY date DESC</code> 在 SELECT 字段内，DISTINCT 不冲突。
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>结论</h2>
+    <div class="note">
+      ✓ 修复后 WebKit（Safari）与 Chromium 下全部路径零报错；搜索、筛选、详情、封面管理均渲染正确。<br>
+      ✓ 提交 <code>f3a7418</code> 已推送至 origin/main。<br>
+      ⚠️ 你在 Safari 需硬刷新一次（Cmd+Shift+R）以加载新后端；后端服务已在运行（含新二进制）。
+    </div>
+  </div>
+</body>
+</html>

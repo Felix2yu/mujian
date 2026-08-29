@@ -118,6 +118,8 @@
         lastGeocoded = addr; // 标记已尝试，避免对同地址反复请求
       }
     }, 600);
+    // 组件销毁时取消未触发的地理编码定时器（$effect 清理函数）。
+    return () => clearTimeout(geoTimer);
   });
 
   // 剧目 / 折子 picker state

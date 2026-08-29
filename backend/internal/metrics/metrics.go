@@ -116,9 +116,9 @@ type ClientVitals struct {
 type Metrics struct {
 	startedAt time.Time
 
-	mu    sync.RWMutex
-	routes map[string]*routeStat // key: "METHOD route-pattern"
-	spilled bool                // set when maxRoutes overflowed
+	mu      sync.RWMutex
+	routes  map[string]*routeStat // key: "METHOD route-pattern"
+	spilled bool                  // set when maxRoutes overflowed
 
 	clientMu sync.Mutex
 	client   []ClientVitals
@@ -265,18 +265,18 @@ func (m *Metrics) Handler() http.HandlerFunc {
 }
 
 type routeJSON struct {
-	Route    string   `json:"route"`
-	Method   string   `json:"method"`
-	Count    int64    `json:"count"`
-	SumMs    float64  `json:"sum_ms"`
-	P50Ms    float64  `json:"p50_ms"`
-	P95Ms    float64  `json:"p95_ms"`
-	P99Ms    float64  `json:"p99_ms"`
+	Route     string  `json:"route"`
+	Method    string  `json:"method"`
+	Count     int64   `json:"count"`
+	SumMs     float64 `json:"sum_ms"`
+	P50Ms     float64 `json:"p50_ms"`
+	P95Ms     float64 `json:"p95_ms"`
+	P99Ms     float64 `json:"p99_ms"`
 	Status2xx int64   `json:"status_2xx"`
 	Status3xx int64   `json:"status_3xx"`
 	Status4xx int64   `json:"status_4xx"`
 	Status5xx int64   `json:"status_5xx"`
-	LastSeen string  `json:"last_seen,omitempty"`
+	LastSeen  string  `json:"last_seen,omitempty"`
 }
 
 func (m *Metrics) snapshot() map[string]any {

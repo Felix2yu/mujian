@@ -322,7 +322,7 @@ func (h *Handler) runRegenerateThumbs(r *http.Request, emit func(map[string]inte
 			}
 			continue
 		}
-		thumbKey, terr := h.storage.MakeThumbnail(key, data, 400, h.cfg.ImageFormat)
+		thumbKey, terr := h.storage.MakeThumbnail(key, data, 400, h.cfg.GetImageFormat())
 		if terr != nil {
 			if emit != nil {
 				emit(map[string]interface{}{

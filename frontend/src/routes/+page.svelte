@@ -1,5 +1,5 @@
 <script>
-  import { onMount, tick } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { fade, fly } from 'svelte/transition';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
@@ -275,29 +275,37 @@
     return q;
   }
 
+  // 请求序号：连续触发 load（防抖外还有各 select 的 onchange 直发）时，
+  // 慢的旧响应返回会覆盖新筛选的结果，用序号丢弃过期响应。
+  let listReqSeq = 0;
+
   async function load() {
+    const seq = ++listReqSeq;
     loading = true;
     loadingMore = false;
     offset = 0;
     error = '';
     try {
       const { records: page, total: t } = await api.listRecords(buildQuery(0, PAGE_SIZE));
+      if (seq !== listReqSeq) return; // 已有更新的请求，丢弃本次响应
       const visible = filters.status ? null : new Set(loadStatusFilter());
       records = page.filter((r) => !visible || visible.has(r.active_status));
       total = t;
       hasMore = PAGE_SIZE < t;
     } catch (e) {
-      error = e.message;
+      if (seq === listReqSeq) error = e.message;
     } finally {
-      loading = false;
+      if (seq === listReqSeq) loading = false;
     }
   }
 
   async function loadMore() {
     if (loading || loadingMore || !hasMore) return;
+    const seq = ++listReqSeq;
     loadingMore = true;
     try {
       const { records: page } = await api.listRecords(buildQuery(offset + PAGE_SIZE, PAGE_SIZE));
+      if (seq !== listReqSeq) return; // 期间筛选已变，旧页不得 append
       offset += PAGE_SIZE;
       const visible = filters.status ? null : new Set(loadStatusFilter());
       records = [...records, ...page.filter((r) => !visible || visible.has(r.active_status))];
@@ -305,7 +313,7 @@
     } catch (e) {
       // 静默失败，保留已加载的
     } finally {
-      loadingMore = false;
+      if (seq === listReqSeq) loadingMore = false;
     }
   }
 
@@ -447,6 +455,16 @@
     loadMeta();
     if (filters.zhezi) ensureZheziNames();
     load().then(autoJumpOnLoad);
+  });
+
+  // 组件销毁时清理观察器与防抖/提示定时器，避免残留监听。
+  onDestroy(() => {
+    if (sentinelObserver) {
+      sentinelObserver.disconnect();
+      sentinelObserver = null;
+    }
+    clearTimeout(searchTimer);
+    clearTimeout(flashTimer);
   });
 </script>
 <svelte:head><title>演出 - 幕间</title></svelte:head>

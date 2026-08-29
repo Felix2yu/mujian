@@ -82,10 +82,10 @@ func TestMissingFieldFilter(t *testing.T) {
 		want  int
 		raw   int
 	}{
-		{"category", 2, rawCount(catPred)},         // noCatCity, noCatNoCityCover
-		{"city", 1, rawCount(cityPred)},            // noCatNoCityCover
+		{"category", 2, rawCount(catPred)}, // noCatCity, noCatNoCityCover
+		{"city", 1, rawCount(cityPred)},    // noCatNoCityCover
 		{"category,city", 2, rawCount(catPred + " OR " + cityPred)},
-		{"cover", 1, rawCount(coverPred)},          // noCatCity only (withCat & noCatNoCityCover have cover_file)
+		{"cover", 1, rawCount(coverPred)}, // noCatCity only (withCat & noCatNoCityCover have cover_file)
 		{"artist", 3, rawCount("NOT EXISTS (SELECT 1 FROM record_artists ra WHERE ra.record_id = records.id)")},
 	}
 	for _, c := range checks {

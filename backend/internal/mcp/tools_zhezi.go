@@ -40,7 +40,7 @@ func (s *StringOrArray) UnmarshalJSON(data []byte) error {
 
 type DeleteZheziInput struct {
 	ID     string `json:"id"`
-	DryRun *bool   `json:"dry_run,omitempty"`
+	DryRun *bool  `json:"dry_run,omitempty"`
 }
 
 type BatchCreateZhezisInput struct {
@@ -48,7 +48,7 @@ type BatchCreateZhezisInput struct {
 	DramaName string        `json:"drama_name,omitempty"`
 	Names     StringOrArray `json:"names"`
 	Remark    string        `json:"remark,omitempty"`
-	DryRun *bool          `json:"dry_run,omitempty"`
+	DryRun    *bool         `json:"dry_run,omitempty"`
 }
 
 type UpdateZheziInput struct {
@@ -56,7 +56,7 @@ type UpdateZheziInput struct {
 	Name    *string  `json:"name,omitempty"`
 	Aliases []string `json:"aliases,omitempty"`
 	Remark  *string  `json:"remark,omitempty"`
-	DryRun *bool     `json:"dry_run,omitempty"`
+	DryRun  *bool    `json:"dry_run,omitempty"`
 }
 
 // ---------- 工具实现 ----------
@@ -172,11 +172,11 @@ func (s *Server) handleDeleteZhezi(ctx context.Context, req *mcp.CallToolRequest
 	}
 	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
-			"dry_run":   true,
-			"zhezi_id":  z.ID,
-			"name":      z.Name,
-			"drama_id":  z.DramaID,
-			"aliases":   z.Aliases,
+			"dry_run":  true,
+			"zhezi_id": z.ID,
+			"name":     z.Name,
+			"drama_id": z.DramaID,
+			"aliases":  z.Aliases,
 		})
 	}
 	if err := s.db.DeleteZhezi(in.ID); err != nil {

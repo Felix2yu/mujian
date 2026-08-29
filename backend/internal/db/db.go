@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
@@ -706,8 +707,8 @@ type RecordFilter struct {
 	PriceMax     float64 // 票价上限（含）；仅当 >0 时生效
 	ActiveStatus int     // 演出状态：0=正常 1=想看 2=已取消 3=未赴约；仅当 >0 时生效
 	Exact        bool    // 关键词精确匹配（按 name 全等，而非模糊 LIKE）
-	Limit    int
-	Offset   int
+	Limit        int
+	Offset       int
 	// NoLimit disables the default/hard row caps applied by ListRecords.
 	// Only for endpoints whose contract is "everything": /api/export,
 	// /api/calendar.ics and the explicit /api/records/all.
@@ -736,7 +737,15 @@ const searchLikeCols = `(records.name LIKE ? OR records.city LIKE ? OR records.a
 	OR EXISTS (SELECT 1 FROM record_artists ra_q JOIN artists a_q ON a_q.id = ra_q.artist_id WHERE ra_q.record_id = records.id AND a_q.name LIKE ?)
 	OR EXISTS (SELECT 1 FROM record_dramas rd_q JOIN dramas d_q ON d_q.id = rd_q.drama_id WHERE rd_q.record_id = records.id AND d_q.aliases LIKE ?))`
 
+// ListRecords runs the query with a background context; request-scoped
+// callers should prefer ListRecordsContext so client cancellation propagates.
 func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
+	return db.ListRecordsContext(context.Background(), f)
+}
+
+// ListRecordsContext is ListRecords bound to ctx: the SQLite driver honors
+// cancellation, so an abandoned HTTP request stops burning query time.
+func (db *DB) ListRecordsContext(ctx context.Context, f RecordFilter) ([]models.Record, error) {
 	started := time.Now()
 	defer func() {
 		if ms := time.Since(started).Milliseconds(); ms >= slowQueryMs {
@@ -871,7 +880,7 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 		query += fmt.Sprintf(" OFFSET %d", f.Offset)
 	}
 
-	rows, err := db.conn.Query(query, args...)
+	rows, err := db.conn.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -889,21 +898,26 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 	if out == nil {
 		out = []models.Record{}
 	}
-	if err := db.backfillDramaIDs(out); err != nil {
+	if err := db.backfillDramaIDs(ctx, out); err != nil {
 		slog.Warn("backfill drama ids", "err", err)
 	}
-	if err := db.backfillZheziIDs(out); err != nil {
+	if err := db.backfillZheziIDs(ctx, out); err != nil {
 		slog.Warn("backfill zhezi ids", "err", err)
 	}
-	if err := db.backfillArtistIDs(out); err != nil {
+	if err := db.backfillArtistIDs(ctx, out); err != nil {
 		slog.Warn("backfill artist ids", "err", err)
 	}
 	return out, nil
 }
 
-// CountRecords returns the total number of records matching the filter.
-// Used for pagination alongside ListRecords.
+// CountRecords runs the count with a background context; prefer
+// CountRecordsContext in request scope.
 func (db *DB) CountRecords(f RecordFilter) (int, error) {
+	return db.CountRecordsContext(context.Background(), f)
+}
+
+// CountRecordsContext is CountRecords bound to ctx.
+func (db *DB) CountRecordsContext(ctx context.Context, f RecordFilter) (int, error) {
 	started := time.Now()
 	defer func() {
 		if ms := time.Since(started).Milliseconds(); ms >= slowQueryMs {
@@ -1001,7 +1015,7 @@ func (db *DB) CountRecords(f RecordFilter) (int, error) {
 	}
 
 	var total int
-	err := db.conn.QueryRow(query, args...).Scan(&total)
+	err := db.conn.QueryRowContext(ctx, query, args...).Scan(&total)
 	return total, err
 }
 
@@ -1090,7 +1104,8 @@ func parseDateText(s string, loc *time.Location) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-func isAllDigits(s string) bool {	if s == "" {
+func isAllDigits(s string) bool {
+	if s == "" {
 		return false
 	}
 	for _, c := range s {
@@ -1114,13 +1129,13 @@ func (db *DB) GetRecord(id string) (*models.Record, error) {
 		return nil, fmt.Errorf("record not found: %w", err)
 	}
 	rs := []models.Record{*r}
-	if err := db.backfillDramaIDs(rs); err != nil {
+	if err := db.backfillDramaIDs(context.Background(), rs); err != nil {
 		slog.Warn("backfill drama ids", "err", err)
 	}
-	if err := db.backfillZheziIDs(rs); err != nil {
+	if err := db.backfillZheziIDs(context.Background(), rs); err != nil {
 		slog.Warn("backfill zhezi ids", "err", err)
 	}
-	if err := db.backfillArtistIDs(rs); err != nil {
+	if err := db.backfillArtistIDs(context.Background(), rs); err != nil {
 		slog.Warn("backfill artist ids", "err", err)
 	}
 	return &rs[0], nil
@@ -1452,7 +1467,7 @@ func (db *DB) setRecordArtists(exec sqlExecutor, recordID string, ids, names []s
 
 // backfillDramaIDs loads drama ids for the given records from the relation
 // table in a single batched query and fills models.Record.DramaIDs.
-func (db *DB) backfillDramaIDs(records []models.Record) error {
+func (db *DB) backfillDramaIDs(ctx context.Context, records []models.Record) error {
 	if len(records) == 0 {
 		return nil
 	}
@@ -1471,7 +1486,7 @@ func (db *DB) backfillDramaIDs(records []models.Record) error {
 		ph[i] = "?"
 		args[i] = id
 	}
-	rows, err := db.conn.Query(
+	rows, err := db.conn.QueryContext(ctx,
 		"SELECT record_id, drama_id FROM record_dramas WHERE record_id IN ("+strings.Join(ph, ",")+") ORDER BY record_id, sort_order",
 		args...,
 	)
@@ -1498,7 +1513,7 @@ func (db *DB) backfillDramaIDs(records []models.Record) error {
 }
 
 // backfillZheziIDs mirrors backfillDramaIDs for the zhezi relation table.
-func (db *DB) backfillZheziIDs(records []models.Record) error {
+func (db *DB) backfillZheziIDs(ctx context.Context, records []models.Record) error {
 	if len(records) == 0 {
 		return nil
 	}
@@ -1517,7 +1532,7 @@ func (db *DB) backfillZheziIDs(records []models.Record) error {
 		ph[i] = "?"
 		args[i] = id
 	}
-	rows, err := db.conn.Query(
+	rows, err := db.conn.QueryContext(ctx,
 		"SELECT record_id, zhezi_id FROM record_zhezis WHERE record_id IN ("+strings.Join(ph, ",")+") ORDER BY record_id, sort_order",
 		args...,
 	)
@@ -1547,7 +1562,7 @@ func (db *DB) backfillZheziIDs(records []models.Record) error {
 // record_artists relation table in a single batched query and fills both
 // models.Record.ArtistIDs and models.Record.ArtistNames (names resolved by id,
 // preserving sort order).
-func (db *DB) backfillArtistIDs(records []models.Record) error {
+func (db *DB) backfillArtistIDs(ctx context.Context, records []models.Record) error {
 	if len(records) == 0 {
 		return nil
 	}
@@ -1566,7 +1581,7 @@ func (db *DB) backfillArtistIDs(records []models.Record) error {
 		ph[i] = "?"
 		args[i] = id
 	}
-	rows, err := db.conn.Query(
+	rows, err := db.conn.QueryContext(ctx,
 		"SELECT ra.record_id, ra.artist_id, a.name FROM record_artists ra JOIN artists a ON a.id = ra.artist_id WHERE ra.record_id IN ("+strings.Join(ph, ",")+") ORDER BY ra.record_id, ra.sort_order",
 		args...,
 	)
@@ -2886,23 +2901,23 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 			}
 		}
 	}
-	if err := db.backfillDramaIDs(s.TopRated); err != nil {
-		slog.Warn("backfill top rated drama ids", "err", err)
+	if err := db.backfillDramaIDs(context.Background(), s.TopRated); err != nil {
+		slog.Warn("backfill drama ids", "err", err)
 	}
-	if err := db.backfillZheziIDs(s.TopRated); err != nil {
-		slog.Warn("backfill top rated zhezi ids", "err", err)
+	if err := db.backfillZheziIDs(context.Background(), s.TopRated); err != nil {
+		slog.Warn("backfill zhezi ids", "err", err)
 	}
-	if err := db.backfillArtistIDs(s.TopRated); err != nil {
-		slog.Warn("backfill top rated artist ids", "err", err)
+	if err := db.backfillArtistIDs(context.Background(), s.TopRated); err != nil {
+		slog.Warn("backfill artist ids", "err", err)
 	}
-	if err := db.backfillDramaIDs(s.RecentRecords); err != nil {
-		slog.Warn("backfill recent drama ids", "err", err)
+	if err := db.backfillDramaIDs(context.Background(), s.RecentRecords); err != nil {
+		slog.Warn("backfill drama ids", "err", err)
 	}
-	if err := db.backfillZheziIDs(s.RecentRecords); err != nil {
-		slog.Warn("backfill recent zhezi ids", "err", err)
+	if err := db.backfillZheziIDs(context.Background(), s.RecentRecords); err != nil {
+		slog.Warn("backfill zhezi ids", "err", err)
 	}
-	if err := db.backfillArtistIDs(s.RecentRecords); err != nil {
-		slog.Warn("backfill recent artist ids", "err", err)
+	if err := db.backfillArtistIDs(context.Background(), s.RecentRecords); err != nil {
+		slog.Warn("backfill artist ids", "err", err)
 	}
 
 	return s, nil
@@ -3029,13 +3044,13 @@ func (db *DB) GetByField(field, value string) ([]models.Record, error) {
 	if out == nil {
 		out = []models.Record{}
 	}
-	if err := db.backfillDramaIDs(out); err != nil {
+	if err := db.backfillDramaIDs(context.Background(), out); err != nil {
 		slog.Warn("backfill by-field drama ids", "err", err)
 	}
-	if err := db.backfillZheziIDs(out); err != nil {
+	if err := db.backfillZheziIDs(context.Background(), out); err != nil {
 		slog.Warn("backfill by-field zhezi ids", "err", err)
 	}
-	if err := db.backfillArtistIDs(out); err != nil {
+	if err := db.backfillArtistIDs(context.Background(), out); err != nil {
 		slog.Warn("backfill by-field artist ids", "err", err)
 	}
 	return out, nil

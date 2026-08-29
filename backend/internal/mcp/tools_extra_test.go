@@ -68,7 +68,7 @@ func TestCreateRecord(t *testing.T) {
 		CategoryNames: StringOrArray{"昆曲", "京昆"},
 		ArtistNames:   StringOrArray{"魏春荣"},
 		Price:         180,
-		DryRun: boolPtr(true),
+		DryRun:        boolPtr(true),
 	})
 	if err != nil || res.IsError {
 		t.Fatalf("dry run: %v %v", res, err)
@@ -128,11 +128,11 @@ func TestUpdateRecord(t *testing.T) {
 
 	// dry_run：返回 original / updated 预览，不落库。
 	res, _, err := s.handleUpdateRecord(ctx, nil, UpdateRecordInput{
-		ID:         recID,
-		Name:       strPtrT("牡丹亭·上本"),
-		Price:      fltPtrT(220),
+		ID:            recID,
+		Name:          strPtrT("牡丹亭·上本"),
+		Price:         fltPtrT(220),
 		CategoryNames: &ArrayOp{Op: "append", Value: []string{"京昆"}},
-		DryRun: boolPtr(true),
+		DryRun:        boolPtr(true),
 	})
 	if err != nil || res.IsError {
 		t.Fatalf("dry run: %v %v", res, err)
@@ -293,7 +293,7 @@ func TestUpdateRecordDryRunPreview(t *testing.T) {
 		Seat:          strPtrT("A1"),
 		Remark:        strPtrT("备注"),
 		CategoryNames: &ArrayOp{Op: "set", Value: []string{"昆曲"}},
-		DryRun: boolPtr(true),
+		DryRun:        boolPtr(true),
 	})
 	if err != nil || res.IsError {
 		t.Fatalf("dry run: %v %v", res, err)
@@ -334,7 +334,7 @@ func TestBatchUpdateRecordsDryRun(t *testing.T) {
 		ArtistNames:   &ArrayOp{Op: "set", Value: []string{"新演员"}},
 		TagIDs:        &ArrayOp{Op: "remove", Value: []string{"t1"}},
 		DramaIDs:      &ArrayOp{Op: "append", Value: []string{"d1"}},
-		DryRun: boolPtr(true),
+		DryRun:        boolPtr(true),
 	}
 
 	res, _, err := s.handleBatchUpdateRecords(ctx, nil, upd)

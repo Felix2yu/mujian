@@ -1,13 +1,31 @@
 const API_BASE = '';
 
+// Optional bearer token (set on the settings page, stored locally). When the
+// server enables MJ_AUTH_TOKEN, every API request must carry it; calendar
+// clients get it appended to the ICS URL instead.
+export function getAuthToken() {
+  try {
+    return localStorage.getItem('mujian:auth_token') || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function authHeaders() {
+  const t = getAuthToken();
+  return t ? { 'X-Auth-Token': t } : {};
+}
+
 async function request(path, options = {}) {
   const url = `${API_BASE}${path}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15000);
   try {
     const res = await fetch(url, {
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      // same-origin：同源部署下与 include 等效，跨域部署时不会把 cookie
+      // 泄漏给第三方站点（配合无 CSRF token 的现状，这是更安全的默认值）。
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(options.headers || {}) },
       ...options,
       signal: controller.signal
     });
@@ -33,8 +51,8 @@ async function request(path, options = {}) {
 export async function streamRequest(path, options = {}, onLine) {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(options.headers || {}) },
     ...options
   });
   if (!res.ok) {
@@ -109,7 +127,12 @@ export const api = {
   importRecords: async (file) => {
     const form = new FormData();
     form.append('file', file);
-    const res = await fetch(`${API_BASE}/api/records/import`, { method: 'POST', body: form });
+    const res = await fetch(`${API_BASE}/api/records/import`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: authHeaders(),
+      body: form
+    });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'Import failed' }));
       throw new Error(err.error || 'Import failed');
@@ -146,7 +169,12 @@ export const api = {
   getDashboard: () => request('/api/dashboard'),
   getAnalytics: () => request('/api/analytics'),
   getCalendar: (year, month) => request(`/api/calendar?year=${year}&month=${month}`),
-  getICSUrl: () => `${API_BASE}/api/calendar.ics`,
+  // ICS 订阅地址：服务端启用 token 鉴权时日历客户端无法带请求头，
+  // 改以 ?token= 查询参数传递。
+  getICSUrl: () => {
+    const t = getAuthToken();
+    return `${API_BASE}/api/calendar.ics${t ? `?token=${encodeURIComponent(t)}` : ''}`;
+  },
 
   getAutocomplete: (field) => request(`/api/autocomplete/${field}`),
   getByField: (field, value) => request(`/api/field/${field}/${encodeURIComponent(value)}`),
@@ -157,7 +185,12 @@ export const api = {
   uploadFile: async (file) => {
     const form = new FormData();
     form.append('file', file);
-    const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: form });
+    const res = await fetch(`${API_BASE}/api/upload`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: authHeaders(),
+      body: form
+    });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'Upload failed' }));
       throw new Error(err.error || 'Upload failed');

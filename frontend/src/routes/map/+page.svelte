@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { api, coverUrl } from '$lib/api.js';
   import 'leaflet/dist/leaflet.css';
   import 'leaflet.markercluster/dist/MarkerCluster.css';
@@ -12,6 +12,15 @@
     } catch (e) {
       return fallback;
     }
+  }
+
+  // Leaflet popup / divIcon 的 html 参数按原始 HTML 插入、不转义，而演出名、
+  // 城市、地址、分类都是用户可控数据（导入/MCP/批量编辑均可写入），必须先
+  // 转义再拼接，否则构成存储型 XSS。
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
   }
 
   let loading = $state(true);
@@ -76,6 +85,16 @@
     if (L && mapEl && records && records.length > 0 && !map) {
       initMap();
     }
+  });
+
+  // 路由切走时销毁 Leaflet 实例，避免地图 DOM 监听与定时器残留。
+  onDestroy(() => {
+    if (map) {
+      map.remove();
+      map = null;
+    }
+    tileLayer = null;
+    clusterGroup = null;
   });
 
   function initMap() {
@@ -170,13 +189,13 @@
           (r) => {
             const cov = r.coverThumb ? coverUrl(r.coverThumb) : coverUrl(r.coverFile);
             const dateStr = r.dateText ? r.dateText.split(' ')[0].replace('年', '.').replace('月', '.').replace('日', '') : '';
-            const catStr = r.categoryName ? ' · ' + r.categoryName : '';
+            const catStr = r.categoryName ? ' · ' + escapeHtml(r.categoryName) : '';
             return `
-              <a class="mrow" href="/records/${r.id}">
-                ${cov ? `<img class="mcov" src="${cov}" alt=""/>` : '<div class="mcov ph"></div>'}
+              <a class="mrow" href="/records/${encodeURIComponent(r.id)}">
+                ${cov ? `<img class="mcov" src="${escapeHtml(cov)}" alt=""/>` : '<div class="mcov ph"></div>'}
                 <div class="minfo">
-                  <div class="mtitle">${r.name}</div>
-                  <div class="msub">${dateStr}${catStr}</div>
+                  <div class="mtitle">${escapeHtml(r.name)}</div>
+                  <div class="msub">${escapeHtml(dateStr)}${catStr}</div>
                 </div>
               </a>`;
           }
@@ -198,13 +217,13 @@
   function createPopup(first, cityText, count, list, more) {
     const cover = first.coverThumb ? coverUrl(first.coverThumb) : coverUrl(first.coverFile);
     const titleHtml = count > 1
-      ? `<b>${cityText}</b> · ${count} 场`
-      : `<b>${first.name}</b>`;
-    const address = first.address ? `<div class="paddr">${first.address}</div>` : '';
+      ? `<b>${escapeHtml(cityText)}</b> · ${count} 场`
+      : `<b>${escapeHtml(first.name)}</b>`;
+    const address = first.address ? `<div class="paddr">${escapeHtml(first.address)}</div>` : '';
     return `
       <div class="pc">
         <div class="phead">
-          ${cover ? `<img src="${cover}" alt=""/>` : ''}
+          ${cover ? `<img src="${escapeHtml(cover)}" alt=""/>` : ''}
           <div class="ptext">${titleHtml}${address}</div>
         </div>
         <div class="plist">${list}</div>

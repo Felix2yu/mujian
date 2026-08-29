@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>幕间 · 移动端专题原型（首页 + 编辑页）</title>
+<style>
+  /* ============================================================
+     幕间 · 移动端专题原型
+     忠实沿用品牌：朱砂红 / 暖纸灰 / 鎏金评分；衬线标题 + 无衬线正文
+     主题：移除全局切换，默认跟随系统（prefers-color-scheme）
+     ============================================================ */
+  :root {
+    color-scheme: light;
+    --bg: #f7f6f3; --surface: #ffffff; --surface-2: #faf9f7; --surface-3: #f3f1ed;
+    --text: #1c1917; --text-2: #57534e; --text-muted: #78716c; --text-3: #a8a29e;
+    --border: #e7e5e4; --border-strong: #d6d3d1;
+    --accent: #b42318; --accent-strong: #991b1b; --accent-soft: rgba(180,35,24,.09); --accent-softer: rgba(180,35,24,.05);
+    --gold: #d97706; --gold-soft: rgba(217,119,6,.12);
+    --success: #15803d; --danger: #dc2626; --danger-soft: rgba(220,38,38,.10);
+    --radius-sm: 10px; --radius: 14px; --radius-lg: 18px;
+    --shadow-sm: 0 1px 3px rgba(28,25,23,.06), 0 1px 2px rgba(28,25,23,.04);
+    --shadow-md: 0 6px 18px -4px rgba(28,25,23,.10), 0 3px 8px -3px rgba(28,25,23,.06);
+    --shadow-lg: 0 16px 40px -8px rgba(28,25,23,.18), 0 6px 16px -6px rgba(28,25,23,.10);
+    --font-serif: Georgia,'Times New Roman','Songti SC','STSong','SimSun',serif;
+    --font-sans: -apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;
+    --ease: cubic-bezier(.4,0,.2,1); --t-fast: .16s; --t-med: .24s;
+  }
+  /* 自动主题：跟随系统，无手动切换按钮 */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #14110f; --surface: #1c1917; --surface-2: #221e1c; --surface-3: #292524;
+      --text: #ede8e3; --text-2: #c7c0b9; --text-muted: #a8a29e; --text-3: #78716c;
+      --border: #2e2a27; --border-strong: #3f3a36;
+      --accent: #f0564d; --accent-strong: #ff7a72; --accent-soft: rgba(240,86,77,.15); --accent-softer: rgba(240,86,77,.08);
+      --gold: #e3a22b; --gold-soft: rgba(227,162,43,.15);
+      --success: #4ade80; --danger: #f87171; --danger-soft: rgba(248,113,113,.14);
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.35), 0 1px 2px rgba(0,0,0,.25);
+      --shadow-md: 0 6px 18px -4px rgba(0,0,0,.45), 0 3px 8px -3px rgba(0,0,0,.35);
+      --shadow-lg: 0 16px 40px -8px rgba(0,0,0,.6), 0 6px 16px -6px rgba(0,0,0,.45);
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-sans); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  h1,h2,h3,h4 { font-family: var(--font-serif); font-weight: 600; letter-spacing: .01em; margin: 0; }
+  .page { max-width: 1080px; margin: 0 auto; padding: 32px 20px 80px; }
+  .doc-head { margin-bottom: 8px; }
+  .doc-head h1 { font-size: 26px; }
+  .doc-head p { color: var(--text-muted); margin: 8px 0 0; }
+  .tagline { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--accent); background: var(--accent-soft); padding: 4px 11px; border-radius: 999px; font-family: var(--font-sans); }
+  .sec-label { display: flex; align-items: center; gap: 10px; margin: 46px 0 16px; }
+  .sec-label .num { font-family: var(--font-serif); font-size: 13px; color: #fff; background: var(--accent); width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; flex: 0 0 auto; }
+  .sec-label h2 { font-size: 19px; }
+  .sec-label .note { margin-left: auto; font-size: 12.5px; color: var(--text-muted); font-family: var(--font-sans); }
+
+  /* ============ 原型舞台 ============ */
+  .stage { display: flex; flex-wrap: wrap; gap: 36px; align-items: flex-start; }
+  .frame { background: var(--surface); border: 1px solid var(--border); border-radius: 28px; padding: 14px; box-shadow: var(--shadow-lg); }
+  .frame .screen { border-radius: 18px; overflow: hidden; background: var(--bg); }
+  .frame-label { font-size: 12.5px; color: var(--text-muted); text-align: center; margin-top: 12px; font-family: var(--font-sans); }
+  .frame-label b { color: var(--text-2); }
+
+  /* ============ 手机壳 ============ */
+  .phone { width: 390px; }
+  .phone .screen { width: 362px; min-height: 720px; position: relative; }
+  .notch { height: 10px; }
+
+  /* ---------- 移动端顶栏（无抽屉、无主题切换） ---------- */
+  .mtop { position: sticky; top: 0; z-index: 40; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px) saturate(1.4); border-bottom: 1px solid var(--border); }
+  .mtop .row1 { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 14px; }
+  .seal { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(150deg, var(--accent), var(--accent-strong)); color: #fff; display: grid; place-items: center; font-family: var(--font-serif); font-weight: 700; font-size: 15px; flex: 0 0 auto; }
+  .brand { font-family: var(--font-serif); font-size: 17px; font-weight: 700; letter-spacing: .05em; }
+  .more-wrap { margin-left: auto; position: relative; }
+  .more-btn { display: inline-flex; align-items: center; gap: 4px; padding: 7px 13px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2); font-size: 13.5px; font-family: var(--font-sans); cursor: pointer; }
+  .more-btn:active { transform: scale(.97); }
+  .more-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 6px; min-width: 184px; display: none; }
+  .more-menu.open { display: block; animation: pop .14s var(--ease); transform-origin: top right; }
+  @keyframes pop { from { opacity: 0; transform: scale(.96) translateY(-4px); } to { opacity: 1; transform: none; } }
+  .more-menu a { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); font-size: 14px; color: var(--text-2); font-family: var(--font-sans); cursor: pointer; }
+  .more-menu a:hover { background: var(--accent-soft); color: var(--accent); }
+  .more-menu .sep { height: 1px; background: var(--border); margin: 5px 8px; }
+  .more-menu .ico { width: 18px; text-align: center; }
+
+  /* 主标签 */
+  .mtabs { display: flex; gap: 4px; padding: 4px 12px 10px; overflow-x: auto; scrollbar-width: none; }
+  .mtabs::-webkit-scrollbar { display: none; }
+  .mtab { padding: 8px 14px; border-radius: 999px; font-size: 14px; color: var(--text-muted); font-family: var(--font-sans); white-space: nowrap; cursor: pointer; transition: all var(--t-fast) var(--ease); }
+  .mtab.on { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+  .mtab:active { transform: scale(.96); }
+
+  /* ---------- 首页内容 ---------- */
+  .mhome { padding: 14px 14px 28px; }
+  .search2 { position: relative; display: flex; align-items: center; }
+  .search2 input { width: 100%; padding: 13px 42px 13px 42px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); font-size: 15px; font-family: var(--font-sans); color: var(--text); box-shadow: var(--shadow-sm); transition: all var(--t-fast) var(--ease); }
+  .search2 input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-sm); }
+  .search2 .ico { position: absolute; left: 15px; color: var(--text-3); font-size: 17px; }
+  .search2 .clr { position: absolute; right: 12px; width: 22px; height: 22px; border-radius: 50%; border: none; background: var(--surface-3); color: var(--text-muted); font-size: 11px; cursor: pointer; }
+
+  /* 快捷筛选：仅剧种维度（人人适用），城市移入「筛选」面板 */
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 14px 2px 4px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: 0 0 auto; padding: 7px 15px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); font-size: 13.5px; font-family: var(--font-sans); cursor: pointer; transition: all var(--t-fast) var(--ease); white-space: nowrap; }
+  .chip:active { transform: scale(.96); }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .chip .dot { opacity: .5; margin-right: 4px; }
+
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+  .filter-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 15px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 14px; font-family: var(--font-sans); cursor: pointer; box-shadow: var(--shadow-sm); }
+  .filter-btn:active { transform: scale(.97); }
+  .filter-btn .badge { background: var(--accent); color: #fff; font-size: 11px; border-radius: 999px; min-width: 17px; height: 17px; padding: 0 5px; display: inline-grid; place-items: center; }
+  .spacer { flex: 1; }
+  .btn-primary { display: inline-flex; align-items: center; gap: 5px; padding: 9px 16px; border-radius: var(--radius-sm); border: none; background: linear-gradient(160deg, var(--accent), var(--accent-strong)); color: #fff; font-size: 14px; font-weight: 600; font-family: var(--font-sans); cursor: pointer; box-shadow: 0 3px 10px -3px var(--accent); }
+  .btn-primary:active { transform: scale(.97); }
+
+  .list-head { display: flex; align-items: baseline; gap: 7px; margin: 24px 2px 14px; }
+  .list-head h3 { font-size: 17px; }
+  .list-head .n { color: var(--accent); font-family: var(--font-sans); font-weight: 700; }
+  .list-head .sort { margin-left: auto; font-size: 12.5px; color: var(--text-muted); }
+
+  /* 卡片：间距宽松、去拥挤 */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .rcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm); transition: box-shadow var(--t-med) var(--ease), transform var(--t-med) var(--ease), border-color var(--t-med) var(--ease); cursor: pointer; display: flex; flex-direction: column; }
+  .rcard:active { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--border-strong); }
+  .rcard .cover { position: relative; padding-top: 138%; height: 0; background: var(--surface-3); overflow: hidden; }
+  .rcard .cover .ph { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-serif); font-size: 54px; color: #fff; opacity: .9; }
+  .rcard .cover .cat { position: absolute; top: 9px; left: 9px; padding: 3px 10px; border-radius: 999px; background: rgba(20,17,15,.66); backdrop-filter: blur(6px); color: #fff; font-size: 11px; font-weight: 600; font-family: var(--font-sans); }
+  .rcard .cover .rate { position: absolute; bottom: 9px; right: 9px; padding: 3px 10px; border-radius: 999px; background: rgba(20,17,15,.66); backdrop-filter: blur(6px); color: var(--gold); font-size: 11.5px; font-weight: 700; font-family: var(--font-sans); }
+  .rcard .info { padding: 13px 14px 15px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .rcard .title { font-family: var(--font-serif); font-weight: 600; font-size: 15px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.7em; }
+  .rcard .meta { font-size: 12px; color: var(--text-muted); display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  .rcard .meta .d { opacity: .55; }
+  .rcard .artists { font-size: 12px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: auto; }
+
+  /* ---------- 筛选面板（底部抽屉，可选项目均为通用维度） ---------- */
+  .sheet-mask { position: absolute; inset: 0; background: rgba(0,0,0,.4); opacity: 0; pointer-events: none; transition: opacity var(--t-med) var(--ease); z-index: 50; }
+  .sheet-mask.open { opacity: 1; pointer-events: auto; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: 20px 20px 0 0; padding: 8px 18px calc(18px + env(safe-area-inset-bottom)); transform: translateY(102%); transition: transform var(--t-med) var(--ease); z-index: 55; box-shadow: var(--shadow-lg); }
+  .sheet.open { transform: none; }
+  .sheet .grip { width: 38px; height: 4px; border-radius: 2px; background: var(--border-strong); margin: 8px auto 12px; }
+  .sheet .s-head { display: flex; align-items: center; margin-bottom: 14px; }
+  .sheet .s-head h3 { font-size: 17px; }
+  .sheet .s-head .done { margin-left: auto; color: var(--accent); font-weight: 600; font-size: 15px; cursor: pointer; font-family: var(--font-sans); }
+  .fgroup { margin-bottom: 18px; }
+  .fgroup > .gl { font-size: 13px; color: var(--text-muted); margin-bottom: 9px; font-family: var(--font-sans); }
+  .fopts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .fopt { padding: 8px 15px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); font-size: 13.5px; font-family: var(--font-sans); cursor: pointer; transition: all var(--t-fast) var(--ease); }
+  .fopt.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .ftext { width: 100%; padding: 11px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-2); font-size: 14px; font-family: var(--font-sans); color: var(--text); }
+  .ftext:focus { outline: none; border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .fhint { font-size: 12px; color: var(--text-3); margin-top: 7px; font-family: var(--font-sans); }
+
+  /* ============ 编辑页（桌面双列） ============ */
+  .edit-wrap { width: 980px; }
+  .edit-wrap .screen { width: 952px; min-height: 760px; }
+  .etop { position: sticky; top: 0; z-index: 40; background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 20px; }
+  .back { width: 36px; height: 36px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text-2); display: grid; place-items: center; cursor: pointer; font-size: 16px; }
+  .etop .et { font-family: var(--font-serif); font-size: 18px; font-weight: 600; }
+  .etop .spacer { flex: 1; }
+  .btn-ghost { padding: 8px 15px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 14px; font-family: var(--font-sans); cursor: pointer; }
+  .btn-ghost:active { transform: scale(.97); }
+
+  .eform { padding: 20px; }
+  .two-col { display: flex; gap: 18px; align-items: flex-start; }
+  .col-l { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  .col-r { flex: 0 1 360px; min-width: 300px; display: flex; flex-direction: column; gap: 16px; position: sticky; top: 72px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px 22px; box-shadow: var(--shadow-sm); }
+  .card h4 { font-size: 15.5px; color: var(--text); display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .card h4 .tick { width: 4px; height: 15px; border-radius: 2px; background: var(--accent); display: inline-block; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 13px; }
+  .row:last-child { margin-bottom: 0; }
+  .f { display: flex; flex-direction: column; gap: 6px; }
+  .f.xs { flex: 0 1 130px; min-width: 110px; }
+  .f.sm { flex: 0 1 200px; min-width: 150px; }
+  .f.md { flex: 1 1 230px; min-width: 170px; }
+  .f.lg { flex: 2.2 1 300px; min-width: 210px; }
+  .f label { font-size: 13px; color: var(--text-muted); font-family: var(--font-sans); }
+  .f label .req { color: var(--accent); }
+  .f label .hlp { color: var(--text-3); font-size: 11.5px; }
+  .input { padding: 11px 13px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-2); font-size: 14.5px; font-family: var(--font-sans); color: var(--text); transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease), background var(--t-fast) var(--ease); width: 100%; }
+  .input::placeholder { color: var(--text-3); }
+  .input:focus { outline: none; border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  select.input { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-3) 50%), linear-gradient(135deg, var(--text-3) 50%, transparent 50%); background-position: calc(100% - 16px) 18px, calc(100% - 11px) 18px; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; padding-right: 30px; }
+
+  /* 坐标子字段 */
+  .sub { margin-top: 11px; padding: 11px 13px; border-left: 2px solid var(--border-strong); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: var(--surface-2); }
+  .sub .sh { font-size: 13px; color: var(--text-2); margin-bottom: 7px; }
+  .sub .geo { padding: 7px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); font-size: 13px; font-family: var(--font-sans); }
+  .loc-btn { width: 40px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-2); cursor: pointer; display: grid; place-items: center; align-self: stretch; }
+  .loc-btn.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .addr-row { display: flex; gap: 8px; }
+
+  /* 星级 */
+  .stars { display: flex; align-items: center; gap: 3px; min-height: 42px; }
+  .star { border: none; background: none; font-size: 25px; color: var(--border-strong); cursor: pointer; padding: 0 1px; transition: transform var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+  .star:hover { transform: scale(1.18); }
+  .star.on { color: var(--gold); }
+  .rate-txt { margin-left: 8px; font-size: 12.5px; color: var(--text-muted); font-family: var(--font-sans); }
+
+  /* 胶囊 tag 输入（演员 / 剧团） */
+  .tagbox { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; min-height: 44px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); cursor: text; transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease), background var(--t-fast) var(--ease); }
+  .tagbox:focus-within { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .tagbox input { flex: 1; min-width: 130px; height: 30px; border: none; background: none; outline: none; padding: 0 4px; font-size: 14px; font-family: var(--font-sans); color: var(--text); }
+  .capsule { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border-radius: 999px; font-size: 13px; font-weight: 500; font-family: var(--font-sans); white-space: nowrap; }
+  .capsule.linked { background: var(--accent-soft); color: var(--accent); }
+  .capsule.free { background: var(--surface-3); color: var(--text-2); border: 1px solid var(--border); }
+  .cap-x { border: none; background: none; color: inherit; opacity: .55; width: 17px; height: 17px; border-radius: 50%; cursor: pointer; font-size: 10px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+  .cap-x:hover { opacity: 1; background: rgba(0,0,0,.12); }
+  .combo { position: relative; flex: 1; min-width: 0; }
+  .combo-list { position: absolute; top: calc(100% + 5px); left: 0; right: 0; z-index: 30; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); max-height: 210px; overflow-y: auto; padding: 5px; }
+  .combo-item { display: block; width: 100%; text-align: left; border: none; background: none; padding: 9px 12px; border-radius: var(--radius-sm); font-size: 14px; color: var(--text-2); font-family: var(--font-sans); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .combo-item:hover { background: var(--accent-soft); color: var(--accent); }
+
+  /* 剧目 / 折子 picker */
+  .ply { display: flex; flex-direction: column; gap: 10px; }
+  .ply-item { border: 1px solid var(--border); border-radius: var(--radius); padding: 13px 15px; background: var(--surface); }
+  .ply-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .ply-name { font-weight: 600; font-size: 14.5px; }
+  .ply-cat { font-style: normal; font-size: 12px; color: var(--text-muted); background: var(--surface-3); border-radius: 999px; padding: 2px 9px; margin-left: 8px; }
+  .ply-ops { display: inline-flex; gap: 2px; }
+  .ply-ops button { border: none; background: none; color: var(--text-3); width: 26px; height: 26px; border-radius: 50%; cursor: pointer; font-size: 13px; }
+  .ply-ops button:hover { background: var(--surface-3); color: var(--accent); }
+  .ply-z { margin-top: 11px; }
+  .ply-z .zl { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 7px; font-family: var(--font-sans); }
+  .zhezi-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .zhezi { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; border: 1px solid var(--border); border-radius: 999px; padding: 6px 13px; font-size: 13px; color: var(--text-2); font-family: var(--font-sans); user-select: none; transition: all var(--t-fast) var(--ease); }
+  .zhezi.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .zhezi input { accent-color: var(--accent); }
+  .z-add { margin-top: 10px; border: 1px dashed var(--border-strong); background: none; color: var(--accent); border-radius: 999px; padding: 5px 14px; font-size: 12.5px; font-family: var(--font-sans); cursor: pointer; }
+  .z-add:hover { background: var(--accent-soft); border-color: var(--accent); }
+  .ply-add { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+  .ply-add .input { flex: 1; }
+  .add-drama { flex: 1; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+  .add-drama summary { cursor: pointer; color: var(--accent); font-size: 13px; font-family: var(--font-sans); }
+
+  /* 备注 + 封面（右列） */
+  .remark { width: 100%; min-height: 280px; resize: vertical; padding: 13px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-2); font-size: 14.5px; font-family: var(--font-sans); color: var(--text); line-height: 1.6; }
+  .remark:focus { outline: none; border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .cover-row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .cover-preview { width: 110px; height: 150px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); flex-shrink: 0; background: linear-gradient(160deg,#7c2d12,#b42318); display: grid; place-items: center; color: #fff; font-family: var(--font-serif); font-size: 38px; }
+  .cover-main { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 12px; }
+  .upload-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .money { display: flex; gap: 6px; }
+  .money .cur { max-width: 78px; }
+
+  .actions { display: flex; gap: 10px; margin-top: 4px; }
+  .btn-lg { padding: 11px 22px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; font-family: var(--font-sans); cursor: pointer; border: none; }
+  .btn-lg.primary { background: linear-gradient(160deg, var(--accent), var(--accent-strong)); color: #fff; box-shadow: 0 3px 10px -3px var(--accent); }
+
+  /* 移动端编辑页（单列堆叠） */
+  .phone-edit .col-r { position: static; }
+  .phone-edit .two-col { flex-direction: column; }
+  .phone-edit .col-r { flex: 1 1 auto; min-width: 0; }
+
+  .footnote { margin-top: 40px; padding: 18px 20px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: 13px; color: var(--text-muted); line-height: 1.8; }
+  .footnote b { color: var(--text-2); }
+  .footnote code { background: var(--surface-3); padding: 1px 6px; border-radius: 5px; font-size: 12px; color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="doc-head">
+    <span class="tagline">移动端专题 · 首页 + 编辑页</span>
+    <h1 style="margin-top:12px;">幕间 · 移动端界面优化原型</h1>
+    <p>在保留现有「朱砂红 + 暖纸灰 + 鎏金评分」戏曲气质基础上，针对移动端首页与编辑详情页的本次专项优化。主题默认跟随系统、无手动切换；移动端导航由抽屉改为顶栏「更多」下拉。</p>
+  </div>
+
+  <!-- ============ 一、移动端首页 ============ -->
+  <div class="sec-label">
+    <span class="num">1</span><h2>移动端首页</h2>
+    <span class="note">手机视口 390pt · 顶栏+更多 · 剧种快捷筛选 · 宽松卡片</span>
+  </div>
+  <div class="stage">
+    <div class="frame phone">
+      <div class="screen">
+        <div class="notch"></div>
+        <!-- 顶栏：无抽屉、无主题切换 -->
+        <div class="mtop">
+          <div class="row1">
+            <span class="seal">幕</span>
+            <span class="brand">幕间</span>
+            <div class="more-wrap">
+              <button class="more-btn" onclick="toggleMore(this)">更多 ▾</button>
+              <div class="more-menu" id="moreMenu">
+                <a><span class="ico">📊</span> 分析</a>
+                <a><span class="ico">🗺️</span> 地图</a>
+                <a><span class="ico">🖼️</span> 封面</a>
+                <a><span class="ico">🏷️</span> 分类</a>
+                <a><span class="ico">📥</span> 数据</a>
+                <div class="sep"></div>
+                <a><span class="ico">⚙️</span> 设置</a>
+              </div>
+            </div>
+          </div>
+          <div class="mtabs" id="mtabs">
+            <span class="mtab on">记录</span>
+            <span class="mtab">剧目</span>
+            <span class="mtab">演员</span>
+            <span class="mtab">日历</span>
+          </div>
+        </div>
+
+        <!-- 首页内容 -->
+        <div class="mhome">
+          <div class="search2">
+            <span class="ico">⌕</span>
+            <input placeholder="搜索演出 / 演员 / 城市 / 剧团 / 备注…" value="牡丹亭" />
+            <button class="clr" title="清除">✕</button>
+          </div>
+
+          <!-- 快捷筛选：仅剧种维度（人人适用） -->
+          <div class="chips" id="genreChips">
+            <button class="chip on">全部</button>
+            <button class="chip">昆剧</button>
+            <button class="chip">京剧</button>
+            <button class="chip">越剧</button>
+            <button class="chip">黄梅戏</button>
+            <button class="chip">话剧</button>
+          </div>
+
+          <div class="toolbar">
+            <button class="filter-btn" onclick="toggleSheet(true)">⚙ 筛选 <span class="badge">2</span></button>
+            <div class="spacer"></div>
+            <button class="btn-primary">＋ 新建记录</button>
+          </div>
+
+          <div class="list-head">
+            <h3>记录</h3><span class="n">6</span>
+            <span class="sort">时间 ↓</span>
+          </div>
+
+          <div class="grid" id="cardGrid"></div>
+        </div>
+
+        <!-- 筛选面板（底部抽屉） -->
+        <div class="sheet-mask" id="sheetMask" onclick="toggleSheet(false)"></div>
+        <div class="sheet" id="sheet">
+          <div class="grip"></div>
+          <div class="s-head"><h3>筛选</h3><span class="done" onclick="toggleSheet(false)">完成</span></div>
+          <div class="fgroup">
+            <div class="gl">时间</div>
+            <div class="fopts">
+              <button class="fopt on">全部</button>
+              <button class="fopt">今年</button>
+              <button class="fopt">本月</button>
+              <button class="fopt">近半年</button>
+            </div>
+          </div>
+          <div class="fgroup">
+            <div class="gl">评分</div>
+            <div class="fopts">
+              <button class="fopt">高分 ≥ 4.5</button>
+              <button class="fopt on">待评分</button>
+            </div>
+          </div>
+          <div class="fgroup">
+            <div class="gl">状态</div>
+            <div class="fopts">
+              <button class="fopt">已看</button>
+              <button class="fopt">想看</button>
+              <button class="fopt">已取消</button>
+            </div>
+          </div>
+          <div class="fgroup">
+            <div class="gl">城市（任意，不再硬编码单一城市）</div>
+            <input class="ftext" placeholder="输入城市，如：北京 / 杭州 / 南京…" value="上海" />
+            <div class="fhint">想过滤哪个城市就填哪个——不再有「上海」专属胶囊。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-label"><b>移动端首页</b> · 顶栏 4 主标签 +「更多」收纳次级；剧种快捷胶囊 + 通用筛选面板；卡片间距 18px</div>
+  </div>
+
+  <!-- ============ 二、移动端编辑页（单列） ============ -->
+  <div class="sec-label">
+    <span class="num">2</span><h2>移动端编辑详情页</h2>
+    <span class="note">同一双列界面在窄屏下自动堆叠为单列</span>
+  </div>
+  <div class="stage">
+    <div class="frame phone phone-edit">
+      <div class="screen">
+        <div class="notch"></div>
+        <!-- 编辑页顶栏 -->
+        <div class="etop">
+          <button class="back">‹</button>
+          <span class="et">编辑演出</span>
+          <span class="spacer"></span>
+          <button class="btn-ghost">取消</button>
+          <button class="btn-primary" style="padding:8px 16px;">保存</button>
+        </div>
+        <div class="eform">
+          <div class="two-col">
+            <div class="col-l">
+              <!-- 基本信息 -->
+              <div class="card">
+                <h4><span class="tick"></span>基本信息</h4>
+                <div class="row">
+                  <div class="f lg"><label>名称 <span class="req">*</span></label><input class="input" value="牡丹亭（精华版）" /></div>
+                  <div class="f sm"><label>剧种（可多个）</label><input class="input" value="昆剧" /></div>
+                </div>
+                <div class="row">
+                  <div class="f sm"><label>城市</label><input class="input" value="上海" /></div>
+                  <div class="f lg"><label>场馆 / 地址</label>
+                    <div class="addr-row">
+                      <div class="combo"><input class="input" value="上海大剧院" /><div class="combo-list"><button class="combo-item">上海大剧院</button><button class="combo-item">美琪大戏院</button></div></div>
+                      <button class="loc-btn on" title="已定位"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c4.5-4.6 7-8.1 7-12a7 7 0 1 0-14 0c0 3.9 2.5 7.4 7 12z"/><circle cx="12" cy="9" r="2.4" fill="currentColor" stroke="none"/></svg></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- 观演信息 -->
+              <div class="card">
+                <h4><span class="tick"></span>观演信息</h4>
+                <div class="row">
+                  <div class="f md"><label>演出时间</label><input class="input" value="2024-03-15 19:30" /></div>
+                  <div class="f xs"><label>状态</label><select class="input"><option>正常</option><option>想看</option><option>已取消</option></select></div>
+                  <div class="f md"><label>评分</label>
+                    <div class="stars"><button class="star on">★</button><button class="star on">★</button><button class="star on">★</button><button class="star on">★</button><button class="star on">★</button><span class="rate-txt">5 分</span></div>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="f sm"><label>座位</label><input class="input" value="3排15座" /></div>
+                  <div class="f md"><label>同行</label><input class="input" value="小王、小李" /></div>
+                </div>
+              </div>
+              <!-- 费用与渠道 -->
+              <div class="card">
+                <h4><span class="tick"></span>费用与渠道</h4>
+                <div class="row">
+                  <div class="f sm"><label>购买渠道</label><input class="input" value="大麦" /></div>
+                  <div class="f sm"><label>票价</label><div class="money"><input class="input" type="number" value="680" /><input class="input cur" value="CNY" /></div></div>
+                </div>
+                <div class="row">
+                  <div class="f sm"><label>实付</label><div class="money"><input class="input" type="number" value="612" /><input class="input cur" value="CNY" /></div></div>
+                </div>
+              </div>
+              <!-- 阵容 -->
+              <div class="card">
+                <h4><span class="tick"></span>阵容</h4>
+                <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:7px;">演员 <span style="color:var(--text-3);font-size:11.5px;">回车生成胶囊</span></label>
+                <div class="tagbox">
+                  <span class="capsule linked">单雯 <button class="cap-x">✕</button></span>
+                  <span class="capsule linked">张军 <button class="cap-x">✕</button></span>
+                  <span class="capsule linked">施夏明 <button class="cap-x">✕</button></span>
+                  <input placeholder="" />
+                </div>
+                <label style="font-size:13px;color:var(--text-muted);display:block;margin:14px 0 7px;">剧团</label>
+                <div class="tagbox">
+                  <span class="capsule free">江苏省昆剧院 <button class="cap-x">✕</button></span>
+                  <input placeholder="" />
+                </div>
+                <label style="font-size:13px;color:var(--text-muted);display:block;margin:14px 0 7px;">剧目 · 折子</label>
+                <div class="ply">
+                  <div class="ply-item">
+                    <div class="ply-head"><span class="ply-name">牡丹亭 <em class="ply-cat">昆剧</em></span><span class="ply-ops"><button>✎</button><button>✕</button></span></div>
+                    <div class="ply-z">
+                      <span class="zl">折子（选中表示本次演出了该折戏）</span>
+                      <div class="zhezi-grid">
+                        <label class="zhezi on"><input type="checkbox" checked /> 游园</label>
+                        <label class="zhezi on"><input type="checkbox" checked /> 惊梦</label>
+                        <label class="zhezi on"><input type="checkbox" checked /> 寻梦</label>
+                        <label class="zhezi"><input type="checkbox" /> 离魂</label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="ply-add">
+                  <div class="combo"><input class="input" placeholder="🔍 搜索并关联已有剧目…" /></div>
+                  <details class="add-drama"><summary>＋ 新建剧目档案</summary></details>
+                </div>
+              </div>
+            </div><!-- /col-l -->
+            <div class="col-r">
+              <!-- 备注 -->
+              <div class="card">
+                <h4><span class="tick"></span>备注</h4>
+                <textarea class="remark" placeholder="剧评、观感、备忘…">青春版经典，单雯的杜丽娘细腻婉转，水袖与身段俱佳。第三幕「惊梦」全场最佳，灯光与昆腔交融，值回票价。</textarea>
+              </div>
+              <!-- 封面 -->
+              <div class="card">
+                <h4><span class="tick"></span>封面</h4>
+                <div class="cover-row">
+                  <div class="cover-preview">牡</div>
+                  <div class="cover-main">
+                    <div class="upload-row">
+                      <button class="btn-ghost">⇪ 上传图片</button>
+                      <button class="btn-ghost">▦ 引用</button>
+                    </div>
+                    <div><label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:6px;">封面 URL</label><input class="input" value="covers/mudanting.jpg" /></div>
+                  </div>
+                </div>
+              </div>
+            </div><!-- /col-r -->
+          </div>
+          <div class="actions">
+            <button class="btn-lg primary">保存</button>
+            <button class="btn-lg btn-ghost" style="border:1px solid var(--border-strong);">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-label"><b>移动端编辑页</b> · 单列堆叠；区块标题统一带朱砂色标</div>
+  </div>
+
+  <!-- ============ 三、桌面双列编辑页 ============ -->
+  <div class="sec-label">
+    <span class="num">3</span><h2>编辑详情页 · 桌面双列版</h2>
+    <span class="note">≥860pt：左列表单主体，右列备注+封面粘性并排</span>
+  </div>
+  <div class="stage">
+    <div class="frame edit-wrap">
+      <div class="screen">
+        <div class="etop">
+          <button class="back">‹</button>
+          <span class="et">编辑演出 · 牡丹亭（精华版）</span>
+          <span class="spacer"></span>
+          <button class="btn-ghost">取消</button>
+          <button class="btn-primary" style="padding:8px 16px;">保存</button>
+        </div>
+        <div class="eform">
+          <div class="two-col">
+            <div class="col-l">
+              <div class="card">
+                <h4><span class="tick"></span>基本信息</h4>
+                <div class="row">
+                  <div class="f lg"><label>名称 <span class="req">*</span></label><input class="input" value="牡丹亭（精华版）" /></div>
+                  <div class="f sm"><label>剧种（可多个）</label><input class="input" value="昆剧" /></div>
+                </div>
+                <div class="row">
+                  <div class="f sm"><label>城市</label><input class="input" value="上海" /></div>
+                  <div class="f lg"><label>场馆 / 地址</label>
+                    <div class="addr-row">
+                      <div class="combo"><input class="input" value="上海大剧院" /><div class="combo-list"><button class="combo-item">上海大剧院</button><button class="combo-item">美琪大戏院</button><button class="combo-item">国家大剧院</button></div></div>
+                      <button class="loc-btn on" title="已定位"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c4.5-4.6 7-8.1 7-12a7 7 0 1 0-14 0c0 3.9 2.5 7.4 7 12z"/><circle cx="12" cy="9" r="2.4" fill="currentColor" stroke="none"/></svg></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="card">
+                <h4><span class="tick"></span>观演信息</h4>
+                <div class="row">
+                  <div class="f md"><label>演出时间</label><input class="input" value="2024-03-15 19:30" /></div>
+                  <div class="f xs"><label>状态</label><select class="input"><option>正常</option><option>想看</option><option>已取消</option></select></div>
+                  <div class="f md"><label>评分</label>
+                    <div class="stars"><button class="star on">★</button><button class="star on">★</button><button class="star on">★</button><button class="star on">★</button><button class="star on">★</button><span class="rate-txt">5 分</span></div>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="f sm"><label>座位</label><input class="input" value="3排15座" /></div>
+                  <div class="f md"><label>同行</label><input class="input" value="小王、小李" /></div>
+                </div>
+              </div>
+              <div class="card">
+                <h4><span class="tick"></span>费用与渠道</h4>
+                <div class="row">
+                  <div class="f sm"><label>购买渠道</label><input class="input" value="大麦" /></div>
+                  <div class="f sm"><label>票价</label><div class="money"><input class="input" type="number" value="680" /><input class="input cur" value="CNY" /></div></div>
+                </div>
+                <div class="row">
+                  <div class="f sm"><label>实付</label><div class="money"><input class="input" type="number" value="612" /><input class="input cur" value="CNY" /></div></div>
+                </div>
+              </div>
+              <div class="card">
+                <h4><span class="tick"></span>阵容</h4>
+                <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:7px;">演员 <span style="color:var(--text-3);font-size:11.5px;">回车生成胶囊，与档案同名自动关联</span></label>
+                <div class="tagbox">
+                  <span class="capsule linked">单雯 <button class="cap-x">✕</button></span>
+                  <span class="capsule linked">张军 <button class="cap-x">✕</button></span>
+                  <span class="capsule linked">施夏明 <button class="cap-x">✕</button></span>
+                  <input placeholder="输入演员姓名，回车确认…" />
+                </div>
+                <label style="font-size:13px;color:var(--text-muted);display:block;margin:14px 0 7px;">剧团</label>
+                <div class="tagbox">
+                  <span class="capsule free">江苏省昆剧院 <button class="cap-x">✕</button></span>
+                  <input placeholder="如：上海昆剧团" />
+                </div>
+                <label style="font-size:13px;color:var(--text-muted);display:block;margin:14px 0 7px;">剧目 · 折子</label>
+                <div class="ply">
+                  <div class="ply-item">
+                    <div class="ply-head"><span class="ply-name">牡丹亭 <em class="ply-cat">昆剧</em></span><span class="ply-ops"><button title="编辑">✎</button><button title="移除">✕</button></span></div>
+                    <div class="ply-z">
+                      <span class="zl">折子（选中表示本次演出了该折戏）</span>
+                      <div class="zhezi-grid">
+                        <label class="zhezi on"><input type="checkbox" checked /> 游园</label>
+                        <label class="zhezi on"><input type="checkbox" checked /> 惊梦</label>
+                        <label class="zhezi on"><input type="checkbox" checked /> 寻梦</label>
+                        <label class="zhezi"><input type="checkbox" /> 离魂</label>
+                        <label class="zhezi"><input type="checkbox" /> 冥判</label>
+                      </div>
+                    </div>
+                    <button class="z-add">＋ 添加折子</button>
+                  </div>
+                  <div class="ply-item">
+                    <div class="ply-head"><span class="ply-name">长生殿 <em class="ply-cat">昆剧</em></span><span class="ply-ops"><button title="编辑">✎</button><button title="移除">✕</button></span></div>
+                    <div class="ply-z">
+                      <span class="zl">折子</span>
+                      <div class="zhezi-grid">
+                        <label class="zhezi"><input type="checkbox" /> 小宴</label>
+                        <label class="zhezi"><input type="checkbox" /> 惊变</label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="ply-add">
+                  <div class="combo"><input class="input" placeholder="🔍 搜索并关联已有剧目…" /></div>
+                  <details class="add-drama"><summary>＋ 新建剧目档案</summary><div style="margin-top:10px;"><input class="input" placeholder="剧目，如：牡丹亭" /></div></details>
+                </div>
+              </div>
+            </div><!-- /col-l -->
+            <div class="col-r">
+              <div class="card">
+                <h4><span class="tick"></span>备注</h4>
+                <textarea class="remark" placeholder="剧评、观感、备忘…">青春版经典，单雯的杜丽娘细腻婉转，水袖与身段俱佳。第三幕「惊梦」全场最佳，灯光与昆腔交融，值回票价。
+
+同行的几位都是老戏迷，散场后还去吃了本帮菜，聊到半夜。</textarea>
+              </div>
+              <div class="card">
+                <h4><span class="tick"></span>封面</h4>
+                <div class="cover-row">
+                  <div class="cover-preview">牡</div>
+                  <div class="cover-main">
+                    <div class="upload-row">
+                      <button class="btn-ghost">⇪ 上传图片</button>
+                      <button class="btn-ghost">▦ 引用</button>
+                    </div>
+                    <div><label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:6px;">封面 URL</label><input class="input" value="covers/mudanting.jpg" /></div>
+                  </div>
+                </div>
+              </div>
+            </div><!-- /col-r -->
+          </div>
+          <div class="actions">
+            <button class="btn-lg primary">保存</button>
+            <button class="btn-lg btn-ghost" style="border:1px solid var(--border-strong);">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-label"><b>桌面双列编辑页</b> · 右列（备注+封面）粘性并排，输入备注时左列剧目/折子/演员字段同屏可见，无需上下翻屏</div>
+  </div>
+
+  <div class="footnote">
+    <b>本次专项要点：</b><br/>
+    ① <b>移动端导航</b>：放弃抽屉，顶栏常驻 4 主标签（记录/剧目/演员/日历）+「更多 ▾」下拉收纳次级（分析/地图/封面/分类/数据/设置）。<br/>
+    ② <b>主题</b>：移除全局切换按钮，默认 <code>prefers-color-scheme</code> 自动主题（原型已内置明/暗两套令牌）。<br/>
+    ③ <b>快捷筛选重评估</b>：移除硬编码的「上海」单点城市胶囊；快捷行仅保留人人适用的<b>剧种维度</b>（昆剧/京剧/越剧/黄梅戏/话剧）；城市/时间/评分/状态统一收进「筛选」面板，<b>任意城市都可过滤</b>。<br/>
+    ④ <b>卡片去拥挤</b>：网格间距由 16px 提至 18px、卡内边距加大、封面仅保留「剧种 + 评分」两枚徽章，状态/剧团下沉信息区。<br/>
+    ⑤ <b>编辑页视觉提纯</b>：保留左列表单主体 + 右列备注/封面双列效率；统一区块标题（朱砂色标）、输入框聚焦环、胶囊/星級/折子选择器质感，整体更协调。
+  </div>
+</div>
+
+<script>
+  // 更多下拉
+  function toggleMore(btn){
+    document.getElementById('moreMenu').classList.toggle('open');
+  }
+  document.addEventListener('click', (e)=>{
+    const m = document.getElementById('moreMenu');
+    if(m && m.classList.contains('open') && !e.target.closest('.more-btn') && !e.target.closest('.more-menu')) m.classList.remove('open');
+  });
+
+  // 顶部主标签
+  document.getElementById('mtabs').addEventListener('click',(e)=>{
+    const t = e.target.closest('.mtab'); if(!t) return;
+    document.querySelectorAll('#mtabs .mtab').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on');
+  });
+
+  // 剧种快捷胶囊
+  document.getElementById('genreChips').addEventListener('click',(e)=>{
+    const c = e.target.closest('.chip'); if(!c) return;
+    const on = c.classList.contains('on');
+    document.querySelectorAll('#genreChips .chip').forEach(x=>x.classList.remove('on'));
+    if(!on) c.classList.add('on');
+  });
+
+  // 筛选面板
+  function toggleSheet(open){
+    document.getElementById('sheet').classList.toggle('open', open);
+    document.getElementById('sheetMask').classList.toggle('open', open);
+  }
+  // 面板内选项（演示）
+  document.getElementById('sheet').addEventListener('click',(e)=>{
+    const o = e.target.closest('.fopt'); if(!o) return;
+    const grp = o.parentElement;
+    // 时间组单选；其余可多选
+    if(grp.previousElementSibling && grp.previousElementSibling.textContent.trim()==='时间'){
+      grp.querySelectorAll('.fopt').forEach(x=>x.classList.remove('on'));
+    }
+    o.classList.toggle('on');
+  });
+
+  // 评分星（演示）
+  document.querySelectorAll('.stars').forEach(s=>{
+    s.addEventListener('click',(e)=>{
+      const st = e.target.closest('.star'); if(!st) return;
+      const all=[...s.querySelectorAll('.star')]; const idx=all.indexOf(st);
+      all.forEach((x,i)=>x.classList.toggle('on', i<=idx));
+    });
+  });
+  // 折子选择（演示）
+  document.querySelectorAll('.zhezi').forEach(z=>{
+    z.addEventListener('click',()=>{}); // label+checkbox 原生处理
+  });
+
+  // 卡片数据
+  const records = [
+    { title:'牡丹亭（精华版）', cat:'昆剧', date:'2024-03-15', city:'上海', venue:'上海大剧院', artists:'单雯 / 张军 等', rating:5, c1:'#7c2d12', c2:'#b42318' },
+    { title:'锁麟囊', cat:'京剧', date:'2024-01-20', city:'北京', venue:'国家大剧院', artists:'李胜素 等', rating:4, c1:'#1e3a8a', c2:'#1d4ed8' },
+    { title:'红楼梦（上下本）', cat:'越剧', date:'2023-11-08', city:'杭州', venue:'杭州大剧院', artists:'茅威涛 等', rating:5, c1:'#9d174d', c2:'#db2777' },
+    { title:'雷雨', cat:'话剧', date:'2024-05-02', city:'上海', venue:'美琪大戏院', artists:'濮存昕 等', rating:4, c1:'#374151', c2:'#6b7280' },
+    { title:'白蛇传', cat:'昆剧', date:'2023-12-24', city:'南京', venue:'紫金大戏院', artists:'孔爱萍 等', rating:3, c1:'#7c2d12', c2:'#b42318' },
+    { title:'赵氏孤儿', cat:'京剧', date:'2024-02-11', city:'天津', venue:'天津大剧院', artists:'孟广禄 等', rating:4, c1:'#1e3a8a', c2:'#1d4ed8' },
+  ];
+  const grid = document.getElementById('cardGrid');
+  records.forEach(r=>{
+    const el=document.createElement('div'); el.className='rcard';
+    el.innerHTML=`<div class="cover"><div class="ph" style="background:linear-gradient(160deg,${r.c1},${r.c2});">${r.title.slice(0,1)}</div><span class="cat">${r.cat}</span><span class="rate">★ ${r.rating}</span></div><div class="info"><div class="title">${r.title}</div><div class="meta"><span>${r.date}</span><span class="d">·</span><span>${r.city}</span><span class="d">·</span><span>${r.venue}</span></div><div class="artists">${r.artists}</div></div>`;
+    grid.appendChild(el);
+  });
+</script>
+</body>
+</html>

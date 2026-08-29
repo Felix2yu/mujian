@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/subtle"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -88,6 +89,47 @@ var compressibleTypes = []string{
 	"image/svg+xml",
 }
 
+// authMiddleware enforces the optional bearer token (MJ_AUTH_TOKEN env or
+// settings.json "auth_token") on /api and /mcp. When no token is configured it
+// is a pass-through, preserving the intranet deployment mode. Exemptions:
+//   - GET /api/settings: the SPA fetches display settings (masked secrets)
+//     before it can know whether a token is required; mutations stay locked.
+//   - POST /api/metrics/client: fire-and-forget beacon that cannot set headers.
+//
+// The token is accepted via Authorization: Bearer, X-Auth-Token, or a ?token=
+// query parameter (so calendar clients can subscribe to /api/calendar.ics).
+func authMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := cfg.AuthTokenValue()
+			if token == "" ||
+				(r.URL.Path == "/api/settings" && r.Method == http.MethodGet) ||
+				r.URL.Path == "/api/metrics/client" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			provided := ""
+			if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+				provided = strings.TrimPrefix(h, "Bearer ")
+			}
+			if provided == "" {
+				provided = r.Header.Get("X-Auth-Token")
+			}
+			if provided == "" {
+				provided = r.URL.Query().Get("token")
+			}
+			if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) == 1 {
+				next.ServeHTTP(w, r)
+				return
+			}
+			w.Header().Set("WWW-Authenticate", `Bearer realm="mujian"`)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"error":"unauthorized"}`))
+		})
+	}
+}
+
 func main() {
 	cfg := config.Load()
 
@@ -108,10 +150,10 @@ func main() {
 	metricsM.Extra = func() map[string]any {
 		s := database.SQLStats()
 		return map[string]any{
-			"mujian_db_connections_open":     s.OpenConnections,
-			"mujian_db_connections_in_use":   s.InUse,
-			"mujian_db_connections_idle":     s.Idle,
-			"mujian_db_wait_count_total":     s.WaitCount,
+			"mujian_db_connections_open":      s.OpenConnections,
+			"mujian_db_connections_in_use":    s.InUse,
+			"mujian_db_connections_idle":      s.Idle,
+			"mujian_db_wait_count_total":      s.WaitCount,
 			"mujian_db_wait_duration_seconds": s.WaitDuration.Seconds(),
 		}
 	}
@@ -148,11 +190,12 @@ func main() {
 	})
 
 	h := handlers.New(database, cfg, st)
-	r.Mount("/api", h.Routes())
+	r.Mount("/api", authMiddleware(cfg)(h.Routes()))
 
 	// MCP over Streamable HTTP：与 /api 同进程同库，供 AI 客户端远程调用
-	// （无鉴权，暴露面与 /api 一致，由反向代理/内网边界保护）。
-	r.Handle("/mcp", mujianmcp.New(database).HTTPHandler())
+	// （默认无鉴权，暴露面与 /api 一致，由反向代理/内网边界保护；配置
+	// MJ_AUTH_TOKEN 后与 /api 一样要求 Bearer token）。
+	r.Mount("/mcp", authMiddleware(cfg)(mujianmcp.New(database).HTTPHandler()))
 
 	// Serve uploaded covers from the uploads dir, but constrain file access to
 	// that subtree using os.Root (Go 1.24) so path traversal outside the dir

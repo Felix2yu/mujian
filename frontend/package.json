@@ -18,8 +18,5 @@
   "dependencies": {
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3"
-  },
-  "overrides": {
-    "cookie": "^0.7.0"
   }
 }

@@ -18,9 +18,9 @@ type ListCoversInput struct {
 type CoverDuplicatesInput struct{}
 
 type MergeCoversInput struct {
-	Target string   `json:"target"`
+	Target  string   `json:"target"`
 	Sources []string `json:"sources"`
-	DryRun *bool     `json:"dry_run,omitempty"`
+	DryRun  *bool    `json:"dry_run,omitempty"`
 }
 
 type CoverOrphansInput struct{}
@@ -30,6 +30,10 @@ type CleanupCoversInput struct {
 }
 
 // ---------- 工具实现 ----------
+
+// allCoversLimit: ListCoverPicker 的扫描上限。孤儿/清理/合并必须覆盖全部封面，
+// 否则排在后面的封面永远不会被报告或处理。
+const allCoversLimit = 1_000_000
 
 func (s *Server) handleListCovers(ctx context.Context, req *mcp.CallToolRequest, in ListCoversInput) (*mcp.CallToolResult, any, error) {
 	limit := in.Limit
@@ -79,9 +83,9 @@ func (s *Server) handleMergeCovers(ctx context.Context, req *mcp.CallToolRequest
 
 	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
-			"dry_run":   true,
-			"target":    in.Target,
-			"sources":   in.Sources,
+			"dry_run":    true,
+			"target":     in.Target,
+			"sources":    in.Sources,
 			"references": merged,
 		})
 	}
@@ -90,27 +94,31 @@ func (s *Server) handleMergeCovers(ctx context.Context, req *mcp.CallToolRequest
 		// 获取引用该封面的记录
 		records, err := s.db.GetRecordsByCoverFile(src)
 		if err != nil {
-			continue
+			return errResult("查询封面引用失败（%s）：%v", src, err)
 		}
 		var ids []string
 		for _, r := range records {
 			ids = append(ids, r.ID)
 		}
 		if len(ids) > 0 {
-			s.db.UpdateRecordsCoverFile(ids, in.Target)
+			if _, err := s.db.UpdateRecordsCoverFile(ids, in.Target); err != nil {
+				return errResult("重指向记录封面失败（%s）：%v", src, err)
+			}
 		}
-		s.db.DeleteCoverMeta(src)
+		if err := s.db.DeleteCoverMeta(src); err != nil {
+			return errResult("删除封面元数据失败（%s）：%v", src, err)
+		}
 	}
 
 	return jsonResult(map[string]any{
-		"target":  in.Target,
-		"merged":  len(in.Sources),
+		"target": in.Target,
+		"merged": len(in.Sources),
 	})
 }
 
 func (s *Server) handleCoverOrphans(ctx context.Context, req *mcp.CallToolRequest, in CoverOrphansInput) (*mcp.CallToolResult, any, error) {
 	// 通过 ListCoverPicker 获取所有封面，再逐个检查引用数
-	covers, _, err := s.db.ListCoverPicker("", 200, 0)
+	covers, _, err := s.db.ListCoverPicker("", allCoversLimit, 0)
 	if err != nil {
 		return errResult("查询封面失败：%v", err)
 	}
@@ -118,7 +126,7 @@ func (s *Server) handleCoverOrphans(ctx context.Context, req *mcp.CallToolReques
 	for _, c := range covers {
 		refs, err := s.db.CountCoverRefs(c.FileName)
 		if err != nil {
-			continue
+			return errResult("统计封面引用失败（%s）：%v", c.FileName, err)
 		}
 		if refs == 0 {
 			orphans = append(orphans, map[string]any{
@@ -134,21 +142,26 @@ func (s *Server) handleCoverOrphans(ctx context.Context, req *mcp.CallToolReques
 }
 
 func (s *Server) handleCleanupCovers(ctx context.Context, req *mcp.CallToolRequest, in CleanupCoversInput) (*mcp.CallToolResult, any, error) {
-	covers, _, err := s.db.ListCoverPicker("", 500, 0)
+	covers, _, err := s.db.ListCoverPicker("", allCoversLimit, 0)
 	if err != nil {
 		return errResult("查询封面失败：%v", err)
 	}
 	var cleaned []string
 	for _, c := range covers {
 		refs, err := s.db.CountCoverRefs(c.FileName)
-		if err != nil || refs > 0 {
+		if err != nil {
+			return errResult("统计封面引用失败（%s）：%v", c.FileName, err)
+		}
+		if refs > 0 {
 			continue
 		}
 		if dryRun(in.DryRun) {
 			cleaned = append(cleaned, c.FileName)
 			continue
 		}
-		s.db.DeleteCoverMeta(c.FileName)
+		if err := s.db.DeleteCoverMeta(c.FileName); err != nil {
+			return errResult("删除封面元数据失败（%s）：%v", c.FileName, err)
+		}
 		cleaned = append(cleaned, c.FileName)
 	}
 	result := map[string]any{

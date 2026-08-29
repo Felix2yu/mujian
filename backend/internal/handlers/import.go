@@ -36,7 +36,9 @@ var importMu sync.Mutex
 // written into <UploadDir>/covers/, with each record's coverFile derived from
 // the cover UUID when it is absent.
 func (h *Handler) importRecords(w http.ResponseWriter, r *http.Request) {
-	r.ParseMultipartForm(512 << 20)
+	// maxMemory only bounds the in-RAM portion; the rest spills to disk. The
+	// total request size is capped by bodyLimitMiddleware (640MB).
+	r.ParseMultipartForm(32 << 20)
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		jsonErr(w, 400, "no file provided")
@@ -147,7 +149,7 @@ func (h *Handler) importZIP(w http.ResponseWriter, file io.Reader) {
 		return
 	}
 
-	format := h.cfg.ImageFormat
+	format := h.cfg.GetImageFormat()
 	if !isSupportedImageFormat(format) {
 		format = "avif"
 	}

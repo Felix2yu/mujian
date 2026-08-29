@@ -1535,8 +1535,8 @@ func TestMultiCategory(t *testing.T) {
 	}
 	gotD, _ = db.GetDrama(d.ID)
 	if gotD.CategoryName != "京剧" || len(gotD.CategoryNames) != 2 {
-	t.Fatalf("cleared override should fall back to aggregation: %+v / %+v", gotD.CategoryName, gotD.CategoryNames)
-}
+		t.Fatalf("cleared override should fall back to aggregation: %+v / %+v", gotD.CategoryName, gotD.CategoryNames)
+	}
 
 	// 拼盘噪声过滤：一条演出同时关联多个剧目时，其剧种不应污染任一剧目的聚合，
 	// 剧目只应反映「被单独演出」时的真实剧种。
@@ -1619,11 +1619,11 @@ func TestBatchUpdateNameDateTimeCoordinateMoney(t *testing.T) {
 	}
 
 	n, err := db.BatchUpdateRecords(models.BatchUpdateParams{
-		IDs:       []string{"n1"},
-		Name:      strPtr("改名后的演出"),
-		DateText:  strPtr("2026-08-23 19:30"),
+		IDs:        []string{"n1"},
+		Name:       strPtr("改名后的演出"),
+		DateText:   strPtr("2026-08-23 19:30"),
 		Coordinate: &models.Coordinate{Latitude: 31.3, Longitude: 120.6},
-		Price:     fltPtr(180),
+		Price:      fltPtr(180),
 	})
 	if err != nil || n == 0 {
 		t.Fatalf("batch update: n=%d err=%v", n, err)
@@ -1670,7 +1670,7 @@ func TestBatchUpdateNameDateTimeCoordinateMoney(t *testing.T) {
 	}
 }
 
-func strPtr(s string) *string { return &s }
+func strPtr(s string) *string   { return &s }
 func fltPtr(f float64) *float64 { return &f }
 
 // 批量数组操作必须同步关联表（record_dramas / record_artists），
@@ -1726,8 +1726,8 @@ func TestBatchArrayOpsSyncRelations(t *testing.T) {
 
 	// artist_names 变化同步 record_artists（演员详情页反向查询依赖它）。
 	if _, err := db.BatchUpdateRecords(models.BatchUpdateParams{
-		IDs:          []string{"rel1"},
-		ArtistNames:  &models.BatchArrayOp{Op: "append", Value: []string{"龚隐雷"}},
+		IDs:         []string{"rel1"},
+		ArtistNames: &models.BatchArrayOp{Op: "append", Value: []string{"龚隐雷"}},
 	}); err != nil {
 		t.Fatalf("batch append artist: %v", err)
 	}
@@ -1908,27 +1908,27 @@ func TestGetAnalytics(t *testing.T) {
 		// 分布在过去 24 个月内
 		date := base.AddDate(0, -int(i%24), -i%28)
 		r := models.Record{
-			ID:              fmt.Sprintf("ana-%03d", i),
-			Name:            dramas[i%len(dramas)],
-			Channel:         []string{"大麦", "永乐票务", "微店", "其它"}[i%4],
-			City:            cities[i%len(cities)],
-			Address:         fmt.Sprintf("剧院 %02d", i%15),
-			Coordinate:      &models.Coordinate{Latitude: 30.0 + float64(i%10), Longitude: 120.0 + float64(i%10)},
-			Date:            date.Unix(),
-			DateText:        date.Format("2006-01-02 15:04"),
-			Rating:          []int{1, 2, 3, 4, 5, 0}[i%6], // 含未评分
-			Price:           float64(50 + i*5),
-			PayPrice:        float64(30 + i*4),
-			OtherCost:       float64(i * 2),
-			PriceCurrency:   "CNY",
-			Company:         []string{"上昆", "苏昆", "浙昆", "京昆"}[i%4],
-			ActiveStatus:    1,
-			ArtistNames:     []string{artists[i%8], artists[(i+3)%8]},
-			Play:            []string{zhezis[i%6]},
-			DramaIDs:        []string{dramaIDs[i%len(dramas)]},
-			ZheziIDs:        []string{zheziIDs[i%6]},
-			ArtistIDs:       []string{artistIDs[i%8], artistIDs[(i+3)%8]},
-			CategoryName:    []string{"昆曲", "京剧", "越剧", "其他"}[i%4],
+			ID:            fmt.Sprintf("ana-%03d", i),
+			Name:          dramas[i%len(dramas)],
+			Channel:       []string{"大麦", "永乐票务", "微店", "其它"}[i%4],
+			City:          cities[i%len(cities)],
+			Address:       fmt.Sprintf("剧院 %02d", i%15),
+			Coordinate:    &models.Coordinate{Latitude: 30.0 + float64(i%10), Longitude: 120.0 + float64(i%10)},
+			Date:          date.Unix(),
+			DateText:      date.Format("2006-01-02 15:04"),
+			Rating:        []int{1, 2, 3, 4, 5, 0}[i%6], // 含未评分
+			Price:         float64(50 + i*5),
+			PayPrice:      float64(30 + i*4),
+			OtherCost:     float64(i * 2),
+			PriceCurrency: "CNY",
+			Company:       []string{"上昆", "苏昆", "浙昆", "京昆"}[i%4],
+			ActiveStatus:  1,
+			ArtistNames:   []string{artists[i%8], artists[(i+3)%8]},
+			Play:          []string{zhezis[i%6]},
+			DramaIDs:      []string{dramaIDs[i%len(dramas)]},
+			ZheziIDs:      []string{zheziIDs[i%6]},
+			ArtistIDs:     []string{artistIDs[i%8], artistIDs[(i+3)%8]},
+			CategoryName:  []string{"昆曲", "京剧", "越剧", "其他"}[i%4],
 		}
 		if err := db.UpsertRecord(r); err != nil {
 			t.Fatalf("Upsert %d: %v", i, err)
@@ -2084,9 +2084,9 @@ func TestCountRecordsBranches(t *testing.T) {
 
 	// 表驱动测试：每个 Case 设一个或多个筛选字段，验证总数
 	cases := []struct {
-		name  string
-		f     RecordFilter
-		want  int
+		name string
+		f    RecordFilter
+		want int
 	}{
 		{"全量", RecordFilter{}, 6},
 		{"Query: 牡丹亭", RecordFilter{Query: "牡丹亭"}, 2},
@@ -2100,9 +2100,9 @@ func TestCountRecordsBranches(t *testing.T) {
 		{"ArtistID=a-1 (张军)", RecordFilter{ArtistID: "a-1"}, 2},
 		{"ArtistID=a-2 (王芳)", RecordFilter{ArtistID: "a-2"}, 2},
 		{"Year+Month 当月", RecordFilter{Year: now.Year(), Month: int(now.Month())}, 1}, // c1
-		{"City+Drama 联合", RecordFilter{City: "上海", DramaID: "d-1"}, 1},            // c1
-		{"Artist+City 联合", RecordFilter{ArtistID: "a-1", City: "上海"}, 2},           // c1, c3
-		{"Start 从今天起", RecordFilter{Start: now.Format("2006-01-02")}, 1},          // c1
+		{"City+Drama 联合", RecordFilter{City: "上海", DramaID: "d-1"}, 1},                // c1
+		{"Artist+City 联合", RecordFilter{ArtistID: "a-1", City: "上海"}, 2},              // c1, c3
+		{"Start 从今天起", RecordFilter{Start: now.Format("2006-01-02")}, 1},              // c1
 	}
 
 	for _, tc := range cases {

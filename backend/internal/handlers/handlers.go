@@ -54,6 +54,9 @@ func (h *Handler) Routes() chi.Router {
 
 	// Clear the aggregate caches after any successful mutating request.
 	r.Use(statsInvalidationMiddleware(h.invalidateStats))
+	// Cap request bodies so an unauthenticated client cannot force the server
+	// to buffer unbounded JSON. Multipart endpoints get a larger allowance.
+	r.Use(bodyLimitMiddleware)
 
 	r.Get("/records", h.listRecords)
 	r.Get("/records/all", h.listAllRecords)
@@ -124,6 +127,32 @@ func (h *Handler) Routes() chi.Router {
 	r.Post("/storage/migrate-to-s3", h.migrateToS3)
 
 	return r
+}
+
+// Request-body caps. JSON endpoints get a small allowance; the multipart
+// import/restore endpoints legitimately carry full export archives.
+const (
+	defaultBodyLimit = 4 << 20   // 4MB for JSON payloads
+	importBodyLimit  = 640 << 20 // import/restore archives (original exports can be hundreds of MB)
+	uploadBodyLimit  = 40 << 20  // single cover upload (8MB file + multipart overhead)
+)
+
+// bodyLimitMiddleware wraps r.Body with http.MaxBytesReader using a
+// per-endpoint limit. The endpoints below are matched by suffix because this
+// router is mounted under /api.
+func bodyLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		limit := int64(defaultBodyLimit)
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/records/import"),
+			strings.HasSuffix(r.URL.Path, "/backup/restore"):
+			limit = importBodyLimit
+		case strings.HasSuffix(r.URL.Path, "/upload"):
+			limit = uploadBodyLimit
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
+		next.ServeHTTP(w, r)
+	})
 }
 
 func jsonResp(w http.ResponseWriter, status int, v interface{}) {
@@ -205,13 +234,13 @@ func (h *Handler) listRecords(w http.ResponseWriter, r *http.Request) {
 	countFilter := f
 	countFilter.Limit = 0
 	countFilter.Offset = 0
-	total, err := h.db.CountRecords(countFilter)
+	total, err := h.db.CountRecordsContext(r.Context(), countFilter)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
 
-	recs, err := h.db.ListRecords(f)
+	recs, err := h.db.ListRecordsContext(r.Context(), f)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -224,7 +253,7 @@ func (h *Handler) listRecords(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) listAllRecords(w http.ResponseWriter, r *http.Request) {
 	// Explicit "everything" endpoint: exempt from the list row caps.
-	recs, err := h.db.ListRecords(db.RecordFilter{NoLimit: true})
+	recs, err := h.db.ListRecordsContext(r.Context(), db.RecordFilter{NoLimit: true})
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -238,7 +267,7 @@ func (h *Handler) searchRecords(w http.ResponseWriter, r *http.Request) {
 		jsonResp(w, 200, []models.Record{})
 		return
 	}
-	recs, err := h.db.ListRecords(db.RecordFilter{Query: q})
+	recs, err := h.db.ListRecordsContext(r.Context(), db.RecordFilter{Query: q})
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -318,20 +347,20 @@ func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 		IDs []string `json:"ids"`
 
 		// 每个字段为 nil 表示不修改；非 nil 则按指定操作更新
-		Name          *string `json:"name,omitempty"`
-		CategoryName *string `json:"category_name,omitempty"`
+		Name          *string              `json:"name,omitempty"`
+		CategoryName  *string              `json:"category_name,omitempty"`
 		CategoryNames *models.BatchArrayOp `json:"category_names,omitempty"`
-		Rating       *int    `json:"rating,omitempty"`
-		ActiveStatus *int    `json:"active_status,omitempty"`
-		City         *string `json:"city,omitempty"`
-		Address      *string `json:"address,omitempty"`
-		Channel      *string `json:"channel,omitempty"`
-		Company      *string `json:"company,omitempty"`
-		Friends      *string `json:"friends,omitempty"`
-		Remark       *string `json:"remark,omitempty"`
-		Seat         *string `json:"seat,omitempty"`
-		DateText     *string             `json:"date_text,omitempty"`
-		Coordinate   *models.Coordinate  `json:"coordinate,omitempty"`
+		Rating        *int                 `json:"rating,omitempty"`
+		ActiveStatus  *int                 `json:"active_status,omitempty"`
+		City          *string              `json:"city,omitempty"`
+		Address       *string              `json:"address,omitempty"`
+		Channel       *string              `json:"channel,omitempty"`
+		Company       *string              `json:"company,omitempty"`
+		Friends       *string              `json:"friends,omitempty"`
+		Remark        *string              `json:"remark,omitempty"`
+		Seat          *string              `json:"seat,omitempty"`
+		DateText      *string              `json:"date_text,omitempty"`
+		Coordinate    *models.Coordinate   `json:"coordinate,omitempty"`
 
 		Price             *float64 `json:"price,omitempty"`
 		PriceCurrency     *string  `json:"price_currency,omitempty"`
@@ -870,7 +899,7 @@ func (h *Handler) getCalendar(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) getICS(w http.ResponseWriter, r *http.Request) {
 	// Calendar subscription must contain every record: bypass the row caps.
-	recs, err := h.db.ListRecords(db.RecordFilter{NoLimit: true})
+	recs, err := h.db.ListRecordsContext(r.Context(), db.RecordFilter{NoLimit: true})
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -922,7 +951,8 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {
-	if !h.cfg.AllowLocalStorage && h.cfg.StorageType != "s3" {
+	storageType, allowLocal := h.cfg.GetStorageMode()
+	if !allowLocal && storageType != "s3" {
 		jsonErr(w, 403, "local storage is disabled")
 		return
 	}

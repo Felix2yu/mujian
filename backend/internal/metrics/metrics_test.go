@@ -15,7 +15,7 @@ func TestObserveAndQuantiles(t *testing.T) {
 	s := newRouteStat()
 	// 10 observations: 1..10 ms
 	for i := 1; i <= 10; i++ {
-		s.observe(time.Duration(i) * time.Millisecond, http.StatusOK)
+		s.observe(time.Duration(i)*time.Millisecond, http.StatusOK)
 	}
 	if got := s.count.Load(); got != 10 {
 		t.Fatalf("count = %d, want 10", got)

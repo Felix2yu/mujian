@@ -145,10 +145,21 @@ func TestGetSettingsResponse(t *testing.T) {
 		t.Errorf("secret should be masked: %v", r["s3_secret_key"])
 	}
 
+	// Short secrets must be fully masked too (they used to leak verbatim).
 	c2 := &Config{S3SecretKey: "abc"}
 	r2 := c2.GetSettingsResponse()
-	if r2["s3_secret_key"] != "abc" {
-		t.Errorf("short secret should be unchanged: %v", r2["s3_secret_key"])
+	if r2["s3_secret_key"] != "****" {
+		t.Errorf("short secret should be fully masked: %v", r2["s3_secret_key"])
+	}
+
+	// Access keys must never be returned in plaintext.
+	c3 := &Config{S3AccessKey: "AKIAEXAMPLE"}
+	r3 := c3.GetSettingsResponse()
+	if r3["s3_access_key"] != "AKIA****" {
+		t.Errorf("access key should be masked: %v", r3["s3_access_key"])
+	}
+	if r3["auth_required"] != false {
+		t.Errorf("auth_required should default to false: %v", r3["auth_required"])
 	}
 }
 

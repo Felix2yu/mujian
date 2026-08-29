@@ -430,17 +430,27 @@ type S3Storage struct {
 }
 
 func NewS3Storage(cfg *config.Config) *S3Storage {
-	creds := credentials.NewStaticCredentialsProvider(cfg.S3AccessKey, cfg.S3SecretKey, "")
+	s := cfg.GetS3Settings()
+	return NewS3StorageFromSettings(s, cfg.GetImageFormat)
+}
+
+// NewS3StorageFromSettings builds an S3 backend from a snapshot of the config
+// (taken under the config read lock) plus a thread-safe image-format provider.
+// Runtime callers (e.g. storage migration) must use this or NewS3Storage —
+// never read config.Config fields directly, they are mutated by
+// PUT /api/settings.
+func NewS3StorageFromSettings(s config.S3Settings, imageFormat func() string) *S3Storage {
+	creds := credentials.NewStaticCredentialsProvider(s.AccessKey, s.SecretKey, "")
 	client := s3.New(s3.Options{
-		Region:       cfg.S3Region,
-		BaseEndpoint: aws.String(cfg.S3Endpoint),
+		Region:       s.Region,
+		BaseEndpoint: aws.String(s.Endpoint),
 		Credentials:  creds,
 	})
 	return &S3Storage{
 		client:      client,
-		bucket:      cfg.S3Bucket,
-		publicURL:   cfg.S3PublicURL,
-		cfgProvider: func() string { return cfg.ImageFormat },
+		bucket:      s.Bucket,
+		publicURL:   s.PublicURL,
+		cfgProvider: imageFormat,
 	}
 }
 
@@ -669,10 +679,13 @@ func (s *S3Storage) ConvertCover(key string, targetFormat string) (string, bool,
 	return newKey, created, nil
 }
 
-// New returns the storage backend selected by the configuration.
+// New returns the storage backend selected by the configuration. Called once
+// at startup, before the HTTP server starts mutating config.
 func New(cfg *config.Config) Storage {
-	if cfg.StorageType == "s3" && cfg.S3Bucket != "" && cfg.S3AccessKey != "" {
-		return NewS3Storage(cfg)
+	s := cfg.GetS3Settings()
+	storageType, _ := cfg.GetStorageMode()
+	if storageType == "s3" && s.Bucket != "" && s.AccessKey != "" {
+		return NewS3StorageFromSettings(s, cfg.GetImageFormat)
 	}
-	return NewLocalStorage(cfg.UploadDir, func() string { return cfg.ImageFormat })
+	return NewLocalStorage(cfg.UploadDir, cfg.GetImageFormat)
 }

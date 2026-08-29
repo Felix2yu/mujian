@@ -15,21 +15,21 @@ type CreateArtistInput struct {
 	Aliases StringOrArray `json:"aliases,omitempty"`
 	Remark  string        `json:"remark,omitempty"`
 	Bio     string        `json:"bio,omitempty"`
-	DryRun *bool          `json:"dry_run,omitempty"`
+	DryRun  *bool         `json:"dry_run,omitempty"`
 }
 
 type UpdateArtistInput struct {
-	ID      string    `json:"id"`
-	Name    *string   `json:"name,omitempty"`
-	Aliases *ArrayOp  `json:"aliases,omitempty"`
-	Remark  *string   `json:"remark,omitempty"`
-	Bio     *string   `json:"bio,omitempty"`
-	DryRun *bool      `json:"dry_run,omitempty"`
+	ID      string   `json:"id"`
+	Name    *string  `json:"name,omitempty"`
+	Aliases *ArrayOp `json:"aliases,omitempty"`
+	Remark  *string  `json:"remark,omitempty"`
+	Bio     *string  `json:"bio,omitempty"`
+	DryRun  *bool    `json:"dry_run,omitempty"`
 }
 
 type DeleteArtistInput struct {
 	ID     string `json:"id"`
-	DryRun *bool   `json:"dry_run,omitempty"`
+	DryRun *bool  `json:"dry_run,omitempty"`
 }
 
 // ---------- 工具实现 ----------
@@ -120,10 +120,10 @@ func (s *Server) handleDeleteArtist(ctx context.Context, req *mcp.CallToolReques
 	}
 	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
-			"dry_run":     true,
-			"artist_id":   a.ID,
-			"name":        a.Name,
-			"aliases":     a.Aliases,
+			"dry_run":      true,
+			"artist_id":    a.ID,
+			"name":         a.Name,
+			"aliases":      a.Aliases,
 			"record_count": a.RecordCount,
 		})
 	}

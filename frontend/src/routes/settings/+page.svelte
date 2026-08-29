@@ -78,6 +78,11 @@
   let mapKey = $state('');
   let mapCustomUrl = $state('');
 
+  // 访问令牌（可选）：服务端通过 MJ_AUTH_TOKEN 或设置文件启用鉴权后，
+  // 前端所有 API 请求需携带该令牌。仅保存在本机 localStorage，不回传服务器。
+  let authToken = $state('');
+  let authRequired = $state(false);
+
   function loadPref(key, fallback) {
     try {
       return localStorage.getItem(key) || fallback;
@@ -115,6 +120,8 @@
       mapSource = loadPref('mujian:map_source', 'osm');
       mapKey = loadPref('mujian:map_custom_key', '');
       mapCustomUrl = loadPref('mujian:map_custom_url', '');
+      authToken = loadPref('mujian:auth_token', '');
+      authRequired = settings.auth_required === true;
     } catch (e) {
       error = e.message;
     } finally {
@@ -126,6 +133,9 @@
     saved = false;
     error = '';
     saveMapPrefs();
+    try {
+      localStorage.setItem('mujian:auth_token', authToken || '');
+    } catch (e) { /* ignore */ }
     try {
       const payload = {
         theme: currentTheme,
@@ -305,6 +315,7 @@
           <label class="field">
             <span>Access Key ID</span>
             <input class="input" type="text" bind:value={settings.s3_access_key} autocomplete="off" spellcheck="false" />
+            <span class="hint">已配置的 Access Key 会以掩码显示；保持不变即可保留原值，填入新值可覆盖</span>
           </label>
           <label class="field">
             <span>Secret Access Key</span>
@@ -480,6 +491,20 @@
         <input type="checkbox" checked={jumpNowPref} onchange={(e) => setJumpNowPref(e.target.checked)} />
       </label>
       <p class="hint" style="margin-top: 8px;">开启后每次打开演出列表会自动滚动到最近已发生（含今天）的演出；列表右下角也随时提供手动定位按钮</p>
+    </div>
+
+    <div class="card sec">
+      <h3>访问安全</h3>
+      <label>
+        访问令牌（可选）
+        {#if authRequired}<span class="hint" style="color: var(--warn, #b45309);">· 服务端已启用鉴权</span>{/if}
+      </label>
+      <input class="input" type="password" bind:value={authToken} placeholder="未设置" autocomplete="new-password" style="max-width: 320px;" />
+      <p class="hint" style="margin-top: 8px;">
+        服务端设置 MJ_AUTH_TOKEN 环境变量（或在设置文件中写入 auth_token）后，所有 API/MCP 请求都需携带该令牌；
+        在此填入与服务器一致的值即可正常使用。令牌仅保存在本机浏览器，不会上传到服务器。
+        日历订阅地址会自动附带 ?token= 参数。
+      </p>
     </div>
 
     <div class="card sec">

@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"log/slog"
 	"math"
 	"sort"
 	"strings"
@@ -149,12 +150,27 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 	windowStart := startOfMonth(now.AddDate(0, -23, 0)) // 24 months inclusive
 
 	// ---- Overview KPIs ----
-	db.conn.QueryRow("SELECT COUNT(*) FROM records").Scan(&out.Overview.TotalRecords)
-	db.conn.QueryRow("SELECT COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0) FROM records").Scan(&out.Overview.TotalCost)
-	db.conn.QueryRow("SELECT COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE rating IS NOT NULL AND rating != 0").Scan(&out.Overview.AvgRating)
-	db.conn.QueryRow("SELECT COUNT(DISTINCT city) FROM records WHERE city != ''").Scan(&out.Overview.TotalCities)
-	db.conn.QueryRow("SELECT COUNT(*) FROM artists").Scan(&out.Overview.TotalArtists)
-	db.conn.QueryRow("SELECT COUNT(*) FROM dramas").Scan(&out.Overview.TotalDramas)
+	// Unlike the sub-sections below (which degrade to empty lists), a failed
+	// KPI scan means the DB is unreachable — surface it instead of rendering
+	// an all-zero page.
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM records").Scan(&out.Overview.TotalRecords); err != nil {
+		return nil, fmt.Errorf("analytics overview: %w", err)
+	}
+	if err := db.conn.QueryRow("SELECT COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0) FROM records").Scan(&out.Overview.TotalCost); err != nil {
+		return nil, fmt.Errorf("analytics overview: %w", err)
+	}
+	if err := db.conn.QueryRow("SELECT COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE rating IS NOT NULL AND rating != 0").Scan(&out.Overview.AvgRating); err != nil {
+		return nil, fmt.Errorf("analytics overview: %w", err)
+	}
+	if err := db.conn.QueryRow("SELECT COUNT(DISTINCT city) FROM records WHERE city != ''").Scan(&out.Overview.TotalCities); err != nil {
+		return nil, fmt.Errorf("analytics overview: %w", err)
+	}
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM artists").Scan(&out.Overview.TotalArtists); err != nil {
+		return nil, fmt.Errorf("analytics overview: %w", err)
+	}
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM dramas").Scan(&out.Overview.TotalDramas); err != nil {
+		return nil, fmt.Errorf("analytics overview: %w", err)
+	}
 
 	// Period-over-period: last 365 days vs the preceding 365 days.
 	curStart := now.AddDate(0, 0, -365).Unix()
@@ -162,8 +178,12 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 	var curCount, prevCount int
 	var curCost, prevCost float64
 	var curRating, prevRating float64
-	db.conn.QueryRow("SELECT COUNT(*), COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0), COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE date >= ?", curStart).Scan(&curCount, &curCost, &curRating)
-	db.conn.QueryRow("SELECT COUNT(*), COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0), COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE date >= ? AND date < ?", prevStart, curStart).Scan(&prevCount, &prevCost, &prevRating)
+	if err := db.conn.QueryRow("SELECT COUNT(*), COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0), COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE date >= ?", curStart).Scan(&curCount, &curCost, &curRating); err != nil {
+		return nil, fmt.Errorf("analytics overview: %w", err)
+	}
+	if err := db.conn.QueryRow("SELECT COUNT(*), COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0), COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE date >= ? AND date < ?", prevStart, curStart).Scan(&prevCount, &prevCost, &prevRating); err != nil {
+		return nil, fmt.Errorf("analytics overview: %w", err)
+	}
 	out.Overview.RecordsDeltaPct = pctChange(float64(prevCount), float64(curCount))
 	out.Overview.CostDeltaPct = pctChange(prevCost, curCost)
 	out.Overview.RatingDelta = round1(curRating - prevRating)
@@ -358,6 +378,7 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 func (db *DB) distFromQuery(query string, args ...interface{}) []models.DistItem {
 	rows, err := db.conn.Query(query, args...)
 	if err != nil {
+		slog.Warn("analytics dist query", "err", err)
 		return []models.DistItem{}
 	}
 	defer rows.Close()
@@ -382,6 +403,7 @@ func (db *DB) distFromQuery(query string, args ...interface{}) []models.DistItem
 func (db *DB) rankFromQuery(query string, args ...interface{}) []models.RankItem {
 	rows, err := db.conn.Query(query, args...)
 	if err != nil {
+		slog.Warn("analytics rank query", "err", err)
 		return []models.RankItem{}
 	}
 	defer rows.Close()
@@ -686,6 +708,7 @@ func (db *DB) diversityIndex() *models.DiversityIndex {
 func (db *DB) groupCounts(query string) []int {
 	rows, err := db.conn.Query(query)
 	if err != nil {
+		slog.Warn("analytics group counts", "err", err)
 		return []int{}
 	}
 	defer rows.Close()
@@ -695,6 +718,9 @@ func (db *DB) groupCounts(query string) []int {
 		if rows.Scan(&c) == nil {
 			out = append(out, c)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		slog.Warn("analytics group counts", "err", err)
 	}
 	return out
 }

@@ -14,20 +14,24 @@ type Config struct {
 	UploadDir         string `json:"-"`
 	Port              string `json:"-"`
 	Timezone          string `json:"-"`
-	Theme             string `json:"theme"`
-	StorageType       string `json:"storage_type"`
-	ImageFormat       string `json:"image_format"` // avif | webp | jpeg
-	S3Endpoint        string `json:"s3_endpoint"`
-	S3Bucket          string `json:"s3_bucket"`
-	S3Region          string `json:"s3_region"`
-	S3AccessKey       string `json:"s3_access_key"`
-	S3SecretKey       string `json:"s3_secret_key"`
-	S3PublicURL       string `json:"s3_public_url"`
-	ShowFriends       bool   `json:"show_friends"`
-	ShowPayPrice      bool   `json:"show_pay_price"`
-	ShowOtherCost     bool   `json:"show_other_cost"`
-	MultiCurrency     bool   `json:"multi_currency"`
-	mu                sync.RWMutex
+	// AuthToken enables optional bearer-token auth for /api and /mcp when
+	// non-empty. It is read via AuthTokenValue() (RLock'd) and never echoed
+	// back by GetSettingsResponse.
+	AuthToken     string `json:"-"`
+	Theme         string `json:"theme"`
+	StorageType   string `json:"storage_type"`
+	ImageFormat   string `json:"image_format"` // avif | webp | jpeg
+	S3Endpoint    string `json:"s3_endpoint"`
+	S3Bucket      string `json:"s3_bucket"`
+	S3Region      string `json:"s3_region"`
+	S3AccessKey   string `json:"s3_access_key"`
+	S3SecretKey   string `json:"s3_secret_key"`
+	S3PublicURL   string `json:"s3_public_url"`
+	ShowFriends   bool   `json:"show_friends"`
+	ShowPayPrice  bool   `json:"show_pay_price"`
+	ShowOtherCost bool   `json:"show_other_cost"`
+	MultiCurrency bool   `json:"multi_currency"`
+	mu            sync.RWMutex
 }
 
 var (
@@ -42,6 +46,7 @@ func Load() *Config {
 		UploadDir:         getEnv("UPLOAD_DIR", "./data/uploads"),
 		Port:              getEnv("PORT", "8080"),
 		Timezone:          loc.String(),
+		AuthToken:         os.Getenv("MJ_AUTH_TOKEN"),
 		Theme:             getEnv("THEME", "auto"),
 		StorageType:       getEnv("STORAGE_TYPE", "local"),
 		ImageFormat:       getEnv("IMAGE_FORMAT", "avif"),
@@ -100,7 +105,11 @@ func (c *Config) Update(s *SettingsUpdate) {
 		c.S3Region = *s.S3Region
 	}
 	if s.S3AccessKey != nil {
-		c.S3AccessKey = *s.S3AccessKey
+		// GET /api/settings masks this value; a client echoing the masked
+		// value back must not overwrite the real key.
+		if !strings.HasSuffix(*s.S3AccessKey, "****") {
+			c.S3AccessKey = *s.S3AccessKey
+		}
 	}
 	if s.S3SecretKey != nil {
 		// GET /api/settings masks the secret (e.g. "sk12****"); a client that
@@ -124,6 +133,9 @@ func (c *Config) Update(s *SettingsUpdate) {
 	if s.MultiCurrency != nil {
 		c.MultiCurrency = *s.MultiCurrency
 	}
+	if s.AuthToken != nil {
+		c.AuthToken = *s.AuthToken
+	}
 }
 
 type SettingsUpdate struct {
@@ -140,16 +152,25 @@ type SettingsUpdate struct {
 	ShowPayPrice  *bool   `json:"show_pay_price"`
 	ShowOtherCost *bool   `json:"show_other_cost"`
 	MultiCurrency *bool   `json:"multi_currency"`
+	AuthToken     *string `json:"auth_token"`
+}
+
+// maskSecret masks a credential for GET /api/settings: it never returns the
+// full value, and always ends in "****" so Update() can recognize an echoed
+// masked value and skip overwriting the real key.
+func maskSecret(s string) string {
+	if s == "" {
+		return ""
+	}
+	if len(s) > 4 {
+		return s[:4] + "****"
+	}
+	return "****"
 }
 
 func (c *Config) GetSettingsResponse() map[string]interface{} {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-
-	s3Key := c.S3SecretKey
-	if len(s3Key) > 4 {
-		s3Key = s3Key[:4] + "****"
-	}
 
 	return map[string]interface{}{
 		"theme":               c.Theme,
@@ -159,14 +180,67 @@ func (c *Config) GetSettingsResponse() map[string]interface{} {
 		"s3_endpoint":         c.S3Endpoint,
 		"s3_bucket":           c.S3Bucket,
 		"s3_region":           c.S3Region,
-		"s3_access_key":       c.S3AccessKey,
-		"s3_secret_key":       s3Key,
+		"s3_access_key":       maskSecret(c.S3AccessKey),
+		"s3_secret_key":       maskSecret(c.S3SecretKey),
 		"s3_public_url":       c.S3PublicURL,
 		"show_friends":        c.ShowFriends,
 		"show_pay_price":      c.ShowPayPrice,
 		"show_other_cost":     c.ShowOtherCost,
 		"multi_currency":      c.MultiCurrency,
+		"auth_required":       c.AuthToken != "",
 	}
+}
+
+// ---------- RLock'd accessors for fields mutated by PUT /api/settings ----------
+//
+// Handlers and the storage layer must read these through the accessors rather
+// than touching the fields directly: a settings update running concurrently
+// with any request would otherwise be a data race.
+
+// GetImageFormat returns the preferred cover image format (avif/webp/jpeg).
+func (c *Config) GetImageFormat() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.ImageFormat
+}
+
+// GetStorageMode returns the storage backend selection and whether switching
+// away from S3 back to local storage is permitted.
+func (c *Config) GetStorageMode() (storageType string, allowLocal bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.StorageType, c.AllowLocalStorage
+}
+
+// S3Settings is a point-in-time snapshot of the S3 connection parameters.
+type S3Settings struct {
+	Endpoint  string
+	Bucket    string
+	Region    string
+	AccessKey string
+	SecretKey string
+	PublicURL string
+}
+
+// GetS3Settings snapshots the S3 configuration under the read lock.
+func (c *Config) GetS3Settings() S3Settings {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return S3Settings{
+		Endpoint:  c.S3Endpoint,
+		Bucket:    c.S3Bucket,
+		Region:    c.S3Region,
+		AccessKey: c.S3AccessKey,
+		SecretKey: c.S3SecretKey,
+		PublicURL: c.S3PublicURL,
+	}
+}
+
+// AuthTokenValue returns the current bearer token under the read lock.
+func (c *Config) AuthTokenValue() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.AuthToken
 }
 
 func (c *Config) SaveToFile(path string) error {
@@ -187,6 +261,7 @@ func (c *Config) SaveToFile(path string) error {
 		"show_pay_price":  b2s(c.ShowPayPrice),
 		"show_other_cost": b2s(c.ShowOtherCost),
 		"multi_currency":  b2s(c.MultiCurrency),
+		"auth_token":      c.AuthToken,
 	}
 
 	b, err := json.MarshalIndent(data, "", "  ")
@@ -253,6 +328,9 @@ func (c *Config) LoadFromFile(path string) error {
 	}
 	if v, ok := data["multi_currency"]; ok {
 		c.MultiCurrency = v == "true"
+	}
+	if v, ok := data["auth_token"]; ok {
+		c.AuthToken = v
 	}
 
 	return nil

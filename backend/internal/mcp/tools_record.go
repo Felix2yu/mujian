@@ -12,80 +12,80 @@ import (
 // ---------- 输入类型 ----------
 
 type CreateRecordInput struct {
-	Name         string   `json:"name"`
-	Channel      string   `json:"channel,omitempty"`
-	City         string   `json:"city,omitempty"`
-	Address      string   `json:"address,omitempty"`
-	Coordinate   *models.Coordinate `json:"coordinate,omitempty"`
-	CoverFile    string   `json:"cover_file,omitempty"`
-	CoverThumb   string   `json:"cover_thumb,omitempty"`
-	CategoryName string   `json:"category_name,omitempty"`
-	CategoryNames StringOrArray `json:"category_names,omitempty"`
-	ArtistIDs    StringOrArray `json:"artist_ids,omitempty"`
-	ArtistNames  StringOrArray `json:"artist_names,omitempty"`
-	Guest        StringOrArray `json:"guest,omitempty"`
-	Play         StringOrArray `json:"play,omitempty"`
-	DramaIDs     StringOrArray `json:"drama_ids,omitempty"`
-	ZheziIDs     StringOrArray `json:"zhezi_ids,omitempty"`
-	TagIDs       StringOrArray `json:"tag_ids,omitempty"`
-	DateText     string   `json:"date_text,omitempty"`
-	Rating       int      `json:"rating,omitempty"`
-	Seat         string   `json:"seat,omitempty"`
-	Friends      string   `json:"friends,omitempty"`
-	Company      string   `json:"company,omitempty"`
-	Remark       string   `json:"remark,omitempty"`
-	ActiveStatus int      `json:"active_status,omitempty"`
-	Price        float64  `json:"price,omitempty"`
-	PriceCurrency string  `json:"price_currency,omitempty"`
-	PayPrice     float64  `json:"pay_price,omitempty"`
-	PayPriceCurrency string `json:"pay_price_currency,omitempty"`
-	OtherCost    float64  `json:"other_cost,omitempty"`
-	OtherCostCurrency string `json:"other_cost_currency,omitempty"`
-	DryRun *bool     `json:"dry_run,omitempty"`
+	Name              string             `json:"name"`
+	Channel           string             `json:"channel,omitempty"`
+	City              string             `json:"city,omitempty"`
+	Address           string             `json:"address,omitempty"`
+	Coordinate        *models.Coordinate `json:"coordinate,omitempty"`
+	CoverFile         string             `json:"cover_file,omitempty"`
+	CoverThumb        string             `json:"cover_thumb,omitempty"`
+	CategoryName      string             `json:"category_name,omitempty"`
+	CategoryNames     StringOrArray      `json:"category_names,omitempty"`
+	ArtistIDs         StringOrArray      `json:"artist_ids,omitempty"`
+	ArtistNames       StringOrArray      `json:"artist_names,omitempty"`
+	Guest             StringOrArray      `json:"guest,omitempty"`
+	Play              StringOrArray      `json:"play,omitempty"`
+	DramaIDs          StringOrArray      `json:"drama_ids,omitempty"`
+	ZheziIDs          StringOrArray      `json:"zhezi_ids,omitempty"`
+	TagIDs            StringOrArray      `json:"tag_ids,omitempty"`
+	DateText          string             `json:"date_text,omitempty"`
+	Rating            int                `json:"rating,omitempty"`
+	Seat              string             `json:"seat,omitempty"`
+	Friends           string             `json:"friends,omitempty"`
+	Company           string             `json:"company,omitempty"`
+	Remark            string             `json:"remark,omitempty"`
+	ActiveStatus      int                `json:"active_status,omitempty"`
+	Price             float64            `json:"price,omitempty"`
+	PriceCurrency     string             `json:"price_currency,omitempty"`
+	PayPrice          float64            `json:"pay_price,omitempty"`
+	PayPriceCurrency  string             `json:"pay_price_currency,omitempty"`
+	OtherCost         float64            `json:"other_cost,omitempty"`
+	OtherCostCurrency string             `json:"other_cost_currency,omitempty"`
+	DryRun            *bool              `json:"dry_run,omitempty"`
 }
 
 type UpdateRecordInput struct {
-	ID           string   `json:"id"`
-	Name         *string  `json:"name,omitempty"`
-	Channel      *string  `json:"channel,omitempty"`
-	City         *string  `json:"city,omitempty"`
-	Address      *string  `json:"address,omitempty"`
-	Coordinate   *models.Coordinate `json:"coordinate,omitempty"`
-	CoverFile    *string  `json:"cover_file,omitempty"`
-	CoverThumb   *string  `json:"cover_thumb,omitempty"`
-	CategoryName *string  `json:"category_name,omitempty"`
-	CategoryNames *ArrayOp `json:"category_names,omitempty"`
-	ArtistIDs    *ArrayOp `json:"artist_ids,omitempty"`
-	ArtistNames  *ArrayOp `json:"artist_names,omitempty"`
-	Guest        *ArrayOp `json:"guest,omitempty"`
-	Play         *ArrayOp `json:"play,omitempty"`
-	DramaIDs     *ArrayOp `json:"drama_ids,omitempty"`
-	ZheziIDs     *ArrayOp `json:"zhezi_ids,omitempty"`
-	TagIDs       *ArrayOp `json:"tag_ids,omitempty"`
-	DateText     *string  `json:"date_text,omitempty"`
-	Rating       *int     `json:"rating,omitempty"`
-	Seat         *string  `json:"seat,omitempty"`
-	Friends      *string  `json:"friends,omitempty"`
-	Company      *string  `json:"company,omitempty"`
-	Remark       *string  `json:"remark,omitempty"`
-	ActiveStatus *int     `json:"active_status,omitempty"`
-	Price        *float64 `json:"price,omitempty"`
-	PriceCurrency *string `json:"price_currency,omitempty"`
-	PayPrice     *float64 `json:"pay_price,omitempty"`
-	PayPriceCurrency *string `json:"pay_price_currency,omitempty"`
-	OtherCost    *float64 `json:"other_cost,omitempty"`
-	OtherCostCurrency *string `json:"other_cost_currency,omitempty"`
-	DryRun *bool     `json:"dry_run,omitempty"`
+	ID                string             `json:"id"`
+	Name              *string            `json:"name,omitempty"`
+	Channel           *string            `json:"channel,omitempty"`
+	City              *string            `json:"city,omitempty"`
+	Address           *string            `json:"address,omitempty"`
+	Coordinate        *models.Coordinate `json:"coordinate,omitempty"`
+	CoverFile         *string            `json:"cover_file,omitempty"`
+	CoverThumb        *string            `json:"cover_thumb,omitempty"`
+	CategoryName      *string            `json:"category_name,omitempty"`
+	CategoryNames     *ArrayOp           `json:"category_names,omitempty"`
+	ArtistIDs         *ArrayOp           `json:"artist_ids,omitempty"`
+	ArtistNames       *ArrayOp           `json:"artist_names,omitempty"`
+	Guest             *ArrayOp           `json:"guest,omitempty"`
+	Play              *ArrayOp           `json:"play,omitempty"`
+	DramaIDs          *ArrayOp           `json:"drama_ids,omitempty"`
+	ZheziIDs          *ArrayOp           `json:"zhezi_ids,omitempty"`
+	TagIDs            *ArrayOp           `json:"tag_ids,omitempty"`
+	DateText          *string            `json:"date_text,omitempty"`
+	Rating            *int               `json:"rating,omitempty"`
+	Seat              *string            `json:"seat,omitempty"`
+	Friends           *string            `json:"friends,omitempty"`
+	Company           *string            `json:"company,omitempty"`
+	Remark            *string            `json:"remark,omitempty"`
+	ActiveStatus      *int               `json:"active_status,omitempty"`
+	Price             *float64           `json:"price,omitempty"`
+	PriceCurrency     *string            `json:"price_currency,omitempty"`
+	PayPrice          *float64           `json:"pay_price,omitempty"`
+	PayPriceCurrency  *string            `json:"pay_price_currency,omitempty"`
+	OtherCost         *float64           `json:"other_cost,omitempty"`
+	OtherCostCurrency *string            `json:"other_cost_currency,omitempty"`
+	DryRun            *bool              `json:"dry_run,omitempty"`
 }
 
 type DeleteRecordInput struct {
 	ID     string `json:"id"`
-	DryRun *bool   `json:"dry_run,omitempty"`
+	DryRun *bool  `json:"dry_run,omitempty"`
 }
 
 type BatchDeleteRecordsInput struct {
 	IDs    []string `json:"ids"`
-	DryRun *bool     `json:"dry_run,omitempty"`
+	DryRun *bool    `json:"dry_run,omitempty"`
 }
 
 // ---------- 工具实现 ----------
@@ -323,9 +323,9 @@ func (s *Server) handleBatchDeleteRecords(ctx context.Context, req *mcp.CallTool
 			}
 		}
 		return jsonResult(map[string]any{
-			"dry_run":  true,
+			"dry_run":   true,
 			"requested": len(in.IDs),
-			"records":  items,
+			"records":   items,
 		})
 	}
 	n, err := s.db.BatchDeleteRecords(in.IDs)

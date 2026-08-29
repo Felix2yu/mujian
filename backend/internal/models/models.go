@@ -23,7 +23,7 @@ type Record struct {
 	CoverFile         string      `json:"coverFile"`
 	CoverThumb        string      `json:"coverThumb"`
 	CustomCategoryID  string      `json:"customCategoryId"`
-	CategoryName      string      `json:"categoryName"`   // 主剧种 = CategoryNames[0]，kept in sync for export compatibility
+	CategoryName      string      `json:"categoryName"`  // 主剧种 = CategoryNames[0]，kept in sync for export compatibility
 	CategoryNames     []string    `json:"categoryNames"` // 一场演出可涉及多个剧种
 	ArtistNames       []string    `json:"artist_names"`
 	Guest             []string    `json:"guest"`
@@ -197,17 +197,17 @@ type RecordRequest struct {
 }
 
 type CalendarEvent struct {
-	ID             string   `json:"id"`
-	Name           string   `json:"name"`
-	Date           int64    `json:"date"`
-	City           string   `json:"city"`
-	Address        string   `json:"address"`
-	CoverFile      string   `json:"coverFile"`
-	CoverThumb     string   `json:"coverThumb"`
-	Rating         int      `json:"rating"`
-	ActiveStatus   int      `json:"active_status"`
-	CategoryName   string   `json:"categoryName"`
-	CategoryNames  []string `json:"categoryNames"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	Date          int64    `json:"date"`
+	City          string   `json:"city"`
+	Address       string   `json:"address"`
+	CoverFile     string   `json:"coverFile"`
+	CoverThumb    string   `json:"coverThumb"`
+	Rating        int      `json:"rating"`
+	ActiveStatus  int      `json:"active_status"`
+	CategoryName  string   `json:"categoryName"`
+	CategoryNames []string `json:"categoryNames"`
 }
 
 // MapPoint is the projection served by GET /api/map/points: only records that
@@ -402,14 +402,14 @@ type AnalyticsData struct {
 	TopVenues      []RankItem        `json:"top_venues"`
 
 	// 行为与经济的扩展维度
-	PriceBuckets      []DistItem        `json:"price_buckets"`       // 实付票价分桶
-	OtherCostBuckets  []DistItem        `json:"other_cost_buckets"`  // 其他花费分桶
-	TopZhezis     []RankItem        `json:"top_zhezis"`     // 常看折子
-	Rewatch       *RewatchStats     `json:"rewatch"`        // 复看率
-	Discovery     []DiscoverPoint   `json:"discovery"`      // 每月新发现
-	Diversity     *DiversityIndex   `json:"diversity"`      // 多样性指数
-	Intervals     *IntervalStats    `json:"intervals"`      // 观演间隔
-	WeekdayDist   []WeekdayItem     `json:"weekday_dist"`   // 周几分布
+	PriceBuckets     []DistItem      `json:"price_buckets"`      // 实付票价分桶
+	OtherCostBuckets []DistItem      `json:"other_cost_buckets"` // 其他花费分桶
+	TopZhezis        []RankItem      `json:"top_zhezis"`         // 常看折子
+	Rewatch          *RewatchStats   `json:"rewatch"`            // 复看率
+	Discovery        []DiscoverPoint `json:"discovery"`          // 每月新发现
+	Diversity        *DiversityIndex `json:"diversity"`          // 多样性指数
+	Intervals        *IntervalStats  `json:"intervals"`          // 观演间隔
+	WeekdayDist      []WeekdayItem   `json:"weekday_dist"`       // 周几分布
 }
 
 // Settings / request structures are reused from config.
@@ -503,8 +503,8 @@ type BatchUpdateParams struct {
 	Friends           *string
 	Remark            *string
 	Seat              *string
-	DateText          *string             // 演出时间文本，解析后联动 date 列；空串清空
-	Coordinate        *Coordinate         // 直接覆写坐标 JSON
+	DateText          *string     // 演出时间文本，解析后联动 date 列；空串清空
+	Coordinate        *Coordinate // 直接覆写坐标 JSON
 	Price             *float64
 	PriceCurrency     *string
 	PayPrice          *float64

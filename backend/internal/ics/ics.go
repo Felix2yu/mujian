@@ -21,10 +21,17 @@ func GenerateCalendar(records []models.Record, loc *time.Location) string {
 	b.WriteString("BEGIN:STANDARD\r\n")
 	b.WriteString("DTSTART:19700101T000000\r\n")
 	_, offsetSec := time.Now().In(loc).Zone()
+	// RFC 5545 requires an explicit + or - sign; naive %+02d formatting on a
+	// negative offset would emit an invalid "+-0500" for e.g. New York.
+	sign := "+"
+	if offsetSec < 0 {
+		sign = "-"
+		offsetSec = -offsetSec
+	}
 	offsetH := offsetSec / 3600
 	offsetM := (offsetSec % 3600) / 60
-	b.WriteString(fmt.Sprintf("TZOFFSETFROM:+%02d%02d\r\n", offsetH, offsetM))
-	b.WriteString(fmt.Sprintf("TZOFFSETTO:+%02d%02d\r\n", offsetH, offsetM))
+	b.WriteString(fmt.Sprintf("TZOFFSETFROM:%s%02d%02d\r\n", sign, offsetH, offsetM))
+	b.WriteString(fmt.Sprintf("TZOFFSETTO:%s%02d%02d\r\n", sign, offsetH, offsetM))
 	b.WriteString("END:STANDARD\r\n")
 	b.WriteString("END:VTIMEZONE\r\n")
 
@@ -85,7 +92,7 @@ func writeEvent(b *strings.Builder, rec models.Record, loc *time.Location) {
 		b.WriteString(fmt.Sprintf("DESCRIPTION:%s\r\n", escapeICS(strings.Join(desc, "\n"))))
 	}
 
-	b.WriteString(fmt.Sprintf("CATEGORIES:%s\r\n", rec.CategoryName))
+	b.WriteString(fmt.Sprintf("CATEGORIES:%s\r\n", escapeICS(rec.CategoryName)))
 	b.WriteString("END:VEVENT\r\n")
 }
 
@@ -93,6 +100,8 @@ func escapeICS(s string) string {
 	s = strings.ReplaceAll(s, "\\", "\\\\")
 	s = strings.ReplaceAll(s, ";", "\\;")
 	s = strings.ReplaceAll(s, ",", "\\,")
+	s = strings.ReplaceAll(s, "\r\n", "\\n")
 	s = strings.ReplaceAll(s, "\n", "\\n")
+	s = strings.ReplaceAll(s, "\r", "\\n")
 	return s
 }

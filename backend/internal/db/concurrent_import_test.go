@@ -23,9 +23,9 @@ func TestConcurrentImportsDoNotFailWithBusy(t *testing.T) {
 		data := &models.ExportData{}
 		for i := 0; i < n; i++ {
 			data.Records = append(data.Records, models.Record{
-				ID:          fmt.Sprintf("%s-%04d", tag, i),
-				Name:        fmt.Sprintf("昆剧经典折子戏 %s %d", tag, i),
-				ArtistNames: []string{fmt.Sprintf("演员%s-%d", tag, i%40)},
+				ID:           fmt.Sprintf("%s-%04d", tag, i),
+				Name:         fmt.Sprintf("昆剧经典折子戏 %s %d", tag, i),
+				ArtistNames:  []string{fmt.Sprintf("演员%s-%d", tag, i%40)},
 				CategoryName: "昆剧",
 			})
 		}

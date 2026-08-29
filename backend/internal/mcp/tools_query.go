@@ -103,7 +103,8 @@ func (s *Server) resolveDrama(id, name string) (*models.Drama, error) {
 	}
 	lower := strings.ToLower(name)
 	var exact *models.Drama
-	var partial []string
+	var partial []string        // 仅用于错误提示展示
+	var partialRefs []*models.Drama // 与 partial 一一对应，唯一命中时直接采用
 	for i := range dramas {
 		d := &dramas[i]
 		if d.Name == name {
@@ -122,12 +123,14 @@ func (s *Server) resolveDrama(id, name string) (*models.Drama, error) {
 		}
 		if strings.Contains(strings.ToLower(d.Name), lower) {
 			partial = append(partial, fmt.Sprintf("%s (id=%s)", d.Name, d.ID))
+			partialRefs = append(partialRefs, d)
 			continue
 		}
 		// Check aliases for partial match
 		for _, alias := range d.Aliases {
 			if strings.Contains(strings.ToLower(alias), lower) {
 				partial = append(partial, fmt.Sprintf("%s (id=%s)", d.Name, d.ID))
+				partialRefs = append(partialRefs, d)
 				break
 			}
 		}
@@ -135,15 +138,13 @@ func (s *Server) resolveDrama(id, name string) (*models.Drama, error) {
 	if exact != nil {
 		return exact, nil
 	}
-	if len(partial) == 1 {
+	if len(partialRefs) == 1 {
 		// 唯一的部分匹配直接采用，方便 AI 用不完整剧名定位。
-		for i := range dramas {
-			if fmt.Sprintf("%s (id=%s)", dramas[i].Name, dramas[i].ID) == partial[0] {
-				return &dramas[i], nil
-			}
-		}
+		// 直接持有剧目指针，避免用 "name (id=…)" 字符串反解析（剧目名
+		// 本身可能包含 "(id="）。
+		return partialRefs[0], nil
 	}
-	if len(partial) > 1 {
+	if len(partialRefs) > 1 {
 		return nil, fmt.Errorf("剧名「%s」匹配到多个剧目，请指定 drama_id：%v", name, partial)
 	}
 	return nil, fmt.Errorf("未找到剧目「%s」", name)

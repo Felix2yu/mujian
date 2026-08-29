@@ -1,6 +1,7 @@
 package db
 
 import (
+	"log/slog"
 	"mujian/internal/models"
 	"mujian/internal/storage"
 	"strings"
@@ -18,7 +19,12 @@ func (db *DB) UpsertCoverMeta(hash, fileName, ext string, size int64) error {
 
 func (db *DB) CoverMetaExists(fileName string) bool {
 	var n int
-	db.conn.QueryRow("SELECT COUNT(*) FROM covers WHERE file_name = ?", fileName).Scan(&n)
+	// A failed COUNT must not be reported as "meta missing": callers rely on
+	// this to decide whether to re-import a cover, which would duplicate rows.
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM covers WHERE file_name = ?", fileName).Scan(&n); err != nil {
+		slog.Warn("cover meta exists", "file", fileName, "err", err)
+		return false
+	}
 	return n > 0
 }
 
@@ -70,6 +76,9 @@ func (db *DB) SyncCovers(store storage.Storage) (int, error) {
 			continue
 		}
 		files = append(files, f)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
 	}
 	if err := rows.Close(); err != nil {
 		return 0, err

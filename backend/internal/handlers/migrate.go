@@ -16,13 +16,14 @@ import (
 // one object per line, flushed immediately, with the final line carrying
 // "done": true plus the summary.
 func (h *Handler) migrateToS3(w http.ResponseWriter, r *http.Request) {
-	if h.cfg.S3Bucket == "" || h.cfg.S3AccessKey == "" {
+	s3cfg := h.cfg.GetS3Settings()
+	if s3cfg.Bucket == "" || s3cfg.AccessKey == "" {
 		jsonErr(w, 400, "S3 未配置完整（需要 Bucket 与 Access Key）")
 		return
 	}
 
 	local := storage.NewLocalStorage(h.cfg.UploadDir, nil)
-	remote := storage.NewS3Storage(h.cfg)
+	remote := storage.NewS3StorageFromSettings(s3cfg, h.cfg.GetImageFormat)
 
 	flusher, ok := w.(http.Flusher)
 	emit := func(done, total int) {}

@@ -35,19 +35,26 @@
     load();
   }
 
+  // 请求序号：连续翻月时两个 getCalendar 乱序返回会把旧月份的活动渲染到
+  // 当前视图，用序号丢弃过期响应。
+  let calReqSeq = 0;
+
   async function load() {
+    const seq = ++calReqSeq;
     loading = true;
     error = '';
     try {
-      events = await api.getCalendar(year, month);
+      const ev = await api.getCalendar(year, month);
+      if (seq !== calReqSeq) return; // 已翻到别的月份，丢弃本次响应
+      events = ev;
       const u = new URL(location.href);
       u.searchParams.set('y', String(year));
       u.searchParams.set('m', String(month));
       history.replaceState({}, '', u);
     } catch (e) {
-      error = e.message;
+      if (seq === calReqSeq) error = e.message;
     } finally {
-      loading = false;
+      if (seq === calReqSeq) loading = false;
     }
   }
 

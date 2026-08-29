@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"image"
 	"image/color"
-	
+
 	"path/filepath"
 	"strings"
 	"testing"

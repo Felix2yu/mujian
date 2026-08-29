@@ -428,8 +428,8 @@ func TestUpdateDrama(t *testing.T) {
 
 	// 只改名称：未提供的字段保持不变；剧种由演出聚合，不可手动设置。
 	res, _, err := s.handleUpdateDrama(context.Background(), nil, UpdateDramaInput{
-		ID:  d.ID,
-		Name: strPtrT("牡丹亭·珍藏版"),
+		ID:     d.ID,
+		Name:   strPtrT("牡丹亭·珍藏版"),
 		DryRun: boolPtr(false),
 	})
 	if err != nil {
