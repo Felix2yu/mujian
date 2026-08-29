@@ -19,7 +19,15 @@
   const PAGE_SIZE = 30;
   let offset = 0;
   let hasMore = $state(false);
-  let filters = $state({ q: '', category: '', city: '', year: '', month: '', drama: '', zhezi: '', missing: [] });
+  let filters = $state({
+    q: '', category: '', city: '', year: '', month: '',
+    drama: '', zhezi: '', artist: '',
+    channel: '', company: '',
+    start: '', end: '',
+    rating_min: '', price_min: '', price_max: '',
+    status: '', exact: false,
+    missing: []
+  });
 
   // 可筛选的「缺失字段」清单。value 必须与后端 buildMissingPredicate 的 token 一致。
   // 用于数据治理：快速找出某项未填写的演出（例如未填分类、未传封面）。
@@ -42,6 +50,43 @@
     { value: 'seat', label: '座位' }
   ];
   const missingLabel = (v) => (MISSING_FIELDS.find((x) => x.value === v) || {}).label || v;
+
+  // 状态标签（active_status: 0 正常 / 1 想看 / 2 已取消 / 3 未赴约）
+  const STATUS_LABELS = { '0': '正常', '1': '想看', '2': '已取消', '3': '未赴约' };
+  const statusLabel = (v) => STATUS_LABELS[v] || ('状态' + v);
+
+  // 筛选面板的下拉候选（剧目/折子/演员/渠道/剧团）。剧目树较大（~36KB），
+  // 仅首次打开筛选面板时才加载，避免污染首屏。
+  let dramaList = $state([]);
+  let zheziList = $state([]);
+  let artistList = $state([]);
+  let channels = $state([]);
+  let companies = $state([]);
+  let filterDataLoaded = false;
+  async function loadFilterData() {
+    if (filterDataLoaded) return;
+    filterDataLoaded = true;
+    try {
+      const [tree, arts, chans, comps] = await Promise.all([
+        api.getDramaTree(),
+        api.listArtists(),
+        api.getAutocomplete('channel'),
+        api.getAutocomplete('company')
+      ]);
+      const d = [], z = [];
+      for (const dr of tree || []) {
+        d.push({ id: dr.id, name: dr.name });
+        for (const zz of dr.zhezis || []) z.push({ id: zz.id, name: zz.name, dramaName: dr.name });
+      }
+      dramaList = d;
+      zheziList = z;
+      artistList = (arts || []).map((a) => ({ id: a.id, name: a.name }));
+      channels = chans || [];
+      companies = comps || [];
+    } catch (e) { /* 候选缺失时不阻塞筛选面板 */ }
+  }
+  const dramaLabel = (id) => (dramaList.find((x) => x.id === id) || {}).name || '剧目';
+  const artistLabel = (id) => (artistList.find((x) => x.id === id) || {}).name || '演员';
   let showFilter = $state(false);
   let zheziNames = $state(new Map());
   let searchTimer;
@@ -169,8 +214,17 @@
       filters.city ? { k: 'city', label: `城市：${filters.city}` } : null,
       filters.year ? { k: 'year', label: `年份：${filters.year}` } : null,
       filters.month ? { k: 'month', label: `月份：${filters.month}` } : null,
-      filters.drama ? { k: 'drama', label: '剧目' } : null,
-      filters.zhezi ? { k: 'zhezi', label: `折子：${zheziLabel(filters.zhezi)}` } : null
+      filters.drama ? { k: 'drama', label: `剧目：${dramaLabel(filters.drama)}` } : null,
+      filters.zhezi ? { k: 'zhezi', label: `折子：${zheziLabel(filters.zhezi)}` } : null,
+      filters.artist ? { k: 'artist', label: `演员：${artistLabel(filters.artist)}` } : null,
+      filters.channel ? { k: 'channel', label: `渠道：${filters.channel}` } : null,
+      filters.company ? { k: 'company', label: `剧团：${filters.company}` } : null,
+      filters.start ? { k: 'start', label: `起：${filters.start}` } : null,
+      filters.end ? { k: 'end', label: `止：${filters.end}` } : null,
+      filters.rating_min ? { k: 'rating_min', label: `评分≥${filters.rating_min}` } : null,
+      (filters.price_min || filters.price_max) ? { k: 'price', label: `票价 ${filters.price_min || '0'}~${filters.price_max || '∞'}` } : null,
+      filters.status ? { k: 'status', label: `状态：${statusLabel(filters.status)}` } : null,
+      filters.exact ? { k: 'exact', label: '精确匹配' } : null
     ].filter(Boolean)
   );
   // 每个被勾选的「缺失字段」各占一个独立 chip，可单独取消。
@@ -185,13 +239,9 @@
 
   function buildFilterQuery() {
     const params = new URLSearchParams();
-    if (filters.q) params.set('q', filters.q);
-    if (filters.category) params.set('category', filters.category);
-    if (filters.city) params.set('city', filters.city);
-    if (filters.year) params.set('year', filters.year);
-    if (filters.month) params.set('month', filters.month);
-    if (filters.drama) params.set('drama', filters.drama);
-    if (filters.zhezi) params.set('zhezi', filters.zhezi);
+    const keys = ['q', 'category', 'city', 'year', 'month', 'drama', 'zhezi', 'artist', 'channel', 'company', 'start', 'end', 'rating_min', 'price_min', 'price_max', 'status'];
+    for (const k of keys) if (filters[k]) params.set(k, filters[k]);
+    if (filters.exact) params.set('exact', '1');
     if (filters.missing.length) params.set('missing', filters.missing.join(','));
     return params.toString();
   }
@@ -200,7 +250,12 @@
   $effect(() => {
     if (!urlReady) return;
     // 依赖：读取全部筛选项以触发更新
-    const _ = [filters.q, filters.category, filters.city, filters.year, filters.month, filters.drama, filters.zhezi, filters.missing.join(',')];
+    const _ = [
+      filters.q, filters.category, filters.city, filters.year, filters.month,
+      filters.drama, filters.zhezi, filters.artist, filters.channel, filters.company,
+      filters.start, filters.end, filters.rating_min, filters.price_min, filters.price_max,
+      filters.status, filters.exact, filters.missing.join(',')
+    ];
     const qs = buildFilterQuery();
     const url = qs ? `/?${qs}` : '/';
     const cur = location.pathname + location.search;
@@ -209,7 +264,14 @@
 
   // 合并筛选参数 + 分页参数
   function buildQuery(off = 0, limit = PAGE_SIZE) {
-    return { ...filters, missing: filters.missing.join(','), offset: off, limit };
+    const q = {};
+    const keys = ['q', 'category', 'city', 'year', 'month', 'drama', 'zhezi', 'artist', 'channel', 'company', 'start', 'end', 'rating_min', 'price_min', 'price_max', 'status'];
+    for (const k of keys) if (filters[k]) q[k] = filters[k];
+    if (filters.exact) q.exact = '1';
+    if (filters.missing.length) q.missing = filters.missing.join(',');
+    q.offset = off;
+    q.limit = limit;
+    return q;
   }
 
   async function load() {
@@ -219,8 +281,8 @@
     error = '';
     try {
       const { records: page, total: t } = await api.listRecords(buildQuery(0, PAGE_SIZE));
-      const visible = new Set(loadStatusFilter());
-      records = page.filter((r) => visible.has(r.active_status));
+      const visible = filters.status ? null : new Set(loadStatusFilter());
+      records = page.filter((r) => !visible || visible.has(r.active_status));
       total = t;
       hasMore = PAGE_SIZE < t;
     } catch (e) {
@@ -236,8 +298,8 @@
     try {
       const { records: page } = await api.listRecords(buildQuery(offset + PAGE_SIZE, PAGE_SIZE));
       offset += PAGE_SIZE;
-      const visible = new Set(loadStatusFilter());
-      records = [...records, ...page.filter((r) => visible.has(r.active_status))];
+      const visible = filters.status ? null : new Set(loadStatusFilter());
+      records = [...records, ...page.filter((r) => !visible || visible.has(r.active_status))];
       hasMore = offset + PAGE_SIZE < total;
     } catch (e) {
       // 静默失败，保留已加载的
@@ -298,6 +360,16 @@
       load();
       return;
     }
+    if (k === 'price') {
+      filters = { ...filters, price_min: '', price_max: '' };
+      load();
+      return;
+    }
+    if (k === 'exact') {
+      filters = { ...filters, exact: false };
+      load();
+      return;
+    }
     filters = { ...filters, [k]: '' };
     load();
   }
@@ -312,7 +384,15 @@
   }
 
   function resetFilters() {
-    filters = { q: '', category: '', city: '', year: '', month: '', drama: '', zhezi: '', missing: [] };
+    filters = {
+      q: '', category: '', city: '', year: '', month: '',
+      drama: '', zhezi: '', artist: '',
+      channel: '', company: '',
+      start: '', end: '',
+      rating_min: '', price_min: '', price_max: '',
+      status: '', exact: false,
+      missing: []
+    };
     load();
   }
 
@@ -349,6 +429,16 @@
       month: sp.get('month') || '',
       drama: sp.get('drama') || '',
       zhezi: sp.get('zhezi') || '',
+      artist: sp.get('artist') || '',
+      channel: sp.get('channel') || '',
+      company: sp.get('company') || '',
+      start: sp.get('start') || '',
+      end: sp.get('end') || '',
+      rating_min: sp.get('rating_min') || '',
+      price_min: sp.get('price_min') || '',
+      price_max: sp.get('price_max') || '',
+      status: sp.get('status') || '',
+      exact: sp.get('exact') === '1' || sp.get('exact') === 'true',
       missing: (sp.get('missing') || '').split(',').map((s) => s.trim()).filter(Boolean)
     };
     urlReady = true;
@@ -380,7 +470,7 @@
           type="button"
           class="btn ghost filter-toggle"
           class:active={activeChips.length > 0}
-          onclick={() => (showFilter = !showFilter)}
+          onclick={() => { showFilter = !showFilter; if (showFilter) loadFilterData(); }}
           aria-expanded={showFilter}
           aria-haspopup="dialog"
         >
@@ -521,6 +611,102 @@
         {/each}
       </div>
     </div>
+
+    <div class="filter-section">
+      <span class="filter-section-title">剧目 / 折子 / 演员</span>
+      <div class="filter-fields">
+        <label class="filter-field">
+          <span class="filter-label">剧目</span>
+          <select class="input" bind:value={filters.drama} onchange={load}>
+            <option value="">全部剧目</option>
+            {#each dramaList as d}<option value={d.id}>{d.name}</option>{/each}
+          </select>
+        </label>
+        <label class="filter-field">
+          <span class="filter-label">折子</span>
+          <select class="input" bind:value={filters.zhezi} onchange={load}>
+            <option value="">全部折子</option>
+            {#each zheziList as z}<option value={z.id}>{z.dramaName} · {z.name}</option>{/each}
+          </select>
+        </label>
+        <label class="filter-field">
+          <span class="filter-label">演员</span>
+          <select class="input" bind:value={filters.artist} onchange={load}>
+            <option value="">全部演员</option>
+            {#each artistList as a}<option value={a.id}>{a.name}</option>{/each}
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <span class="filter-section-title">时间区间（起 / 止）</span>
+      <div class="filter-fields">
+        <label class="filter-field">
+          <span class="filter-label">起始日期</span>
+          <input class="input" type="date" bind:value={filters.start} onchange={load} />
+        </label>
+        <label class="filter-field">
+          <span class="filter-label">结束日期</span>
+          <input class="input" type="date" bind:value={filters.end} onchange={load} />
+        </label>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <span class="filter-section-title">渠道 / 剧团</span>
+      <div class="filter-fields">
+        <label class="filter-field">
+          <span class="filter-label">渠道</span>
+          <input class="input" list="flt-channel" placeholder="渠道" bind:value={filters.channel} onchange={load} />
+          <datalist id="flt-channel">{#each channels as c}<option value={c}>{c}</option>{/each}</datalist>
+        </label>
+        <label class="filter-field">
+          <span class="filter-label">剧团</span>
+          <input class="input" list="flt-company" placeholder="剧团" bind:value={filters.company} onchange={load} />
+          <datalist id="flt-company">{#each companies as c}<option value={c}>{c}</option>{/each}</datalist>
+        </label>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <span class="filter-section-title">评分 / 票价</span>
+      <div class="filter-fields">
+        <label class="filter-field">
+          <span class="filter-label">评分 ≥</span>
+          <input class="input" type="number" min="0" max="10" step="1" placeholder="评分下限" bind:value={filters.rating_min} onchange={load} />
+        </label>
+        <div class="filter-field">
+          <span class="filter-label">票价区间（¥）</span>
+          <div class="range-row">
+            <input class="input" type="number" min="0" step="1" placeholder="最低" bind:value={filters.price_min} onchange={load} />
+            <span class="range-sep">~</span>
+            <input class="input" type="number" min="0" step="1" placeholder="最高" bind:value={filters.price_max} onchange={load} />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <span class="filter-section-title">状态 / 匹配方式</span>
+      <div class="filter-fields">
+        <label class="filter-field">
+          <span class="filter-label">状态</span>
+          <select class="input" bind:value={filters.status} onchange={load}>
+            <option value="">全部状态</option>
+            <option value="0">正常</option>
+            <option value="1">想看</option>
+            <option value="2">已取消</option>
+            <option value="3">未赴约</option>
+          </select>
+        </label>
+        <label class="missing-opt exact-opt">
+          <input type="checkbox" bind:checked={filters.exact} onchange={load} />
+          <span>关键词精确匹配（按名称全等，非模糊）</span>
+        </label>
+      </div>
+    </div>
+
     <div class="filter-panel-actions">
       <button class="btn ghost" onclick={resetFilters}>清除全部</button>
       <button class="btn primary" onclick={() => (showFilter = false)}>完成</button>
@@ -709,6 +895,14 @@
     accent-color: var(--accent);
     flex-shrink: 0;
   }
+  .exact-opt {
+    align-self: end;
+    padding-bottom: 2px;
+    white-space: normal;
+  }
+  .range-row { display: flex; align-items: center; gap: 6px; }
+  .range-row .input { width: 100%; min-width: 0; }
+  .range-sep { color: var(--text-3); font-size: 13px; flex-shrink: 0; }
   .filter-panel-actions {
     display: flex;
     gap: 10px;

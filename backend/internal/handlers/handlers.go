@@ -177,6 +177,23 @@ func (h *Handler) listRecords(w http.ResponseWriter, r *http.Request) {
 	f.DramaID = q.Get("drama")
 	f.ZheziID = q.Get("zhezi")
 	f.Missing = q.Get("missing")
+	f.Channel = q.Get("channel")
+	f.Company = q.Get("company")
+	if v := q.Get("rating_min"); v != "" {
+		f.RatingMin, _ = strconv.Atoi(v)
+	}
+	if v := q.Get("price_min"); v != "" {
+		f.PriceMin, _ = strconv.ParseFloat(v, 64)
+	}
+	if v := q.Get("price_max"); v != "" {
+		f.PriceMax, _ = strconv.ParseFloat(v, 64)
+	}
+	if v := q.Get("status"); v != "" {
+		f.ActiveStatus, _ = strconv.Atoi(v)
+	}
+	if q.Get("exact") == "1" || q.Get("exact") == "true" {
+		f.Exact = true
+	}
 	if v := q.Get("limit"); v != "" {
 		f.Limit, _ = strconv.Atoi(v)
 	}

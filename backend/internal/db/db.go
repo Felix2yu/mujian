@@ -698,6 +698,14 @@ type RecordFilter struct {
 	// company, channel, rating, price, cover, coordinate, artist, drama, zhezi,
 	// friends, remark, seat, play.
 	Missing string
+	// 扩展筛选维度（前端筛选面板新增的字段）
+	Channel      string  // 渠道精确匹配
+	Company      string  // 剧团精确匹配
+	RatingMin    int     // 评分下限（含）
+	PriceMin     float64 // 票价下限（含）
+	PriceMax     float64 // 票价上限（含）；仅当 >0 时生效
+	ActiveStatus int     // 演出状态：0=正常 1=想看 2=已取消 3=未赴约；仅当 >0 时生效
+	Exact        bool    // 关键词精确匹配（按 name 全等，而非模糊 LIKE）
 	Limit    int
 	Offset   int
 	// NoLimit disables the default/hard row caps applied by ListRecords.
@@ -751,9 +759,14 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 	args := []interface{}{}
 
 	if f.Query != "" {
-		where = append(where, searchLikeCols)
-		for range 12 {
-			args = append(args, "%"+f.Query+"%")
+		if f.Exact {
+			where = append(where, "records.name = ?")
+			args = append(args, f.Query)
+		} else {
+			where = append(where, searchLikeCols)
+			for range 12 {
+				args = append(args, "%"+f.Query+"%")
+			}
 		}
 	}
 	if f.Category != "" {
@@ -808,6 +821,32 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 		if p := buildMissingPredicate(f.Missing); p != "" {
 			where = append(where, p)
 		}
+	}
+
+	// 扩展维度：渠道/剧团精确匹配、评分下限、票价区间、状态过滤
+	if f.Channel != "" {
+		where = append(where, "channel = ?")
+		args = append(args, f.Channel)
+	}
+	if f.Company != "" {
+		where = append(where, "company = ?")
+		args = append(args, f.Company)
+	}
+	if f.RatingMin > 0 {
+		where = append(where, "rating >= ?")
+		args = append(args, f.RatingMin)
+	}
+	if f.PriceMin > 0 {
+		where = append(where, "price >= ?")
+		args = append(args, f.PriceMin)
+	}
+	if f.PriceMax > 0 {
+		where = append(where, "price <= ?")
+		args = append(args, f.PriceMax)
+	}
+	if f.ActiveStatus > 0 {
+		where = append(where, "active_status = ?")
+		args = append(args, f.ActiveStatus)
 	}
 
 	if len(where) > 0 {
@@ -876,9 +915,14 @@ func (db *DB) CountRecords(f RecordFilter) (int, error) {
 	args := []interface{}{}
 
 	if f.Query != "" {
-		where = append(where, searchLikeCols)
-		for range 12 {
-			args = append(args, "%"+f.Query+"%")
+		if f.Exact {
+			where = append(where, "records.name = ?")
+			args = append(args, f.Query)
+		} else {
+			where = append(where, searchLikeCols)
+			for range 12 {
+				args = append(args, "%"+f.Query+"%")
+			}
 		}
 	}
 	if f.Category != "" {
@@ -924,6 +968,32 @@ func (db *DB) CountRecords(f RecordFilter) (int, error) {
 		if p := buildMissingPredicate(f.Missing); p != "" {
 			where = append(where, p)
 		}
+	}
+
+	// 扩展维度：渠道/剧团精确匹配、评分下限、票价区间、状态过滤
+	if f.Channel != "" {
+		where = append(where, "channel = ?")
+		args = append(args, f.Channel)
+	}
+	if f.Company != "" {
+		where = append(where, "company = ?")
+		args = append(args, f.Company)
+	}
+	if f.RatingMin > 0 {
+		where = append(where, "rating >= ?")
+		args = append(args, f.RatingMin)
+	}
+	if f.PriceMin > 0 {
+		where = append(where, "price >= ?")
+		args = append(args, f.PriceMin)
+	}
+	if f.PriceMax > 0 {
+		where = append(where, "price <= ?")
+		args = append(args, f.PriceMax)
+	}
+	if f.ActiveStatus > 0 {
+		where = append(where, "active_status = ?")
+		args = append(args, f.ActiveStatus)
 	}
 
 	if len(where) > 0 {
