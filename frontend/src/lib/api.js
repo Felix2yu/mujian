@@ -92,6 +92,12 @@ export const api = {
     }
     return { records: data.records ?? [], total: data.total ?? 0 };
   },
+  // 地图专用精简投影：仅含带坐标的记录与地图渲染所需字段，
+  // 体积约为 /api/records 全量响应的 1/12。
+  mapPoints: async () => {
+    const data = await request('/api/map/points');
+    return Array.isArray(data) ? data : (data.points ?? []);
+  },
   getRecord: (id) => request(`/api/records/${id}`),
   createRecord: (data) => request('/api/records', { method: 'POST', body: JSON.stringify(data) }),
   updateRecord: (id, data) => request(`/api/records/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

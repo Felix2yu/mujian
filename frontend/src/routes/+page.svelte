@@ -6,8 +6,8 @@
   import { loadStatusFilter } from '$lib/statusPrefs.js';
   import { loadPref } from '$lib/prefs.js';
   import RecordCard from '$lib/components/RecordCard.svelte';
-  import BatchEditModal from '$lib/components/BatchEditModal.svelte';
   import OperaIcon from '$lib/components/OperaIcon.svelte';
+  // BatchEditModal 改为按需动态加载（见 openBatchEdit），不进首页关键路径。
 
   let records = $state([]);
   let categories = $state([]);
@@ -110,8 +110,21 @@
     }
   }
 
-  function openBatchEdit() {
+  let BatchEditModal = $state(null);
+  let batchModalLoading = $state(false);
+
+  async function openBatchEdit() {
     if (selectedIds.size === 0) return;
+    // 680 行的批量编辑弹窗只在进入批量模式后才需要：按需加载，
+    // 把它移出首页首屏关键路径（约 -12KB JS）。
+    if (!BatchEditModal) {
+      batchModalLoading = true;
+      try {
+        BatchEditModal = (await import('$lib/components/BatchEditModal.svelte')).default;
+      } finally {
+        batchModalLoading = false;
+      }
+    }
     showBatchEdit = true;
   }
 
@@ -207,17 +220,29 @@
 
   async function loadMeta() {
     try {
-      const [cats, cityList, tree] = await Promise.all([
+      const [cats, cityList] = await Promise.all([
         api.listCategories(),
-        api.getAutocomplete('city'),
-        api.getDramaTree().catch(() => [])
+        api.getAutocomplete('city')
       ]);
       categories = cats;
       cities = cityList;
+    } catch (e) { /* 非关键，忽略 */ }
+  }
+
+  // 剧目/折子树（36KB）只为把 zhezi id 解析成「剧目 · 折子」显示名，
+  // 仅当 URL 带 ?zhezi= 筛选时才有用。此前无条件随首屏加载，
+  // 是首屏关键路径上最大的一笔无效请求。
+  let zheziNamesLoading = false;
+  async function ensureZheziNames() {
+    if (zheziNames.size || zheziNamesLoading) return;
+    zheziNamesLoading = true;
+    try {
+      const tree = await api.getDramaTree();
       const m = new Map();
       for (const d of tree) for (const z of d.zhezis || []) m.set(z.id, { name: z.name, dramaName: d.name });
       zheziNames = m;
-    } catch (e) { /* 非关键，忽略 */ }
+    } catch (e) { /* 显示名缺失时兜底为「折子」 */ }
+    finally { zheziNamesLoading = false; }
   }
 
   function onSearchInput() {
@@ -284,6 +309,7 @@
     };
     urlReady = true;
     loadMeta();
+    if (filters.zhezi) ensureZheziNames();
     load().then(autoJumpOnLoad);
   });
 </script>
@@ -456,7 +482,7 @@
   </button>
 {/if}
 
-{#if showBatchEdit}
+{#if showBatchEdit && BatchEditModal}
   <BatchEditModal
     selectedIds={[...selectedIds]}
     records={records}

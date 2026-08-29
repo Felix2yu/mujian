@@ -63,7 +63,7 @@
       L = (await import('leaflet')).default || L;
       // 预引入 markercluster（会自动注册到 L）
       await import('leaflet.markercluster');
-      records = (await api.listRecords({})).records;
+      records = await api.mapPoints();
     } catch (e) {
       error = e.message;
     } finally {

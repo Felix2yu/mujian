@@ -32,9 +32,49 @@
   let updateReady = $state(false);
   let swReg = null;
 
+  // Web Vitals 采集：每次页面加载上报一次（fire-and-forget sendBeacon），
+  // 失败静默——遥测绝不能影响正常使用。
+  function reportWebVitals() {
+    try {
+      if (typeof navigator.sendBeacon !== 'function') return;
+      const nav = performance.getEntriesByType('navigation')[0];
+      const v = { route: $page.url.pathname, ttfb_ms: nav ? Math.round(nav.responseStart) : 0 };
+      const paint = performance.getEntriesByType('paint') || [];
+      for (const p of paint) {
+        if (p.name === 'first-contentful-paint') v.fcp_ms = Math.round(p.startTime);
+      }
+      let cls = 0;
+      try {
+        new PerformanceObserver((l) => {
+          for (const e of l.getEntries()) if (!e.hadRecentInput) cls += e.value;
+        }).observe({ type: 'layout-shift', buffered: true });
+      } catch {}
+      try {
+        new PerformanceObserver((l) => {
+          const es = l.getEntries();
+          if (es.length) v.lcp_ms = Math.round(es[es.length - 1].startTime);
+        }).observe({ type: 'largest-contentful-paint', buffered: true });
+      } catch {}
+      let longTask = 0;
+      try {
+        new PerformanceObserver((l) => {
+          for (const e of l.getEntries()) longTask += e.duration;
+        }).observe({ type: 'longtask', buffered: true });
+      } catch {}
+
+      // 给 LCP/CLS/长任务 一点完成时间，再随页面卸货前发出。
+      setTimeout(() => {
+        v.cls = cls.toFixed(3);
+        v.longtask_ms = Math.round(longTask);
+        navigator.sendBeacon('/api/metrics/client', JSON.stringify(v));
+      }, 1500);
+    } catch {}
+  }
+
   onMount(() => {
     initTheme();
     initStorageInfo();
+    reportWebVitals();
 
     if ('serviceWorker' in navigator && !/^localhost$|^127\.0\.0\.1$|^\[::1\]$/.test(location.hostname)) {
       navigator.serviceWorker.register('/sw.js').then((reg) => {
