@@ -2222,3 +2222,55 @@ func TestRecordFilterStatuses(t *testing.T) {
 		t.Fatalf("Statuses should take precedence: total %d, want 3", totalBoth)
 	}
 }
+
+// Multi-token queries are AND-ed across searchable columns: "牡丹亭 上海"
+// matches a record named 牡丹亭 in 上海 even though no single column contains
+// the full phrase. Each token may hit a different column.
+func TestRecordFilterMultiTokenQuery(t *testing.T) {
+	d := newTestDB(t)
+	r := sampleRecord("mt-1", 1755000000) // name 牡丹亭, city 上海, company 上昆
+	if err := d.UpsertRecord(r); err != nil {
+		t.Fatal(err)
+	}
+	other := sampleRecord("mt-2", 1754900000)
+	other.Name = "墙头马上"
+	if err := d.UpsertRecord(other); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		q      string
+		expect int
+	}{
+		{"牡丹亭", 1},
+		{"牡丹亭 上海", 1},   // name token + city token
+		{"牡丹亭 上昆", 1},   // name token + company token
+		{"上海 牡丹亭", 1},   // order irrelevant
+		{"牡丹亭  北京", 0},  // no record satisfies both tokens
+		{"墙头马上 上海", 1}, // mt-2: name 墙头马上 in 上海
+		{"牡丹亭 墙头马上", 0}, // the two names live on different records
+	}
+	for _, c := range cases {
+		total, err := d.CountRecordsContext(context.Background(), RecordFilter{Query: c.q})
+		if err != nil {
+			t.Fatalf("CountRecords(%q): %v", c.q, err)
+		}
+		recs, err := d.ListRecordsContext(context.Background(), RecordFilter{Query: c.q})
+		if err != nil {
+			t.Fatalf("ListRecords(%q): %v", c.q, err)
+		}
+		if total != c.expect || len(recs) != c.expect {
+			t.Errorf("q=%q: got %d listed / total %d, want %d", c.q, len(recs), total, c.expect)
+		}
+	}
+
+	// Exact mode still compares the raw string verbatim (space included).
+	exactRecs, _ := d.ListRecordsContext(context.Background(), RecordFilter{Query: "牡丹亭", Exact: true})
+	if len(exactRecs) != 1 {
+		t.Fatalf("exact single keyword: got %d, want 1", len(exactRecs))
+	}
+	exactSpace, _ := d.ListRecordsContext(context.Background(), RecordFilter{Query: "牡丹亭 上海", Exact: true})
+	if len(exactSpace) != 0 {
+		t.Fatalf("exact with space should not split tokens: got %d, want 0", len(exactSpace))
+	}
+}

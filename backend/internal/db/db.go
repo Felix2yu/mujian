@@ -771,6 +771,29 @@ func appendStatusPredicate(f RecordFilter, where *[]string, args *[]interface{})
 
 // ListRecordsContext is ListRecords bound to ctx: the SQLite driver honors
 // cancellation, so an abandoned HTTP request stops burning query time.
+// appendSearchPredicate adds the keyword-search predicate. Space-separated
+// tokens are AND-ed: "牡丹亭 上海" matches records that contain 牡丹亭 in some
+// searchable column AND 上海 in some (possibly different) column. A single
+// token behaves exactly like the old whole-string LIKE; Exact still compares
+// records.name to the raw query string verbatim. Shared by ListRecordsContext
+// and CountRecordsContext so the list and its total always agree.
+func appendSearchPredicate(f RecordFilter, where *[]string, args *[]interface{}) {
+	if f.Query == "" {
+		return
+	}
+	if f.Exact {
+		*where = append(*where, "records.name = ?")
+		*args = append(*args, f.Query)
+		return
+	}
+	for _, tok := range strings.Fields(f.Query) {
+		*where = append(*where, searchLikeCols)
+		for range 12 {
+			*args = append(*args, "%"+tok+"%")
+		}
+	}
+}
+
 func (db *DB) ListRecordsContext(ctx context.Context, f RecordFilter) ([]models.Record, error) {
 	started := time.Now()
 	defer func() {
@@ -793,17 +816,7 @@ func (db *DB) ListRecordsContext(ctx context.Context, f RecordFilter) ([]models.
 	where := []string{}
 	args := []interface{}{}
 
-	if f.Query != "" {
-		if f.Exact {
-			where = append(where, "records.name = ?")
-			args = append(args, f.Query)
-		} else {
-			where = append(where, searchLikeCols)
-			for range 12 {
-				args = append(args, "%"+f.Query+"%")
-			}
-		}
-	}
+	appendSearchPredicate(f, &where, &args)
 	if f.Category != "" {
 		// Multi-category: match any element of the category_names JSON array
 		// (single-category rows are stored as one-element arrays).
@@ -951,17 +964,7 @@ func (db *DB) CountRecordsContext(ctx context.Context, f RecordFilter) (int, err
 	where := []string{}
 	args := []interface{}{}
 
-	if f.Query != "" {
-		if f.Exact {
-			where = append(where, "records.name = ?")
-			args = append(args, f.Query)
-		} else {
-			where = append(where, searchLikeCols)
-			for range 12 {
-				args = append(args, "%"+f.Query+"%")
-			}
-		}
-	}
+	appendSearchPredicate(f, &where, &args)
 	if f.Category != "" {
 		query += " JOIN json_each(records.category_names) je_cat ON je_cat.value = ?"
 		args = append(args, f.Category)

@@ -1,7 +1,8 @@
 <script>
-  import { onMount, tick } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { api, coverUrl } from '$lib/api.js';
   import { geocodeAddress } from '$lib/geocode.js';
+  import { STATUS_LABELS } from '$lib/statusPrefs.js';
   import CoverPicker from '$lib/components/CoverPicker.svelte';
   import CategoryTags from '$lib/components/CategoryTags.svelte';
 
@@ -670,11 +671,303 @@
   }
 
 
+  // ---------- 从既往演出复制（仅新建模式显示） ----------
+  // 搜索历史演出 → 勾选要复制的字段 → 应用到当前表单。日期/封面/状态默认
+  // 不勾：新演出通常有自己的时间与海报。应用演员时，未建档的名字进自由胶囊。
+  const COPY_FIELD_DEFS = [
+    { key: 'name', label: '演出名称' },
+    { key: 'categoryNames', label: '剧种分类' },
+    { key: 'city', label: '城市' },
+    { key: 'address', label: '场馆地址' },
+    { key: 'coord', label: '场馆坐标' },
+    { key: 'company', label: '剧团' },
+    { key: 'channel', label: '渠道' },
+    { key: 'artists', label: '演员' },
+    { key: 'dramas', label: '剧目 / 折子' },
+    { key: 'price', label: '票价' },
+    { key: 'pay_price', label: '实付' },
+    { key: 'other_cost', label: '其他花费' },
+    { key: 'seat', label: '座位' },
+    { key: 'friends', label: '同行' },
+    { key: 'remark', label: '备注' },
+    { key: 'rating', label: '评分' },
+    { key: 'date', label: '演出时间' },
+    { key: 'cover', label: '封面' },
+    { key: 'active_status', label: '演出状态' }
+  ];
+  // 座位/同行与时间/封面/状态/评分同属「每场大概率不同」的个人信息，默认不勾。
+  const COPY_DEFAULT_OFF = new Set(['date', 'cover', 'active_status', 'rating', 'seat', 'friends']);
+
+  const COPY_SEARCH_PAGE = 20; // 每页搜索结果数
+  let copySearch = $state('');
+  let copySearching = $state(false);
+  let copyResults = $state([]);
+  let copyTotal = $state(0);
+  let copyLimit = $state(COPY_SEARCH_PAGE);
+  let copySource = $state(null);
+  let copyApplied = $state(false);
+  let copyFields = $state(
+    Object.fromEntries(COPY_FIELD_DEFS.map((f) => [f.key, !COPY_DEFAULT_OFF.has(f.key)]))
+  );
+  let copySearchTimer = null;
+
+  function defaultCopyFields() {
+    return Object.fromEntries(COPY_FIELD_DEFS.map((f) => [f.key, !COPY_DEFAULT_OFF.has(f.key)]));
+  }
+
+  // 源记录对应字段的取值预览；空值返回 ''，对应勾选项整行隐藏。
+  function copyFieldPreview(key, src) {
+    const money = (v, c) => (v ? `${v} ${c || 'CNY'}` : '');
+    switch (key) {
+      case 'name': return src.name || '';
+      case 'categoryNames':
+        return (src.categoryNames && src.categoryNames.length
+          ? src.categoryNames
+          : src.categoryName
+            ? [src.categoryName]
+            : []
+        ).join('、');
+      case 'city': return src.city || '';
+      case 'address': return src.address || '';
+      case 'coord':
+        return src.coordinate ? `${src.coordinate.latitude}, ${src.coordinate.longitude}` : '';
+      case 'company': return src.company || '';
+      case 'channel': return src.channel || '';
+      case 'artists': return (src.artist_names || []).join('、');
+      case 'dramas': return (src.play || []).filter(Boolean).join('、');
+      case 'price': return money(src.price, src.price_currency);
+      case 'pay_price': return money(src.pay_price, src.pay_price_currency);
+      case 'other_cost': return money(src.other_cost, src.other_cost_currency);
+      case 'seat': return src.seat || '';
+      case 'friends': return src.friends || '';
+      case 'remark': return src.remark || '';
+      case 'rating': return src.rating ? `${src.rating} 分` : '';
+      case 'date':
+        return src.dateText
+          ? src.dateText.slice(0, 16)
+          : src.date
+            ? fmtDateLocal(src.date).replace('T', ' ')
+            : '';
+      case 'cover': return src.coverFile ? '有封面' : '';
+      case 'active_status': return src.active_status ? STATUS_LABELS[src.active_status] || '' : '';
+      default: return '';
+    }
+  }
+
+  const truncPreview = (s, n = 22) => (s.length > n ? s.slice(0, n) + '…' : s);
+
+  // 只展示源记录里有值的字段，每项带取值预览，方便决定是否勾选。
+  let copyFieldRows = $derived(
+    copySource
+      ? COPY_FIELD_DEFS.map((f) => ({ ...f, preview: copyFieldPreview(f.key, copySource) }))
+          .filter((r) => r.preview)
+      : []
+  );
+
+  function onCopySearchInput() {
+    clearTimeout(copySearchTimer);
+    copyLimit = COPY_SEARCH_PAGE; // 新关键词从头翻页
+    copySearchTimer = setTimeout(doCopySearch, 260);
+  }
+
+  async function doCopySearch() {
+    const q = copySearch.trim();
+    if (!q) {
+      copyResults = [];
+      copyTotal = 0;
+      return;
+    }
+    copySearching = true;
+    try {
+      const res = await api.listRecords({ q, limit: copyLimit });
+      copyResults = res.records || [];
+      copyTotal = res.total || 0;
+    } catch (e) {
+      copyResults = [];
+      copyTotal = 0;
+    } finally {
+      copySearching = false;
+    }
+  }
+
+  async function loadMoreCopyResults() {
+    copyLimit += COPY_SEARCH_PAGE;
+    await doCopySearch();
+  }
+
+  function pickCopySource(r) {
+    copySource = r;
+    copyApplied = false;
+    copyResults = [];
+    copyTotal = 0;
+    copyLimit = COPY_SEARCH_PAGE;
+    copySearch = '';
+    copyFields = defaultCopyFields();
+  }
+
+  function resetCopySource() {
+    copySource = null;
+    copyApplied = false;
+    copySearch = '';
+    copyResults = [];
+    copyTotal = 0;
+    copyLimit = COPY_SEARCH_PAGE;
+  }
+
+  // 下拉候选里显示前 3 位演员，超出显示总人数
+  function artistPreview(r) {
+    const names = r.artist_names || [];
+    if (!names.length) return '';
+    const head = names.slice(0, 3).join('、');
+    return names.length > 3 ? `${head} 等${names.length}人` : head;
+  }
+
+  function fmtDateLocal(ts) {
+    if (!ts) return '';
+    const d = new Date(ts * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function applyCopy() {
+    const src = copySource;
+    if (!src) return;
+    const on = (k) => !!copyFields[k];
+
+    if (on('name')) form.name = src.name || '';
+    if (on('categoryNames')) {
+      form.categoryNames = (src.categoryNames && src.categoryNames.length
+        ? src.categoryNames
+        : src.categoryName
+          ? [src.categoryName]
+          : []
+      ).slice();
+    }
+    if (on('city')) form.city = src.city || '';
+    if (on('address')) form.address = src.address || '';
+    if (on('coord')) {
+      form.lat = src.coordinate ? (src.coordinate.latitude ?? '') : '';
+      form.lng = src.coordinate ? (src.coordinate.longitude ?? '') : '';
+    }
+    // 地址变了而坐标没复制：清掉"已解析"标记让自动定位接管；
+    // 地址和坐标都复制了：标记已解析，避免地理编码把复制的坐标覆盖掉。
+    if (on('address')) {
+      lastGeocoded = on('coord') && src.coordinate ? form.address : '';
+    }
+    if (on('company')) form.company = src.company || '';
+    if (on('channel')) form.channel = src.channel || '';
+    if (on('artists')) {
+      form.artist_ids = (src.artist_ids || []).slice();
+      const names = src.artist_names || [];
+      freeNames = names.filter(
+        (n) => !artistList.some((a) => a.name === n) && !freeNames.includes(n)
+      );
+    }
+    if (on('dramas')) {
+      form.drama_ids = (src.drama_ids || []).slice();
+      form.zhezi_ids = (src.zhezi_ids || []).slice();
+    }
+    if (on('price')) {
+      form.price = src.price || 0;
+      form.price_currency = src.price_currency || 'CNY';
+    }
+    if (on('pay_price')) {
+      form.pay_price = src.pay_price || 0;
+      form.pay_price_currency = src.pay_price_currency || 'CNY';
+    }
+    if (on('other_cost')) {
+      form.other_cost = src.other_cost || 0;
+      form.other_cost_currency = src.other_cost_currency || 'CNY';
+    }
+    if (on('seat')) form.seat = src.seat || '';
+    if (on('friends')) form.friends = src.friends || '';
+    if (on('remark')) form.remark = src.remark || '';
+    if (on('rating')) form.rating = src.rating || 0;
+    if (on('date')) form.date_local = fmtDateLocal(src.date);
+    if (on('cover')) {
+      form.coverFile = src.coverFile || '';
+      form.coverThumb = src.coverThumb || '';
+    }
+    if (on('active_status')) form.active_status = src.active_status || 0;
+    copyApplied = true;
+  }
+
+  onDestroy(() => clearTimeout(copySearchTimer));
 </script>
 
 <form class="form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} onkeydown={(e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault(); }}>
 <div class="two-col">
   <div class="col-left">
+  {#if !record}
+  <!-- ============ 从既往演出复制 ============ -->
+  <div class="card section copy-card">
+    <h3>从既往演出复制</h3>
+    {#if !copySource}
+      <input
+        class="input"
+        spellcheck="false"
+        bind:value={copySearch}
+        oninput={onCopySearchInput}
+        placeholder="搜索演出名称、演员、城市、剧团…"
+      />
+      <p class="copy-hint muted">支持空格分隔多关键词，如「牡丹亭 上海」（每个词命中任意字段即可，需同时满足）；每次显示 20 条，超出可点「显示更多」。勾选项只列出这条演出有值的字段。</p>
+      {#if copySearching && copyResults.length === 0}
+        <div class="copy-hint muted">搜索中…</div>
+      {:else if copySearch.trim() && !copySearching && copyResults.length === 0}
+        <div class="copy-hint muted">没有匹配的演出</div>
+      {:else if copyResults.length}
+        <div class="copy-results">
+          {#each copyResults as r (r.id)}
+            <button type="button" class="copy-item" onclick={() => pickCopySource(r)}>
+              <span class="copy-name">{r.name}</span>
+              <span class="copy-meta">
+                {r.dateText ? r.dateText.slice(0, 10) : '无日期'}{r.city ? ' · ' + r.city : ''}{r.address ? ' · ' + r.address : ''}{artistPreview(r) ? ' · ' + artistPreview(r) : ''}
+              </span>
+            </button>
+          {/each}
+        </div>
+        {#if copyResults.length < copyTotal}
+          <button type="button" class="btn ghost copy-more" disabled={copySearching} onclick={loadMoreCopyResults}>
+            {copySearching ? '加载中…' : `显示更多（已显示 ${copyResults.length} / 共 ${copyTotal} 场）`}
+          </button>
+        {/if}
+      {/if}
+    {:else}
+      <div class="copy-source">
+        <div class="copy-src-info">
+          <span class="copy-name">{copySource.name}</span>
+          <span class="copy-meta">
+            {copySource.dateText ? copySource.dateText.slice(0, 10) : '无日期'}{copySource.city ? ' · ' + copySource.city : ''}
+          </span>
+        </div>
+        <button type="button" class="btn ghost" onclick={resetCopySource}>重选</button>
+      </div>
+      <div class="copy-fields">
+        {#each copyFieldRows as f (f.key)}
+          <label class="copy-field" title={f.preview}>
+            <input type="checkbox" bind:checked={copyFields[f.key]} />
+            <span class="copy-field-body">
+              <span class="copy-field-label">{f.label}</span>
+              <span class="copy-field-val">
+                {#if f.key === 'cover'}
+                  <img class="copy-cover-thumb" src={coverUrl(copySource.coverThumb || copySource.coverFile)} alt="" />
+                {/if}
+                {truncPreview(f.preview)}
+              </span>
+            </span>
+          </label>
+        {/each}
+        {#if copyFieldRows.length === 0}
+          <div class="copy-hint muted">这条演出没有可复制的内容</div>
+        {/if}
+      </div>
+      <div class="copy-actions">
+        <button type="button" class="btn" onclick={applyCopy}>复制所选字段</button>
+        {#if copyApplied}<span class="copy-ok">已复制 ✓ 可继续修改</span>{/if}
+      </div>
+    {/if}
+  </div>
+  {/if}
   <!-- ============ 基本信息 ============ -->
   <div class="card section">
     <h3>基本信息</h3>
@@ -849,7 +1142,7 @@
       </div>
       <div class="f-sm">
         <label>票价</label>
-        <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.price} />{#if settings.multi_currency}<input class="input cur" spellcheck="false" bind:value={form.price_currency} />{/if}</div>
+        <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.price} />{#if settings.multi_currency}<select class="input cur" bind:value={form.price_currency}>{#each currencyOptions(form.price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
       </div>
       {#if settings.show_pay_price}
         <div class="f-sm">
@@ -966,7 +1259,7 @@
     <label>剧目</label>
     <div class="ply">
       {#if chosenDramas.length === 0}
-        <div class="ply-empty muted tiny">尚未关联剧目。从下方选择或新建一个剧目档案。</div>
+        <div class="ply-empty muted tiny">尚未关联剧目。从下方选择或新建一个剧目。</div>
       {/if}
       {#each orderedChosenDramas as d, di (d.id)}
         <div
@@ -1061,7 +1354,7 @@
         {/if}
       </div>
       <details class="ply-new">
-        <summary class="small">＋ 新建剧目档案</summary>
+        <summary class="small">＋ 新建剧目</summary>
         <div class="ply-new-body">
           <div class="row">
             <input class="input" spellcheck="false" placeholder="剧目，如：牡丹亭" bind:value={newDrama.name} onkeydown={(e) => e.key === 'Enter' && createNewDrama()} />
@@ -1132,14 +1425,21 @@
 
   /* 字段宽度档位：短字段不独占整行（需压过全局 .row > * 的 flex:1） */
   .row > .f-xs { flex: 0 1 130px; min-width: 110px; }
-  .row > .f-sm { flex: 0 1 200px; min-width: 150px; }
+  /* grow 1：换行后最后一个字段拉伸占满剩余宽度，避免货币下拉右侧大片留白 */
+  .row > .f-sm { flex: 1 1 200px; min-width: 150px; }
   .row > .f-md { flex: 1 1 240px; min-width: 180px; }
   .row > .f-lg { flex: 2.4 1 320px; min-width: 220px; }
   /* 演出时间：datetime-local 内容固定且偏宽，给略宽于 f-sm 的固定档 */
   .row > .f-dt { flex: 0 1 215px; min-width: 180px; }
 
   .money { display: flex; gap: 6px; }
-  .money .cur { max-width: 76px; }
+  /* 货币框收窄并让文字居中：默认左对齐 + 34px 箭头预留位会让 CNY 右侧
+     剩下一截空白。select 右侧仍留箭头位，只是收窄并居中文字。 */
+  /* 货币框宽度自适应最宽选项（币种都是 3 字母代码，约 30px），文字之后
+     只剩紧贴箭头的一点间隙。不依赖 select 的文字居中：Chromium 渲染
+     <select> 闭合文本既不理 text-align 也不理 text-align-last。 */
+  .money .cur { width: auto; max-width: none; min-width: 0; flex: 0 0 auto; }
+  .money select.cur { padding-left: 9px; padding-right: 24px; }
 
   /* 坐标：场馆的子字段（缩进 + 左侧竖线表示从属） */
   .sub-field {
@@ -1399,7 +1699,64 @@
   .combo-item:hover { background: var(--accent-soft); color: var(--accent); }
   .combo-item.create { color: var(--accent); font-weight: 500; }
   .combo-empty { padding: 10px 12px; color: var(--text-3); font-size: 13px; }
-  .ply-new { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; flex: 1; }
+  /* 收起时收缩到「＋ 新建剧目」文字宽度（此前固定占 1/3 宽，文字右侧
+     全是空白边框）；展开后独占整行，新建表单有足够空间。 */
+  .ply-new {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    flex: 0 0 auto;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .ply-new[open] { flex: 1 1 100%; }
   .ply-new summary { cursor: pointer; color: var(--accent); }
   .ply-new-body { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* ---------- 从既往演出复制 ---------- */
+  .copy-hint { padding: 6px 2px 0; font-size: 13px; }
+  .copy-results {
+    margin-top: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 10px);
+    overflow: hidden;
+    max-height: 264px;
+    overflow-y: auto;
+  }
+  .copy-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    text-align: left;
+    padding: 8px 12px;
+    background: var(--surface);
+    border: none;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+  }
+  .copy-item:last-child { border-bottom: none; }
+  .copy-more { margin-top: 8px; width: 100%; }
+  .copy-item:hover { background: var(--accent-softer); }
+  .copy-name { font-weight: 600; }
+  .copy-meta { font-size: 12px; color: var(--text-3); }
+  .copy-source { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .copy-src-info { display: flex; flex-direction: column; gap: 2px; }
+  .copy-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 8px 14px;
+    margin: 14px 0;
+  }
+  .copy-field { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; cursor: pointer; min-width: 0; }
+  .copy-field-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .copy-field-label { font-weight: 500; }
+  .copy-field-val { color: var(--text-3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px; display: flex; align-items: center; gap: 4px; }
+  .copy-cover-thumb { width: 22px; height: 30px; object-fit: cover; border-radius: 3px; flex: none; }
+  .copy-actions { display: flex; align-items: center; gap: 12px; }
+  .copy-ok { color: var(--success); font-size: 13px; }
 </style>

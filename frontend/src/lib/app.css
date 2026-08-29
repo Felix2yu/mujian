@@ -213,6 +213,15 @@ a { color: inherit; text-decoration: none; }
     outline: none;
   }
 .input::placeholder { color: var(--text-3); }
+/* 暗色模式下输入框与卡片底色太接近（#221e1c vs #1c1917），整体糊成一片：
+   提亮底色与边框、占位符用更亮的灰。 */
+:root.dark .input,
+:root.dark select.input,
+:root.dark textarea.input {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+:root.dark .input::placeholder { color: var(--text-muted); }
 .input:not(textarea) { height: 40px; }
 select.input {
   -webkit-appearance: none;
@@ -238,6 +247,18 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.6; }
 label { display: block; font-size: 13px; font-weight: 500; color: var(--text-2); margin: 14px 0 6px; }
 
 .row { display: flex; gap: 12px; flex-wrap: wrap; }
+/* 窄屏：字段宽度档位（f-sm=200px 等）是为并排设计的，单独换行后就是一条
+   窄输入框，右侧大片留白。小屏直接改为纵向堆叠、每个字段占满整行。 */
+@media (max-width: 640px) {
+  .row { flex-direction: column; gap: 10px; }
+  .row > * { width: 100%; }
+  .row > .f-xs, .row > .f-sm, .row > .f-md, .row > .f-lg, .row > .f-dt {
+    /* !important：压过 RecordForm 组件内后加载的 .row > .f-* { flex: … }，
+       否则列方向下 flex-basis(320px) 会变成高度，把字段撑出大片空白 */
+    flex: 0 0 auto !important;
+    min-width: 0;
+  }
+}
 .row > * { flex: 1; min-width: 150px; }
 
 /* ============ 徽章 / 标签 ============ */
