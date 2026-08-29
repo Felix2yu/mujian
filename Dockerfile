@@ -39,10 +39,11 @@ RUN apt-get update \
 ENV TZ=Asia/Shanghai PUID=1000 PGID=1000 ALLOW_LOCAL_STORAGE=true
 WORKDIR /app
 
-COPY bin/mujian ./mujian
-COPY dist ./dist
-RUN chmod +x ./mujian \
-    && chown -R ubuntu:ubuntu /app
+# --chown/--chmod fold what used to be a separate chmod/chown RUN layer into
+# the COPY itself: the binary and dist change on every push anyway, but the
+# fewer layers after the (weekly-busted) apt layer, the less BuildKit redoes.
+COPY --chown=ubuntu:ubuntu --chmod=755 bin/mujian ./mujian
+COPY --chown=ubuntu:ubuntu dist ./dist
 
 EXPOSE 8080
 CMD ["sh", "-c", "exec su -s /bin/sh ubuntu -c './mujian'"]
