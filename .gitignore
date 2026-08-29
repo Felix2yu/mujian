@@ -37,3 +37,4 @@ reasonix.toml
 # 记录现场 export (本地导出数据，含封面图片，不纳入仓库)
 recordlive_export/
 frontend/static/sw.js
+outputs/
