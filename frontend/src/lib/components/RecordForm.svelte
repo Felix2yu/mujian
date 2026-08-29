@@ -590,7 +590,8 @@
 
   function pickCover(c) {
     form.coverFile = c.file_name;
-    form.coverThumb = '';
+    // 选择器已解析出缩略图 key：带上它，详情页/列表不必加载 2000px 原图
+    form.coverThumb = c.thumb || '';
   }
 
   function splitList(s) {
@@ -1372,7 +1373,7 @@
     <h3>封面</h3>
     <div class="cover-layout">
       {#if form.coverFile}
-        <img class="preview" src={coverUrl(form.coverFile)} alt="封面预览" />
+        <img class="preview" src={coverUrl(form.coverThumb || form.coverFile)} alt="封面预览" />
       {/if}
       <div class="cover-main">
         <div class="upload-row">

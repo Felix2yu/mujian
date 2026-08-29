@@ -196,6 +196,23 @@ func main() {
 	backupMgr.Start()
 	defer backupMgr.Stop()
 
+	// 回收站自动清理：启动时 + 每 24 小时清掉 30 天前的软删除记录。
+	go func() {
+		purge := func() {
+			if n, err := database.PurgeExpiredDeletedRecords(30 * 24 * time.Hour); err != nil {
+				slog.Warn("purge expired trash", "err", err)
+			} else if n > 0 {
+				slog.Info("purged expired trash", "records", n)
+			}
+		}
+		purge()
+		t := time.NewTicker(24 * time.Hour)
+		defer t.Stop()
+		for range t.C {
+			purge()
+		}
+	}()
+
 	h := handlers.New(database, cfg, st, backupMgr)
 	r.Mount("/api", authMiddleware(cfg)(h.Routes()))
 

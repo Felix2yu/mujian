@@ -214,6 +214,18 @@ export const api = {
   updateSettings: (data) => request('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
 
   backupRun: () => request('/api/backup/run', { method: 'POST' }),
+  listRecordPhotos: (id) => request(`/api/records/${id}/photos`),
+  addRecordPhoto: (id, key) => request(`/api/records/${id}/photos`, { method: 'POST', body: JSON.stringify({ key }) }),
+  deleteRecordPhoto: (id, pid) => request(`/api/records/${id}/photos/${pid}`, { method: 'DELETE' }),
+  reorderRecordPhotos: (id, ids) => request(`/api/records/${id}/photos/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
+  listDeletedRecords: () => request('/api/records/deleted'),
+  restoreRecord: (id) => request(`/api/records/${id}/restore`, { method: 'POST' }),
+  purgeRecord: (id) => request(`/api/records/${id}/purge`, { method: 'DELETE' }),
+  purgeRecordsTrash: () => request('/api/records/trash/purge', { method: 'POST' }),
+  backupList: () => request('/api/backup/list'),
+  backupDownloadUrl: (file) => `${API_BASE}/api/backup/download?file=${encodeURIComponent(file)}`,
+  backupRestoreFrom: (file) => request('/api/backup/restore-from', { method: 'POST', body: JSON.stringify({ file }) }),
+  backupDelete: (file) => request(`/api/backup?file=${encodeURIComponent(file)}`, { method: 'DELETE' }),
 
   uploadFile: async (file) => {
     const form = new FormData();

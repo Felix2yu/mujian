@@ -24,6 +24,10 @@ func (db *DB) Export() (*models.ExportData, error) {
 	if err != nil {
 		return nil, fmt.Errorf("export meta: %w", err)
 	}
+	photos, err := db.ListAllRecordPhotos()
+	if err != nil {
+		return nil, fmt.Errorf("export record photos: %w", err)
+	}
 
 	return &models.ExportData{
 		Source:       "mujian",
@@ -35,6 +39,7 @@ func (db *DB) Export() (*models.ExportData, error) {
 		Meta:         *meta,
 		Records:      records,
 		Categories:   categories,
+		RecordPhotos: photos,
 	}, nil
 }
 
@@ -77,6 +82,13 @@ func (db *DB) ImportData(data *models.ExportData) (*ImportResult, error) {
 
 	if err := db.SetMetaTx(tx, &data.Meta); err != nil {
 		return nil, fmt.Errorf("import meta: %w", err)
+	}
+
+	// 票根关联：按 record_id 整体替换（旧版导出无该字段则跳过）。
+	for _, p := range data.RecordPhotos {
+		if err := db.replaceRecordPhotosTx(tx, p.RecordID, p); err != nil {
+			return nil, fmt.Errorf("import record photo %s: %w", p.FileName, err)
+		}
 	}
 
 	return result, tx.Commit()

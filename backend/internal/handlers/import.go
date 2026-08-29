@@ -114,7 +114,13 @@ func (h *Handler) importZIP(w http.ResponseWriter, file io.Reader) {
 		jsonErr(w, 400, "invalid zip archive: "+err.Error())
 		return
 	}
+	h.importZipArchive(w, zr)
+}
 
+// importZipArchive detects the data file inside zr (记录现场 or converted
+// layout), imports it and materializes covers. Shared by the upload import
+// endpoint and restore-from-backup.
+func (h *Handler) importZipArchive(w http.ResponseWriter, zr *zip.Reader) {
 	var data models.ExportData
 	switch entry := findZipBySuffix(zr, "ji_lu_xian_chang.android"); {
 	case entry != nil:

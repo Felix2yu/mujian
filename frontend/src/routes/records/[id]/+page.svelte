@@ -20,24 +20,23 @@
   let zheziMap = $state(new Map());
 
   // 封面灯箱：点击放大查看
-  let lightbox = $state(false);
   // 列表/详情显示缩略图优先，灯箱使用原图
   const thumbSrc = $derived(rec?.coverThumb || rec?.coverFile || '');
   const fullSrc = $derived(rec?.coverFile || rec?.coverThumb || '');
 
   // 灯箱打开时锁定背景滚动，Esc 关闭
   $effect(() => {
-    if (!lightbox) return;
+    if (!lightbox && !lightboxSrc) return;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
   });
 
   function onWindowKeydown(e) {
-    if (e.key === 'Escape') lightbox = false;
+    if (e.key === 'Escape') { lightbox = false; lightboxSrc = ''; }
   }
 
   function openLightbox() {
-    if (fullSrc) lightbox = true;
+    if (fullSrc) { lightbox = true; lightboxSrc = fullSrc; }
   }
 
   function dramaName(id) {
@@ -78,6 +77,59 @@
 
   const statusLabel = STATUS_LABELS;
 
+  // 票根/现场照
+  let photos = $state([]);
+  let photoBusy = $state('');
+  let photoFile = $state(null);
+  let photoFileList = $state(null);
+  let lightboxSrc = $state(''); // 空字符串 = 关闭；支持封面与多张照片
+  let lightbox = $state(false);
+
+  async function loadPhotos() {
+    try {
+      const res = await api.listRecordPhotos(id);
+      photos = res.photos || [];
+    } catch (e) { photos = []; }
+  }
+  async function addPhoto() {
+    if (!photoFile) return;
+    photoBusy = 'add';
+    try {
+      const up = await api.uploadFile(photoFile);
+      await api.addRecordPhoto(id, up.key);
+      photoFile = null;
+      await loadPhotos();
+    } catch (e) {
+      error = e.message;
+    } finally {
+      photoBusy = '';
+    }
+  }
+  async function removePhoto(p) {
+    if (!confirm('移除这张照片？图片文件保留在服务器，可由封面清理统一回收。')) return;
+    photoBusy = p.id;
+    try {
+      await api.deleteRecordPhoto(id, p.id);
+      if (lightboxSrc === coverUrl(p.file_name)) { lightbox = false; lightboxSrc = ''; }
+      await loadPhotos();
+    } finally {
+      photoBusy = '';
+    }
+  }
+  async function movePhoto(p, dir) {
+    const ids = photos.map((x) => x.id);
+    const i = ids.indexOf(p.id);
+    const j = i + dir;
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    photos = ids.map((pid) => photos.find((x) => x.id === pid)); // 乐观更新
+    await api.reorderRecordPhotos(id, ids).catch(loadPhotos);
+  }
+
+  // 相关演出：同剧目 / 同场馆（不含自身，各取最近 6 场）
+  let relatedDrama = $state([]);
+  let relatedVenue = $state([]);
+
   async function load() {
     loading = true;
     error = '';
@@ -89,6 +141,8 @@
       for (const d of tree) {
         for (const z of d.zhezis || []) zheziMap.set(z.id, { ...z, dramaId: d.id, dramaName: d.name });
       }
+      loadRelated(r);
+      loadPhotos();
     } catch (e) {
       error = e.message;
     } finally {
@@ -96,8 +150,29 @@
     }
   }
 
+  async function loadRelated(r) {
+    relatedDrama = [];
+    relatedVenue = [];
+    const tasks = [];
+    if (r.drama_ids?.length) {
+      tasks.push(
+        api.listRecords({ drama: r.drama_ids[0], limit: 8 }).then((res) => {
+          relatedDrama = (res.records || []).filter((x) => x.id !== r.id).slice(0, 6);
+        }).catch(() => {})
+      );
+    }
+    if (r.address) {
+      tasks.push(
+        api.getByField('address', r.address).then((res) => {
+          relatedVenue = (res || []).filter((x) => x.id !== r.id).slice(0, 6);
+        }).catch(() => {})
+      );
+    }
+    await Promise.all(tasks);
+  }
+
   async function remove() {
-    if (!confirm('确定删除这条记录？此操作不可恢复。')) return;
+    if (!confirm('确定删除这条演出？删除后进入回收站，30 天内可在「数据」页恢复。')) return;
     deleting = true;
     try {
       await api.deleteRecord(id);
@@ -229,6 +304,34 @@
       </div>
     {/if}
 
+    {#if relatedDrama.length || relatedVenue.length}
+      <div class="card section">
+        <h3>相关演出</h3>
+        {#if relatedDrama.length}
+          <p class="rel-label muted tiny">同剧目其他场次</p>
+          <div class="rel-list">
+            {#each relatedDrama as x (x.id)}
+              <a class="rel-item" href={`/records/${x.id}`}>
+                <span class="rel-name">{x.name}</span>
+                <span class="rel-meta">{x.dateText ? x.dateText.slice(0, 10) : ''}{x.city ? ' · ' + x.city : ''}</span>
+              </a>
+            {/each}
+          </div>
+        {/if}
+        {#if relatedVenue.length}
+          <p class="rel-label muted tiny">同场馆「{rec.address}」其他场次</p>
+          <div class="rel-list">
+            {#each relatedVenue as x (x.id)}
+              <a class="rel-item" href={`/records/${x.id}`}>
+                <span class="rel-name">{x.name}</span>
+                <span class="rel-meta">{x.dateText ? x.dateText.slice(0, 10) : ''}{x.city ? ' · ' + x.city : ''}</span>
+              </a>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
+
     <div class="cards-row">
       <div class="card section">
         <h3>演出信息</h3>
@@ -284,6 +387,32 @@
       </div>
     </div>
 
+    <div class="card section">
+      <h3>照片（票根 / 现场照）</h3>
+        <div class="photo-actions">
+          <label class="btn sm" class:disabled={photoBusy === 'add'}>
+            {photoBusy === 'add' ? '上传中…' : '⇪ 添加照片'}
+            <input type="file" accept="image/*" hidden bind:files={photoFileList} onchange={(e) => { photoFile = e.target.files?.[0] || null; addPhoto(); e.target.value = ''; }} />
+          </label>
+          {#if !photos.length}<span class="hint">还没有照片。上传后点击可看大图。</span>{/if}
+        </div>
+        {#if photos.length}
+          <div class="photo-grid">
+            {#each photos as p, i (p.id)}
+              <div class="photo-cell">
+                <img src={coverUrl(p.file_name)} alt="照片 {i + 1}" loading="lazy" onclick={() => { lightbox = true; lightboxSrc = p.file_name; }} />
+                <div class="photo-ops">
+                  <button type="button" onclick={() => movePhoto(p, -1)} disabled={i === 0} aria-label="前移">◀</button>
+                  <button type="button" onclick={() => removePhoto(p)} disabled={photoBusy === p.id} aria-label="删除">✕</button>
+                  <button type="button" onclick={() => movePhoto(p, 1)} disabled={i === photos.length - 1} aria-label="后移">▶</button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+
+    </div>
+
     {#if rec.remark}
       <div class="card section">
         <h3>备注</h3>
@@ -293,9 +422,9 @@
   </div>
 {/if}
 
-{#if lightbox && fullSrc}
-  <button type="button" class="lightbox" onclick={() => (lightbox = false)} aria-label="关闭大图" transition:fade={{ duration: 150 }}>
-    <img src={coverUrl(fullSrc)} alt={rec.name} transition:scale={{ start: 0.96, duration: 180 }} />
+{#if lightbox && lightboxSrc}
+  <button type="button" class="lightbox" onclick={() => { lightbox = false; lightboxSrc = ''; }} aria-label="关闭大图" transition:fade={{ duration: 150 }}>
+    <img src={coverUrl(lightboxSrc)} alt={rec.name} transition:scale={{ start: 0.96, duration: 180 }} />
   </button>
 {/if}
 
@@ -496,4 +625,30 @@
     .cards-row { grid-template-columns: 1fr; }
     h1 { font-size: 22px; }
   }
+
+  .rel-label { margin: 10px 0 6px; }
+  .rel-list { display: flex; flex-direction: column; gap: 6px; }
+  .rel-item {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm, 8px);
+    color: inherit; text-decoration: none;
+  }
+  .rel-item:hover { border-color: var(--accent); background: var(--accent-softer); }
+  .rel-name { font-weight: 500; font-size: 13.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rel-meta { color: var(--text-3); font-size: 12px; flex: none; }
+
+  .photo-actions { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+  .photo-cell { position: relative; border: 1px solid var(--border); border-radius: var(--radius-sm, 8px); overflow: hidden; background: var(--surface-3); }
+  .photo-cell img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block; cursor: zoom-in; }
+  .photo-ops {
+    position: absolute; inset: auto 0 0 0; display: flex; justify-content: center; gap: 6px;
+    padding: 4px; background: rgb(0 0 0 / 0.45); opacity: 0; transition: opacity 0.15s;
+  }
+  .photo-cell:hover .photo-ops { opacity: 1; }
+  .photo-ops button {
+    border: none; background: rgb(255 255 255 / 0.85); color: #111; border-radius: 5px;
+    width: 24px; height: 22px; font-size: 11px; cursor: pointer; line-height: 1;
+  }
+  .photo-ops button:disabled { opacity: 0.4; cursor: default; }
 </style>

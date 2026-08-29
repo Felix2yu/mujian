@@ -72,7 +72,7 @@
         <div class="grid">
           {#each covers as c}
             <button class="item" onclick={() => pick(c)} title={c.sample_name || c.file_name}>
-              <img src={coverUrl(c.file_name)} alt={c.sample_name} loading="lazy" />
+              <img src={coverUrl(c.thumb || c.file_name)} alt={c.sample_name} loading="lazy" />
               <span class="iname">{c.sample_name || c.file_name}</span>
               <span class="iref">{c.ref_count} 条引用</span>
             </button>

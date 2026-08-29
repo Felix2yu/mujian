@@ -99,6 +99,8 @@
     { v: 'zip', label: '数据 + 封面（.zip）', hint: 'data.json 加全部封面文件，可从「数据」页导入完整恢复' }
   ];
   let backupFormat = $state('db');
+  let backupRemote = $state(false);
+  const s3Ready = $derived(!!(settings.s3_bucket?.trim() && settings.s3_access_key?.trim()));
   let backupInterval = $state(0);
   // 存量值不在预设档位时（如旧配置的 6 小时）动态补一个选项，避免下拉显示空白
   let intervalOptions = $derived(
@@ -110,6 +112,38 @@
   let lastBackupAt = $state(0);
   let backupRunning = $state(false);
   let backupMsg = $state('');
+  let backups = $state([]);
+  let restoringFile = $state('');
+
+  function fmtSize(n) {
+    if (n >= 1 << 20) return (n / (1 << 20)).toFixed(1) + ' MB';
+    if (n >= 1 << 10) return (n / (1 << 10)).toFixed(0) + ' KB';
+    return n + ' B';
+  }
+  async function refreshBackups() {
+    try {
+      const res = await api.backupList();
+      backups = res.backups || [];
+    } catch (e) { /* 列表加载失败不打断页面 */ }
+  }
+  async function backupRestore(file) {
+    if (!confirm(`用 ${file} 恢复数据？现有同 ID 记录会被覆盖。`)) return;
+    restoringFile = file;
+    try {
+      await api.backupRestoreFrom(file);
+      backupMsg = '已从 ' + file + ' 恢复';
+      setTimeout(() => (backupMsg = ''), 6000);
+    } catch (e) {
+      backupMsg = '恢复失败：' + e.message;
+    } finally {
+      restoringFile = '';
+    }
+  }
+  async function backupRemove(file) {
+    if (!confirm(`删除备份 ${file}？此操作不可恢复。`)) return;
+    await api.backupDelete(file).catch((e) => (backupMsg = '删除失败：' + e.message));
+    refreshBackups();
+  }
 
   function loadPref(key, fallback) {
     try {
@@ -153,7 +187,9 @@
       backupInterval = typeof settings.backup_interval_hours === 'number' ? settings.backup_interval_hours : 0;
       backupKeep = typeof settings.backup_keep === 'number' ? settings.backup_keep : 10;
       backupFormat = ['db', 'json', 'zip'].includes(settings.backup_format) ? settings.backup_format : 'db';
+      backupRemote = settings.backup_remote === true;
       lastBackupAt = typeof settings.last_backup_at === 'number' ? settings.last_backup_at : 0;
+      refreshBackups();
     } catch (e) {
       error = e.message;
     } finally {
@@ -181,7 +217,8 @@
         multi_currency: settings.multi_currency,
         backup_interval_hours: backupInterval,
         backup_keep: Math.max(1, Number(backupKeep) || 10),
-        backup_format: backupFormat
+        backup_format: backupFormat,
+        backup_remote: backupRemote
       };
       if (settings.storage_type === 's3') {
         payload.s3_endpoint = settings.s3_endpoint.trim();
@@ -212,6 +249,7 @@
       const res = await api.backupRun();
       backupMsg = `已生成备份 ${res.file}`;
       lastBackupAt = Math.floor(Date.now() / 1000);
+      refreshBackups();
     } catch (e) {
       backupMsg = '备份失败：' + e.message;
     } finally {
@@ -359,78 +397,86 @@
       </select>
 
       {#if settings.storage_type === 's3'}
-        <div class="s3-grid">
-          <label class="field">
-            <span>S3 Endpoint</span>
-            <input class="input" type="text" bind:value={settings.s3_endpoint} placeholder="https://<accountid>.r2.cloudflarestorage.com" autocomplete="off" spellcheck="false" />
-            <span class="hint">兼容 AWS S3 / Cloudflare R2 / MinIO / OSS 等 S3 协议端点；AWS 官方 S3 可留空</span>
-          </label>
-          <label class="field">
-            <span>Bucket</span>
-            <input class="input" type="text" bind:value={settings.s3_bucket} placeholder="mujian" autocomplete="off" spellcheck="false" />
-          </label>
-          <label class="field">
-            <span>Region</span>
-            <input class="input" type="text" bind:value={settings.s3_region} placeholder="us-east-1" autocomplete="off" spellcheck="false" />
-          </label>
-          <label class="field">
-            <span>Access Key ID</span>
-            <input class="input" type="text" bind:value={settings.s3_access_key} autocomplete="off" spellcheck="false" />
-            <span class="hint">已配置的 Access Key 会以掩码显示；保持不变即可保留原值，填入新值可覆盖</span>
-          </label>
-          <label class="field">
-            <span>Secret Access Key</span>
-            <input class="input" type="password" bind:value={settings.s3_secret_key} placeholder={loadedS3Secret || '未设置'} autocomplete="new-password" />
-            <span class="hint">已配置的密钥会以掩码显示；保持不变即可保留原密钥，清空后保存可移除</span>
-          </label>
-          <label class="field">
-            <span>公网访问地址（Public URL）</span>
-            <input class="input" type="text" bind:value={settings.s3_public_url} placeholder="https://cdn.example.com/mujian" spellcheck="false" />
-            <span class="hint">前端从该地址直接加载封面，要求桶可公开读取或挂了 CDN；留空则回退到 /uploads/ 路径（仅当反向代理把该路径映射到桶时可用）</span>
-          </label>
+        {#if !settings.s3_bucket.trim() || !settings.s3_access_key.trim()}
+          <div class="banner error">⚠ 存储方式为 S3，但下方「S3 对象存储」卡片的 Bucket / Access Key 未填写，重启后仍会退回本地存储</div>
+        {:else}
+          <p class="hint-row">✓ S3 凭据已配置（见下方「S3 对象存储」卡片），保存并重启服务后生效</p>
+        {/if}
+        <p class="hint-row">切换存储方式不会自动迁移已有封面：切到 S3 后旧图仍留在本地磁盘，新上传的才会写入 S3；可在下方 S3 卡片中执行「把本地封面上传到 S3」实现无缝衔接</p>
+      {/if}
+    </div>
+
+    <div class="card sec">
+      <h3>S3 对象存储</h3>
+      <p class="tiny muted" style="margin: 0 0 10px;">封面存储与自动备份的 S3 推送共用这组凭据；无论当前存储方式如何都可在此配置。</p>
+      <div class="s3-grid">
+        <label class="field">
+          <span>S3 Endpoint</span>
+          <input class="input" type="text" bind:value={settings.s3_endpoint} placeholder="https://<accountid>.r2.cloudflarestorage.com" autocomplete="off" spellcheck="false" />
+          <span class="hint">兼容 AWS S3 / Cloudflare R2 / MinIO / OSS 等 S3 协议端点；AWS 官方 S3 可留空</span>
+        </label>
+        <label class="field">
+          <span>Bucket</span>
+          <input class="input" type="text" bind:value={settings.s3_bucket} placeholder="mujian" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="field">
+          <span>Region</span>
+          <input class="input" type="text" bind:value={settings.s3_region} placeholder="us-east-1" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="field">
+          <span>Access Key ID</span>
+          <input class="input" type="text" bind:value={settings.s3_access_key} autocomplete="off" spellcheck="false" />
+          <span class="hint">已配置的 Access Key 会以掩码显示；保持不变即可保留原值，填入新值可覆盖</span>
+        </label>
+        <label class="field">
+          <span>Secret Access Key</span>
+          <input class="input" type="password" bind:value={settings.s3_secret_key} placeholder={loadedS3Secret || '未设置'} autocomplete="new-password" />
+          <span class="hint">已配置的密钥会以掩码显示；保持不变即可保留原密钥，清空后保存可移除</span>
+        </label>
+        <label class="field">
+          <span>公网访问地址（Public URL）</span>
+          <input class="input" type="text" bind:value={settings.s3_public_url} placeholder="https://cdn.example.com/mujian" spellcheck="false" />
+          <span class="hint">前端从该地址直接加载封面，要求桶可公开读取或挂了 CDN；留空则回退到 /uploads/ 路径（仅当反向代理把该路径映射到桶时可用）</span>
+        </label>
+      </div>
+
+      {#if settings.storage_type === 's3' && (!settings.s3_bucket.trim() || !settings.s3_access_key.trim())}
+        <div class="banner error">⚠ 存储方式为 S3：Bucket 与 Access Key 必须填写，否则重启后仍会退回本地存储</div>
+      {:else if settings.s3_bucket.trim() && settings.s3_access_key.trim()}
+        <p class="hint-row">✓ S3 配置已就绪，保存并重启服务后生效</p>
+      {/if}
+
+      {#if settings.s3_bucket.trim() && settings.s3_access_key.trim()}
+        <div class="convert-actions">
+          <button
+            class="btn"
+            class:disabled={migrating}
+            onclick={runMigrateToS3}
+            disabled={migrating}
+          >
+            {#if migrating}
+              迁移中…
+            {:else}
+              把本地封面上传到 S3
+            {/if}
+          </button>
+          <span class="hint">按原 key 上传本地 covers/ 下的全部文件（含缩略图）；S3 中已存在的对象自动跳过，可重复执行。建议在切换存储方式前先运行，实现无缝衔接</span>
         </div>
 
-        {#if !settings.s3_bucket.trim() || !settings.s3_access_key.trim()}
-          <div class="banner error">⚠ Bucket 与 Access Key 未填写，重启后仍会退回本地存储</div>
-        {:else}
-          <p class="hint-row">✓ 配置已就绪，保存并重启服务后生效</p>
-        {/if}
-        <p class="hint-row">切换存储方式不会自动迁移已有封面：切到 S3 后旧图仍留在本地磁盘（配好 Public URL 前可能无法显示），新上传的才会写入 S3</p>
-
-        {#if settings.s3_bucket.trim() && settings.s3_access_key.trim()}
-          <div class="convert-actions">
-            <button
-              class="btn"
-              class:disabled={migrating}
-              onclick={runMigrateToS3}
-              disabled={migrating}
-            >
-              {#if migrating}
-                迁移中…
-              {:else}
-                把本地封面上传到 S3
-              {/if}
-            </button>
-            <span class="hint">按原 key 上传本地 covers/ 下的全部文件（含缩略图）；S3 中已存在的对象自动跳过，可重复执行。建议在切换存储方式前先运行，实现无缝衔接</span>
+        {#if migrating && migrateProgress.total > 0}
+          <div class="banner info">
+            <span>⏳ 迁移中… {migrateProgress.processed}/{migrateProgress.total}</span>
           </div>
+        {/if}
 
-          {#if migrating && migrateProgress.total > 0}
-            <div class="banner info">
-              <span>⏳ 迁移中… {migrateProgress.processed}/{migrateProgress.total}</span>
-            </div>
-          {/if}
-
-          {#if migrateResult}
-            <div class="banner success">
-              ✓ 共 {migrateResult.total} 个文件：新上传 {migrateResult.migrated}，已存在跳过 {migrateResult.skipped}{#if migrateResult.failed}，失败 {migrateResult.failed}{/if}
-            </div>
+        {#if migrateResult}
+          <div class="banner success">
+            ✓ 共 {migrateResult.total} 个文件：新上传 {migrateResult.migrated}，已存在跳过 {migrateResult.skipped}{#if migrateResult.failed}，失败 {migrateResult.failed}{/if}
+          </div>
           {/if}
           {#if migrateError}
             <div class="banner error">⚠ {migrateError}</div>
           {/if}
-        {/if}
-      {:else}
-        <p class="hint-row">封面文件保存在服务器 uploads 目录中</p>
       {/if}
     </div>
 
@@ -584,6 +630,17 @@
           <span>上次备份</span>
           <input class="input" readonly value={fmtBackupTime(lastBackupAt)} />
         </label>
+        <label class="field">
+          <span>备份后上传到 S3</span>
+          <input type="checkbox" bind:checked={backupRemote} disabled={!s3Ready} style="align-self: center;" />
+          <span class="hint">
+            {#if s3Ready}
+              每次备份成功后把该文件推送到上方「S3 对象存储」卡片的桶内 backups/ 目录（本机备份仍保留）
+            {:else}
+              需要先在「S3 对象存储」卡片填写完整的 Bucket 与 Access Key
+            {/if}
+          </span>
+        </label>
       </div>
       <div class="convert-actions" style="margin-top: 10px;">
         <button class="btn" disabled={backupRunning} onclick={runBackupNow}>
@@ -591,6 +648,31 @@
         </button>
         {#if backupMsg}<span class="hint" style="align-self: center;">{backupMsg}</span>{/if}
       </div>
+
+      {#if backups.length}
+        <div class="backup-list">
+          {#each backups as b (b.file)}
+            <div class="backup-row">
+              <span class="backup-name" title={b.file}>{b.file}</span>
+              <span class="backup-size">{fmtSize(b.size)}</span>
+              <span class="backup-time">{fmtBackupTime(b.modified)}</span>
+              <span class="backup-ops">
+                <a class="btn sm" href={api.backupDownloadUrl(b.file)} download>下载</a>
+                {#if b.file.endsWith('.json') || b.file.endsWith('.zip')}
+                  <button type="button" class="btn sm" disabled={restoringFile === b.file} onclick={() => backupRestore(b.file)}>
+                    {restoringFile === b.file ? '恢复中…' : '恢复'}
+                  </button>
+                {:else}
+                  <button type="button" class="btn sm" disabled title=".db 快照需停机后替换数据库文件恢复">恢复</button>
+                {/if}
+                <button type="button" class="btn sm danger" onclick={() => backupRemove(b.file)}>删除</button>
+              </span>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <p class="hint" style="margin-top: 10px;">还没有备份文件：点「立即备份」生成第一份，或开启自动备份。</p>
+      {/if}
       <p class="hint" style="margin-top: 8px;">修改间隔或保留份数后需点击页面底部的「保存」才会生效；重启服务不会重置备份节奏（按最近一份快照的时间续算）。</p>
     </div>
 
@@ -755,4 +837,20 @@
   }
   .status-opt input { accent-color: var(--accent); cursor: pointer; }
   .status-opt.on { border-color: var(--accent); background: var(--accent-softer); color: var(--accent); font-weight: 600; }
+
+  /* ---------- 自动备份列表 ---------- */
+  .backup-list { margin-top: 12px; border: 1px solid var(--border); border-radius: var(--radius, 10px); overflow: hidden; }
+  .backup-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .backup-row:last-child { border-bottom: none; }
+  .backup-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .backup-size { color: var(--text-3); font-size: 12px; flex: none; }
+  .backup-time { color: var(--text-3); font-size: 12px; flex: none; }
+  .backup-ops { display: flex; gap: 6px; flex: none; }
 </style>

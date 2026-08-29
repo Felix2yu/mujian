@@ -20,10 +20,12 @@ type Config struct {
 	// back by GetSettingsResponse.
 	AuthToken string `json:"-"`
 	// BackupIntervalHours: 0 = 自动备份关闭；BackupKeep: 快照保留份数；
-	// BackupFormat: db（VACUUM 快照）| json（data.json）| zip（data.json+封面）。
+	// BackupFormat: db（VACUUM 快照）| json（data.json）| zip（data.json+封面）；
+	// BackupRemote: 备份成功后推送到 S3。
 	BackupIntervalHours int    `json:"-"`
 	BackupKeep          int    `json:"-"`
 	BackupFormat        string `json:"-"`
+	BackupRemote        bool   `json:"-"`
 	Theme               string `json:"theme"`
 	StorageType         string `json:"storage_type"`
 	ImageFormat         string `json:"image_format"` // avif | webp | jpeg
@@ -56,6 +58,7 @@ func Load() *Config {
 		BackupIntervalHours: getEnvInt("BACKUP_INTERVAL_HOURS", 0),
 		BackupKeep:          getEnvInt("BACKUP_KEEP", 10),
 		BackupFormat:        getEnv("BACKUP_FORMAT", "db"),
+		BackupRemote:        os.Getenv("BACKUP_REMOTE") == "true",
 		Theme:               getEnv("THEME", "auto"),
 		StorageType:         getEnv("STORAGE_TYPE", "local"),
 		ImageFormat:         getEnv("IMAGE_FORMAT", "avif"),
@@ -165,6 +168,9 @@ func (c *Config) Update(s *SettingsUpdate) {
 			c.BackupFormat = *s.BackupFormat
 		}
 	}
+	if s.BackupRemote != nil {
+		c.BackupRemote = *s.BackupRemote
+	}
 }
 
 type SettingsUpdate struct {
@@ -186,6 +192,7 @@ type SettingsUpdate struct {
 	BackupIntervalHours *int    `json:"backup_interval_hours,omitempty"`
 	BackupKeep          *int    `json:"backup_keep,omitempty"`
 	BackupFormat        *string `json:"backup_format,omitempty"`
+	BackupRemote        *bool   `json:"backup_remote,omitempty"`
 }
 
 // maskSecret masks a credential for GET /api/settings: it never returns the
@@ -224,6 +231,7 @@ func (c *Config) GetSettingsResponse() map[string]interface{} {
 		"backup_interval_hours": c.BackupIntervalHours,
 		"backup_keep":           c.BackupKeep,
 		"backup_format":         c.BackupFormat,
+		"backup_remote":         c.BackupRemote,
 	}
 }
 
@@ -296,6 +304,13 @@ func (c *Config) GetBackupFormat() string {
 	return c.BackupFormat
 }
 
+// GetBackupRemote reports whether successful backups should be pushed to S3.
+func (c *Config) GetBackupRemote() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BackupRemote
+}
+
 // GetBackupKeep returns the snapshot retention count.
 func (c *Config) GetBackupKeep() int {
 	c.mu.RLock()
@@ -328,6 +343,7 @@ func (c *Config) SaveToFile(path string) error {
 		"backup_interval_hours": strconv.Itoa(c.BackupIntervalHours),
 		"backup_keep":           strconv.Itoa(c.BackupKeep),
 		"backup_format":         c.BackupFormat,
+		"backup_remote":         b2s(c.BackupRemote),
 	}
 
 	b, err := json.MarshalIndent(data, "", "  ")
@@ -413,6 +429,9 @@ func (c *Config) LoadFromFile(path string) error {
 		case "db", "json", "zip":
 			c.BackupFormat = v
 		}
+	}
+	if v, ok := data["backup_remote"]; ok {
+		c.BackupRemote = v == "true"
 	}
 
 	return nil

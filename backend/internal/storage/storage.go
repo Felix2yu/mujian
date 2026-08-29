@@ -57,6 +57,11 @@ type Storage interface {
 	// ListTrashKeys lists all keys currently in the trash area.
 	ListTrashKeys() ([]string, error)
 
+	// ThumbIndex maps a cover's base name (hash without extension) to the key
+	// of an existing thumbnail in any format; covers without a thumbnail are
+	// absent. One listing per call — batch callers should reuse the map.
+	ThumbIndex() map[string]string
+
 	// PurgeTrash permanently deletes all trash contents.
 	PurgeTrash() (int, error)
 
@@ -349,6 +354,29 @@ func (s *LocalStorage) ListTrashKeys() ([]string, error) {
 	return s.listKeys("covers_trash")
 }
 
+func (s *LocalStorage) ThumbIndex() map[string]string {
+	keys, err := s.listKeys("covers")
+	if err != nil {
+		return map[string]string{}
+	}
+	return buildThumbIndex(keys)
+}
+
+// buildThumbIndex indexes thumbnail keys by the cover base name (the part
+// before ".thumb."): "covers/<hash>.thumb.avif" → index["<hash>"].
+func buildThumbIndex(keys []string) map[string]string {
+	out := make(map[string]string, len(keys))
+	for _, k := range keys {
+		base := filepath.Base(k)
+		i := strings.Index(base, ".thumb.")
+		if i <= 0 {
+			continue
+		}
+		out[base[:i]] = k
+	}
+	return out
+}
+
 func (s *LocalStorage) listKeys(sub string) ([]string, error) {
 	dir := filepath.Join(s.uploadDir, sub)
 	entries, err := os.ReadDir(dir)
@@ -609,6 +637,14 @@ func (s *S3Storage) MoveCoverToTrash(key string) error {
 
 func (s *S3Storage) ListTrashKeys() ([]string, error) {
 	return s.listKeys("covers_trash/")
+}
+
+func (s *S3Storage) ThumbIndex() map[string]string {
+	keys, err := s.listKeys("covers/")
+	if err != nil {
+		return map[string]string{}
+	}
+	return buildThumbIndex(keys)
 }
 
 func (s *S3Storage) listKeys(prefix string) ([]string, error) {

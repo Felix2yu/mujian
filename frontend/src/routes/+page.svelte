@@ -4,7 +4,7 @@
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
   import { loadStatusFilter, ALL_STATUSES } from '$lib/statusPrefs.js';
-  import { loadPref } from '$lib/prefs.js';
+  import { loadPref, savePref } from '$lib/prefs.js';
   import RecordCard from '$lib/components/RecordCard.svelte';
   import OperaIcon from '$lib/components/OperaIcon.svelte';
   // BatchEditModal 改为按需动态加载（见 openBatchEdit），不进首页关键路径。
@@ -289,6 +289,36 @@
     return q;
   }
 
+  // 保存的筛选视图（localStorage）：{name, filters} 快照
+  const VIEWS_KEY = 'mujian:saved_views';
+  let savedViews = $state([]); // SSR 无 localStorage：挂载后再读，避免水合失配
+
+  let savingView = $state(false);
+  let viewName = $state('');
+
+  function persistViews() { savePref(VIEWS_KEY, savedViews); }
+  function saveCurrentView() {
+    const name = viewName.trim();
+    if (!name) return;
+    // 快照当前全部筛选（含精确匹配与缺失字段；q 保留，方便存「关键词+条件」组合）。
+    // 同名视图覆盖而非追加：chips 以名称为 each key，重名会破坏渲染。
+    const snapshot = JSON.parse(JSON.stringify(filters));
+    const rest = savedViews.filter((x) => x.name !== name);
+    savedViews = [...rest, { name, filters: snapshot }];
+    persistViews();
+    viewName = '';
+    savingView = false;
+  }
+  function applyView(v) {
+    filters = { ...filters, ...JSON.parse(JSON.stringify(v.filters)), missing: [...(v.filters.missing || [])] };
+    load();
+  }
+  function removeView(v) {
+    if (!confirm(`删除视图「${v.name}」？`)) return;
+    savedViews = savedViews.filter((x) => x !== v);
+    persistViews();
+  }
+
   // 请求序号：连续触发 load（防抖外还有各 select 的 onchange 直发）时，
   // 慢的旧响应返回会覆盖新筛选的结果，用序号丢弃过期响应。
   let listReqSeq = 0;
@@ -467,6 +497,10 @@
       missing: (sp.get('missing') || '').split(',').map((s) => s.trim()).filter(Boolean)
     };
     if (filters.missing.length) showMissing = true; // 携带缺失筛选进入时自动展开该分组
+    // 去重防御：chips 以名称为 each key，历史数据里的重名视图会导致渲染崩溃
+    const rawViews = loadPref(VIEWS_KEY, []);
+    const seenNames = new Set();
+    savedViews = rawViews.filter((v) => (seenNames.has(v.name) ? false : seenNames.add(v.name)));
     urlReady = true;
     loadMeta();
     if (filters.zhezi) ensureZheziNames();
@@ -549,6 +583,16 @@
 
   <div class="count-row">
     <h2>记录 <span class="num">{total}</span>{#if isFiltered && allTotal > 0} / {allTotal}{/if}</h2>
+      {#if savedViews.length}
+        <span class="views-row">
+          {#each savedViews as v (v.name)}
+            <span class="view-chip" title="点击应用视图">
+              <button class="view-apply" onclick={() => applyView(v)}>{v.name}</button>
+              <button class="view-x" onclick={() => removeView(v)} aria-label={`删除视图 ${v.name}`}>×</button>
+            </span>
+          {/each}
+        </span>
+      {/if}
   </div>
 
       {#if batchError}
@@ -751,6 +795,20 @@
     </div>
 
     <div class="filter-panel-actions">
+      {#if savingView}
+        <input
+          class="input"
+          style="max-width: 180px;"
+          placeholder="视图名称，如：今年的昆曲"
+          bind:value={viewName}
+          onkeydown={(e) => { if (e.key === 'Enter') saveCurrentView(); }}
+        />
+        <button class="btn" onclick={saveCurrentView} disabled={!viewName.trim()}>存为视图</button>
+        <button class="btn ghost" onclick={() => { savingView = false; viewName = ''; }}>取消</button>
+      {:else}
+        <button class="btn ghost" onclick={() => (savingView = true)}>💾 保存当前筛选</button>
+      {/if}
+      <span style="flex: 1;"></span>
       <button class="btn ghost" onclick={resetFilters}>清除全部</button>
       <button class="btn primary" onclick={() => (showFilter = false)}>完成</button>
     </div>
@@ -1175,4 +1233,11 @@
     0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); }
     40% { opacity: 1; transform: scale(1.1); }
   }
+
+  /* 保存的筛选视图 chips */
+  .view-chip { display: inline-flex; align-items: stretch; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; background: var(--surface-2); }
+  .view-apply { border: none; background: transparent; color: var(--text); font-size: 12px; padding: 4px 6px 4px 10px; cursor: pointer; }
+  .view-apply:hover { color: var(--accent); }
+  .view-x { border: none; background: transparent; color: var(--text-3); font-size: 13px; padding: 4px 8px 4px 2px; cursor: pointer; }
+  .view-x:hover { color: var(--danger); }
 </style>

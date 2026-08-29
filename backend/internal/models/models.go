@@ -157,6 +157,17 @@ type ExportData struct {
 	Meta         Meta       `json:"meta"`
 	Records      []Record   `json:"records"`
 	Categories   []Category `json:"categories"`
+	// RecordPhotos: 票根/现场照关联（file_name 为 covers/ 存储 key）。
+	// 旧版导出没有该字段，导入时按缺省处理。
+	RecordPhotos []RecordPhoto `json:"recordPhotos,omitempty"`
+}
+
+// RecordPhoto is one extra image (ticket stub / stage photo) linked to a record.
+type RecordPhoto struct {
+	ID       string `json:"id"`
+	RecordID string `json:"recordId"`
+	FileName string `json:"fileName"`
+	Sort     int    `json:"sort"`
 }
 
 // RecordRequest is the editable payload accepted by create/update endpoints.
@@ -454,6 +465,7 @@ type CoverRef struct {
 	RefCount   int    `json:"ref_count"`
 	SampleName string `json:"sample_name"`
 	Category   string `json:"category"`
+	Thumb      string `json:"thumb,omitempty"`
 }
 
 // DupRecord is one record inside a duplicate group.
@@ -516,5 +528,4 @@ type BatchUpdateParams struct {
 	Play              *BatchArrayOp
 	Guest             *BatchArrayOp
 	ArtistNames       *BatchArrayOp
-	TagIDs            *BatchArrayOp
 }

@@ -20,6 +20,8 @@ func (t testVacuumer) VacuumInto(path string) error {
 	return err
 }
 
+func (t testVacuumer) Checkpoint() error { return nil }
+
 func newManager(t *testing.T, interval, keep int) (*Manager, *sql.DB, string) {
 	t.Helper()
 	dir := t.TempDir()

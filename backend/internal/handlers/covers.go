@@ -39,6 +39,12 @@ func (h *Handler) listCovers(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 500, err.Error())
 		return
 	}
+	// 批量解析缩略图 key：选择器网格用 thumb（400px）而不是 2000px 原图
+	thumbIdx := h.storage.ThumbIndex()
+	for i := range covers {
+		base := strings.TrimSuffix(filepath.Base(covers[i].FileName), filepath.Ext(covers[i].FileName))
+		covers[i].Thumb = thumbIdx[base]
+	}
 	jsonResp(w, 200, map[string]interface{}{
 		"covers": covers,
 		"total":  total,

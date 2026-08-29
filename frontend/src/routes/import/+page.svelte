@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
 
   let file = $state(null);
@@ -6,6 +7,59 @@
   let error = $state('');
   let busy = $state(false);
   let dragover = $state(false);
+
+  // 回收站（软删除 30 天）
+  let trash = $state([]);
+  let trashTotal = $state(0);
+  let trashBusy = $state('');
+
+  const RETAIN_DAYS = 30;
+  function daysLeft(deletedAt) {
+    const elapsed = Math.floor(Date.now() / 1000) - deletedAt;
+    return Math.max(0, RETAIN_DAYS - Math.floor(elapsed / 86400));
+  }
+  async function loadTrash() {
+    try {
+      const res = await api.listDeletedRecords();
+      trash = res.records || [];
+      trashTotal = res.total || 0;
+    } catch (e) { /* 页面其他功能不受影响 */ }
+  }
+  async function restoreTrashed(id) {
+    trashBusy = id;
+    try {
+      await api.restoreRecord(id);
+      await loadTrash();
+    } catch (e) {
+      error = '恢复失败：' + e.message;
+    } finally {
+      trashBusy = '';
+    }
+  }
+  async function purgeTrashed(id) {
+    if (!confirm('彻底删除这条演出？此操作不可恢复。')) return;
+    trashBusy = id;
+    try {
+      await api.purgeRecord(id);
+      await loadTrash();
+    } catch (e) {
+      error = '删除失败：' + e.message;
+    } finally {
+      trashBusy = '';
+    }
+  }
+  async function emptyTrash() {
+    if (!confirm(`清空回收站（${trashTotal} 条）？此操作不可恢复。`)) return;
+    trashBusy = 'all';
+    try {
+      await api.purgeRecordsTrash();
+      await loadTrash();
+    } catch (e) {
+      error = '清空失败：' + e.message;
+    } finally {
+      trashBusy = '';
+    }
+  }
 
   function onFile(e) {
     file = e.target.files?.[0] || null;
@@ -39,6 +93,8 @@
       busy = false;
     }
   }
+
+  onMount(loadTrash);
 </script>
 <svelte:head><title>导入 - 幕间</title></svelte:head>
 
@@ -111,6 +167,36 @@
   </div>
 
   <div class="card sec">
+    <h3>回收站</h3>
+    <p class="tiny">删除的演出在这里保留 {RETAIN_DAYS} 天，之后自动永久清除。</p>
+    {#if trash.length === 0}
+      <p class="tiny muted">回收站是空的。</p>
+    {:else}
+      <div class="trash-list">
+        {#each trash as t (t.id)}
+          <div class="trash-row">
+            <span class="trash-name">{t.name}</span>
+            <span class="trash-meta">{t.dateText ? t.dateText.slice(0, 10) : ''}{t.city ? ' · ' + t.city : ''} · 剩 {daysLeft(t.deleted_at)} 天</span>
+            <span class="trash-ops">
+              <button type="button" class="btn sm" disabled={trashBusy === t.id} onclick={() => restoreTrashed(t.id)}>
+                {trashBusy === t.id ? '…' : '恢复'}
+              </button>
+              <button type="button" class="btn sm danger" disabled={trashBusy === t.id} onclick={() => purgeTrashed(t.id)}>
+                {trashBusy === t.id ? '…' : '彻底删除'}
+              </button>
+            </span>
+          </div>
+        {/each}
+      </div>
+      <div class="btn-row" style="margin-top: 10px;">
+        <button type="button" class="btn sm danger" disabled={trashBusy === 'all' || trash.length === 0} onclick={emptyTrash}>
+          {trashBusy === 'all' ? '清空中…' : `清空回收站（${trashTotal} 条）`}
+        </button>
+      </div>
+    {/if}
+  </div>
+
+  <div class="card sec">
     <h3>导出 / 备份</h3>
     <p class="tiny">可导出为单独 JSON，或打包为含封面的 zip（导入时可直接还原）。</p>
     <div class="btn-row">
@@ -161,4 +247,18 @@
   .tips { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--text-2); }
   code { background: var(--surface-3); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
   .flink { color: var(--accent); font-weight: 600; margin-left: 6px; }
+
+  .trash-list { border: 1px solid var(--border); border-radius: var(--radius, 10px); overflow: hidden; }
+  .trash-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .trash-row:last-child { border-bottom: none; }
+  .trash-name { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .trash-meta { color: var(--text-3); font-size: 12px; flex: none; }
+  .trash-ops { display: flex; gap: 6px; flex: none; }
 </style>

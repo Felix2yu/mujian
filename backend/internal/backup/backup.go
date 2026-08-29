@@ -20,6 +20,7 @@ import (
 // Vacuumer is the DB capability the manager needs; *db.DB implements it.
 type Vacuumer interface {
 	VacuumInto(path string) error
+	Checkpoint() error
 }
 
 const filePrefix = "mujian-backup-"
@@ -80,6 +81,65 @@ func (m *Manager) Reschedule() {
 	case m.reschedule <- struct{}{}:
 	default:
 	}
+}
+
+// BackupInfo describes one snapshot file in the backup dir.
+type BackupInfo struct {
+	Name    string `json:"file"`
+	Size    int64  `json:"size"`
+	ModTime int64  `json:"modified"`
+}
+
+// List returns all snapshots, newest first.
+func (m *Manager) List() []BackupInfo {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	files := listBackupFiles(m.dir)
+	out := make([]BackupInfo, 0, len(files))
+	for i := len(files) - 1; i >= 0; i-- {
+		info, err := os.Stat(filepath.Join(m.dir, files[i]))
+		if err != nil {
+			continue
+		}
+		out = append(out, BackupInfo{Name: files[i], Size: info.Size(), ModTime: info.ModTime().Unix()})
+	}
+	return out
+}
+
+// ValidateName guards against path traversal: only snapshot files inside the
+// backup dir may be addressed. Exported for the restore endpoint.
+func ValidateName(name string) error {
+	if strings.HasPrefix(name, filePrefix) && !strings.ContainsAny(name, "/\\") && filepath.Base(name) == name {
+		switch filepath.Ext(name) {
+		case ".db", ".json", ".zip":
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid backup file name: %q", name)
+}
+
+// Read returns the raw bytes of a snapshot (download / restore).
+func (m *Manager) Read(name string) ([]byte, error) {
+	if err := ValidateName(name); err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return os.ReadFile(filepath.Join(m.dir, name))
+}
+
+// Delete removes one snapshot from the backup dir.
+func (m *Manager) Delete(name string) error {
+	if err := ValidateName(name); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	err := os.Remove(filepath.Join(m.dir, name))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }
 
 // Status reports the last successful backup (unix seconds, 0 = never) and the
@@ -205,6 +265,14 @@ func (m *Manager) RunNow() (string, error) {
 		m.lastErr = err.Error()
 		os.Remove(tmp)
 		return "", fmt.Errorf("rename snapshot: %w", err)
+	}
+
+	// db 快照之后把 WAL 收缩进主文件：磁盘上的 .db 从此自洽，
+	// 即使进程随后崩溃，快照对应的恢复流程也不依赖 WAL。
+	if payload == nil {
+		if err := m.db.Checkpoint(); err != nil {
+			slog.Warn("wal checkpoint after backup", "err", err)
+		}
 	}
 
 	m.lastRun = time.Now()

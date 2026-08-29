@@ -65,7 +65,7 @@ func (db *DB) SyncCovers(store storage.Storage) (int, error) {
 	}
 	defer tx.Rollback()
 
-	rows, err := tx.Query(`SELECT DISTINCT cover_file FROM records WHERE cover_file != ''`)
+	rows, err := tx.Query(`SELECT DISTINCT cover_file FROM records WHERE deleted_at = 0 AND cover_file != ''`)
 	if err != nil {
 		return 0, err
 	}
@@ -118,7 +118,7 @@ func (db *DB) GetDuplicateGroups() ([]models.DupGroup, error) {
 		SELECT r.id, r.name, r.cover_file, c.hash, c.ext, c.size
 		FROM records r
 		JOIN covers c ON c.file_name = r.cover_file
-		WHERE r.cover_file != '' AND c.hash != ''
+		WHERE r.deleted_at = 0 AND r.cover_file != '' AND c.hash != ''
 		ORDER BY c.hash
 	`)
 	if err != nil {
@@ -202,7 +202,7 @@ func (db *DB) UpdateRecordsCoverFile(ids []string, coverFile string) (int64, err
 	args = append(args, coverFile)
 	inClause := "(" + strings.Join(placeholders, ",") + ")"
 	res, err := db.conn.Exec(
-		"UPDATE records SET cover_file = ? WHERE id IN "+inClause+" AND cover_file != ?",
+		"UPDATE records SET cover_file = ? WHERE deleted_at = 0 AND id IN "+inClause+" AND cover_file != ?",
 		args...,
 	)
 	if err != nil {
@@ -213,7 +213,7 @@ func (db *DB) UpdateRecordsCoverFile(ids []string, coverFile string) (int64, err
 
 func (db *DB) CountCoverRefs(fileName string) (int, error) {
 	var n int
-	err := db.conn.QueryRow("SELECT COUNT(*) FROM records WHERE cover_file = ?", fileName).Scan(&n)
+	err := db.conn.QueryRow("SELECT COUNT(*) FROM records WHERE deleted_at = 0 AND cover_file = ?", fileName).Scan(&n)
 	return n, err
 }
 
@@ -228,7 +228,7 @@ func (db *DB) RepointCoverRefs(oldKey, newKey string) error {
 
 // GetRecordsByCoverFile returns records whose cover_file equals the given key.
 func (db *DB) GetRecordsByCoverFile(coverFile string) ([]struct{ ID, CoverFile string }, error) {
-	rows, err := db.conn.Query("SELECT id, cover_file FROM records WHERE cover_file = ?", coverFile)
+	rows, err := db.conn.Query("SELECT id, cover_file FROM records WHERE deleted_at = 0 AND cover_file = ?", coverFile)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +261,7 @@ func (db *DB) ListCoverPicker(q string, limit, offset int) ([]models.CoverRef, i
 		       (SELECT name FROM records r2 WHERE r2.cover_file = r.cover_file ORDER BY r2.date DESC LIMIT 1) AS sample_name,
 		       (SELECT category_name FROM records r2 WHERE r2.cover_file = r.cover_file ORDER BY r2.date DESC LIMIT 1) AS sample_category
 		FROM records r
-		WHERE r.cover_file != ''
+		WHERE r.deleted_at = 0 AND r.cover_file != ''
 		GROUP BY r.cover_file
 		HAVING (? = '' OR sample_name LIKE ? OR sample_category LIKE ?)`
 
@@ -318,7 +318,7 @@ func extOf(fileName string) string {
 // ListCoverFiles returns id + cover_file for every record that has a cover,
 // used for thumbnail regeneration.
 func (db *DB) ListCoverFiles() ([]struct{ ID, CoverFile string }, error) {
-	rows, err := db.conn.Query(`SELECT id, cover_file FROM records WHERE cover_file != ''`)
+	rows, err := db.conn.Query(`SELECT id, cover_file FROM records WHERE deleted_at = 0 AND cover_file != ''`)
 	if err != nil {
 		return nil, err
 	}

@@ -245,18 +245,11 @@ func TestBatchUpdateAndDelete(t *testing.T) {
 	cat, rate, act, addr, chanS, comp, fr, remark, seat := "昆曲", 5, 1, "剧场", "大麦", "院团", "友人", "注", "A1"
 	price, pp, oc := 200.0, 180.0, 20.0
 	pcur, ppcur, ocur := "CNY", "CNY", "CNY"
-	setD := &models.BatchArrayOp{Op: "set", Value: []string{"d1"}}
-	zset := &models.BatchArrayOp{Op: "set", Value: []string{"z1"}}
-	appOp := &models.BatchArrayOp{Op: "append", Value: []string{"p1"}}
-	appG := &models.BatchArrayOp{Op: "append", Value: []string{"g1"}}
-	appA := &models.BatchArrayOp{Op: "append", Value: []string{"张军"}}
-	rmT := &models.BatchArrayOp{Op: "remove", Value: []string{"nope"}}
 	if _, err := db.BatchUpdateRecords(models.BatchUpdateParams{
 		IDs: []string{"bf"}, CategoryName: &cat, Rating: &rate, ActiveStatus: &act,
 		City: &addr, Address: &addr, Channel: &chanS, Company: &comp, Friends: &fr,
 		Remark: &remark, Seat: &seat, Price: &price, PriceCurrency: &pcur,
 		PayPrice: &pp, PayPriceCurrency: &ppcur, OtherCost: &oc, OtherCostCurrency: &ocur,
-		DramaIDs: setD, ZheziIDs: zset, Play: appOp, Guest: appG, ArtistNames: appA, TagIDs: rmT,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -1158,12 +1151,18 @@ func TestRecordDramaRelation(t *testing.T) {
 		t.Errorf("ListRecords(DramaID) mismatch: %+v", matched)
 	}
 
-	// DeleteRecord cascades to the relation table (FK constraints disabled).
+	// DeleteRecord 现在是软删除（进回收站，关系保留）；彻底删除才清关系。
 	if err := db.DeleteRecord("rd1"); err != nil {
 		t.Fatal(err)
 	}
+	if n := db.countDramaLinks(t, "rd1"); n != 1 {
+		t.Errorf("soft delete should keep drama links for restore, got %d", n)
+	}
+	if err := db.PurgeRecord("rd1"); err != nil {
+		t.Fatal(err)
+	}
 	if n := db.countDramaLinks(t, "rd1"); n != 0 {
-		t.Errorf("DeleteRecord should cascade drama links, got %d", n)
+		t.Errorf("PurgeRecord should cascade drama links, got %d", n)
 	}
 }
 
@@ -1337,31 +1336,62 @@ func TestDeleteRecordCascadesRelations(t *testing.T) {
 	if n := db.countArtistLinks(t, r.ID); n != 1 {
 		t.Fatalf("artist link not written: %d", n)
 	}
-
-	// Sanity: artist count is 1 before delete.
 	if detail, _ := db.GetArtistDetail(artist.ID); detail.RecordCount != 1 {
 		t.Fatalf("pre-delete recordCount should be 1, got %d", detail.RecordCount)
 	}
 
-	// Delete the record; all three relation tables must be cleared.
+	// 软删除：记录进回收站，所有活记录读取路径立即消失；
+	// 关系行保留（恢复时完整还原），但演员/剧目计数不再统计已删记录。
 	if err := db.DeleteRecord(r.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.GetRecord(r.ID); err == nil {
-		t.Error("deleted record should be gone")
+		t.Error("deleted record should be gone from GetRecord")
+	}
+	if n := db.countArtistLinks(t, r.ID); n != 1 {
+		t.Errorf("soft delete should keep record_artists for restore, got %d", n)
+	}
+	if detail, _ := db.GetArtistDetail(artist.ID); detail.RecordCount != 0 {
+		t.Errorf("post-soft-delete artist recordCount should be 0, got %d", detail.RecordCount)
+	}
+	live, _ := db.ListRecords(RecordFilter{})
+	if len(live) != 0 {
+		t.Errorf("ListRecords should exclude deleted, got %d", len(live))
+	}
+	total, _ := db.CountRecords(RecordFilter{})
+	if total != 0 {
+		t.Errorf("CountRecords should exclude deleted, got %d", total)
+	}
+
+	// 恢复：一切回来了。
+	if err := db.RestoreRecord(r.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.GetRecord(r.ID); err != nil {
+		t.Errorf("restored record should be readable: %v", err)
+	}
+	if detail, _ := db.GetArtistDetail(artist.ID); detail.RecordCount != 1 {
+		t.Errorf("post-restore artist recordCount should be 1, got %d", detail.RecordCount)
+	}
+
+	// 彻底删除：关系行级联清理。
+	if err := db.DeleteRecord(r.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.PurgeRecord(r.ID); err != nil {
+		t.Fatal(err)
 	}
 	if n := db.countArtistLinks(t, r.ID); n != 0 {
-		t.Errorf("DeleteRecord should clear record_artists, got %d", n)
+		t.Errorf("PurgeRecord should clear record_artists, got %d", n)
 	}
 	if n := db.countDramaLinks(t, r.ID); n != 0 {
-		t.Errorf("DeleteRecord should clear record_dramas, got %d", n)
+		t.Errorf("PurgeRecord should clear record_dramas, got %d", n)
 	}
 	if n := db.countZheziLinks(t, r.ID); n != 0 {
-		t.Errorf("DeleteRecord should clear record_zhezis, got %d", n)
+		t.Errorf("PurgeRecord should clear record_zhezis, got %d", n)
 	}
-	// And the artist recordCount must drop back to 0.
 	if detail, _ := db.GetArtistDetail(artist.ID); detail.RecordCount != 0 {
-		t.Errorf("post-delete artist recordCount should be 0, got %d", detail.RecordCount)
+		t.Errorf("post-purge artist recordCount should be 0, got %d", detail.RecordCount)
 	}
 }
 
@@ -1659,18 +1689,10 @@ func TestBatchUpdateNameDateTimeCoordinateMoney(t *testing.T) {
 		t.Fatalf("date changed by invalid input: %q", got2.DateText)
 	}
 
-	// tagIds 数组操作
-	n, err = db.BatchUpdateRecords(models.BatchUpdateParams{
-		IDs:    []string{"n1"},
-		TagIDs: &models.BatchArrayOp{Op: "append", Value: []string{"小剧场"}},
-	})
-	if err != nil || n == 0 {
-		t.Fatalf("tag append: n=%d err=%v", n, err)
-	}
+	// tag_ids 操作面已移除（标签功能废弃）；字段保留仅作旧数据兼容
 	got3, _ := db.GetRecord("n1")
-	// sampleRecord 自带 tag-1；append 后应为两个元素（去重集合，顺序不保证）
-	if len(got3.TagIDs) != 2 {
-		t.Fatalf("tag_ids: %+v", got3.TagIDs)
+	if len(got3.TagIDs) != 1 {
+		t.Fatalf("tag_ids should stay untouched: %+v", got3.TagIDs)
 	}
 }
 
@@ -2250,7 +2272,7 @@ func TestRecordFilterMultiTokenQuery(t *testing.T) {
 		{"牡丹亭 上昆", 1},   // name token + company token
 		{"上海 牡丹亭", 1},   // order irrelevant
 		{"牡丹亭  北京", 0},  // no record satisfies both tokens
-		{"墙头马上 上海", 1}, // mt-2: name 墙头马上 in 上海
+		{"墙头马上 上海", 1},  // mt-2: name 墙头马上 in 上海
 		{"牡丹亭 墙头马上", 0}, // the two names live on different records
 	}
 	for _, c := range cases {

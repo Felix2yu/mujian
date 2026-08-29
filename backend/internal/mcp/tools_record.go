@@ -27,7 +27,6 @@ type CreateRecordInput struct {
 	Play              StringOrArray      `json:"play,omitempty"`
 	DramaIDs          StringOrArray      `json:"drama_ids,omitempty"`
 	ZheziIDs          StringOrArray      `json:"zhezi_ids,omitempty"`
-	TagIDs            StringOrArray      `json:"tag_ids,omitempty"`
 	DateText          string             `json:"date_text,omitempty"`
 	Rating            int                `json:"rating,omitempty"`
 	Seat              string             `json:"seat,omitempty"`
@@ -61,7 +60,6 @@ type UpdateRecordInput struct {
 	Play              *ArrayOp           `json:"play,omitempty"`
 	DramaIDs          *ArrayOp           `json:"drama_ids,omitempty"`
 	ZheziIDs          *ArrayOp           `json:"zhezi_ids,omitempty"`
-	TagIDs            *ArrayOp           `json:"tag_ids,omitempty"`
 	DateText          *string            `json:"date_text,omitempty"`
 	Rating            *int               `json:"rating,omitempty"`
 	Seat              *string            `json:"seat,omitempty"`
@@ -111,7 +109,6 @@ func (s *Server) handleCreateRecord(ctx context.Context, req *mcp.CallToolReques
 		Play:              in.Play,
 		DramaIDs:          in.DramaIDs,
 		ZheziIDs:          in.ZheziIDs,
-		TagIDs:            in.TagIDs,
 		DateText:          in.DateText,
 		Rating:            in.Rating,
 		Seat:              in.Seat,
@@ -167,7 +164,6 @@ func (s *Server) handleUpdateRecord(ctx context.Context, req *mcp.CallToolReques
 		Play:              existing.Play,
 		DramaIDs:          existing.DramaIDs,
 		ZheziIDs:          existing.ZheziIDs,
-		TagIDs:            existing.TagIDs,
 		DateText:          existing.DateText,
 		Rating:            existing.Rating,
 		Seat:              existing.Seat,
@@ -227,9 +223,6 @@ func (s *Server) handleUpdateRecord(ctx context.Context, req *mcp.CallToolReques
 	}
 	if in.ZheziIDs != nil {
 		r.ZheziIDs = applyArrayOp(r.ZheziIDs, in.ZheziIDs)
-	}
-	if in.TagIDs != nil {
-		r.TagIDs = applyArrayOp(r.TagIDs, in.TagIDs)
 	}
 	if in.DateText != nil {
 		r.DateText = *in.DateText

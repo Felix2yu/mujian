@@ -100,7 +100,6 @@ func TestMutationHandlers(t *testing.T) {
 		IDs:           []string{recID},
 		Name:          strPtrT("牡丹亭·纪念场"),
 		Price:         fltPtrT(199),
-		TagIDs:        &ArrayOp{Op: "append", Value: []string{"晚场"}},
 		CategoryNames: &ArrayOp{Op: "append", Value: []string{"苏剧"}},
 		DryRun:        boolPtr(false),
 	})
@@ -108,7 +107,7 @@ func TestMutationHandlers(t *testing.T) {
 		t.Fatalf("batch_update_records: %v %v", res, err)
 	}
 	got, _ := s.db.GetRecord(recID)
-	if got.Name != "牡丹亭·纪念场" || got.Price != 199 || len(got.TagIDs) != 1 || len(got.CategoryNames) != 2 {
+	if got.Name != "牡丹亭·纪念场" || got.Price != 199 || len(got.CategoryNames) != 2 {
 		t.Fatalf("batch result: %+v", got)
 	}
 

@@ -332,7 +332,6 @@ func TestBatchUpdateRecordsDryRun(t *testing.T) {
 		Price:         fltPtrT(99),
 		CategoryNames: &ArrayOp{Op: "append", Value: []string{"婺剧"}},
 		ArtistNames:   &ArrayOp{Op: "set", Value: []string{"新演员"}},
-		TagIDs:        &ArrayOp{Op: "remove", Value: []string{"t1"}},
 		DramaIDs:      &ArrayOp{Op: "append", Value: []string{"d1"}},
 		DryRun:        boolPtr(true),
 	}
@@ -348,8 +347,8 @@ func TestBatchUpdateRecordsDryRun(t *testing.T) {
 	if num(t, m, "requested") != 1 {
 		t.Fatalf("requested = %v", m["requested"])
 	}
-	if len(m["changes"].([]any)) != 9 {
-		t.Fatalf("changes len = %d, want 9", len(m["changes"].([]any)))
+	if len(m["changes"].([]any)) != 8 {
+		t.Fatalf("changes len = %d, want 8", len(m["changes"].([]any)))
 	}
 	if unchanged, _ := s.db.GetRecord(recID); unchanged.Name != "牡丹亭" {
 		t.Fatalf("dry run must not persist: %+v", unchanged)

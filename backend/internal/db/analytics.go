@@ -32,7 +32,7 @@ func (db *DB) ListVenueGroups(query string) ([]VenueGroup, error) {
 		       COUNT(*)          AS cnt,
 		       MAX(coordinate != '' AND coordinate != 'null') AS has_coord
 		FROM records
-		WHERE address != ''
+		WHERE deleted_at = 0 AND address != ''
 		GROUP BY address
 		ORDER BY cnt DESC, address`)
 	if err != nil {
@@ -61,7 +61,7 @@ func (db *DB) ListVenueGroups(query string) ([]VenueGroup, error) {
 	// main aggregation simple.
 	for i := range out {
 		crows, err := db.conn.Query(
-			`SELECT DISTINCT city FROM records WHERE address = ? AND city != '' ORDER BY city LIMIT 5`,
+			`SELECT DISTINCT city FROM records WHERE deleted_at = 0 AND address = ? AND city != '' ORDER BY city LIMIT 5`,
 			out[i].Address)
 		if err != nil {
 			return nil, err
@@ -102,7 +102,7 @@ func (db *DB) GetValueCounts(field string) ([]ValueCount, error) {
 	}
 	// field comes from the whitelist above, never from user input.
 	rows, err := db.conn.Query(fmt.Sprintf(
-		`SELECT %s, COUNT(*) FROM records WHERE %s != '' GROUP BY %s ORDER BY COUNT(*) DESC, %s`,
+		`SELECT %s, COUNT(*) FROM records WHERE deleted_at = 0 AND %s != '' GROUP BY %s ORDER BY COUNT(*) DESC, %s`,
 		field, field, field, field))
 	if err != nil {
 		return nil, err
@@ -153,16 +153,16 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 	// Unlike the sub-sections below (which degrade to empty lists), a failed
 	// KPI scan means the DB is unreachable — surface it instead of rendering
 	// an all-zero page.
-	if err := db.conn.QueryRow("SELECT COUNT(*) FROM records").Scan(&out.Overview.TotalRecords); err != nil {
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM records WHERE deleted_at = 0").Scan(&out.Overview.TotalRecords); err != nil {
 		return nil, fmt.Errorf("analytics overview: %w", err)
 	}
-	if err := db.conn.QueryRow("SELECT COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0) FROM records").Scan(&out.Overview.TotalCost); err != nil {
+	if err := db.conn.QueryRow("SELECT COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0) FROM records WHERE deleted_at = 0").Scan(&out.Overview.TotalCost); err != nil {
 		return nil, fmt.Errorf("analytics overview: %w", err)
 	}
-	if err := db.conn.QueryRow("SELECT COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE rating IS NOT NULL AND rating != 0").Scan(&out.Overview.AvgRating); err != nil {
+	if err := db.conn.QueryRow("SELECT COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE deleted_at = 0 AND rating IS NOT NULL AND rating != 0").Scan(&out.Overview.AvgRating); err != nil {
 		return nil, fmt.Errorf("analytics overview: %w", err)
 	}
-	if err := db.conn.QueryRow("SELECT COUNT(DISTINCT city) FROM records WHERE city != ''").Scan(&out.Overview.TotalCities); err != nil {
+	if err := db.conn.QueryRow("SELECT COUNT(DISTINCT city) FROM records WHERE deleted_at = 0 AND city != ''").Scan(&out.Overview.TotalCities); err != nil {
 		return nil, fmt.Errorf("analytics overview: %w", err)
 	}
 	if err := db.conn.QueryRow("SELECT COUNT(*) FROM artists").Scan(&out.Overview.TotalArtists); err != nil {
@@ -178,10 +178,10 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 	var curCount, prevCount int
 	var curCost, prevCost float64
 	var curRating, prevRating float64
-	if err := db.conn.QueryRow("SELECT COUNT(*), COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0), COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE date >= ?", curStart).Scan(&curCount, &curCost, &curRating); err != nil {
+	if err := db.conn.QueryRow("SELECT COUNT(*), COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0), COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE deleted_at = 0 AND date >= ?", curStart).Scan(&curCount, &curCost, &curRating); err != nil {
 		return nil, fmt.Errorf("analytics overview: %w", err)
 	}
-	if err := db.conn.QueryRow("SELECT COUNT(*), COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0), COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE date >= ? AND date < ?", prevStart, curStart).Scan(&prevCount, &prevCost, &prevRating); err != nil {
+	if err := db.conn.QueryRow("SELECT COUNT(*), COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0), COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE deleted_at = 0 AND date >= ? AND date < ?", prevStart, curStart).Scan(&prevCount, &prevCost, &prevRating); err != nil {
 		return nil, fmt.Errorf("analytics overview: %w", err)
 	}
 	out.Overview.RecordsDeltaPct = pctChange(float64(prevCount), float64(curCount))
@@ -201,7 +201,7 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 		       COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0),
 		       COALESCE(AVG(CAST(rating AS REAL)), 0)
 		FROM records
-		WHERE date >= ?
+		WHERE deleted_at = 0 AND date >= ?
 		GROUP BY m`, windowStart.Unix())
 	if err == nil {
 		defer rows.Close()
@@ -229,24 +229,24 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 	out.CategoryDist = db.distFromQuery(`
 		SELECT je.value AS name, COUNT(*) AS cnt FROM records,
 			json_each(records.category_names) je
-		WHERE je.value != '' GROUP BY je.value ORDER BY cnt DESC`)
+		WHERE records.deleted_at = 0 AND je.value != '' GROUP BY je.value ORDER BY cnt DESC`)
 	out.ChannelDist = db.distFromQuery(`
 		SELECT channel AS name, COUNT(*) AS cnt FROM records
-		WHERE channel != '' GROUP BY channel ORDER BY cnt DESC`)
+		WHERE deleted_at = 0 AND channel != '' GROUP BY channel ORDER BY cnt DESC`)
 	out.CompanyDist = db.distFromQuery(`
 		SELECT company AS name, COUNT(*) AS cnt FROM records
-		WHERE company != '' GROUP BY company ORDER BY cnt DESC`)
+		WHERE deleted_at = 0 AND company != '' GROUP BY company ORDER BY cnt DESC`)
 	out.CityDist = db.distFromQuery(`
 		SELECT city AS name, COUNT(*) AS cnt FROM records
-		WHERE city != '' GROUP BY city ORDER BY cnt DESC`)
+		WHERE deleted_at = 0 AND city != '' GROUP BY city ORDER BY cnt DESC`)
 	out.YearDist = db.distFromQuery(`
 		SELECT strftime('%Y', datetime(date, 'unixepoch')) AS name, COUNT(*) AS cnt
-		FROM records WHERE date > 0 GROUP BY 1 ORDER BY 1`)
+		FROM records WHERE deleted_at = 0 AND date > 0 GROUP BY 1 ORDER BY 1`)
 
 	// Rating distribution: counts for stars 1..5.
 	ratedTotal := 0
 	ratedByStar := map[int]int{}
-	rrows, rerr := db.conn.Query("SELECT rating, COUNT(*) FROM records WHERE rating > 0 GROUP BY rating")
+	rrows, rerr := db.conn.Query("SELECT rating, COUNT(*) FROM records WHERE deleted_at = 0 AND rating > 0 GROUP BY rating")
 	if rerr == nil {
 		defer rrows.Close()
 		for rrows.Next() {
@@ -324,18 +324,18 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 
 	// ---- Correlations (Pearson r on numeric pairs) ----
 	out.CorrPairs = append(out.CorrPairs, db.pearsonPair("有效票价", "评分",
-		"SELECT CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price, rating FROM records WHERE (pay_price > 0 OR price > 0) AND rating > 0"))
+		"SELECT CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price, rating FROM records WHERE deleted_at = 0 AND (pay_price > 0 OR price > 0) AND rating > 0"))
 	out.CorrPairs = append(out.CorrPairs, db.pearsonPair("其他花费", "评分",
-		"SELECT other_cost, rating FROM records WHERE other_cost > 0 AND rating > 0"))
+		"SELECT other_cost, rating FROM records WHERE deleted_at = 0 AND other_cost > 0 AND rating > 0"))
 	out.CorrPairs = append(out.CorrPairs, db.pearsonPair("标价", "有效票价",
-		"SELECT price, CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price FROM records WHERE price > 0"))
+		"SELECT price, CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price FROM records WHERE deleted_at = 0 AND price > 0"))
 	out.CorrPairs = append(out.CorrPairs, db.pearsonPair("有效票价", "其他花费",
-		"SELECT CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price, other_cost FROM records WHERE (pay_price > 0 OR price > 0) AND other_cost > 0"))
+		"SELECT CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price, other_cost FROM records WHERE deleted_at = 0 AND (pay_price > 0 OR price > 0) AND other_cost > 0"))
 
 	// Scatter sample: effective price vs rating (most recent 150 with both values).
 	srows, serr := db.conn.Query(`
 		SELECT CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price, rating FROM records
-		WHERE (pay_price > 0 OR price > 0) AND rating > 0
+		WHERE deleted_at = 0 AND (pay_price > 0 OR price > 0) AND rating > 0
 		ORDER BY date DESC LIMIT 150`)
 	if serr == nil {
 		defer srows.Close()
@@ -350,15 +350,17 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 	// ---- Rankings ----
 	out.TopArtists = db.rankFromQuery(`
 		SELECT a.id, a.name, COUNT(*) AS cnt FROM record_artists ra
+		JOIN records rc ON rc.id = ra.record_id AND rc.deleted_at = 0
 		JOIN artists a ON a.id = ra.artist_id
 		GROUP BY a.id ORDER BY cnt DESC LIMIT 10`)
 	out.TopDramas = db.rankFromQuery(`
 		SELECT d.id, d.name, COUNT(*) AS cnt FROM record_dramas rd
+		JOIN records rc ON rc.id = rd.record_id AND rc.deleted_at = 0
 		JOIN dramas d ON d.id = rd.drama_id
 		GROUP BY d.id ORDER BY cnt DESC LIMIT 10`)
 	out.TopVenues = db.rankFromQuery(`
 		SELECT '' AS id, address AS name, COUNT(*) AS cnt FROM records
-		WHERE address != '' GROUP BY address ORDER BY cnt DESC LIMIT 10`)
+		WHERE deleted_at = 0 AND address != '' GROUP BY address ORDER BY cnt DESC LIMIT 10`)
 
 	// ---- New behavioural / economic dimensions ----
 	out.PriceBuckets = db.priceBucketDist()
@@ -535,7 +537,7 @@ func (db *DB) priceBucketDist() []models.DistItem {
 				ELSE '800+'
 			END AS bucket,
 			COUNT(*) AS cnt
-		FROM (SELECT CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price FROM records)
+		FROM (SELECT CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price FROM records WHERE deleted_at = 0)
 		WHERE effective_price > 0
 		GROUP BY bucket`)
 	if err != nil {
@@ -580,7 +582,7 @@ func (db *DB) otherCostBucketDist() []models.DistItem {
 			END AS bucket,
 			COUNT(*) AS cnt
 		FROM records
-		WHERE other_cost > 0
+		WHERE deleted_at = 0 AND other_cost > 0
 		GROUP BY bucket`)
 	if err != nil {
 		return []models.DistItem{}
@@ -614,6 +616,7 @@ func (db *DB) topZhezis() []models.RankItem {
 	return db.rankFromQuery(`
 		SELECT z.id, z.name, COUNT(*) AS cnt
 		FROM record_zhezis rz
+		JOIN records rc ON rc.id = rz.record_id AND rc.deleted_at = 0
 		JOIN zhezis z ON z.id = rz.zhezi_id
 		GROUP BY z.id
 		ORDER BY cnt DESC
@@ -626,12 +629,12 @@ func (db *DB) rewatchStats() *models.RewatchStats {
 	db.conn.QueryRow(`
 		SELECT COUNT(*),
 		       COALESCE(SUM(CASE WHEN c >= 2 THEN 1 ELSE 0 END), 0)
-		FROM (SELECT drama_id, COUNT(*) AS c FROM record_dramas GROUP BY drama_id)`).
+		FROM (SELECT rd.drama_id, COUNT(*) AS c FROM record_dramas rd JOIN records rc ON rc.id = rd.record_id AND rc.deleted_at = 0 GROUP BY rd.drama_id)`).
 		Scan(&r.TotalDramas, &r.RewatchedDramas)
 	db.conn.QueryRow(`
 		SELECT COUNT(*),
 		       COALESCE(SUM(CASE WHEN c >= 2 THEN 1 ELSE 0 END), 0)
-		FROM (SELECT artist_id, COUNT(*) AS c FROM record_artists GROUP BY artist_id)`).
+		FROM (SELECT ra.artist_id, COUNT(*) AS c FROM record_artists ra JOIN records rc ON rc.id = ra.record_id AND rc.deleted_at = 0 GROUP BY ra.artist_id)`).
 		Scan(&r.TotalArtists, &r.RewatchedArtists)
 	r.DramaRate = pctOf(float64(r.TotalDramas), float64(r.RewatchedDramas))
 	r.ArtistRate = pctOf(float64(r.TotalArtists), float64(r.RewatchedArtists))
@@ -646,7 +649,7 @@ func (db *DB) discoverySeries() []models.DiscoverPoint {
 		SELECT strftime('%Y-%m', datetime(MIN(r.date), 'unixepoch')) AS m
 		FROM record_artists ra
 		JOIN records r ON r.id = ra.record_id
-		WHERE r.date > 0
+		WHERE r.date > 0 AND r.deleted_at = 0
 		GROUP BY ra.artist_id`); err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -661,7 +664,7 @@ func (db *DB) discoverySeries() []models.DiscoverPoint {
 		SELECT strftime('%Y-%m', datetime(MIN(r.date), 'unixepoch')) AS m
 		FROM record_dramas rd
 		JOIN records r ON r.id = rd.record_id
-		WHERE r.date > 0
+		WHERE r.date > 0 AND r.deleted_at = 0
 		GROUP BY rd.drama_id`); err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -694,11 +697,11 @@ func (db *DB) discoverySeries() []models.DiscoverPoint {
 // category / artist / drama distributions.
 func (db *DB) diversityIndex() *models.DiversityIndex {
 	d := &models.DiversityIndex{}
-	catCounts := db.groupCounts(`SELECT COUNT(*) AS c FROM records, json_each(records.category_names) je WHERE je.value != '' GROUP BY je.value`)
+	catCounts := db.groupCounts(`SELECT COUNT(*) AS c FROM records, json_each(records.category_names) je WHERE records.deleted_at = 0 AND je.value != '' GROUP BY je.value`)
 	d.CategoryEntropy, d.CategoryEvenness = shannon(catCounts)
-	artCounts := db.groupCounts(`SELECT COUNT(*) AS c FROM record_artists GROUP BY artist_id`)
+	artCounts := db.groupCounts(`SELECT COUNT(*) AS c FROM record_artists ra JOIN records rc ON rc.id = ra.record_id AND rc.deleted_at = 0 GROUP BY ra.artist_id`)
 	d.ArtistEntropy, d.ArtistEvenness = shannon(artCounts)
-	draCounts := db.groupCounts(`SELECT COUNT(*) AS c FROM record_dramas GROUP BY drama_id`)
+	draCounts := db.groupCounts(`SELECT COUNT(*) AS c FROM record_dramas rd JOIN records rc ON rc.id = rd.record_id AND rc.deleted_at = 0 GROUP BY rd.drama_id`)
 	d.DramaEntropy, d.DramaEvenness = shannon(draCounts)
 	return d
 }
@@ -752,7 +755,7 @@ func shannon(counts []int) (float64, float64) {
 
 // intervalStats summarises the gaps (in days) between consecutive performances.
 func (db *DB) intervalStats() *models.IntervalStats {
-	rows, err := db.conn.Query(`SELECT date FROM records WHERE date > 0 ORDER BY date`)
+	rows, err := db.conn.Query(`SELECT date FROM records WHERE deleted_at = 0 AND date > 0 ORDER BY date`)
 	if err != nil {
 		return &models.IntervalStats{Buckets: []models.DistItem{}}
 	}
@@ -823,7 +826,7 @@ func (db *DB) weekdayDist() []models.WeekdayItem {
 	names := []string{"周日", "周一", "周二", "周三", "周四", "周五", "周六"}
 	order := []int{1, 2, 3, 4, 5, 6, 0}
 	counts := map[int]int{}
-	if rows, err := db.conn.Query(`SELECT CAST(strftime('%w', datetime(date, 'unixepoch')) AS INTEGER) AS wd, COUNT(*) FROM records WHERE date > 0 GROUP BY wd`); err == nil {
+	if rows, err := db.conn.Query(`SELECT CAST(strftime('%w', datetime(date, 'unixepoch')) AS INTEGER) AS wd, COUNT(*) FROM records WHERE deleted_at = 0 AND date > 0 GROUP BY wd`); err == nil {
 		defer rows.Close()
 		for rows.Next() {
 			var wd, c int

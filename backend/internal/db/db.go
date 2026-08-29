@@ -225,6 +225,15 @@ func (db *DB) migrate() error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_record_dramas_drama ON record_dramas(drama_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_record_dramas_record ON record_dramas(record_id)`,
+		// 票根/现场照等附加图片：file_name 指向内容寻址的 covers/ 存储 key，
+		// 图片本体与封面共用去重存储；记录彻底删除时级联清理关联行。
+		`CREATE TABLE IF NOT EXISTS record_photos (
+			id TEXT PRIMARY KEY,
+			record_id TEXT NOT NULL,
+			file_name TEXT NOT NULL,
+			sort INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_record_photos_record ON record_photos(record_id)`,
 		// Relation table: record <-> zhezi. Same rationale as record_dramas:
 		// replaces the JSON-in-TEXT zhezi_ids column so cross-table lookups use
 		// real indexes instead of instr() scans. records.zhezi_ids is kept only as
@@ -307,6 +316,11 @@ func (db *DB) migrate() error {
 	}
 	// Total cost: pre-computed sum of effective price + other_cost for quick display.
 	if err := db.addColumn("records", "total_cost", "REAL NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	// Soft delete: unix timestamp of deletion, 0 = live. All read paths must
+	// filter deleted_at = 0 (see softdelete.go).
+	if err := db.addColumn("records", "deleted_at", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
 	// Backfill total_cost for existing records.
@@ -642,17 +656,20 @@ const recordColumns = `records.id, records.name, records.channel, records.city, 
 	records.price, records.price_currency, records.pay_price, records.pay_price_currency,
 	records.other_cost, records.other_cost_currency, records.total_cost`
 
-func scanRecord(rows *sql.Rows) (*models.Record, error) {
+// scanRecord scans recordColumns in order; extra destinations (appended after
+// the fixed columns, e.g. deleted_at) are supported via extra.
+func scanRecord(rows *sql.Rows, extra ...any) (*models.Record, error) {
 	var r models.Record
 	var (
 		coordinate, guest, play, zheziIDs, tagIDs, categoryNames string
 	)
-	err := rows.Scan(
+	dests := []any{
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
 		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &categoryNames, &guest, &play, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
 		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency, &r.TotalCost,
-	)
+	}
+	err := rows.Scan(append(dests, extra...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -779,6 +796,14 @@ func (db *DB) VacuumInto(path string) error {
 	return err
 }
 
+// WalCheckpoint truncates the write-ahead log into the main database file.
+// Called after a successful snapshot backup: the on-disk .db is then fully
+// self-contained even if the process later crashes before a clean shutdown.
+func (db *DB) Checkpoint() error {
+	_, err := db.conn.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+	return err
+}
+
 // appendSearchPredicate adds the keyword-search predicate. Space-separated
 // tokens are AND-ed: "牡丹亭 上海" matches records that contain 牡丹亭 in some
 // searchable column AND 上海 in some (possibly different) column. A single
@@ -821,7 +846,7 @@ func (db *DB) ListRecordsContext(ctx context.Context, f RecordFilter) ([]models.
 		query += `DISTINCT `
 	}
 	query += recordColumns + ` FROM records`
-	where := []string{}
+	where := []string{notDeleted}
 	args := []interface{}{}
 
 	appendSearchPredicate(f, &where, &args)
@@ -969,7 +994,7 @@ func (db *DB) CountRecordsContext(ctx context.Context, f RecordFilter) (int, err
 		}
 	}()
 	query := `SELECT COUNT(DISTINCT records.id) FROM records`
-	where := []string{}
+	where := []string{notDeleted}
 	args := []interface{}{}
 
 	appendSearchPredicate(f, &where, &args)
@@ -1154,7 +1179,7 @@ func parseInt64(s string) (int64, error) {
 }
 
 func (db *DB) GetRecord(id string) (*models.Record, error) {
-	row := db.conn.QueryRow(`SELECT `+recordColumns+` FROM records WHERE id = ?`, id)
+	row := db.conn.QueryRow(`SELECT `+recordColumns+` FROM records WHERE id = ? AND deleted_at = 0`, id)
 	r, err := scanRecordRow(row)
 	if err != nil {
 		return nil, fmt.Errorf("record not found: %w", err)
@@ -1701,7 +1726,7 @@ func (db *DB) SyncVenueCoordinates(addr string, coord *models.Coordinate, exclud
 		return 0, nil
 	}
 	res, err := db.conn.Exec(
-		"UPDATE records SET coordinate = ? WHERE address = ? AND id != ?",
+		"UPDATE records SET coordinate = ? WHERE address = ? AND id != ? AND deleted_at = 0",
 		marshalJSON(coord), addr, excludeID,
 	)
 	if err != nil {
@@ -1721,7 +1746,7 @@ type AlignVenueResult struct {
 // 回填同地址下坐标不同的其他记录。整组都无坐标的地址跳过。
 func (db *DB) AlignVenueCoordinates() (*AlignVenueResult, error) {
 	res := &AlignVenueResult{}
-	rows, err := db.conn.Query("SELECT DISTINCT address FROM records WHERE address != ''")
+	rows, err := db.conn.Query("SELECT DISTINCT address FROM records WHERE deleted_at = 0 AND address != ''")
 	if err != nil {
 		return nil, err
 	}
@@ -1739,7 +1764,7 @@ func (db *DB) AlignVenueCoordinates() (*AlignVenueResult, error) {
 	for _, addr := range addrs {
 		res.GroupsTotal++
 		var rep string
-		gr, err := db.conn.Query("SELECT coordinate FROM records WHERE address = ?", addr)
+		gr, err := db.conn.Query("SELECT coordinate FROM records WHERE deleted_at = 0 AND address = ?", addr)
 		if err != nil {
 			return nil, err
 		}
@@ -1759,7 +1784,7 @@ func (db *DB) AlignVenueCoordinates() (*AlignVenueResult, error) {
 		}
 		res.GroupsAligned++
 		upd, err := db.conn.Exec(
-			"UPDATE records SET coordinate = ? WHERE address = ? AND coordinate != ?",
+			"UPDATE records SET coordinate = ? WHERE address = ? AND coordinate != ? AND deleted_at = 0",
 			rep, addr, rep,
 		)
 		if err != nil {
@@ -1813,16 +1838,10 @@ func requestToRecord(r models.RecordRequest) models.Record {
 }
 
 func (db *DB) DeleteRecord(id string) error {
-	// Cascade-clear relation tables so artist/drama/zhezi record counts stay
-	// accurate after a record is removed (these are NOT covered by SQLite
-	// foreign keys, which are disabled for this schema).
-	for _, tbl := range []string{"record_artists", "record_dramas", "record_zhezis"} {
-		if _, err := db.conn.Exec("DELETE FROM "+tbl+" WHERE record_id = ?", id); err != nil {
-			return err
-		}
-	}
-	_, err := db.conn.Exec("DELETE FROM records WHERE id = ?", id)
-	return err
+	// Soft delete: the record moves to the trash (回收站). Relation rows are
+	// kept so a restore brings everything back; every read path filters
+	// deleted_at = 0, so counts and lists drop the record immediately.
+	return db.SoftDeleteRecord(id)
 }
 
 // BatchUpdateRecords accepts models.BatchUpdateParams for batch field updates.
@@ -1924,7 +1943,7 @@ func (db *DB) BatchUpdateRecords(params models.BatchUpdateParams) (int64, error)
 
 	hasArrayOps := params.DramaIDs != nil || params.ZheziIDs != nil ||
 		params.Play != nil || params.Guest != nil ||
-		params.ArtistNames != nil || params.TagIDs != nil ||
+		params.ArtistNames != nil ||
 		params.CategoryNames != nil
 
 	// 2. Apply simple scalar updates (one SQL for all)
@@ -1935,7 +1954,7 @@ func (db *DB) BatchUpdateRecords(params models.BatchUpdateParams) (int64, error)
 			placeholders[i] = "?"
 			inArgs[i] = id
 		}
-		sql := "UPDATE records SET " + strings.Join(simpleSets, ", ") + " WHERE id IN (" + strings.Join(placeholders, ",") + ")"
+		sql := "UPDATE records SET " + strings.Join(simpleSets, ", ") + " WHERE deleted_at = 0 AND id IN (" + strings.Join(placeholders, ",") + ")"
 		args := append(simpleArgs, inArgs...)
 		if _, err := db.conn.Exec(sql, args...); err != nil {
 			return 0, err
@@ -1973,9 +1992,6 @@ func (db *DB) applyArrayOps(params models.BatchUpdateParams) (int64, error) {
 	if params.ArtistNames != nil {
 		arrayCols["artist_names"] = params.ArtistNames
 	}
-	if params.TagIDs != nil {
-		arrayCols["tag_ids"] = params.TagIDs
-	}
 	if params.CategoryNames != nil {
 		arrayCols["category_names"] = params.CategoryNames
 	}
@@ -1987,7 +2003,7 @@ func (db *DB) applyArrayOps(params models.BatchUpdateParams) (int64, error) {
 
 		for col, op := range arrayCols {
 			var existing []string
-			row := db.conn.QueryRow("SELECT "+col+" FROM records WHERE id = ?", id)
+			row := db.conn.QueryRow("SELECT "+col+" FROM records WHERE id = ? AND deleted_at = 0", id)
 			var raw string
 			if err := row.Scan(&raw); err != nil {
 				continue
@@ -2013,7 +2029,7 @@ func (db *DB) applyArrayOps(params models.BatchUpdateParams) (int64, error) {
 
 		if len(colUpdates) > 0 {
 			colArgs = append(colArgs, id)
-			sql := "UPDATE records SET " + strings.Join(colUpdates, ", ") + " WHERE id = ?"
+			sql := "UPDATE records SET " + strings.Join(colUpdates, ", ") + " WHERE id = ? AND deleted_at = 0"
 			if _, err := db.conn.Exec(sql, colArgs...); err != nil {
 				return total, err
 			}
@@ -2035,7 +2051,7 @@ func (db *DB) applyArrayOps(params models.BatchUpdateParams) (int64, error) {
 func (db *DB) syncRecordRelationsAfterBatch(exec sqlExecutor, recordID string, cols map[string]*models.BatchArrayOp) error {
 	selectCol := func(col string) ([]string, error) {
 		var raw string
-		if err := exec.QueryRow("SELECT "+col+" FROM records WHERE id = ?", recordID).Scan(&raw); err != nil {
+		if err := exec.QueryRow("SELECT "+col+" FROM records WHERE id = ? AND deleted_at = 0", recordID).Scan(&raw); err != nil {
 			return nil, err
 		}
 		return unmarshalStrings(raw), nil
@@ -2111,31 +2127,8 @@ func applyArrayOp(existing []string, op *models.BatchArrayOp) []string {
 }
 
 func (db *DB) BatchDeleteRecords(ids []string) (int64, error) {
-	if len(ids) == 0 {
-		return 0, nil
-	}
-	placeholders := make([]string, len(ids))
-	args := make([]interface{}, 0, len(ids))
-	for i, id := range ids {
-		placeholders[i] = "?"
-		args = append(args, id)
-	}
-	inClause := "(" + strings.Join(placeholders, ",") + ")"
-	res, err := db.conn.Exec("DELETE FROM records WHERE id IN "+inClause, args...)
-	if err != nil {
-		return 0, err
-	}
-	// Cascade: drop drama/zhezi links for the deleted records.
-	if _, err := db.conn.Exec("DELETE FROM record_dramas WHERE record_id IN "+inClause, args...); err != nil {
-		slog.Warn("delete record drama links", "err", err)
-	}
-	if _, err := db.conn.Exec("DELETE FROM record_zhezis WHERE record_id IN "+inClause, args...); err != nil {
-		slog.Warn("delete record zhezi links", "err", err)
-	}
-	if _, err := db.conn.Exec("DELETE FROM record_artists WHERE record_id IN "+inClause, args...); err != nil {
-		slog.Warn("delete record artist links", "err", err)
-	}
-	return res.RowsAffected()
+	// 批量删除同样进入回收站（软删除）
+	return db.SoftDeleteRecords(ids)
 }
 
 // ---------- Categories ----------
@@ -2219,7 +2212,7 @@ func (db *DB) dramaCategoriesAll() (map[string][]string, error) {
 		WITH solo AS (
 			SELECT r.id AS record_id
 			FROM records r, json_each(r.category_names) je
-			WHERE je.value != ''
+			WHERE r.deleted_at = 0 AND je.value != ''
 			GROUP BY r.id HAVING COUNT(DISTINCT je.value) = 1
 		)
 		SELECT rd.drama_id, je.value AS cat, COUNT(*) AS cnt
@@ -2227,7 +2220,7 @@ func (db *DB) dramaCategoriesAll() (map[string][]string, error) {
 		JOIN records r ON r.id = rd.record_id
 		JOIN json_each(r.category_names) je
 		JOIN solo s ON s.record_id = rd.record_id
-		WHERE je.value != ''
+		WHERE r.deleted_at = 0 AND je.value != ''
 		GROUP BY rd.drama_id, cat
 		ORDER BY cnt DESC`)
 	if err != nil {
@@ -2277,7 +2270,7 @@ func (db *DB) ListDramas() ([]models.Drama, error) {
 	rows, err := db.conn.Query(`
 		SELECT d.id, d.name, d.aliases, d.category_names, d.remark, d.sort_order,
 			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id) AS zhezi_count,
-			(SELECT COUNT(*) FROM record_dramas rd WHERE rd.drama_id = d.id) AS record_count
+			(SELECT COUNT(*) FROM record_dramas rd JOIN records rc ON rc.id = rd.record_id AND rc.deleted_at = 0 WHERE rd.drama_id = d.id) AS record_count
 		FROM dramas d ORDER BY d.sort_order ASC, d.name COLLATE NOCASE`)
 	if err != nil {
 		return nil, err
@@ -2313,7 +2306,7 @@ func (db *DB) GetDrama(id string) (*models.Drama, error) {
 	err := db.conn.QueryRow(`
 		SELECT d.id, d.name, d.aliases, d.category_names, d.remark, d.sort_order,
 			(SELECT COUNT(*) FROM zhezis z WHERE z.drama_id = d.id),
-			(SELECT COUNT(*) FROM record_dramas rd WHERE rd.drama_id = d.id)
+			(SELECT COUNT(*) FROM record_dramas rd JOIN records rc ON rc.id = rd.record_id AND rc.deleted_at = 0 WHERE rd.drama_id = d.id)
 		FROM dramas d WHERE d.id = ?`, id).
 		Scan(&d.ID, &d.Name, &aliases, &manual, &d.Remark, &d.SortOrder, &d.ZheziCount, &d.RecordCount)
 	if err != nil {
@@ -2334,7 +2327,7 @@ func (db *DB) dramaCategoriesFor(dramaID string) ([]string, error) {
 		WITH solo AS (
 			SELECT r.id AS record_id
 			FROM records r, json_each(r.category_names) je
-			WHERE je.value != ''
+			WHERE r.deleted_at = 0 AND je.value != ''
 			GROUP BY r.id HAVING COUNT(DISTINCT je.value) = 1
 		)
 		SELECT je.value, COUNT(*) AS cnt
@@ -2342,7 +2335,7 @@ func (db *DB) dramaCategoriesFor(dramaID string) ([]string, error) {
 		JOIN records r ON r.id = rd.record_id
 		JOIN json_each(r.category_names) je
 		JOIN solo s ON s.record_id = rd.record_id
-		WHERE rd.drama_id = ? AND je.value != ''
+		WHERE r.deleted_at = 0 AND rd.drama_id = ? AND je.value != ''
 		GROUP BY je.value ORDER BY cnt DESC`, dramaID)
 	if err != nil {
 		return nil, err
@@ -2474,7 +2467,7 @@ func (db *DB) DeleteDrama(id string) error {
 func (db *DB) ListArtists() ([]models.Artist, error) {
 	rows, err := db.conn.Query(`
 		SELECT a.id, a.name, a.aliases, a.remark, a.cover, a.cover_file, a.cover_thumb, a.bio, a.sort_order,
-			(SELECT COUNT(*) FROM record_artists ra WHERE ra.artist_id = a.id) AS record_count
+			(SELECT COUNT(*) FROM record_artists ra JOIN records rc ON rc.id = ra.record_id AND rc.deleted_at = 0 WHERE ra.artist_id = a.id) AS record_count
 		FROM artists a ORDER BY a.sort_order ASC, a.name COLLATE NOCASE`)
 	if err != nil {
 		return nil, err
@@ -2502,7 +2495,7 @@ func (db *DB) GetArtist(id string) (*models.Artist, error) {
 	var aliases string
 	err := db.conn.QueryRow(`
 		SELECT a.id, a.name, a.aliases, a.remark, a.cover, a.cover_file, a.cover_thumb, a.bio, a.sort_order,
-			(SELECT COUNT(*) FROM record_artists ra WHERE ra.artist_id = a.id)
+			(SELECT COUNT(*) FROM record_artists ra JOIN records rc ON rc.id = ra.record_id AND rc.deleted_at = 0 WHERE ra.artist_id = a.id)
 		FROM artists a WHERE a.id = ?`, id).
 		Scan(&a.ID, &a.Name, &aliases, &a.Remark, &a.Cover, &a.CoverFile, &a.CoverThumb, &a.Bio, &a.SortOrder, &a.RecordCount)
 	if err != nil {
@@ -2835,10 +2828,10 @@ func setMetaExec(exec sqlExecutor, m *models.Meta) error {
 
 func (db *DB) GetStats() (*models.Stats, error) {
 	s := &models.Stats{}
-	db.conn.QueryRow("SELECT COUNT(*) FROM records").Scan(&s.TotalRecords)
-	db.conn.QueryRow("SELECT COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0) FROM records").Scan(&s.TotalCost)
-	db.conn.QueryRow("SELECT COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE rating IS NOT NULL AND rating != 0").Scan(&s.AvgRating)
-	db.conn.QueryRow("SELECT COUNT(DISTINCT city) FROM records WHERE city != ''").Scan(&s.TotalCities)
+	db.conn.QueryRow("SELECT COUNT(*) FROM records WHERE deleted_at = 0").Scan(&s.TotalRecords)
+	db.conn.QueryRow("SELECT COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0) FROM records WHERE deleted_at = 0").Scan(&s.TotalCost)
+	db.conn.QueryRow("SELECT COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE deleted_at = 0 AND rating IS NOT NULL AND rating != 0").Scan(&s.AvgRating)
+	db.conn.QueryRow("SELECT COUNT(DISTINCT city) FROM records WHERE deleted_at = 0 AND city != ''").Scan(&s.TotalCities)
 	return s, nil
 }
 
@@ -2852,15 +2845,15 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 	s.TopRated = []models.Record{}
 	s.RecentRecords = []models.Record{}
 
-	db.conn.QueryRow("SELECT COUNT(*) FROM records").Scan(&s.TotalRecords)
-	db.conn.QueryRow("SELECT COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0) FROM records").Scan(&s.TotalCost)
-	db.conn.QueryRow("SELECT COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE rating IS NOT NULL AND rating != 0").Scan(&s.AvgRating)
-	db.conn.QueryRow("SELECT COUNT(DISTINCT city) FROM records WHERE city != ''").Scan(&s.TotalCities)
+	db.conn.QueryRow("SELECT COUNT(*) FROM records WHERE deleted_at = 0").Scan(&s.TotalRecords)
+	db.conn.QueryRow("SELECT COALESCE(SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)), 0) FROM records WHERE deleted_at = 0").Scan(&s.TotalCost)
+	db.conn.QueryRow("SELECT COALESCE(AVG(CAST(rating AS REAL)), 0) FROM records WHERE deleted_at = 0 AND rating IS NOT NULL AND rating != 0").Scan(&s.AvgRating)
+	db.conn.QueryRow("SELECT COUNT(DISTINCT city) FROM records WHERE deleted_at = 0 AND city != ''").Scan(&s.TotalCities)
 
 	rows, err := db.conn.Query(`
 		SELECT strftime('%Y-%m', datetime(date, 'unixepoch')) as month, COUNT(*) as cnt
 		FROM records
-		WHERE date >= strftime('%s', 'now', '-12 months')
+		WHERE deleted_at = 0 AND date >= strftime('%s', 'now', '-12 months')
 		GROUP BY month ORDER BY month`)
 	if err == nil {
 		defer rows.Close()
@@ -2876,7 +2869,7 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 	rows2, err := db.conn.Query(`
 		SELECT je.value AS category_name, COUNT(*) as cnt FROM records,
 			json_each(records.category_names) je
-		WHERE je.value != '' GROUP BY je.value ORDER BY cnt DESC`)
+		WHERE records.deleted_at = 0 AND je.value != '' GROUP BY je.value ORDER BY cnt DESC`)
 	if err == nil {
 		defer rows2.Close()
 		for rows2.Next() {
@@ -2888,7 +2881,7 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 
 	rows3, err := db.conn.Query(`
 		SELECT city, COUNT(*) as cnt FROM records
-		WHERE city != '' GROUP BY city ORDER BY cnt DESC LIMIT 10`)
+		WHERE deleted_at = 0 AND city != '' GROUP BY city ORDER BY cnt DESC LIMIT 10`)
 	if err == nil {
 		defer rows3.Close()
 		for rows3.Next() {
@@ -2902,7 +2895,7 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 		SELECT strftime('%Y-%m', datetime(date, 'unixepoch')) as month,
 		       SUM(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)) as cost
 		FROM records
-		WHERE date >= strftime('%s', 'now', '-12 months')
+		WHERE deleted_at = 0 AND date >= strftime('%s', 'now', '-12 months')
 		GROUP BY month ORDER BY month`)
 	if err == nil {
 		defer rows4.Close()
@@ -2913,7 +2906,7 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 		}
 	}
 
-	topRows, err := db.conn.Query(`SELECT ` + recordColumns + ` FROM records WHERE rating IS NOT NULL AND rating != 0 ORDER BY rating DESC, date DESC LIMIT 6`)
+	topRows, err := db.conn.Query(`SELECT ` + recordColumns + ` FROM records WHERE deleted_at = 0 AND rating IS NOT NULL AND rating != 0 ORDER BY rating DESC, date DESC LIMIT 6`)
 	if err == nil {
 		defer topRows.Close()
 		for topRows.Next() {
@@ -2923,7 +2916,7 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 		}
 	}
 
-	recentRows, err := db.conn.Query(`SELECT ` + recordColumns + ` FROM records ORDER BY date DESC LIMIT 6`)
+	recentRows, err := db.conn.Query(`SELECT ` + recordColumns + ` FROM records WHERE deleted_at = 0 ORDER BY date DESC LIMIT 6`)
 	if err == nil {
 		defer recentRows.Close()
 		for recentRows.Next() {
@@ -2962,7 +2955,7 @@ func (db *DB) ListMapPoints() ([]models.MapPoint, error) {
 		SELECT id, name, city, address, coordinate, cover_file, cover_thumb,
 		       date_text, rating, active_status, category_name
 		FROM records
-		WHERE coordinate != '' AND coordinate != 'null'
+		WHERE deleted_at = 0 AND coordinate != '' AND coordinate != 'null'
 		ORDER BY date DESC`)
 	if err != nil {
 		return nil, err
@@ -2991,7 +2984,7 @@ func (db *DB) GetCalendarEvents(year, month int) ([]models.CalendarEvent, error)
 	end := start.AddDate(0, 1, 0)
 	rows, err := db.conn.Query(`
 		SELECT id, name, date, city, address, cover_file, cover_thumb, rating, active_status, category_name
-		FROM records WHERE date >= ? AND date < ? ORDER BY date ASC
+		FROM records WHERE deleted_at = 0 AND date >= ? AND date < ? ORDER BY date ASC
 	`, start.Unix(), end.Unix())
 	if err != nil {
 		return nil, err
@@ -3026,7 +3019,7 @@ func (db *DB) GetAutocomplete(field string) ([]string, error) {
 	if !textFields[field] {
 		return nil, fmt.Errorf("invalid field: %s", field)
 	}
-	rows, err := db.conn.Query("SELECT DISTINCT " + field + " FROM records WHERE " + field + " != '' ORDER BY " + field)
+	rows, err := db.conn.Query("SELECT DISTINCT " + field + " FROM records WHERE deleted_at = 0 AND " + field + " != '' ORDER BY " + field)
 	if err != nil {
 		return nil, err
 	}
@@ -3061,7 +3054,7 @@ func (db *DB) GetByField(field, value string) ([]models.Record, error) {
 	if !textFields[field] {
 		return nil, fmt.Errorf("invalid field: %s", field)
 	}
-	rows, err := db.conn.Query(`SELECT `+recordColumns+` FROM records WHERE `+field+` LIKE ? ORDER BY date DESC`, "%"+value+"%")
+	rows, err := db.conn.Query(`SELECT `+recordColumns+` FROM records WHERE deleted_at = 0 AND `+field+` LIKE ? ORDER BY date DESC`, "%"+value+"%")
 	if err != nil {
 		return nil, err
 	}

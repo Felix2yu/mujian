@@ -79,6 +79,18 @@ func (h *Handler) Routes() chi.Router {
 	r.Put("/records/{id}", h.updateRecord)
 	r.Delete("/records/{id}", h.deleteRecord)
 
+	// 票根/现场照（多图）
+	r.Get("/records/{id}/photos", h.listRecordPhotos)
+	r.Post("/records/{id}/photos", h.addRecordPhoto)
+	r.Delete("/records/{id}/photos/{pid}", h.deleteRecordPhoto)
+	r.Post("/records/{id}/photos/reorder", h.reorderRecordPhotos)
+
+	// 回收站（软删除，30 天后自动清理）
+	r.Get("/records/deleted", h.listDeletedRecords)
+	r.Post("/records/trash/purge", h.purgeRecordsTrash)
+	r.Post("/records/{id}/restore", h.restoreRecord)
+	r.Delete("/records/{id}/purge", h.purgeRecord)
+
 	r.Get("/categories", h.listCategories)
 	r.Post("/categories", h.createCategory)
 	r.Post("/categories/reorder", h.reorderCategories)
@@ -134,6 +146,10 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/export", h.exportRecords)
 	r.Post("/backup/restore", h.backupRestore)
 	r.Post("/backup/run", h.runBackupNow)
+	r.Get("/backup/list", h.listBackups)
+	r.Get("/backup/download", h.downloadBackup)
+	r.Post("/backup/restore-from", h.restoreFromBackup)
+	r.Delete("/backup", h.deleteBackup)
 	r.Post("/storage/migrate-to-s3", h.migrateToS3)
 
 	return r
@@ -350,6 +366,118 @@ func (h *Handler) deleteRecord(w http.ResponseWriter, r *http.Request) {
 	jsonResp(w, 200, map[string]string{"message": "deleted"})
 }
 
+// GET /api/records/{id}/photos — 票根/现场照列表。
+func (h *Handler) listRecordPhotos(w http.ResponseWriter, r *http.Request) {
+	photos, err := h.db.ListRecordPhotos(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]interface{}{"photos": photos})
+}
+
+// POST /api/records/{id}/photos {"key": ...} — 关联一张已上传的图片。
+func (h *Handler) addRecordPhoto(w http.ResponseWriter, r *http.Request) {
+	recordID := chi.URLParam(r, "id")
+	var req struct {
+		Key string `json:"key"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Key == "" {
+		jsonErr(w, 400, "key is required")
+		return
+	}
+	if !h.storage.CoverExists(req.Key) {
+		jsonErr(w, 400, "unknown image key: "+req.Key)
+		return
+	}
+	photo, err := h.db.AddRecordPhoto(recordID, req.Key)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 201, photo)
+}
+
+// DELETE /api/records/{id}/photos/{pid} — 移除一张照片的关联
+// （图片本体内容寻址，留待封面清理统一回收）。
+func (h *Handler) deleteRecordPhoto(w http.ResponseWriter, r *http.Request) {
+	if err := h.db.DeleteRecordPhoto(chi.URLParam(r, "id"), chi.URLParam(r, "pid")); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "deleted"})
+}
+
+// POST /api/records/{id}/photos/reorder {"ids": [...]} — 照片排序。
+func (h *Handler) reorderRecordPhotos(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if err := h.db.ReorderRecordPhotos(chi.URLParam(r, "id"), req.IDs); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "reordered"})
+}
+
+// GET /api/records/deleted — 回收站列表。
+func (h *Handler) listDeletedRecords(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	recs, err := h.db.ListDeletedRecords(limit, offset)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	total, _ := h.db.DeletedCount()
+	jsonResp(w, 200, map[string]interface{}{"records": recs, "total": total})
+}
+
+// POST /api/records/{id}/restore — 从回收站恢复。
+func (h *Handler) restoreRecord(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.db.RestoreRecord(id); err != nil {
+		jsonErr(w, 404, err.Error())
+		return
+	}
+	rec, err := h.db.GetRecord(id)
+	if err != nil {
+		jsonErr(w, 404, "record not found")
+		return
+	}
+	jsonResp(w, 200, rec)
+}
+
+// DELETE /api/records/{id}/purge — 彻底删除（不可恢复）。
+func (h *Handler) purgeRecord(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.db.PurgeRecord(id); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "purged"})
+}
+
+// POST /api/records/trash/purge — 清空回收站。
+func (h *Handler) purgeRecordsTrash(w http.ResponseWriter, r *http.Request) {
+	recs, err := h.db.ListDeletedRecords(0, 0)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	purged := 0
+	for _, rec := range recs {
+		if err := h.db.PurgeRecord(rec.ID); err == nil {
+			purged++
+		}
+	}
+	jsonResp(w, 200, map[string]interface{}{"purged": purged})
+}
+
 // POST /records/align-venues — 存量对齐：按地址分组，用各组里已有的坐标
 // 回填同地址的其他记录，保证「同场馆唯一经纬度」。
 func (h *Handler) alignVenues(w http.ResponseWriter, r *http.Request) {
@@ -394,7 +522,6 @@ func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 		Play        *models.BatchArrayOp `json:"play,omitempty"`
 		Guest       *models.BatchArrayOp `json:"guest,omitempty"`
 		ArtistNames *models.BatchArrayOp `json:"artist_names,omitempty"`
-		TagIDs      *models.BatchArrayOp `json:"tag_ids,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "invalid request body")
@@ -431,7 +558,6 @@ func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 		Play:              req.Play,
 		Guest:             req.Guest,
 		ArtistNames:       req.ArtistNames,
-		TagIDs:            req.TagIDs,
 	})
 	if err != nil {
 		jsonErr(w, 500, err.Error())
@@ -970,6 +1096,92 @@ func (h *Handler) runBackupNow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResp(w, 200, map[string]interface{}{"file": name})
+}
+
+// GET /api/backup/list — 备份快照清单（新→旧）。
+func (h *Handler) listBackups(w http.ResponseWriter, r *http.Request) {
+	jsonResp(w, 200, map[string]interface{}{"backups": h.backup.List()})
+}
+
+// GET /api/backup/download?file= — 下载一份快照。
+func (h *Handler) downloadBackup(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("file")
+	data, err := h.backup.Read(name)
+	if err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", name))
+	w.Write(data)
+}
+
+// DELETE /api/backup?file= — 删除一份快照。
+func (h *Handler) deleteBackup(w http.ResponseWriter, r *http.Request) {
+	if err := h.backup.Delete(r.URL.Query().Get("file")); err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]string{"message": "deleted"})
+}
+
+// POST /api/backup/restore-from {"file": ...} — 从已有快照恢复。
+// json/zip 走导入通道在线恢复；.db 快照无法热恢复，提示停机换文件。
+func (h *Handler) restoreFromBackup(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		File string `json:"file"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if err := backup.ValidateName(req.File); err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+
+	switch filepath.Ext(req.File) {
+	case ".db":
+		jsonErr(w, 400, ".db 快照无法在服务运行时恢复：请下线服务后用该文件替换数据库文件，或改用 json/zip 快照在线恢复")
+		return
+	case ".json", ".zip":
+	default:
+		jsonErr(w, 400, "unsupported backup file")
+		return
+	}
+
+	data, err := h.backup.Read(req.File)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+
+	h.withImportLock(w, func() {
+		if filepath.Ext(req.File) == ".zip" {
+			zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+			if err != nil {
+				jsonErr(w, 400, "invalid zip archive: "+err.Error())
+				return
+			}
+			h.importZipArchive(w, zr)
+			return
+		}
+		var export models.ExportData
+		if err := json.Unmarshal(data, &export); err != nil {
+			jsonErr(w, 400, "invalid export file: "+err.Error())
+			return
+		}
+		result, err := h.db.ImportData(&export)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]interface{}{
+			"message":    "restore completed",
+			"records":    result.Records,
+			"categories": result.Categories,
+		})
+	})
 }
 
 func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {

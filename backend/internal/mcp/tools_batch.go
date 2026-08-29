@@ -59,7 +59,6 @@ type BatchUpdateRecordsInput struct {
 	Play        *ArrayOp `json:"play,omitempty"`
 	Guest       *ArrayOp `json:"guest,omitempty"`
 	ArtistNames *ArrayOp `json:"artist_names,omitempty"`
-	TagIDs      *ArrayOp `json:"tag_ids,omitempty"`
 
 	DryRun *bool `json:"dry_run,omitempty"`
 }
@@ -280,9 +279,6 @@ func (s *Server) handleBatchUpdateRecords(ctx context.Context, req *mcp.CallTool
 		if in.ArtistNames != nil {
 			changes = append(changes, fieldChange{"artist_names", in.ArtistNames})
 		}
-		if in.TagIDs != nil {
-			changes = append(changes, fieldChange{"tag_ids", in.TagIDs})
-		}
 		return jsonResult(map[string]any{
 			"dry_run":   true,
 			"requested": len(in.IDs),
@@ -318,7 +314,6 @@ func (s *Server) handleBatchUpdateRecords(ctx context.Context, req *mcp.CallTool
 		Play:              (*models.BatchArrayOp)(in.Play),
 		Guest:             (*models.BatchArrayOp)(in.Guest),
 		ArtistNames:       (*models.BatchArrayOp)(in.ArtistNames),
-		TagIDs:            (*models.BatchArrayOp)(in.TagIDs),
 	}
 	n, err := s.db.BatchUpdateRecords(params)
 	if err != nil {
