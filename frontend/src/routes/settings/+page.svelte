@@ -100,6 +100,12 @@
   ];
   let backupFormat = $state('db');
   let backupInterval = $state(0);
+  // 存量值不在预设档位时（如旧配置的 6 小时）动态补一个选项，避免下拉显示空白
+  let intervalOptions = $derived(
+    BACKUP_INTERVALS.some((i) => i.v === backupInterval)
+      ? BACKUP_INTERVALS
+      : [...BACKUP_INTERVALS, { v: backupInterval, label: `每 ${backupInterval} 小时` }]
+  );
   let backupKeep = $state(10);
   let lastBackupAt = $state(0);
   let backupRunning = $state(false);
@@ -563,7 +569,7 @@
         <label class="field">
           <span>备份间隔</span>
           <select class="input" bind:value={backupInterval} style="max-width: 200px;">
-            {#each BACKUP_INTERVALS as it (it.v)}
+            {#each intervalOptions as it (it.v)}
               <option value={it.v}>{it.label}</option>
             {/each}
           </select>
@@ -659,14 +665,17 @@
 </div>
 
 <style>
-  /* 宽屏下卡片两列铺排，窄屏自动退化为单列 */
+  /* 窄屏单列。宽屏用 CSS 多列瀑布式排布：浏览器自动均衡两列总高度，
+     每张卡片保持自身高度——grid 的等高行会被内容最多的卡片撑高，
+     矮卡片一侧留出大片空白。 */
   .settings-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-    gap: 14px;
     margin-bottom: 14px;
   }
-  .sec { padding: 18px 20px; margin-bottom: 0; }
+  .sec { padding: 18px 20px; margin-bottom: 14px; }
+  @media (min-width: 860px) {
+    .settings-grid { columns: 2; column-gap: 14px; }
+    .settings-grid .sec { break-inside: avoid; }
+  }
   .sec h3 { margin: 0 0 12px; font-size: 15.5px; }
 
   .theme-row { display: flex; gap: 8px; }
