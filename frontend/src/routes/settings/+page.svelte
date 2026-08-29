@@ -136,6 +136,8 @@
     try {
       localStorage.setItem('mujian:auth_token', authToken || '');
     } catch (e) { /* ignore */ }
+    // 令牌变了，订阅链接里的 ?token= 也要跟着刷新
+    icsUrl = `${window.location.origin}${api.getICSUrl()}`;
     try {
       const payload = {
         theme: currentTheme,
@@ -426,7 +428,7 @@
       <h3>日历</h3>
       <p class="hint" style="margin-bottom: 12px;">将演出记录同步到系统日历：下载 .ics 文件导入，或复制订阅链接添加到日历应用（如 Apple 日历 → 订阅日历），内容会随记录更新</p>
       <div class="cal-actions">
-        <a class="btn" href={`${api.getICSUrl()}?dl=1`}>⇩ 导出日历 (.ics)</a>
+        <a class="btn" href={api.getICSUrl({ dl: '1' })}>⇩ 导出日历 (.ics)</a>
         <div class="cal-subscribe">
           <input class="input" readonly value={icsUrl} onfocus={(e) => e.currentTarget.select()} />
           <button
@@ -501,9 +503,13 @@
       </label>
       <input class="input" type="password" bind:value={authToken} placeholder="未设置" autocomplete="new-password" style="max-width: 320px;" />
       <p class="hint" style="margin-top: 8px;">
-        服务端设置 MJ_AUTH_TOKEN 环境变量（或在设置文件中写入 auth_token）后，所有 API/MCP 请求都需携带该令牌；
-        在此填入与服务器一致的值即可正常使用。令牌仅保存在本机浏览器，不会上传到服务器。
-        日历订阅地址会自动附带 ?token= 参数。
+        在服务器上配置环境变量 MJ_AUTH_TOKEN（或设置文件中的 auth_token）即启用鉴权，此后所有 API/MCP 请求都必须携带这个令牌。
+        在上方填入与服务器相同的值并保存即可正常使用：本页只把它记在本机浏览器（localStorage），每次请求自动附带；
+        保存时不会把令牌发回服务器——服务器已经从环境变量拿到了这个值，无需再存一份。
+        {#if authRequired}
+          服务端已启用鉴权：未填写或填错时，除本页外的所有页面和接口都会提示 401 未授权，填对后立即恢复，无需重启。
+        {/if}
+        日历订阅地址会自动附带 ?token= 参数（日历客户端无法自定义请求头）。
       </p>
     </div>
 

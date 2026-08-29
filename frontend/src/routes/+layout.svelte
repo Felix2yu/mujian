@@ -1,7 +1,7 @@
 <script>
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { initStorageInfo } from '$lib/api.js';
+  import { api, initStorageInfo, getAuthToken, verifyAuthToken } from '$lib/api.js';
   import { initTheme } from '$lib/stores.js';
   import { onMount } from 'svelte';
   import { fade, fly } from 'svelte/transition';
@@ -71,7 +71,67 @@
     } catch {}
   }
 
+  // ---------- 全站访问令牌门 ----------
+  // 服务端启用鉴权（MJ_AUTH_TOKEN）后，任何页面都会 401；与其让每个页面
+  // 静默显示空列表，不如在最外层拦下：启动时探测一次，未通过则整站只渲染
+  // 令牌输入页，校验通过才放行渲染应用。会话中途令牌失效（服务端更换）
+  // 由 api.js 广播的 mujian:unauthorized 事件重新拉起本门。
+  let authState = $state('checking'); // checking | ok | locked
+  let tokenInput = $state('');
+  let authError = $state('');
+  let verifying = $state(false);
+
+  async function checkAuth() {
+    try {
+      // GET /api/settings 免鉴权，仅用它的 auth_required 判断是否需要令牌。
+      const s = await api.getSettings();
+      if (!s || !s.auth_required) {
+        authState = 'ok';
+        return;
+      }
+      const saved = getAuthToken();
+      if (saved && (await verifyAuthToken(saved))) {
+        authState = 'ok';
+        return;
+      }
+      authState = 'locked';
+    } catch (e) {
+      // 探测失败（网络异常等）时不锁死应用，各页面自行展示错误。
+      authState = 'ok';
+    }
+  }
+
+  async function submitToken(e) {
+    e.preventDefault();
+    const t = tokenInput.trim();
+    if (!t) {
+      authError = '请输入访问令牌';
+      return;
+    }
+    verifying = true;
+    authError = '';
+    if (await verifyAuthToken(t)) {
+      try {
+        localStorage.setItem('mujian:auth_token', t);
+      } catch (err) { /* ignore */ }
+      tokenInput = '';
+      authState = 'ok';
+    } else {
+      authError = '令牌不正确，或网络异常，请重试';
+    }
+    verifying = false;
+  }
+
+  $effect(() => {
+    const on401 = () => {
+      if (authState === 'ok') authState = 'locked';
+    };
+    window.addEventListener('mujian:unauthorized', on401);
+    return () => window.removeEventListener('mujian:unauthorized', on401);
+  });
+
   onMount(() => {
+    checkAuth();
     initTheme();
     initStorageInfo();
     reportWebVitals();
@@ -240,11 +300,37 @@
   {/if}
 
   <main id="main" class="content">
-    {@render children()}
+    {#if authState === 'ok'}
+      {@render children()}
+    {:else if authState === 'checking'}
+      <div class="auth-loading muted">加载中…</div>
+    {/if}
   </main>
   <footer class="foot">
     <span class="muted tiny">幕间 · 现场演出记录</span>
   </footer>
+
+  {#if authState === 'locked'}
+    <div class="auth-gate" role="dialog" aria-modal="true" aria-label="访问验证">
+      <form class="auth-card" onsubmit={submitToken}>
+        <img class="auth-seal" src="/favicon.svg" alt="" />
+        <h1 class="auth-title">幕间</h1>
+        <p class="auth-sub">此服务已开启访问验证，请输入访问令牌继续</p>
+        <input
+          class="input"
+          type="password"
+          bind:value={tokenInput}
+          placeholder="访问令牌"
+          autocomplete="current-password"
+          disabled={verifying}
+        />
+        {#if authError}<div class="auth-error" role="alert">{authError}</div>{/if}
+        <button class="btn primary" type="submit" disabled={verifying}>
+          {verifying ? '验证中…' : '进入'}
+        </button>
+      </form>
+    </div>
+  {/if}
 
   {#if updateReady}
     <button type="button" class="update-banner" onclick={applyUpdate} transition:fly={{ y: 60, duration: 220 }} role="status" aria-live="polite">
@@ -490,4 +576,37 @@
     /* 移动端显示顶栏日历入口（在汉堡左侧） */
     .topbar-cal { display: inline-flex; }
   }
+
+  /* ---------- 全站访问令牌门 ---------- */
+  .auth-loading { padding: 48px 0; text-align: center; }
+
+  .auth-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--bg);
+  }
+
+  .auth-card {
+    width: min(360px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+    padding: 36px 30px;
+    border-radius: var(--radius-lg, 16px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 16px 48px rgb(0 0 0 / 0.14);
+  }
+
+  .auth-seal { width: 44px; height: 44px; margin: 0 auto; }
+  .auth-title { margin: 0; font-size: 22px; letter-spacing: 0.08em; }
+  .auth-sub { margin: 0 0 6px; color: var(--text-2); font-size: 13px; }
+  .auth-card .input { text-align: center; }
+  .auth-error { color: var(--danger); font-size: 13px; }
 </style>

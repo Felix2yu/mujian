@@ -16,6 +16,28 @@ function authHeaders() {
   return t ? { 'X-Auth-Token': t } : {};
 }
 
+// 任意接口返回 401 时广播一次全局事件：布局层据此弹出全站令牌门，
+// 覆盖「服务端启用/更换令牌后会话中途失效」的场景。
+function markUnauthorized() {
+  try {
+    window.dispatchEvent(new CustomEvent('mujian:unauthorized'));
+  } catch (e) { /* ignore */ }
+}
+
+// 供令牌门校验输入：用给定令牌探测一个需要鉴权的轻量接口。
+export async function verifyAuthToken(token) {
+  if (!token) return false;
+  try {
+    const res = await fetch(`${API_BASE}/api/stats`, {
+      credentials: 'same-origin',
+      headers: { 'X-Auth-Token': token }
+    });
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
 async function request(path, options = {}) {
   const url = `${API_BASE}${path}`;
   const controller = new AbortController();
@@ -31,6 +53,7 @@ async function request(path, options = {}) {
     });
 
     if (!res.ok) {
+      if (res.status === 401) markUnauthorized();
       const err = await res.json().catch(() => ({ error: 'Request failed' }));
       throw new Error(err.error || 'Request failed');
     }
@@ -56,6 +79,7 @@ export async function streamRequest(path, options = {}, onLine) {
     ...options
   });
   if (!res.ok) {
+    if (res.status === 401) markUnauthorized();
     const err = await res.json().catch(() => ({ error: 'Request failed' }));
     throw new Error(err.error || 'Request failed');
   }
@@ -170,10 +194,17 @@ export const api = {
   getAnalytics: () => request('/api/analytics'),
   getCalendar: (year, month) => request(`/api/calendar?year=${year}&month=${month}`),
   // ICS 订阅地址：服务端启用 token 鉴权时日历客户端无法带请求头，
-  // 改以 ?token= 查询参数传递。
-  getICSUrl: () => {
+  // 改以 ?token= 查询参数传递。extra 用于合并附加参数（如 dl=1），
+  // 避免调用方手拼第二个 "?" 把 token 值污染掉。
+  getICSUrl: (extra = {}) => {
+    const q = new URLSearchParams();
     const t = getAuthToken();
-    return `${API_BASE}/api/calendar.ics${t ? `?token=${encodeURIComponent(t)}` : ''}`;
+    if (t) q.set('token', t);
+    for (const [k, v] of Object.entries(extra)) {
+      if (v !== '' && v != null) q.set(k, v);
+    }
+    const qs = q.toString();
+    return `${API_BASE}/api/calendar.ics${qs ? `?${qs}` : ''}`;
   },
 
   getAutocomplete: (field) => request(`/api/autocomplete/${field}`),
