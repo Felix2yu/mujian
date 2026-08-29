@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -217,3 +218,86 @@ func TestSaveAndLoadFromFile(t *testing.T) {
 		t.Errorf("s3 should be accepted: %q", c3.StorageType)
 	}
 }
+
+func TestAuthTokenLifecycle(t *testing.T) {
+	c := &Config{}
+	r := c.GetSettingsResponse()
+	if r["auth_required"] != false {
+		t.Errorf("auth_required should be false without a token: %v", r["auth_required"])
+	}
+
+	// Update sets the token; the response must flag it but never echo it.
+	tok := "s3cr3t-token"
+	c.Update(&SettingsUpdate{AuthToken: &tok})
+	if c.AuthTokenValue() != "s3cr3t-token" {
+		t.Errorf("AuthTokenValue: got %q", c.AuthTokenValue())
+	}
+	r = c.GetSettingsResponse()
+	if r["auth_required"] != true {
+		t.Errorf("auth_required should be true after Update: %v", r["auth_required"])
+	}
+	for k, v := range r {
+		if s, ok := v.(string); ok && s == tok {
+			t.Errorf("token leaked via settings field %q", k)
+		}
+	}
+
+	// Token round-trips through the settings file.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	if err := c.SaveToFile(path); err != nil {
+		t.Fatalf("SaveToFile: %v", err)
+	}
+	c2 := &Config{}
+	if err := c2.LoadFromFile(path); err != nil {
+		t.Fatalf("LoadFromFile: %v", err)
+	}
+	if c2.AuthTokenValue() != "s3cr3t-token" {
+		t.Errorf("token should round-trip via settings file: got %q", c2.AuthTokenValue())
+	}
+
+	// Update can replace or clear the token.
+	tok2 := "rotated"
+	c2.Update(&SettingsUpdate{AuthToken: &tok2})
+	if c2.AuthTokenValue() != "rotated" {
+		t.Errorf("token rotation failed: %q", c2.AuthTokenValue())
+	}
+	cleared := ""
+	c2.Update(&SettingsUpdate{AuthToken: &cleared})
+	if c2.AuthTokenValue() != "" {
+		t.Errorf("empty update should clear the token: %q", c2.AuthTokenValue())
+	}
+}
+
+// The accessors must be safe to call concurrently with Update (handlers read
+// config fields on every request while PUT /api/settings mutates them). Run
+// with -race to verify.
+func TestConfigAccessorsConcurrentWithUpdate(t *testing.T) {
+	c := &Config{StorageType: "local", ImageFormat: "avif"}
+	accessKey := "ak"
+	secretKey := "sk"
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			c.Update(&SettingsUpdate{
+				ImageFormat: ptr("webp"),
+				S3AccessKey: &accessKey,
+				S3SecretKey: &secretKey,
+			})
+		}
+		close(done)
+	}()
+	for i := 0; i < 200; i++ {
+		_ = c.GetImageFormat()
+		_, _ = c.GetStorageMode()
+		_ = c.GetS3Settings()
+		_ = c.AuthTokenValue()
+		_ = c.GetSettingsResponse()
+	}
+	wg.Wait()
+}
+
+func ptr(s string) *string { return &s }

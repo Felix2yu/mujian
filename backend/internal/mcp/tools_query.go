@@ -103,7 +103,7 @@ func (s *Server) resolveDrama(id, name string) (*models.Drama, error) {
 	}
 	lower := strings.ToLower(name)
 	var exact *models.Drama
-	var partial []string        // 仅用于错误提示展示
+	var partial []string            // 仅用于错误提示展示
 	var partialRefs []*models.Drama // 与 partial 一一对应，唯一命中时直接采用
 	for i := range dramas {
 		d := &dramas[i]

@@ -93,4 +93,49 @@ func TestEscapeICS(t *testing.T) {
 	if got := escapeICS("plain"); got != "plain" {
 		t.Errorf("plain string should be unchanged: %q", got)
 	}
+	// Bare CR and CRLF are folded to the literal backslash-n escape (regression:
+	// CR used to pass through raw and could split a content line).
+	for _, in := range []string{"a\rb", "a\r\nb"} {
+		if got := escapeICS(in); got != "a\\nb" {
+			t.Errorf("escapeICS(%q) = %q, want %q", in, got, "a\\nb")
+		}
+	}
+}
+
+// Western-hemisphere timezones must produce a negative TZOFFSET (RFC 5545),
+// not the invalid "+-0500" emitted before the sign fix.
+func TestGenerateCalendarNegativeOffset(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("tzdata unavailable")
+	}
+	out := GenerateCalendar(nil, loc)
+	if !strings.Contains(out, "TZOFFSETFROM:-") || !strings.Contains(out, "TZOFFSETTO:-") {
+		t.Errorf("negative offset should be signed with '-':\n%s", out)
+	}
+	if strings.Contains(out, "+-") {
+		t.Errorf("invalid '+-HHMM' offset found:\n%s", out)
+	}
+}
+
+// Category names and carriage returns are user-controlled: they must be
+// escaped so a record cannot break the ICS structure (calendar injection).
+func TestGenerateCalendarEscapesCategoriesAndCR(t *testing.T) {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	rec := models.Record{
+		ID:           "rec-x",
+		Name:         "注入测试",
+		CategoryName: "昆\r曲,折子\r\n戏",
+		Remark:       "第一行\r\n第二行",
+		Date:         1755000000,
+	}
+	out := GenerateCalendar([]models.Record{rec}, loc)
+	for _, bad := range []string{"CATEGORIES:昆\r", "昆\n曲", ",折子\r"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("unescaped ICS structure break %q in:\n%s", bad, out)
+		}
+	}
+	if !strings.Contains(out, "CATEGORIES:昆\\n曲\\,折子\\n戏\r\n") {
+		t.Errorf("CATEGORIES should escape CR/LF/comma (CRLF folds to one \\n):\n%s", out)
+	}
 }

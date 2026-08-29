@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"mujian/internal/models"
@@ -2115,5 +2116,53 @@ func TestCountRecordsBranches(t *testing.T) {
 				t.Errorf("CountRecords(%+v) = %d, want %d", tc.f, got, tc.want)
 			}
 		})
+	}
+}
+
+// ListRecordsContext/CountRecordsContext must behave like their non-ctx
+// wrappers, and a cancelled context must stop the query instead of burning
+// SQLite time for an abandoned request.
+func TestListRecordsContext(t *testing.T) {
+	d := newTestDB(t)
+	if err := d.UpsertRecord(sampleRecord("r-ctx", 1755000000)); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.UpsertRecord(sampleRecord("r-ctx-2", 1754900000)); err != nil {
+		t.Fatal(err)
+	}
+
+	recs, err := d.ListRecordsContext(context.Background(), RecordFilter{Query: "牡丹亭"})
+	if err != nil {
+		t.Fatalf("ListRecordsContext: %v", err)
+	}
+	if len(recs) != 2 {
+		t.Fatalf("got %d records, want 2", len(recs))
+	}
+	if recs[0].DramaIDs == nil {
+		t.Error("backfills should run in the ctx path too")
+	}
+
+	total, err := d.CountRecordsContext(context.Background(), RecordFilter{Query: "牡丹亭"})
+	if err != nil {
+		t.Fatalf("CountRecordsContext: %v", err)
+	}
+	if total != 2 {
+		t.Fatalf("total = %d, want 2", total)
+	}
+
+	// Wrapper equivalence.
+	wrapped, err := d.ListRecords(RecordFilter{Query: "牡丹亭"})
+	if err != nil || len(wrapped) != 2 {
+		t.Fatalf("ListRecords wrapper: %v, %d records", err, len(wrapped))
+	}
+
+	// A pre-cancelled context fails the query instead of scanning.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := d.ListRecordsContext(ctx, RecordFilter{}); err == nil {
+		t.Error("cancelled context should abort ListRecordsContext")
+	}
+	if _, err := d.CountRecordsContext(ctx, RecordFilter{}); err == nil {
+		t.Error("cancelled context should abort CountRecordsContext")
 	}
 }

@@ -1387,3 +1387,43 @@ func TestListRecordsPaginationAPI(t *testing.T) {
 		t.Errorf("filter+limit: len=%d, want 3", len(list))
 	}
 }
+
+// bodyLimitMiddleware caps JSON bodies at 4MB: an oversized create payload is
+// rejected with 400 instead of being buffered into memory unbounded.
+func TestBodyLimitRejectsOversizedJSON(t *testing.T) {
+	ts, _, _, _ := newTestServer(t, nil)
+
+	big := `{"name":"超大请求","remark":"` + strings.Repeat("x", 5<<20) + `"}`
+	res, _ := doReq(t, "POST", ts.URL+"/api/records", strings.NewReader(big), "application/json")
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("oversized JSON body: got %d, want 400", res.StatusCode)
+	}
+
+	// A normal payload still goes through.
+	res, body := doReq(t, "POST", ts.URL+"/api/records",
+		strings.NewReader(`{"name":"正常记录"}`), "application/json")
+	if res.StatusCode != http.StatusCreated {
+		t.Errorf("normal create after limit middleware: got %d, body %s", res.StatusCode, body)
+	}
+}
+
+// The multipart endpoints get a larger allowance: the 40MB upload cap must
+// accept an 8MB file (the documented limit) while the JSON default would not.
+func TestBodyLimitAllowsCoverUpload(t *testing.T) {
+	ts, _, _, _ := newTestServer(t, nil)
+
+	img := bytes.NewBuffer(nil)
+	if err := jpeg.Encode(img, image.NewRGBA(image.Rect(0, 0, 64, 64)), nil); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	fw, _ := w.CreateFormFile("file", "cover.jpg")
+	fw.Write(img.Bytes())
+	w.Close()
+
+	res, _ := doReq(t, "POST", ts.URL+"/api/upload", &buf, w.FormDataContentType())
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("8MB-limit upload of %d bytes: got %d, want 200", buf.Len(), res.StatusCode)
+	}
+}
