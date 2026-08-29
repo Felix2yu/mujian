@@ -88,6 +88,7 @@
   const dramaLabel = (id) => (dramaList.find((x) => x.id === id) || {}).name || '剧目';
   const artistLabel = (id) => (artistList.find((x) => x.id === id) || {}).name || '演员';
   let showFilter = $state(false);
+  let showMissing = $state(false); // 缺失字段分组默认折叠（数据治理高级维度）
   let zheziNames = $state(new Map());
   let searchTimer;
   let searchComposing = false;
@@ -441,6 +442,7 @@
       exact: sp.get('exact') === '1' || sp.get('exact') === 'true',
       missing: (sp.get('missing') || '').split(',').map((s) => s.trim()).filter(Boolean)
     };
+    if (filters.missing.length) showMissing = true; // 携带缺失筛选进入时自动展开该分组
     urlReady = true;
     loadMeta();
     if (filters.zhezi) ensureZheziNames();
@@ -601,15 +603,21 @@
       </label>
     </div>
     <div class="filter-section">
-      <span class="filter-section-title">缺失字段（数据治理）</span>
-      <div class="missing-grid">
-        {#each MISSING_FIELDS as f}
-          <label class="missing-opt">
-            <input type="checkbox" checked={filters.missing.includes(f.value)} onchange={() => toggleMissing(f.value)} />
-            <span>{f.label}</span>
-          </label>
-        {/each}
-      </div>
+      <button type="button" class="filter-section-title collapsible" onclick={() => (showMissing = !showMissing)} aria-expanded={showMissing}>
+        <span>缺失字段（数据治理）</span>
+        {#if filters.missing.length}<span class="missing-count">{filters.missing.length}</span>{/if}
+        <svg class="chev" class:open={showMissing} viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      {#if showMissing}
+        <div class="missing-grid">
+          {#each MISSING_FIELDS as f}
+            <label class="missing-opt">
+              <input type="checkbox" checked={filters.missing.includes(f.value)} onchange={() => toggleMissing(f.value)} />
+              <span>{f.label}</span>
+            </label>
+          {/each}
+        </div>
+      {/if}
     </div>
 
     <div class="filter-section">
@@ -641,6 +649,7 @@
 
     <div class="filter-section">
       <span class="filter-section-title">时间区间（起 / 止）</span>
+      <div class="filter-hint">可只填其中一项：仅起始=该日及之后，仅结束=该日及之前。</div>
       <div class="filter-fields">
         <label class="filter-field">
           <span class="filter-label">起始日期</span>
@@ -852,12 +861,12 @@
   .filter-close:hover { background: var(--surface-3); color: var(--text); }
   .filter-fields {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 12px;
   }
   .filter-field { display: flex; flex-direction: column; gap: 6px; margin: 0; }
   .filter-label { font-size: 13px; font-weight: 500; color: var(--text-2); }
-  .filter-field .input { width: 100%; }
+  .filter-field .input { width: 100%; min-width: 0; }
 
   /* 缺失字段分组 */
   .filter-section {
@@ -871,6 +880,12 @@
     font-weight: 600;
     color: var(--text-2);
     margin-bottom: 8px;
+  }
+  .filter-hint {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-3, #9aa0a6);
+    margin: -4px 0 10px;
   }
   .missing-grid {
     display: grid;
@@ -909,6 +924,55 @@
     justify-content: flex-end;
     margin-top: 16px;
   }
+
+  /* 桌面端：加宽筛选面板并放宽网格列数，承载更多维度而不显拥挤 */
+  @media (min-width: 640px) {
+    .filter-panel {
+      width: min(860px, 94vw);
+      max-height: 88vh;
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+    }
+    .filter-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+
+  /* 缺失字段分组可折叠 */
+  .collapsible {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    margin: 0 0 8px;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 9px;
+    background: var(--surface-3);
+    color: var(--text-2);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  }
+  .collapsible:hover { background: var(--accent-soft); color: var(--accent); }
+  .collapsible > span:first-child { flex: 1; min-width: 0; }
+  .missing-count {
+    flex-shrink: 0;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 18px;
+    text-align: center;
+  }
+  .chev { flex-shrink: 0; transition: transform var(--t-fast) var(--ease); transform: rotate(-90deg); }
+  .chev.open { transform: rotate(0deg); }
 
   .chips { display: flex; gap: 6px; flex-wrap: wrap; }
   .chip {
