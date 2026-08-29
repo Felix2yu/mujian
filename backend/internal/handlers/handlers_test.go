@@ -14,6 +14,7 @@ import (
 	"image/jpeg"
 	"io"
 	"mime/multipart"
+	"mujian/internal/backup"
 	"mujian/internal/config"
 	"mujian/internal/db"
 	"mujian/internal/models"
@@ -53,7 +54,8 @@ func newTestServer(t *testing.T, mutate func(*config.Config)) (*httptest.Server,
 	if mutate != nil {
 		mutate(cfg)
 	}
-	h := New(database, cfg, store)
+	bm := backup.New(database, filepath.Join(dir, "backups"), cfg)
+	h := New(database, cfg, store, bm)
 	mux := chi.NewRouter()
 	mux.Mount("/api", h.Routes())
 	ts := httptest.NewServer(mux)

@@ -7,7 +7,8 @@ import (
 
 // GetCalendarEvents 覆盖点：月内过滤、月末边界、跨年隔离、字段映射、升序、空结果。
 func TestGetCalendarEvents(t *testing.T) {
-	g := newTestDB(t) // 默认时区 UTC
+	g := newTestDB(t)
+	g.SetLocation(time.UTC) // 本测试按 UTC 日期构造记录，显式固定时区
 
 	mk := func(id string, y int, m time.Month, d int, status int, thumb string) {
 		t.Helper()

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"mujian/internal/backup"
 	"mujian/internal/config"
 	"mujian/internal/db"
 	"mujian/internal/handlers"
@@ -189,7 +190,13 @@ func main() {
 		w.Write([]byte("ok"))
 	})
 
-	h := handlers.New(database, cfg, st)
+	// 自动备份：快照写在数据库同目录的 backups/ 下；settings.json 先于
+	// Start() 加载，启动即按已保存的间隔调度。
+	backupMgr := backup.New(database, filepath.Join(filepath.Dir(cfg.DBPath), "backups"), cfg)
+	backupMgr.Start()
+	defer backupMgr.Stop()
+
+	h := handlers.New(database, cfg, st, backupMgr)
 	r.Mount("/api", authMiddleware(cfg)(h.Routes()))
 
 	// MCP over Streamable HTTP：与 /api 同进程同库，供 AI 客户端远程调用

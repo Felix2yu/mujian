@@ -21,6 +21,9 @@ func newTestDB(t *testing.T) *DB {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	// 与生产一致使用本地时区：UTC 会导致「今天」类日期断言在本地
+	// 午夜 0 点到早上 8 点（UTC+8）之间失败。
+	db.SetLocation(time.Local)
 	t.Cleanup(db.Close)
 	return db
 }

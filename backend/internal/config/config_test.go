@@ -301,3 +301,48 @@ func TestConfigAccessorsConcurrentWithUpdate(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+func TestBackupSettingsRoundTrip(t *testing.T) {
+	c := &Config{}
+	if c.GetBackupIntervalHours() != 0 {
+		t.Error("backup should be disabled by default")
+	}
+	if c.GetBackupKeep() != 10 {
+		t.Errorf("default keep should be 10, got %d", c.GetBackupKeep())
+	}
+
+	interval := 6
+	keep := 3
+	c.Update(&SettingsUpdate{BackupIntervalHours: &interval, BackupKeep: &keep})
+	if c.GetBackupIntervalHours() != 6 || c.GetBackupKeep() != 3 {
+		t.Fatalf("update failed: interval=%d keep=%d", c.GetBackupIntervalHours(), c.GetBackupKeep())
+	}
+	if r := c.GetSettingsResponse(); r["backup_interval_hours"] != 6 || r["backup_keep"] != 3 {
+		t.Errorf("settings response missing backup fields: %v", r)
+	}
+
+	// 保存/加载往返
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	if err := c.SaveToFile(path); err != nil {
+		t.Fatal(err)
+	}
+	c2 := &Config{}
+	if err := c2.LoadFromFile(path); err != nil {
+		t.Fatal(err)
+	}
+	if c2.GetBackupIntervalHours() != 6 || c2.GetBackupKeep() != 3 {
+		t.Fatalf("round trip: interval=%d keep=%d", c2.GetBackupIntervalHours(), c2.GetBackupKeep())
+	}
+
+	// 越界值收敛：负间隔归 0（关闭），保留份数下限 1
+	neg := -5
+	zeroKeep := 0
+	c2.Update(&SettingsUpdate{BackupIntervalHours: &neg, BackupKeep: &zeroKeep})
+	if c2.GetBackupIntervalHours() != 0 {
+		t.Error("negative interval should clamp to 0 (disabled)")
+	}
+	if c2.GetBackupKeep() != 1 {
+		t.Errorf("keep=0 should clamp to minimum 1, got %d", c2.GetBackupKeep())
+	}
+}

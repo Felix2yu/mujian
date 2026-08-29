@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,21 +18,26 @@ type Config struct {
 	// AuthToken enables optional bearer-token auth for /api and /mcp when
 	// non-empty. It is read via AuthTokenValue() (RLock'd) and never echoed
 	// back by GetSettingsResponse.
-	AuthToken     string `json:"-"`
-	Theme         string `json:"theme"`
-	StorageType   string `json:"storage_type"`
-	ImageFormat   string `json:"image_format"` // avif | webp | jpeg
-	S3Endpoint    string `json:"s3_endpoint"`
-	S3Bucket      string `json:"s3_bucket"`
-	S3Region      string `json:"s3_region"`
-	S3AccessKey   string `json:"s3_access_key"`
-	S3SecretKey   string `json:"s3_secret_key"`
-	S3PublicURL   string `json:"s3_public_url"`
-	ShowFriends   bool   `json:"show_friends"`
-	ShowPayPrice  bool   `json:"show_pay_price"`
-	ShowOtherCost bool   `json:"show_other_cost"`
-	MultiCurrency bool   `json:"multi_currency"`
-	mu            sync.RWMutex
+	AuthToken string `json:"-"`
+	// BackupIntervalHours: 0 = 自动备份关闭；BackupKeep: 快照保留份数；
+	// BackupFormat: db（VACUUM 快照）| json（data.json）| zip（data.json+封面）。
+	BackupIntervalHours int    `json:"-"`
+	BackupKeep          int    `json:"-"`
+	BackupFormat        string `json:"-"`
+	Theme               string `json:"theme"`
+	StorageType         string `json:"storage_type"`
+	ImageFormat         string `json:"image_format"` // avif | webp | jpeg
+	S3Endpoint          string `json:"s3_endpoint"`
+	S3Bucket            string `json:"s3_bucket"`
+	S3Region            string `json:"s3_region"`
+	S3AccessKey         string `json:"s3_access_key"`
+	S3SecretKey         string `json:"s3_secret_key"`
+	S3PublicURL         string `json:"s3_public_url"`
+	ShowFriends         bool   `json:"show_friends"`
+	ShowPayPrice        bool   `json:"show_pay_price"`
+	ShowOtherCost       bool   `json:"show_other_cost"`
+	MultiCurrency       bool   `json:"multi_currency"`
+	mu                  sync.RWMutex
 }
 
 var (
@@ -41,25 +47,28 @@ var (
 func Load() *Config {
 	loc := loadTimezone(getEnv("TZ", "Asia/Shanghai"))
 	global = &Config{
-		AllowLocalStorage: os.Getenv("ALLOW_LOCAL_STORAGE") != "false",
-		DBPath:            getEnv("DB_PATH", "./data/mujian.db"),
-		UploadDir:         getEnv("UPLOAD_DIR", "./data/uploads"),
-		Port:              getEnv("PORT", "8080"),
-		Timezone:          loc.String(),
-		AuthToken:         os.Getenv("MJ_AUTH_TOKEN"),
-		Theme:             getEnv("THEME", "auto"),
-		StorageType:       getEnv("STORAGE_TYPE", "local"),
-		ImageFormat:       getEnv("IMAGE_FORMAT", "avif"),
-		S3Endpoint:        os.Getenv("S3_ENDPOINT"),
-		S3Bucket:          os.Getenv("S3_BUCKET"),
-		S3Region:          getEnv("S3_REGION", "us-east-1"),
-		S3AccessKey:       os.Getenv("S3_ACCESS_KEY"),
-		S3SecretKey:       os.Getenv("S3_SECRET_KEY"),
-		S3PublicURL:       os.Getenv("S3_PUBLIC_URL"),
-		ShowFriends:       true,
-		ShowPayPrice:      true,
-		ShowOtherCost:     true,
-		MultiCurrency:     true,
+		AllowLocalStorage:   os.Getenv("ALLOW_LOCAL_STORAGE") != "false",
+		DBPath:              getEnv("DB_PATH", "./data/mujian.db"),
+		UploadDir:           getEnv("UPLOAD_DIR", "./data/uploads"),
+		Port:                getEnv("PORT", "8080"),
+		Timezone:            loc.String(),
+		AuthToken:           os.Getenv("MJ_AUTH_TOKEN"),
+		BackupIntervalHours: getEnvInt("BACKUP_INTERVAL_HOURS", 0),
+		BackupKeep:          getEnvInt("BACKUP_KEEP", 10),
+		BackupFormat:        getEnv("BACKUP_FORMAT", "db"),
+		Theme:               getEnv("THEME", "auto"),
+		StorageType:         getEnv("STORAGE_TYPE", "local"),
+		ImageFormat:         getEnv("IMAGE_FORMAT", "avif"),
+		S3Endpoint:          os.Getenv("S3_ENDPOINT"),
+		S3Bucket:            os.Getenv("S3_BUCKET"),
+		S3Region:            getEnv("S3_REGION", "us-east-1"),
+		S3AccessKey:         os.Getenv("S3_ACCESS_KEY"),
+		S3SecretKey:         os.Getenv("S3_SECRET_KEY"),
+		S3PublicURL:         os.Getenv("S3_PUBLIC_URL"),
+		ShowFriends:         true,
+		ShowPayPrice:        true,
+		ShowOtherCost:       true,
+		MultiCurrency:       true,
 	}
 	return global
 }
@@ -136,6 +145,26 @@ func (c *Config) Update(s *SettingsUpdate) {
 	if s.AuthToken != nil {
 		c.AuthToken = *s.AuthToken
 	}
+	if s.BackupIntervalHours != nil {
+		v := *s.BackupIntervalHours
+		if v < 0 {
+			v = 0
+		}
+		c.BackupIntervalHours = v
+	}
+	if s.BackupKeep != nil {
+		v := *s.BackupKeep
+		if v < 1 {
+			v = 1
+		}
+		c.BackupKeep = v
+	}
+	if s.BackupFormat != nil {
+		switch *s.BackupFormat {
+		case "db", "json", "zip":
+			c.BackupFormat = *s.BackupFormat
+		}
+	}
 }
 
 type SettingsUpdate struct {
@@ -153,6 +182,10 @@ type SettingsUpdate struct {
 	ShowOtherCost *bool   `json:"show_other_cost"`
 	MultiCurrency *bool   `json:"multi_currency"`
 	AuthToken     *string `json:"auth_token"`
+	// 自动备份：0 = 关闭，单位小时；Keep 为快照保留份数（>=1）。
+	BackupIntervalHours *int    `json:"backup_interval_hours,omitempty"`
+	BackupKeep          *int    `json:"backup_keep,omitempty"`
+	BackupFormat        *string `json:"backup_format,omitempty"`
 }
 
 // maskSecret masks a credential for GET /api/settings: it never returns the
@@ -173,21 +206,24 @@ func (c *Config) GetSettingsResponse() map[string]interface{} {
 	defer c.mu.RUnlock()
 
 	return map[string]interface{}{
-		"theme":               c.Theme,
-		"storage_type":        c.StorageType,
-		"image_format":        c.ImageFormat,
-		"allow_local_storage": c.AllowLocalStorage,
-		"s3_endpoint":         c.S3Endpoint,
-		"s3_bucket":           c.S3Bucket,
-		"s3_region":           c.S3Region,
-		"s3_access_key":       maskSecret(c.S3AccessKey),
-		"s3_secret_key":       maskSecret(c.S3SecretKey),
-		"s3_public_url":       c.S3PublicURL,
-		"show_friends":        c.ShowFriends,
-		"show_pay_price":      c.ShowPayPrice,
-		"show_other_cost":     c.ShowOtherCost,
-		"multi_currency":      c.MultiCurrency,
-		"auth_required":       c.AuthToken != "",
+		"theme":                 c.Theme,
+		"storage_type":          c.StorageType,
+		"image_format":          c.ImageFormat,
+		"allow_local_storage":   c.AllowLocalStorage,
+		"s3_endpoint":           c.S3Endpoint,
+		"s3_bucket":             c.S3Bucket,
+		"s3_region":             c.S3Region,
+		"s3_access_key":         maskSecret(c.S3AccessKey),
+		"s3_secret_key":         maskSecret(c.S3SecretKey),
+		"s3_public_url":         c.S3PublicURL,
+		"show_friends":          c.ShowFriends,
+		"show_pay_price":        c.ShowPayPrice,
+		"show_other_cost":       c.ShowOtherCost,
+		"multi_currency":        c.MultiCurrency,
+		"auth_required":         c.AuthToken != "",
+		"backup_interval_hours": c.BackupIntervalHours,
+		"backup_keep":           c.BackupKeep,
+		"backup_format":         c.BackupFormat,
 	}
 }
 
@@ -243,25 +279,55 @@ func (c *Config) AuthTokenValue() string {
 	return c.AuthToken
 }
 
+// GetBackupIntervalHours returns the auto-backup interval (0 = disabled).
+func (c *Config) GetBackupIntervalHours() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BackupIntervalHours
+}
+
+// GetBackupFormat returns the backup payload kind (db/json/zip).
+func (c *Config) GetBackupFormat() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.BackupFormat == "" {
+		return "db"
+	}
+	return c.BackupFormat
+}
+
+// GetBackupKeep returns the snapshot retention count.
+func (c *Config) GetBackupKeep() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.BackupKeep < 1 {
+		return 10
+	}
+	return c.BackupKeep
+}
+
 func (c *Config) SaveToFile(path string) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	data := map[string]string{
-		"theme":           c.Theme,
-		"storage_type":    c.StorageType,
-		"image_format":    c.ImageFormat,
-		"s3_endpoint":     c.S3Endpoint,
-		"s3_bucket":       c.S3Bucket,
-		"s3_region":       c.S3Region,
-		"s3_access_key":   c.S3AccessKey,
-		"s3_secret_key":   c.S3SecretKey,
-		"s3_public_url":   c.S3PublicURL,
-		"show_friends":    b2s(c.ShowFriends),
-		"show_pay_price":  b2s(c.ShowPayPrice),
-		"show_other_cost": b2s(c.ShowOtherCost),
-		"multi_currency":  b2s(c.MultiCurrency),
-		"auth_token":      c.AuthToken,
+		"theme":                 c.Theme,
+		"storage_type":          c.StorageType,
+		"image_format":          c.ImageFormat,
+		"s3_endpoint":           c.S3Endpoint,
+		"s3_bucket":             c.S3Bucket,
+		"s3_region":             c.S3Region,
+		"s3_access_key":         c.S3AccessKey,
+		"s3_secret_key":         c.S3SecretKey,
+		"s3_public_url":         c.S3PublicURL,
+		"show_friends":          b2s(c.ShowFriends),
+		"show_pay_price":        b2s(c.ShowPayPrice),
+		"show_other_cost":       b2s(c.ShowOtherCost),
+		"multi_currency":        b2s(c.MultiCurrency),
+		"auth_token":            c.AuthToken,
+		"backup_interval_hours": strconv.Itoa(c.BackupIntervalHours),
+		"backup_keep":           strconv.Itoa(c.BackupKeep),
+		"backup_format":         c.BackupFormat,
 	}
 
 	b, err := json.MarshalIndent(data, "", "  ")
@@ -332,6 +398,22 @@ func (c *Config) LoadFromFile(path string) error {
 	if v, ok := data["auth_token"]; ok {
 		c.AuthToken = v
 	}
+	if v, ok := data["backup_interval_hours"]; ok {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			c.BackupIntervalHours = n
+		}
+	}
+	if v, ok := data["backup_keep"]; ok {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
+			c.BackupKeep = n
+		}
+	}
+	if v, ok := data["backup_format"]; ok {
+		switch v {
+		case "db", "json", "zip":
+			c.BackupFormat = v
+		}
+	}
 
 	return nil
 }
@@ -339,6 +421,15 @@ func (c *Config) LoadFromFile(path string) error {
 func getEnv(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return def
+}
+
+func getEnvInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
 	}
 	return def
 }

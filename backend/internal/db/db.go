@@ -771,6 +771,14 @@ func appendStatusPredicate(f RecordFilter, where *[]string, args *[]interface{})
 
 // ListRecordsContext is ListRecords bound to ctx: the SQLite driver honors
 // cancellation, so an abandoned HTTP request stops burning query time.
+// VacuumInto writes a consistent snapshot of the whole database to path via
+// SQLite's VACUUM INTO (single statement, safe under WAL with concurrent
+// readers; fails if the target file already exists).
+func (db *DB) VacuumInto(path string) error {
+	_, err := db.conn.Exec("VACUUM INTO ?", path)
+	return err
+}
+
 // appendSearchPredicate adds the keyword-search predicate. Space-separated
 // tokens are AND-ed: "牡丹亭 上海" matches records that contain 牡丹亭 in some
 // searchable column AND 上海 in some (possibly different) column. A single

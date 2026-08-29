@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"mujian/internal/backup"
 	"mujian/internal/config"
 	"mujian/internal/db"
 	"mujian/internal/ics"
@@ -24,6 +25,7 @@ type Handler struct {
 	db      *db.DB
 	cfg     *config.Config
 	storage storage.Storage
+	backup  *backup.Manager
 	// TTL caches for the read-only aggregate endpoints; invalidated by
 	// statsInvalidationMiddleware after every successful mutation.
 	statsCache     *statsCache[*models.Stats]
@@ -31,15 +33,22 @@ type Handler struct {
 	analyticsCache *statsCache[*models.AnalyticsData]
 }
 
-func New(database *db.DB, cfg *config.Config, st storage.Storage) *Handler {
-	return &Handler{
+func New(database *db.DB, cfg *config.Config, st storage.Storage, bm *backup.Manager) *Handler {
+	h := &Handler{
 		db:             database,
 		cfg:            cfg,
 		storage:        st,
+		backup:         bm,
 		statsCache:     newStatsCache[*models.Stats](5 * time.Second),
 		dashboardCache: newStatsCache[*models.DashboardStats](5 * time.Second),
 		analyticsCache: newStatsCache[*models.AnalyticsData](5 * time.Second),
 	}
+	// 自动备份的 JSON/ZIP 两种格式复用导出端点的构建逻辑；数据库快照格式
+	// 由 backup.Manager 自己执行 VACUUM INTO，无需导出器。
+	if bm != nil {
+		bm.SetExporter(h.exportDataJSON, h.exportZipBytes)
+	}
+	return h
 }
 
 // invalidateStats drops all aggregate caches (called after mutations).
@@ -124,6 +133,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Post("/upload", h.uploadFile)
 	r.Get("/export", h.exportRecords)
 	r.Post("/backup/restore", h.backupRestore)
+	r.Post("/backup/run", h.runBackupNow)
 	r.Post("/storage/migrate-to-s3", h.migrateToS3)
 
 	return r
@@ -945,7 +955,21 @@ func (h *Handler) getByField(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
-	jsonResp(w, 200, h.cfg.GetSettingsResponse())
+	resp := h.cfg.GetSettingsResponse()
+	lastRun, lastErr := h.backup.Status()
+	resp["last_backup_at"] = lastRun
+	resp["backup_last_error"] = lastErr
+	jsonResp(w, 200, resp)
+}
+
+// POST /api/backup/run — 手动触发一次备份，返回快照文件名。
+func (h *Handler) runBackupNow(w http.ResponseWriter, r *http.Request) {
+	name, err := h.backup.RunNow()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]interface{}{"file": name})
 }
 
 func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
@@ -956,6 +980,8 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	h.cfg.Update(&req)
 	h.cfg.SaveToFile(filepath.Join(h.cfg.DBPath, "..", "settings.json"))
+	// 备份间隔可能变了：让调度器重算下次运行时间
+	h.backup.Reschedule()
 	jsonResp(w, 200, h.cfg.GetSettingsResponse())
 }
 
@@ -994,13 +1020,7 @@ func (h *Handler) exportRecords(w http.ResponseWriter, r *http.Request) {
 		h.exportZIP(w, r)
 		return
 	}
-
-	data, err := h.db.Export()
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	b, err := json.MarshalIndent(data, "", "  ")
+	b, err := h.exportDataJSON()
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -1011,25 +1031,47 @@ func (h *Handler) exportRecords(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
+// exportDataJSON renders the full export payload (records + categories +
+// meta) as indented JSON. Shared by the download endpoint and the auto-backup
+// exporter.
+func (h *Handler) exportDataJSON() ([]byte, error) {
+	data, err := h.db.Export()
+	if err != nil {
+		return nil, err
+	}
+	return json.MarshalIndent(data, "", "  ")
+}
+
 // exportZIP downloads the converted-format archive: data.json + binary
 // covers/ (read from the uploads dir), ready to be re-imported directly.
 func (h *Handler) exportZIP(w http.ResponseWriter, r *http.Request) {
-	data, err := h.db.Export()
+	b, err := h.exportZipBytes()
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
+	filename := fmt.Sprintf("mujian_export_%s.zip", time.Now().Format("20060102"))
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	w.Write(b)
+}
+
+// exportZipBytes builds the data.json + covers/ archive in memory. Shared by
+// the download endpoint and the auto-backup exporter.
+func (h *Handler) exportZipBytes() ([]byte, error) {
+	data, err := h.db.Export()
+	if err != nil {
+		return nil, err
+	}
 	jsonBytes, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
+		return nil, err
 	}
 
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 	if err := writeZipEntryBytes(zw, "data.json", jsonBytes); err != nil {
-		jsonErr(w, 500, "failed to write data.json: "+err.Error())
-		return
+		return nil, fmt.Errorf("failed to write data.json: %w", err)
 	}
 
 	uploadRoot := filepath.Clean(h.cfg.UploadDir)
@@ -1052,21 +1094,15 @@ func (h *Handler) exportZIP(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if err := writeZipEntryBytes(zw, "covers/"+name, b); err != nil {
-			jsonErr(w, 500, "failed to write cover: "+err.Error())
-			return
+			return nil, fmt.Errorf("failed to write cover: %w", err)
 		}
 		seen[name] = true
 		covers++
 	}
 	if err := zw.Close(); err != nil {
-		jsonErr(w, 500, "failed to finalize zip: "+err.Error())
-		return
+		return nil, fmt.Errorf("failed to finalize zip: %w", err)
 	}
-
-	filename := fmt.Sprintf("mujian_export_%s.zip", time.Now().Format("20060102"))
-	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
-	w.Write(buf.Bytes())
+	return buf.Bytes(), nil
 }
 
 func writeZipEntryBytes(zw *zip.Writer, name string, data []byte) error {

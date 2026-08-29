@@ -213,6 +213,8 @@ export const api = {
   getSettings: () => request('/api/settings'),
   updateSettings: (data) => request('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
 
+  backupRun: () => request('/api/backup/run', { method: 'POST' }),
+
   uploadFile: async (file) => {
     const form = new FormData();
     form.append('file', file);

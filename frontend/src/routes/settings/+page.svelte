@@ -83,6 +83,28 @@
   let authToken = $state('');
   let authRequired = $state(false);
 
+  // 自动备份
+  const BACKUP_INTERVALS = [
+    { v: 0, label: '关闭' },
+    { v: 24, label: '每天' },
+    { v: 72, label: '每 3 天' },
+    { v: 168, label: '每周' },
+    { v: 336, label: '每 2 周' },
+    { v: 720, label: '每月' },
+    { v: 2160, label: '每季度' }
+  ];
+  const BACKUP_FORMATS = [
+    { v: 'db', label: '数据库快照（.db）', hint: '单个 SQLite 库文件，停机后直接换回文件即可恢复' },
+    { v: 'json', label: '纯数据（data.json）', hint: '体积小，可从「数据」页导入恢复，不含封面' },
+    { v: 'zip', label: '数据 + 封面（.zip）', hint: 'data.json 加全部封面文件，可从「数据」页导入完整恢复' }
+  ];
+  let backupFormat = $state('db');
+  let backupInterval = $state(0);
+  let backupKeep = $state(10);
+  let lastBackupAt = $state(0);
+  let backupRunning = $state(false);
+  let backupMsg = $state('');
+
   function loadPref(key, fallback) {
     try {
       return localStorage.getItem(key) || fallback;
@@ -122,6 +144,10 @@
       mapCustomUrl = loadPref('mujian:map_custom_url', '');
       authToken = loadPref('mujian:auth_token', '');
       authRequired = settings.auth_required === true;
+      backupInterval = typeof settings.backup_interval_hours === 'number' ? settings.backup_interval_hours : 0;
+      backupKeep = typeof settings.backup_keep === 'number' ? settings.backup_keep : 10;
+      backupFormat = ['db', 'json', 'zip'].includes(settings.backup_format) ? settings.backup_format : 'db';
+      lastBackupAt = typeof settings.last_backup_at === 'number' ? settings.last_backup_at : 0;
     } catch (e) {
       error = e.message;
     } finally {
@@ -146,7 +172,10 @@
         show_friends: settings.show_friends,
         show_pay_price: settings.show_pay_price,
         show_other_cost: settings.show_other_cost,
-        multi_currency: settings.multi_currency
+        multi_currency: settings.multi_currency,
+        backup_interval_hours: backupInterval,
+        backup_keep: Math.max(1, Number(backupKeep) || 10),
+        backup_format: backupFormat
       };
       if (settings.storage_type === 's3') {
         payload.s3_endpoint = settings.s3_endpoint.trim();
@@ -163,9 +192,33 @@
       resetStorageInfo();
       saved = true;
       setTimeout(() => (saved = false), 2400);
+      const fresh = await api.getSettings().catch(() => null);
+      if (fresh) lastBackupAt = fresh.last_backup_at || 0;
     } catch (e) {
       error = e.message;
     }
+  }
+
+  async function runBackupNow() {
+    backupRunning = true;
+    backupMsg = '';
+    try {
+      const res = await api.backupRun();
+      backupMsg = `已生成备份 ${res.file}`;
+      lastBackupAt = Math.floor(Date.now() / 1000);
+    } catch (e) {
+      backupMsg = '备份失败：' + e.message;
+    } finally {
+      backupRunning = false;
+      setTimeout(() => (backupMsg = ''), 6000);
+    }
+  }
+
+  function fmtBackupTime(ts) {
+    if (!ts) return '从未备份';
+    const d = new Date(ts * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
   function setTheme(v) {
@@ -493,6 +546,46 @@
         <input type="checkbox" checked={jumpNowPref} onchange={(e) => setJumpNowPref(e.target.checked)} />
       </label>
       <p class="hint" style="margin-top: 8px;">开启后每次打开演出列表会自动滚动到最近已发生（含今天）的演出；列表右下角也随时提供手动定位按钮</p>
+    </div>
+
+    <div class="card sec">
+      <h3>自动备份</h3>
+      <div class="s3-grid">
+        <label class="field">
+          <span>备份格式</span>
+          <select class="input" bind:value={backupFormat} style="max-width: 260px;">
+            {#each BACKUP_FORMATS as f (f.v)}
+              <option value={f.v}>{f.label}</option>
+            {/each}
+          </select>
+          <span class="hint">{BACKUP_FORMATS.find((f) => f.v === backupFormat)?.hint}</span>
+        </label>
+        <label class="field">
+          <span>备份间隔</span>
+          <select class="input" bind:value={backupInterval} style="max-width: 200px;">
+            {#each BACKUP_INTERVALS as it (it.v)}
+              <option value={it.v}>{it.label}</option>
+            {/each}
+          </select>
+          <span class="hint">按间隔自动把所选格式的备份写入服务端 backups/ 目录</span>
+        </label>
+        <label class="field">
+          <span>保留份数</span>
+          <input class="input" type="number" min="1" max="100" bind:value={backupKeep} style="max-width: 120px;" />
+          <span class="hint">超出后自动删除最旧的快照</span>
+        </label>
+        <label class="field">
+          <span>上次备份</span>
+          <input class="input" readonly value={fmtBackupTime(lastBackupAt)} />
+        </label>
+      </div>
+      <div class="convert-actions" style="margin-top: 10px;">
+        <button class="btn" disabled={backupRunning} onclick={runBackupNow}>
+          {backupRunning ? '备份中…' : '立即备份'}
+        </button>
+        {#if backupMsg}<span class="hint" style="align-self: center;">{backupMsg}</span>{/if}
+      </div>
+      <p class="hint" style="margin-top: 8px;">修改间隔或保留份数后需点击页面底部的「保存」才会生效；重启服务不会重置备份节奏（按最近一份快照的时间续算）。</p>
     </div>
 
     <div class="card sec">
