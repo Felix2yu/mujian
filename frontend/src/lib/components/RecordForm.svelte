@@ -778,7 +778,7 @@
   <div class="card section">
     <h3>观演信息</h3>
     <div class="row">
-      <div class="f-md">
+      <div class="f-sm f-dt">
         <label>演出时间</label>
         <input class="input" type="datetime-local" bind:value={form.date_local} autocomplete="off" />
       </div>
@@ -825,7 +825,7 @@
   <div class="card section">
     <h3>费用与渠道</h3>
     <div class="row">
-      <div class="f-sm">
+      <div class="f-md">
         <label>购买渠道</label>
         <div class="combo">
           <input
@@ -849,23 +849,19 @@
         <label>票价</label>
         <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.price} />{#if settings.multi_currency}<input class="input cur" spellcheck="false" bind:value={form.price_currency} />{/if}</div>
       </div>
-    </div>
-    {#if settings.show_pay_price}
-      <div class="row">
+      {#if settings.show_pay_price}
         <div class="f-sm">
           <label>实付</label>
           <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.pay_price} />{#if settings.multi_currency}<select class="input cur" bind:value={form.pay_price_currency}>{#each currencyOptions(form.pay_price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
         </div>
-      </div>
-    {/if}
-    {#if settings.show_other_cost}
-      <div class="row">
+      {/if}
+      {#if settings.show_other_cost}
         <div class="f-sm">
-        <label>其他花费</label>
-        <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.other_cost} />{#if settings.multi_currency}<select class="input cur" bind:value={form.other_cost_currency}>{#each currencyOptions(form.other_cost_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
+          <label>其他花费</label>
+          <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.other_cost} />{#if settings.multi_currency}<select class="input cur" bind:value={form.other_cost_currency}>{#each currencyOptions(form.other_cost_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
         </div>
-      </div>
-    {/if}
+      {/if}
+    </div>
   </div>
 
   <!-- ============ 阵容 ============ -->
@@ -891,7 +887,7 @@
                 ondragend={() => { artistDragIdx = -1; artistOverIdx = -1; }}
           >
             <span class="cap-grip" aria-hidden="true">⠿</span>
-            {item.label}
+            <span class="cap-text">{item.label}</span>
             <button type="button" class="cap-x" onclick={item.kind === 'linked' ? () => removeArtist(item.id) : () => removeFreeName(item.label)} title={item.kind === 'linked' ? '移除该演员' : '移除'} aria-label={`移除 ${item.label}`}>✕</button>
           </span>
         {/each}
@@ -922,52 +918,48 @@
         </div>
       {/if}
     </div>
-    <div class="row">
-      <div class="f-sm">
-        <label>剧团 <span class="hint">已有团体失焦自动添加；新名称回车生成胶囊，逗号分隔可一次添加多个</span></label>
-        <div class="combo">
-          <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
-            {#each companyTags as t, ti (t)}
-              <span
-                class="capsule free"
-                class:cap-dragging={companyDragIdx === ti}
-                class:drop-before={companyOverIdx === ti && companyDragIdx !== ti && companyOverBefore}
-                class:drop-after={companyOverIdx === ti && companyDragIdx !== ti && !companyOverBefore}
-                draggable="true"
-                title="拖动调整顺序"
-                ondragstart={(e) => { companyDragIdx = ti; e.dataTransfer.effectAllowed = 'move'; }}
-                ondragover={(e) => onCompanyDragOver(e, ti)}
-                ondragleave={() => { if (companyOverIdx === ti) companyOverIdx = -1; }}
-                ondrop={(e) => { e.preventDefault(); onCompanyDropAt(ti, companyOverBefore); }}
-                ondragend={() => { companyDragIdx = -1; companyOverIdx = -1; }}
-              >
-                <span class="cap-grip" aria-hidden="true">⠿</span>
-                {t}
-                <button type="button" class="cap-x" onclick={() => removeCompany(t)} title="移除该团体" aria-label={`移除 ${t}`}>✕</button>
-              </span>
-            {/each}
-            <input
-              spellcheck="false"
-              placeholder={companyTags.length ? '' : '如：上海昆剧团'}
-              bind:value={companyQuery}
-              onfocus={() => (showCompanyList = true)}
-              onblur={onCompanyBlur}
-              onkeydown={onCompanyKeydown}
-              oninput={onCompanyInput}
-            />
-          </div>
-          {#if showCompanyList && (filteredCompanies.length || companyQuery.trim())}
-            <div class="combo-list">
-              {#each filteredCompanies as v (v)}
-                <button type="button" class="combo-item" onmousedown={(e) => e.preventDefault()} onclick={() => pickCompany(v)}>{v}</button>
-              {/each}
-              {#if companyQuery.trim() && !filteredCompanies.length}
-                <div class="combo-empty">无匹配团体，回车添加新团体</div>
-              {/if}
-            </div>
+    <label>剧团 <span class="hint">已有团体失焦自动添加；新名称回车生成胶囊，逗号分隔可一次添加多个</span></label>
+    <div class="combo">
+      <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
+        {#each companyTags as t, ti (t)}
+          <span
+            class="capsule free"
+            class:cap-dragging={companyDragIdx === ti}
+            class:drop-before={companyOverIdx === ti && companyDragIdx !== ti && companyOverBefore}
+            class:drop-after={companyOverIdx === ti && companyDragIdx !== ti && !companyOverBefore}
+            draggable="true"
+            title="拖动调整顺序"
+            ondragstart={(e) => { companyDragIdx = ti; e.dataTransfer.effectAllowed = 'move'; }}
+            ondragover={(e) => onCompanyDragOver(e, ti)}
+            ondragleave={() => { if (companyOverIdx === ti) companyOverIdx = -1; }}
+            ondrop={(e) => { e.preventDefault(); onCompanyDropAt(ti, companyOverBefore); }}
+            ondragend={() => { companyDragIdx = -1; companyOverIdx = -1; }}
+          >
+            <span class="cap-grip" aria-hidden="true">⠿</span>
+            <span class="cap-text">{t}</span>
+            <button type="button" class="cap-x" onclick={() => removeCompany(t)} title="移除该团体" aria-label={`移除 ${t}`}>✕</button>
+          </span>
+        {/each}
+        <input
+          spellcheck="false"
+          placeholder={companyTags.length ? '' : '如：上海昆剧团'}
+          bind:value={companyQuery}
+          onfocus={() => (showCompanyList = true)}
+          onblur={onCompanyBlur}
+          onkeydown={onCompanyKeydown}
+          oninput={onCompanyInput}
+        />
+      </div>
+      {#if showCompanyList && (filteredCompanies.length || companyQuery.trim())}
+        <div class="combo-list">
+          {#each filteredCompanies as v (v)}
+            <button type="button" class="combo-item" onmousedown={(e) => e.preventDefault()} onclick={() => pickCompany(v)}>{v}</button>
+          {/each}
+          {#if companyQuery.trim() && !filteredCompanies.length}
+            <div class="combo-empty">无匹配团体，回车添加新团体</div>
           {/if}
         </div>
-      </div>
+      {/if}
     </div>
     <label>剧目</label>
     <div class="ply">
@@ -1141,6 +1133,8 @@
   .row > .f-sm { flex: 0 1 200px; min-width: 150px; }
   .row > .f-md { flex: 1 1 240px; min-width: 180px; }
   .row > .f-lg { flex: 2.4 1 320px; min-width: 220px; }
+  /* 演出时间：datetime-local 内容固定且偏宽，给略宽于 f-sm 的固定档 */
+  .row > .f-dt { flex: 0 1 215px; min-width: 180px; }
 
   .money { display: flex; gap: 6px; }
   .money .cur { max-width: 76px; }
@@ -1240,11 +1234,15 @@
     font-size: 13px;
     font-weight: 500;
     white-space: nowrap;
+    max-width: 100%;
+    min-width: 0;
     animation: fadeIn var(--t-fast) var(--ease);
     cursor: grab;
   }
   .capsule:active { cursor: grabbing; }
-  .cap-grip { color: currentColor; opacity: 0.45; font-size: 11px; line-height: 1; user-select: none; cursor: grab; }
+  .cap-grip { flex: 0 0 auto; color: currentColor; opacity: 0.45; font-size: 11px; line-height: 1; user-select: none; cursor: grab; }
+  /* 超长名称：文本省略号收束，手柄与删除按钮保持可见，胶囊不再撑破容器 */
+  .cap-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .capsule.cap-dragging { opacity: 0.35; }
   /* 拖拽插入指示：目标左/右侧显示竖线光标，表示松手后的插入位置 */
   .capsule.drop-before::before,
@@ -1263,6 +1261,7 @@
   .capsule.linked { background: var(--accent-soft); color: var(--accent); }
   .capsule.free { background: var(--surface-3); color: var(--text-2); border: 1px solid var(--border); }
   .cap-x {
+    flex: 0 0 auto;
     border: none;
     background: none;
     color: inherit;
