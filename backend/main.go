@@ -10,10 +10,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"mujian/internal/config"
 	"mujian/internal/db"
 	"mujian/internal/handlers"
+	"mujian/internal/metrics"
 	"mujian/internal/storage"
 
 	"github.com/go-chi/chi/v5"
@@ -25,6 +27,26 @@ import (
 func fatal(format string, args ...any) {
 	slog.Error(fmt.Sprintf(format, args...))
 	os.Exit(1)
+}
+
+// slogLogger is a structured replacement for middleware.Logger. It skips the
+// high-frequency low-value paths (health checks, hashed static assets,
+// uploaded covers) that dominated the log volume, and keeps everything else
+// at Info with a duration field for latency eyeballing.
+func slogLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		next.ServeHTTP(ww, r)
+		p := r.URL.Path
+		if p == "/healthz" || strings.HasPrefix(p, "/uploads/") || strings.HasPrefix(p, "/_app/") {
+			return
+		}
+		slog.Info("http",
+			"method", r.Method, "path", p,
+			"status", ww.Status(), "ms", time.Since(start).Milliseconds(),
+			"bytes", ww.BytesWritten())
+	})
 }
 
 // rootFileSystem adapts an *os.Root to http.FileSystem so uploaded files are
@@ -45,6 +67,27 @@ func (r rootFileSystem) Open(name string) (http.File, error) {
 //go:embed all:dist
 var frontend embed.FS
 
+// compressibleTypes is chi's default list plus text/calendar. Passing types
+// to NewCompressor replaces the default list, so this must stay a superset.
+var compressibleTypes = []string{
+	"text/html",
+	"text/css",
+	"text/plain",
+	"text/javascript",
+	"text/markdown",
+	"text/csv",
+	"text/vtt",
+	"text/calendar",
+	"application/javascript",
+	"application/x-javascript",
+	"application/json",
+	"application/atom+xml",
+	"application/rss+xml",
+	"application/xml",
+	"text/xml",
+	"image/svg+xml",
+}
+
 func main() {
 	cfg := config.Load()
 
@@ -59,12 +102,40 @@ func main() {
 
 	st := storage.New(cfg)
 
+	// Aggregate the database connection-pool stats into /metrics on scrape
+	// (never on the request hot path).
+	metricsM := metrics.New()
+	metricsM.Extra = func() map[string]any {
+		s := database.SQLStats()
+		return map[string]any{
+			"mujian_db_connections_open":     s.OpenConnections,
+			"mujian_db_connections_in_use":   s.InUse,
+			"mujian_db_connections_idle":     s.Idle,
+			"mujian_db_wait_count_total":     s.WaitCount,
+			"mujian_db_wait_duration_seconds": s.WaitDuration.Seconds(),
+		}
+	}
+
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	r.Use(metricsM.Middleware) // outermost: measures the full handling time
+	r.Use(slogLogger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Compress(5))
+	// Compression level 1 instead of 5: on the low-power production CPU the
+	// level-5 CPU cost outweighed the bandwidth saving for large JSON
+	// responses (measured: +75% latency on a 720KB payload), while level 1
+	// keeps ~95% of the size reduction. text/calendar is added to the
+	// compressible types so the 400KB+ ICS feed stops being shipped raw.
+	// NOTE: passing types here REPLACES chi's default list, so the defaults
+	// are spelled out again.
+	r.Use(middleware.NewCompressor(1, compressibleTypes...).Handler)
 
 	registerPprof(r)
+
+	// Lightweight instrumentation endpoints. /metrics is scrape-friendly
+	// (JSON by default, Prometheus text with ?format=prometheus); the client
+	// vitals beacon is a fire-and-forget POST from the SPA.
+	r.Get("/metrics", metricsM.Handler())
+	r.Post("/api/metrics/client", metricsM.ClientVitalsHandler())
 
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := database.Ping(); err != nil {
@@ -139,7 +210,22 @@ func main() {
 
 	addr := "0.0.0.0:" + cfg.Port
 	slog.Info("mujian server starting", "addr", addr)
-	if err := http.ListenAndServe(addr, r); err != nil {
+
+	// Explicit server with header/idle timeouts instead of the zero-value
+	// http.ListenAndServe defaults, which let slow clients hold connections
+	// indefinitely. ReadTimeout and WriteTimeout stay at 0 on purpose: the
+	// NDJSON streaming handlers (/api/covers/thumbs, /api/covers/convert-batch)
+	// legitimately run for minutes and a WriteTimeout would cut them off.
+	// For an intranet, single-user deployment behind Nginx, header+idle
+	// timeouts are the right trade-off.
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		fatal("server error: %v", err)
 	}
 }
