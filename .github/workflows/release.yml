@@ -73,7 +73,9 @@ jobs:
 
       - name: Build backend (Windows)
         if: runner.os == 'Windows'
-        run: CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o mujian-${{ matrix.label }}.exe .
+        run: |
+          $env:CGO_ENABLED=1
+          go build -trimpath -ldflags="-s -w" -o mujian-${{ matrix.label }}.exe .
         working-directory: backend
 
       - name: Upload artifact
