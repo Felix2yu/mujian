@@ -212,3 +212,161 @@ func TestExportFormats(t *testing.T) {
 		t.Fatalf("got %d files, want 2 (json+zip)", len(entries))
 	}
 }
+
+func TestValidateName(t *testing.T) {
+	tests := []struct {
+		name    string
+		wantErr bool
+	}{
+		{"mujian-backup-20240101-120000.db", false},
+		{"mujian-backup-20240101-120000.json", false},
+		{"mujian-backup-20240101-120000.zip", false},
+		{"../etc/passwd", true},
+		{"mujian-backup-20240101-120000.txt", true},
+		{"", true},
+		{"../../backup.db", true},
+		{"mujian-backup-20240101-120000.db/../../etc/passwd", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateName(tt.name)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateName(%q) error = %v, wantErr %v", tt.name, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestRead(t *testing.T) {
+	m, _, bdir := newManager(t, 0, 10)
+	name, err := m.RunNow()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := m.Read(name)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if len(data) == 0 {
+		t.Error("Read returned empty data")
+	}
+
+	// 读取不存在的文件应返回错误
+	if _, err := m.Read("mujian-backup-nonexistent.db"); err == nil {
+		t.Error("Read nonexistent should error")
+	}
+
+	// 非法文件名应返回错误
+	if _, err := m.Read("../../../etc/passwd"); err == nil {
+		t.Error("Read with path traversal should error")
+	}
+
+	_ = bdir
+}
+
+func TestDelete(t *testing.T) {
+	m, _, _ := newManager(t, 0, 10)
+	name, err := m.RunNow()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.Delete(name); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	// 删除不存在的文件不报错
+	if err := m.Delete("mujian-backup-nonexistent.db"); err != nil {
+		t.Errorf("Delete nonexistent: %v", err)
+	}
+
+	// 非法文件名应返回错误
+	if err := m.Delete("../../../etc/passwd"); err == nil {
+		t.Error("Delete with path traversal should error")
+	}
+}
+
+func TestReschedule(t *testing.T) {
+	m, _, _ := newManager(t, 0, 5)
+	m.Start()
+	defer m.Stop()
+
+	// Reschedule 不应 panic
+	m.Reschedule()
+
+	// 多次调用也不应阻塞
+	m.Reschedule()
+	m.Reschedule()
+}
+
+func TestStatus(t *testing.T) {
+	m, _, _ := newManager(t, 0, 10)
+
+	// 初始状态
+	lastRun, lastErr := m.Status()
+	if lastRun != 0 {
+		t.Errorf("initial lastRun should be 0, got %d", lastRun)
+	}
+	if lastErr != "" {
+		t.Errorf("initial lastErr should be empty, got %q", lastErr)
+	}
+
+	// 执行备份后
+	if _, err := m.RunNow(); err != nil {
+		t.Fatal(err)
+	}
+	lastRun, lastErr = m.Status()
+	if lastRun == 0 {
+		t.Error("lastRun should be set after backup")
+	}
+	if lastErr != "" {
+		t.Errorf("lastErr should be empty after success, got %q", lastErr)
+	}
+}
+
+func TestList(t *testing.T) {
+	m, _, _ := newManager(t, 0, 10)
+
+	// 空目录
+	list := m.List()
+	if len(list) != 0 {
+		t.Errorf("empty list: got %d", len(list))
+	}
+
+	// 添加一个备份
+	name, err := m.RunNow()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	list = m.List()
+	if len(list) != 1 {
+		t.Fatalf("list after backup: got %d, want 1", len(list))
+	}
+	if list[0].Name != name {
+		t.Errorf("list name: got %q, want %q", list[0].Name, name)
+	}
+	if list[0].Size <= 0 {
+		t.Error("list size should be positive")
+	}
+	if list[0].ModTime <= 0 {
+		t.Error("list modtime should be positive")
+	}
+}
+
+func TestExportFormatsWithMissingExporters(t *testing.T) {
+	m, _, _ := newManager(t, 0, 10)
+
+	// JSON 格式但未设置 exporter
+	m.cfg = &config.Config{BackupFormat: "json", BackupKeep: 3}
+	if _, err := m.RunNow(); err == nil {
+		t.Error("json without exporter should error")
+	}
+
+	// ZIP 格式但未设置 exporter
+	m.cfg = &config.Config{BackupFormat: "zip", BackupKeep: 3}
+	if _, err := m.RunNow(); err == nil {
+		t.Error("zip without exporter should error")
+	}
+}

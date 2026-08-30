@@ -434,3 +434,231 @@ func encodeRawPNG(t *testing.T, img image.Image) []byte {
 	}
 	return buf.Bytes()
 }
+
+func TestThumbIndex(t *testing.T) {
+	s := newLocal(t, "avif")
+	jpg := jpegBytes(t)
+	key, _, err := s.SaveCoverBytes(jpg, ".jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 无缩略图时索引为空
+	idx := s.ThumbIndex()
+	if len(idx) != 0 {
+		t.Errorf("empty index: got %d entries", len(idx))
+	}
+
+	// 添加缩略图后
+	thumb, err := s.MakeThumbnail(key, jpg, 400, "avif")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	idx = s.ThumbIndex()
+	if len(idx) != 1 {
+		t.Fatalf("index after thumb: got %d entries, want 1", len(idx))
+	}
+
+	// 获取 key 的 base name (hash without extension)
+	base := strings.TrimSuffix(filepath.Base(key), filepath.Ext(filepath.Base(key)))
+	if _, ok := idx[base]; !ok {
+		t.Errorf("index missing key %q", base)
+	}
+	if idx[base] != thumb {
+		t.Errorf("index value: got %q, want %q", idx[base], thumb)
+	}
+}
+
+func TestListTrashKeysEmpty(t *testing.T) {
+	s := newLocal(t, "avif")
+	trash, err := s.ListTrashKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(trash) != 0 {
+		t.Errorf("empty trash: got %d keys", len(trash))
+	}
+}
+
+func TestPurgeTrashEmpty(t *testing.T) {
+	s := newLocal(t, "avif")
+	n, err := s.PurgeTrash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("purge empty trash: got %d, want 0", n)
+	}
+}
+
+func TestConvertCoverToSameFormat(t *testing.T) {
+	s := newLocal(t, "avif")
+	jpg := jpegBytes(t)
+	key, _, err := s.SaveCoverBytes(jpg, ".jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 转换为相同格式
+	newKey, converted, err := s.ConvertCover(key, "avif")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 可能返回 false (dedup) 或 true (重新编码)
+	_ = converted
+	if !strings.HasSuffix(newKey, ".avif") {
+		t.Errorf("converted key should be .avif: %q", newKey)
+	}
+}
+
+func TestSaveCoverBytesWithExplicitExt(t *testing.T) {
+	s := newLocal(t, "avif")
+	png := pngBytes(t)
+	key, created, err := s.SaveCoverBytes(png, ".png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !created {
+		t.Error("first save should create")
+	}
+	if !strings.HasSuffix(key, ".png") {
+		t.Errorf("key should end with .png: %q", key)
+	}
+
+	// Dedup
+	key2, created2, err := s.SaveCoverBytes(png, ".png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if key2 != key || created2 {
+		t.Errorf("dedupe failed: %q %v", key2, created2)
+	}
+}
+
+func TestListCoverKeysMultiple(t *testing.T) {
+	s := newLocal(t, "avif")
+	jpg := jpegBytes(t)
+	png := pngBytes(t)
+
+	key1, _, err := s.SaveCoverBytes(jpg, ".jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	key2, _, err := s.SaveCoverBytes(png, ".png")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keys, err := s.ListCoverKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(keys) != 2 {
+		t.Errorf("expected 2 keys, got %d", len(keys))
+	}
+
+	// 验证排序
+	if len(keys) == 2 && keys[0] > keys[1] {
+		t.Error("keys should be sorted")
+	}
+	_ = key1
+	_ = key2
+}
+
+func TestMoveCoverToTrashAndBack(t *testing.T) {
+	s := newLocal(t, "avif")
+	jpg := jpegBytes(t)
+	key, _, err := s.SaveCoverBytes(jpg, ".jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 移到回收站
+	if err := s.MoveCoverToTrash(key); err != nil {
+		t.Fatal(err)
+	}
+	if s.CoverExists(key) {
+		t.Error("cover should not exist after move to trash")
+	}
+
+	// 从回收站恢复 (手动移动回去)
+	trash := filepath.Join(s.uploadDir, "covers_trash", filepath.Base(key))
+	restore := filepath.Join(s.uploadDir, key)
+	if err := os.Rename(trash, restore); err != nil {
+		t.Fatal(err)
+	}
+	if !s.CoverExists(key) {
+		t.Error("cover should exist after restore")
+	}
+}
+
+func TestDeleteCoverWithThumbs(t *testing.T) {
+	s := newLocal(t, "avif")
+	jpg := jpegBytes(t)
+	key, _, err := s.SaveCoverBytes(jpg, ".jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 创建多个格式的缩略图
+	thumb1, err := s.MakeThumbnail(key, jpg, 400, "avif")
+	if err != nil {
+		t.Fatal(err)
+	}
+	thumb2, err := s.MakeThumbnail(key, jpg, 200, "webp")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 删除封面应同时删除所有缩略图
+	if err := s.DeleteCover(key); err != nil {
+		t.Fatal(err)
+	}
+	if s.CoverExists(key) {
+		t.Error("cover should be deleted")
+	}
+	if s.CoverExists(thumb1) {
+		t.Error("thumb1 should be deleted")
+	}
+	if s.CoverExists(thumb2) {
+		t.Error("thumb2 should be deleted")
+	}
+}
+
+func TestMakeThumbnailFormats(t *testing.T) {
+	s := newLocal(t, "avif")
+	jpg := jpegBytes(t)
+	key, _, err := s.SaveCoverBytes(jpg, ".jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 测试不同格式
+	formats := []string{"avif", "webp", "jpeg"}
+	for _, format := range formats {
+		thumb, err := s.MakeThumbnail(key, jpg, 400, format)
+		if err != nil {
+			t.Fatalf("MakeThumbnail(%s): %v", format, err)
+		}
+		expectedExt := ExtForImageFormat(format)
+		if !strings.HasSuffix(thumb, expectedExt) {
+			t.Errorf("thumb key should end with %s: %q", expectedExt, thumb)
+		}
+	}
+}
+
+func TestStorageNewLocalStorage(t *testing.T) {
+	dir := t.TempDir()
+	s := NewLocalStorage(dir, nil)
+	if s == nil {
+		t.Fatal("NewLocalStorage returned nil")
+	}
+
+	// 验证目录已创建
+	for _, sub := range []string{"covers", "covers_trash"} {
+		if _, err := os.Stat(filepath.Join(dir, sub)); err != nil {
+			t.Errorf("expected dir %s: %v", sub, err)
+		}
+	}
+}
