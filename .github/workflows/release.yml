@@ -48,7 +48,6 @@ jobs:
           - { os: ubuntu-latest, label: linux-amd64 }
           - { os: ubuntu-24.04-arm, label: linux-arm64 }
           - { os: macos-latest, label: darwin-arm64 }
-          - { os: macos-13, label: darwin-amd64 }
           - { os: windows-latest, label: windows-amd64 }
 
     steps:
