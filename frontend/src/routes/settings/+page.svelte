@@ -58,6 +58,12 @@
   let migrateError = $state('');
   let migrateProgress = $state({ processed: 0, total: 0 });
 
+  // S3 连接自检：用当前（合并掩码后的）配置做一次真实读写探测，验证连通性 /
+  // 凭据 / 桶存在 / path-style 寻址；不落库。
+  let testingS3 = $state(false);
+  let s3TestOk = $state(false);
+  let s3TestError = $state('');
+
   // 日历订阅链接（同源部署，取当前站点地址拼出完整 URL）
   let icsUrl = $state('');
   let icsCopied = $state(false);
@@ -238,16 +244,17 @@
         backup_format: backupFormat,
         backup_remote: backupRemote
       };
-      if (settings.storage_type === 's3') {
-        payload.s3_endpoint = settings.s3_endpoint.trim();
-        payload.s3_bucket = settings.s3_bucket.trim();
-        payload.s3_region = settings.s3_region.trim() || 'us-east-1';
+      // S3 凭据独立于存储方式：本地存储模式下也可配置（供备份推送等使用），
+      // 始终提交。掩码值（含 ****）说明用户没有改密钥，不回传；后端同样会忽略。
+      payload.s3_endpoint = settings.s3_endpoint.trim();
+      payload.s3_bucket = settings.s3_bucket.trim();
+      payload.s3_region = settings.s3_region.trim() || 'us-east-1';
+      if (settings.s3_access_key.trim() && !settings.s3_access_key.includes('****')) {
         payload.s3_access_key = settings.s3_access_key.trim();
-        payload.s3_public_url = settings.s3_public_url.trim();
-        // 掩码值（含 ****）说明用户没有改密钥，不回传；后端同样会忽略。
-        if (settings.s3_secret_key && !settings.s3_secret_key.includes('****')) {
-          payload.s3_secret_key = settings.s3_secret_key;
-        }
+      }
+      payload.s3_public_url = settings.s3_public_url.trim();
+      if (settings.s3_secret_key && !settings.s3_secret_key.includes('****')) {
+        payload.s3_secret_key = settings.s3_secret_key;
       }
       await api.updateSettings(payload);
       resetStorageInfo();
@@ -339,6 +346,37 @@
       migrateError = e.message;
     } finally {
       migrating = false;
+    }
+  }
+
+  async function testS3() {
+    testingS3 = true;
+    s3TestOk = false;
+    s3TestError = '';
+    try {
+      const payload = {
+        s3_endpoint: settings.s3_endpoint.trim(),
+        s3_bucket: settings.s3_bucket.trim(),
+        s3_region: settings.s3_region.trim() || 'us-east-1',
+        s3_public_url: settings.s3_public_url.trim()
+      };
+      // 掩码值（含 ****）说明用户没有改密钥，不回传；后端用已保存的真实值兜底
+      if (settings.s3_access_key.trim() && !settings.s3_access_key.includes('****')) {
+        payload.s3_access_key = settings.s3_access_key.trim();
+      }
+      if (settings.s3_secret_key && !settings.s3_secret_key.includes('****')) {
+        payload.s3_secret_key = settings.s3_secret_key;
+      }
+      const res = await api.testS3Connection(payload);
+      if (res.ok) {
+        s3TestOk = true;
+      } else {
+        s3TestError = res.error || 'S3 连接测试失败';
+      }
+    } catch (e) {
+      s3TestError = e.message;
+    } finally {
+      testingS3 = false;
     }
   }
 
@@ -743,7 +781,7 @@
         <p class="hint-row">✓ S3 配置已就绪，保存后立即生效，无需重启</p>
       {/if}
 
-      {#if settings.s3_bucket.trim() && settings.s3_access_key.trim()}
+        {#if settings.s3_bucket.trim() && settings.s3_access_key.trim()}
         <div class="convert-actions">
           <button
             class="btn"
@@ -757,8 +795,30 @@
               把本地封面上传到 S3
             {/if}
           </button>
-          <span class="hint">按原 key 上传本地 covers/ 下的全部文件（含缩略图）；S3 中已存在的对象自动跳过，可重复执行。建议在切换存储方式前先运行，实现无缝衔接</span>
+          <button
+            class="btn"
+            class:disabled={testingS3}
+            onclick={testS3}
+            disabled={testingS3}
+          >
+            {#if testingS3}
+              测试中…
+            {:else}
+              测试 S3 连接
+            {/if}
+          </button>
+          <span class="hint">「测试连接」会用当前配置（含已保存的掩码密钥）做一次真实读写探测，验证连通性、凭据与 path-style 寻址是否正确，不影响已存数据</span>
         </div>
+
+        {#if testingS3}
+          <div class="banner info"><span>⏳ 正在探测 S3 连接…</span></div>
+        {/if}
+        {#if s3TestOk}
+          <div class="banner success">✓ S3 连接成功：已可向该桶写入并读取（path-style 寻址正常）</div>
+        {/if}
+        {#if s3TestError}
+          <div class="banner error">⚠ S3 连接失败：{s3TestError}</div>
+        {/if}
 
         {#if migrating && migrateProgress.total > 0}
           <div class="banner info">

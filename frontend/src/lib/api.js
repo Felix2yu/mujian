@@ -212,6 +212,7 @@ export const api = {
 
   getSettings: () => request('/api/settings'),
   updateSettings: (data) => request('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
+  testS3Connection: (data) => request('/api/settings/test-s3', { method: 'POST', body: JSON.stringify(data) }),
 
   backupRun: () => request('/api/backup/run', { method: 'POST' }),
   listRecordPhotos: (id) => request(`/api/records/${id}/photos`),

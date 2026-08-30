@@ -141,6 +141,7 @@ func (h *Handler) Routes() chi.Router {
 
 	r.Get("/settings", h.getSettings)
 	r.Put("/settings", h.updateSettings)
+	r.Post("/settings/test-s3", h.testS3Connection)
 
 	r.Post("/upload", h.uploadFile)
 	r.Get("/export", h.exportRecords)
@@ -1195,6 +1196,86 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	// 备份间隔可能变了：让调度器重算下次运行时间
 	h.backup.Reschedule()
 	jsonResp(w, 200, h.cfg.GetSettingsResponse())
+}
+
+// effectiveS3Settings merges the S3 fields submitted by the client with the
+// currently-saved config. The merge rules differ per field kind:
+//   - Endpoint/Bucket/Region/PublicURL: a non-empty body value overrides saved;
+//     an empty body value means "not provided" and falls back to saved.
+//   - AccessKey/SecretKey: a non-empty, non-masked body value overrides saved
+//     (the user typed a new key); an empty body value falls back to saved; a
+//     masked value (suffix "****", echoed from GET) is ignored so the real saved
+//     secret is kept. An empty body field must NOT inherit the saved secret —
+//     otherwise a user who never configured creds and tests before typing the
+//     key would see a false positive.
+func effectiveS3Settings(saved, req config.S3Settings) config.S3Settings {
+	out := saved
+	if req.Endpoint != "" {
+		out.Endpoint = req.Endpoint
+	}
+	if req.Bucket != "" {
+		out.Bucket = req.Bucket
+	}
+	if req.Region != "" {
+		out.Region = req.Region
+	}
+	if req.PublicURL != "" {
+		out.PublicURL = req.PublicURL
+	}
+	if req.AccessKey != "" && !strings.HasSuffix(req.AccessKey, "****") {
+		out.AccessKey = req.AccessKey
+	}
+	// Secret: empty body => no override (so a never-saved secret stays empty and
+	// the test correctly reports "incomplete"). Masked => keep saved. Plain => use.
+	if req.SecretKey != "" && !strings.HasSuffix(req.SecretKey, "****") {
+		out.SecretKey = req.SecretKey
+	}
+	return out
+}
+
+// POST /api/settings/test-s3 — probe the (merged) S3 config with a real
+// put+delete of a tiny marker object. Returns {ok:bool, error?:string}.
+// Intentionally does NOT persist anything.
+//
+// The body uses the same s3_* field names as PUT /api/settings (config.S3Settings
+// has no JSON tags, so it cannot be decoded directly from that payload). Masked
+// values (suffix "****") and empties fall back to the saved config.
+type s3TestRequest struct {
+	Endpoint  string `json:"s3_endpoint"`
+	Bucket    string `json:"s3_bucket"`
+	Region    string `json:"s3_region"`
+	AccessKey string `json:"s3_access_key"`
+	SecretKey string `json:"s3_secret_key"`
+	PublicURL string `json:"s3_public_url"`
+}
+
+func (h *Handler) testS3Connection(w http.ResponseWriter, r *http.Request) {
+	var req s3TestRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	eff := effectiveS3Settings(h.cfg.GetS3Settings(), config.S3Settings{
+		Endpoint:  req.Endpoint,
+		Bucket:    req.Bucket,
+		Region:    req.Region,
+		AccessKey: req.AccessKey,
+		SecretKey: req.SecretKey,
+		PublicURL: req.PublicURL,
+	})
+	if eff.Bucket == "" || eff.AccessKey == "" || eff.SecretKey == "" {
+		jsonResp(w, 200, map[string]interface{}{
+			"ok":    false,
+			"error": "S3 未配置完整：需要 Bucket、Access Key、Secret Key（以及 Endpoint 或 Region）",
+		})
+		return
+	}
+	st := storage.NewS3StorageFromSettings(eff, h.cfg.GetImageFormat)
+	if err := st.TestConnection(r.Context()); err != nil {
+		jsonResp(w, 200, map[string]interface{}{"ok": false, "error": err.Error()})
+		return
+	}
+	jsonResp(w, 200, map[string]interface{}{"ok": true})
 }
 
 func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {

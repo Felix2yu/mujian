@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -462,6 +463,21 @@ func NewS3Storage(cfg *config.Config) *S3Storage {
 	return NewS3StorageFromSettings(s, cfg.GetImageFormat)
 }
 
+// normalizeS3Endpoint ensures a custom S3 endpoint is a full URI. The AWS SDK
+// requires a scheme; users often enter a bare host (e.g. "s3.example.com"),
+// which would otherwise fail with "endpoint rule error, Custom endpoint ... was
+// not a valid URI". We default a missing scheme to https:// (correct for R2 /
+// MinIO / OSS public endpoints). AWS (empty endpoint) is passed through.
+func normalizeS3Endpoint(endpoint string) string {
+	if endpoint == "" {
+		return ""
+	}
+	if !strings.Contains(endpoint, "://") {
+		return "https://" + endpoint
+	}
+	return endpoint
+}
+
 // NewS3StorageFromSettings builds an S3 backend from a snapshot of the config
 // (taken under the config read lock) plus a thread-safe image-format provider.
 // Runtime callers (e.g. storage migration) must use this or NewS3Storage —
@@ -469,10 +485,20 @@ func NewS3Storage(cfg *config.Config) *S3Storage {
 // PUT /api/settings.
 func NewS3StorageFromSettings(s config.S3Settings, imageFormat func() string) *S3Storage {
 	creds := credentials.NewStaticCredentialsProvider(s.AccessKey, s.SecretKey, "")
+	// 自定义 Endpoint（R2 / MinIO / OSS 等 S3 兼容存储）一律走 path-style
+	// 寻址：虚拟主机式（<bucket>.endpoint）在这些服务上通常会 400/404，
+	// 表现为「界面有进度但存储桶里没有文件」。AWS 官方 S3（Endpoint 留空）
+	// 保持默认的虚拟主机式。SDK 的自动判断只覆盖 *.amazonaws.com 与
+	// localhost，自定义域名（如 s3.example.com）不会触发，因此这里显式指定。
+	usePathStyle := s.Endpoint != ""
+	// SDK 要求 Endpoint 是完整 URI；用户常只填裸域名（如 s3.example.com），
+	// 缺失 scheme 会报 "was not a valid URI"。这里补默认 https:// 以兜底。
+	endpoint := normalizeS3Endpoint(s.Endpoint)
 	client := s3.New(s3.Options{
 		Region:       s.Region,
-		BaseEndpoint: aws.String(s.Endpoint),
+		BaseEndpoint: aws.String(endpoint),
 		Credentials:  creds,
+		UsePathStyle: usePathStyle,
 	})
 	return &S3Storage{
 		client:      client,
@@ -480,6 +506,35 @@ func NewS3StorageFromSettings(s config.S3Settings, imageFormat func() string) *S
 		publicURL:   s.PublicURL,
 		cfgProvider: imageFormat,
 	}
+}
+
+// TestConnection verifies S3 reachability, credentials, bucket existence and
+// addressing style by writing a tiny probe object and then deleting it. It
+// performs a real PutObject + DeleteObject (not just HeadBucket) so it also
+// validates write permission — which cover migration and backup push require.
+func (s *S3Storage) TestConnection(ctx context.Context) error {
+	if s.bucket == "" {
+		return fmt.Errorf("bucket 未配置")
+	}
+	if s.client == nil {
+		return fmt.Errorf("S3 客户端未初始化（缺少 Access Key / Endpoint）")
+	}
+	probe := []byte("mujian s3 connection test " + time.Now().UTC().Format(time.RFC3339))
+	key := "test/mujian-connection-test.txt"
+	if _, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+		Body:   bytes.NewReader(probe),
+	}); err != nil {
+		return fmt.Errorf("S3 写入探测失败: %w", err)
+	}
+	if _, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	}); err != nil {
+		return fmt.Errorf("S3 清理探测对象失败: %w", err)
+	}
+	return nil
 }
 
 func (s *S3Storage) imageFormat() string {

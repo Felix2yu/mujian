@@ -36,6 +36,10 @@ type Manager struct {
 	exportJSON func() ([]byte, error)
 	exportZip  func() ([]byte, error)
 
+	// remote uploads the snapshot to S3 (backups/ prefix) when BackupRemote is
+	// enabled; nil means remote push is unavailable.
+	remote RemotePusher
+
 	mu      sync.Mutex
 	lastRun time.Time
 	lastErr string
@@ -72,6 +76,16 @@ func (m *Manager) Stop() {
 func (m *Manager) SetExporter(jsonFn, zipFn func() ([]byte, error)) {
 	m.exportJSON = jsonFn
 	m.exportZip = zipFn
+}
+
+// RemotePusher uploads a snapshot to remote object storage under the given key.
+// Wired from main.go (it has access to the S3 client); nil means "no remote
+// upload configured". Backup.RunNow only invokes it when BackupRemote is set.
+type RemotePusher func(key string, data []byte) error
+
+// SetRemotePusher wires the S3 uploader used when BackupRemote is enabled.
+func (m *Manager) SetRemotePusher(p RemotePusher) {
+	m.remote = p
 }
 
 // Reschedule nudges the loop to recompute the next run time after the
@@ -265,6 +279,27 @@ func (m *Manager) RunNow() (string, error) {
 		m.lastErr = err.Error()
 		os.Remove(tmp)
 		return "", fmt.Errorf("rename snapshot: %w", err)
+	}
+
+	// 备份成功后若开启了「上传 S3」，把快照推送到桶内 backups/ 目录。
+	// 本地快照已经落盘（上面的 Rename 已生效），即便 S3 上传失败，本机
+	// 备份仍然保留，仅本次操作的 S3 部分失败会被上报。
+	if m.cfg.GetBackupRemote() {
+		if m.remote == nil {
+			m.lastErr = "BackupRemote 已开启但未配置 S3 上传器"
+			return name, fmt.Errorf("BackupRemote 已开启，但 S3 客户端未注入（请确认 S3 凭据已配置）")
+		}
+		data, rerr := os.ReadFile(final)
+		if rerr != nil {
+			m.lastErr = rerr.Error()
+			return name, fmt.Errorf("read snapshot for S3 upload: %w", rerr)
+		}
+		s3key := "backups/" + name
+		if perr := m.remote(s3key, data); perr != nil {
+			m.lastErr = "S3 上传失败: " + perr.Error()
+			return name, fmt.Errorf("S3 上传失败（本地备份已保留）: %w", perr)
+		}
+		slog.Info("backup pushed to S3", "key", s3key)
 	}
 
 	// db 快照之后把 WAL 收缩进主文件：磁盘上的 .db 从此自洽，

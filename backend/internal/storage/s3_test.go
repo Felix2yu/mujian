@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"mujian/internal/config"
@@ -150,6 +151,57 @@ func s3UploadHeader(t *testing.T, data []byte) *multipart.FileHeader {
 	r := multipart.NewReader(&buf, w.Boundary())
 	form, _ := r.ReadForm(1 << 20)
 	return form.File["file"][0]
+}
+
+func TestS3FromSettingsPathStyle(t *testing.T) {
+	// Records the most recent request so we can assert addressing style.
+	var mu sync.Mutex
+	var lastPath string
+	rec := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		lastPath = r.URL.Path
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer rec.Close()
+
+	// Explicit (http) endpoint → path-style, bucket segment in the path.
+	// A virtual-hosted form would put the bucket in the Host header and the
+	// path would be just "/covers/test.jpg"; we assert the bucket is in the path.
+	s := NewS3StorageFromSettings(config.S3Settings{
+		Endpoint:  rec.URL, // e.g. http://127.0.0.1:PORT
+		Bucket:    "mujian-test",
+		Region:    "us-east-1",
+		AccessKey: "ak",
+		SecretKey: "sk",
+	}, func() string { return "avif" })
+	if err := s.PutRaw("covers/test.jpg", []byte("hello")); err != nil {
+		t.Fatalf("PutRaw (scheme endpoint) failed: %v", err)
+	}
+	mu.Lock()
+	gotPath := lastPath
+	mu.Unlock()
+	if !strings.HasPrefix(gotPath, "/mujian-test/") {
+		t.Errorf("custom endpoint should use path-style (/<bucket>/<key>), got path %q", gotPath)
+	}
+}
+
+func TestNormalizeS3Endpoint(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"", ""},
+		{"s3.example.com", "https://s3.example.com"},
+		{"https://s3.example.com", "https://s3.example.com"},
+		{"http://localhost:9000", "http://localhost:9000"},
+		{"play.min.io", "https://play.min.io"},
+		{"https://account.r2.cloudflarestorage.com", "https://account.r2.cloudflarestorage.com"},
+	}
+	for _, c := range cases {
+		if got := normalizeS3Endpoint(c.in); got != c.want {
+			t.Errorf("normalizeS3Endpoint(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
 }
 
 func TestS3StorageFlow(t *testing.T) {

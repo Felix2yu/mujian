@@ -1429,3 +1429,114 @@ func TestBodyLimitAllowsCoverUpload(t *testing.T) {
 		t.Errorf("8MB-limit upload of %d bytes: got %d, want 200", buf.Len(), res.StatusCode)
 	}
 }
+
+// fakeS3Probe is a minimal path-style S3 fake: only bucket "mujian-test" exists;
+// any other bucket returns 404 NoSuchBucket. Used to exercise testS3Connection.
+type fakeS3Probe struct{}
+
+func (fakeS3Probe) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rest := strings.TrimPrefix(r.URL.Path, "/")
+	bucket := rest
+	if i := strings.Index(bucket, "/"); i >= 0 {
+		bucket = bucket[:i]
+	}
+	if bucket != "mujian-test" {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `<Error><Code>NoSuchBucket</Code><Message>bucket not found</Message></Error>`)
+		return
+	}
+	switch r.Method {
+	case http.MethodDelete:
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func TestTestS3Connection(t *testing.T) {
+	ts := httptest.NewServer(fakeS3Probe{})
+	defer ts.Close()
+
+	srv, _, _, _ := newTestServer(t, func(c *config.Config) {
+		c.S3Endpoint = ts.URL
+		c.S3Bucket = "mujian-test"
+		c.S3Region = "us-east-1"
+		c.S3AccessKey = "ak"
+		c.S3SecretKey = "sk"
+	})
+
+	call := func(payload map[string]string) map[string]interface{} {
+		body, _ := json.Marshal(payload)
+		res, b := doReq(t, "POST", srv.URL+"/api/settings/test-s3", bytes.NewReader(body), "application/json")
+		if res.StatusCode != 200 {
+			t.Fatalf("status %d: %s", res.StatusCode, b)
+		}
+		var out map[string]interface{}
+		json.Unmarshal(b, &out)
+		return out
+	}
+
+	// 1) Freshly-typed values in the body must be tested as-is (regression:
+	//    config.S3Settings has no JSON tags, so decode must use s3_* names).
+	if out := call(map[string]string{
+		"s3_endpoint": ts.URL, "s3_bucket": "mujian-test",
+		"s3_region": "us-east-1", "s3_access_key": "ak", "s3_secret_key": "sk",
+	}); out["ok"] != true {
+		t.Errorf("valid config should be ok: %v", out)
+	}
+
+	// 2) Wrong bucket -> ok:false with a concrete error (proves negative path surfaces S3 errors).
+	out := call(map[string]string{
+		"s3_endpoint": ts.URL, "s3_bucket": "nope",
+		"s3_region": "us-east-1", "s3_access_key": "ak", "s3_secret_key": "sk",
+	})
+	if out["ok"] == true {
+		t.Errorf("wrong bucket should fail: %v", out)
+	}
+	if msg, _ := out["error"].(string); msg == "" {
+		t.Errorf("wrong bucket should carry an error message: %v", out)
+	}
+
+	// 3) Masked secret echoed back -> fall back to saved real secret -> succeeds.
+	if out := call(map[string]string{
+		"s3_endpoint": ts.URL, "s3_bucket": "mujian-test",
+		"s3_region": "us-east-1", "s3_access_key": "ak", "s3_secret_key": "sk****",
+	}); out["ok"] != true {
+		t.Errorf("masked secret should fall back to saved and succeed: %v", out)
+	}
+
+	// 4) Genuinely incomplete: a server with NO saved S3 secret and a body that
+	//    omits the secret must report failure (empty body field must NOT inherit
+	//    a non-existent saved secret).
+	srv2, _, _, _ := newTestServer(t, func(c *config.Config) {
+		c.S3Endpoint = ts.URL
+		c.S3Bucket = "mujian-test"
+		c.S3Region = "us-east-1"
+		c.S3AccessKey = "ak"
+		// no S3SecretKey saved
+	})
+	call2 := func(payload map[string]string) map[string]interface{} {
+		body, _ := json.Marshal(payload)
+		res, b := doReq(t, "POST", srv2.URL+"/api/settings/test-s3", bytes.NewReader(body), "application/json")
+		if res.StatusCode != 200 {
+			t.Fatalf("status %d: %s", res.StatusCode, b)
+		}
+		var out map[string]interface{}
+		json.Unmarshal(b, &out)
+		return out
+	}
+	if out := call2(map[string]string{
+		"s3_endpoint": ts.URL, "s3_bucket": "mujian-test",
+		"s3_region": "us-east-1", "s3_access_key": "ak",
+		// no s3_secret_key
+	}); out["ok"] == true {
+		t.Errorf("omitted secret with no saved secret should fail: %v", out)
+	}
+	// ...and providing the secret in the body succeeds.
+	if out := call2(map[string]string{
+		"s3_endpoint": ts.URL, "s3_bucket": "mujian-test",
+		"s3_region": "us-east-1", "s3_access_key": "ak", "s3_secret_key": "sk",
+	}); out["ok"] != true {
+		t.Errorf("provided secret should succeed: %v", out)
+	}
+}

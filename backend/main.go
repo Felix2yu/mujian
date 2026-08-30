@@ -195,6 +195,16 @@ func main() {
 	// 自动备份：快照写在数据库同目录的 backups/ 下；settings.json 先于
 	// Start() 加载，启动即按已保存的间隔调度。
 	backupMgr := backup.New(database, filepath.Join(filepath.Dir(cfg.DBPath), "backups"), cfg)
+	// 备份「上传 S3」：BackupRemote 开启时把快照推送到桶内 backups/ 目录。
+	// 每次调用按最新 config 重建 S3 客户端，保证设置页改凭据即时生效。
+	backupMgr.SetRemotePusher(func(key string, data []byte) error {
+		s3cfg := cfg.GetS3Settings()
+		if s3cfg.Bucket == "" || s3cfg.AccessKey == "" {
+			return fmt.Errorf("S3 未配置完整（需要 Bucket 与 Access Key）")
+		}
+		s := storage.NewS3StorageFromSettings(s3cfg, cfg.GetImageFormat)
+		return s.PutRaw(key, data)
+	})
 	backupMgr.Start()
 	defer backupMgr.Stop()
 
