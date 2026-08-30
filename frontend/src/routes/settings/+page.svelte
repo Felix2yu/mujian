@@ -20,6 +20,24 @@
   // GET /api/settings 返回的 secret 是掩码值（如 "sk12****"）；保存时若未改动
   // 就不回传该字段，避免把掩码存成真实密钥（后端也会兜底忽略）。
   let loadedS3Secret = $state('');
+  // 设置卡片的两列归属：按预估高度最短列优先分配，列高大致均衡。
+  // 新增/调整卡片时同步这里的权重即可。
+  const CARD_COLS = (() => {
+    // 权重 = 实测卡片高度（含间距，px）；内容变化时按需更新
+    const cards = [
+      ['theme', 162], ['storage', 158], ['s3', 823], ['encode', 305], ['calendar', 280],
+      ['fields', 349], ['status', 178], ['list', 224], ['backup', 988], ['security', 274], ['map', 435]
+    ];
+    const cols = [[], []];
+    const hs = [0, 0];
+    for (const [k, w] of cards) {
+      const c = hs[0] <= hs[1] ? 0 : 1;
+      cols[c].push(k);
+      hs[c] += w;
+    }
+    return cols;
+  })();
+
   let error = $state('');
   let saved = $state(false);
   let loading = $state(true);
@@ -353,7 +371,8 @@
     <div class="skeleton" style="height: 220px;"></div>
   {:else}
     <div class="settings-grid">
-    <div class="card sec">
+{#snippet themeCard()}
+<div class="card sec">
       <h3>主题</h3>
       <div class="theme-row">
         {#each themes as t}
@@ -387,8 +406,10 @@
         {/each}
       </div>
     </div>
+{/snippet}
 
-    <div class="card sec">
+{#snippet storageCard()}
+<div class="card sec">
       <h3>存储</h3>
       <label>封面图片存储方式</label>
       <select class="input" bind:value={settings.storage_type} style="max-width: 280px;">
@@ -405,82 +426,10 @@
         <p class="hint-row">切换存储方式不会自动迁移已有封面：切到 S3 后旧图仍留在本地磁盘，新上传的才会写入 S3；可在下方 S3 卡片中执行「把本地封面上传到 S3」实现无缝衔接</p>
       {/if}
     </div>
+{/snippet}
 
-    <div class="card sec">
-      <h3>S3 对象存储</h3>
-      <p class="tiny muted" style="margin: 0 0 10px;">封面存储与自动备份的 S3 推送共用这组凭据；无论当前存储方式如何都可在此配置。</p>
-      <div class="s3-grid">
-        <label class="field">
-          <span>S3 Endpoint</span>
-          <input class="input" type="text" bind:value={settings.s3_endpoint} placeholder="https://<accountid>.r2.cloudflarestorage.com" autocomplete="off" spellcheck="false" />
-          <span class="hint">兼容 AWS S3 / Cloudflare R2 / MinIO / OSS 等 S3 协议端点；AWS 官方 S3 可留空</span>
-        </label>
-        <label class="field">
-          <span>Bucket</span>
-          <input class="input" type="text" bind:value={settings.s3_bucket} placeholder="mujian" autocomplete="off" spellcheck="false" />
-        </label>
-        <label class="field">
-          <span>Region</span>
-          <input class="input" type="text" bind:value={settings.s3_region} placeholder="us-east-1" autocomplete="off" spellcheck="false" />
-        </label>
-        <label class="field">
-          <span>Access Key ID</span>
-          <input class="input" type="text" bind:value={settings.s3_access_key} autocomplete="off" spellcheck="false" />
-          <span class="hint">已配置的 Access Key 会以掩码显示；保持不变即可保留原值，填入新值可覆盖</span>
-        </label>
-        <label class="field">
-          <span>Secret Access Key</span>
-          <input class="input" type="password" bind:value={settings.s3_secret_key} placeholder={loadedS3Secret || '未设置'} autocomplete="new-password" />
-          <span class="hint">已配置的密钥会以掩码显示；保持不变即可保留原密钥，清空后保存可移除</span>
-        </label>
-        <label class="field">
-          <span>公网访问地址（Public URL）</span>
-          <input class="input" type="text" bind:value={settings.s3_public_url} placeholder="https://cdn.example.com/mujian" spellcheck="false" />
-          <span class="hint">前端从该地址直接加载封面，要求桶可公开读取或挂了 CDN；留空则回退到 /uploads/ 路径（仅当反向代理把该路径映射到桶时可用）</span>
-        </label>
-      </div>
-
-      {#if settings.storage_type === 's3' && (!settings.s3_bucket.trim() || !settings.s3_access_key.trim())}
-        <div class="banner error">⚠ 存储方式为 S3：Bucket 与 Access Key 必须填写，否则重启后仍会退回本地存储</div>
-      {:else if settings.s3_bucket.trim() && settings.s3_access_key.trim()}
-        <p class="hint-row">✓ S3 配置已就绪，保存并重启服务后生效</p>
-      {/if}
-
-      {#if settings.s3_bucket.trim() && settings.s3_access_key.trim()}
-        <div class="convert-actions">
-          <button
-            class="btn"
-            class:disabled={migrating}
-            onclick={runMigrateToS3}
-            disabled={migrating}
-          >
-            {#if migrating}
-              迁移中…
-            {:else}
-              把本地封面上传到 S3
-            {/if}
-          </button>
-          <span class="hint">按原 key 上传本地 covers/ 下的全部文件（含缩略图）；S3 中已存在的对象自动跳过，可重复执行。建议在切换存储方式前先运行，实现无缝衔接</span>
-        </div>
-
-        {#if migrating && migrateProgress.total > 0}
-          <div class="banner info">
-            <span>⏳ 迁移中… {migrateProgress.processed}/{migrateProgress.total}</span>
-          </div>
-        {/if}
-
-        {#if migrateResult}
-          <div class="banner success">
-            ✓ 共 {migrateResult.total} 个文件：新上传 {migrateResult.migrated}，已存在跳过 {migrateResult.skipped}{#if migrateResult.failed}，失败 {migrateResult.failed}{/if}
-          </div>
-          {/if}
-          {#if migrateError}
-            <div class="banner error">⚠ {migrateError}</div>
-          {/if}
-      {/if}
-    </div>
-
-    <div class="card sec">
+{#snippet encodeCard()}
+<div class="card sec">
       <h3>封面编码</h3>
       <label>默认编码格式
         <span class="hint">新上传海报会使用所选格式保存；更改后立即生效，无需重启</span>
@@ -528,8 +477,10 @@
         <div class="banner error">⚠ {convertError}</div>
       {/if}
     </div>
+{/snippet}
 
-    <div class="card sec">
+{#snippet calendarCard()}
+<div class="card sec">
       <h3>日历</h3>
       <p class="hint" style="margin-bottom: 12px;">将演出记录同步到系统日历：下载 .ics 文件导入，或复制订阅链接添加到日历应用（如 Apple 日历 → 订阅日历），内容会随记录更新</p>
       <div class="cal-actions">
@@ -555,8 +506,10 @@
         <span class="hint">订阅链接为完整地址，可在手机 / 电脑的日历应用中直接添加订阅；该地址无鉴权，请勿公开分享</span>
       </div>
     </div>
+{/snippet}
 
-    <div class="card sec">
+{#snippet fieldsCard()}
+<div class="card sec">
       <h3>记录字段</h3>
       <p class="hint" style="margin-bottom: 12px;">控制新建 / 编辑演出时是否显示以下字段，不常用的可按需隐藏</p>
       <label class="switch-row">
@@ -576,8 +529,10 @@
         <input type="checkbox" bind:checked={settings.multi_currency} />
       </label>
     </div>
+{/snippet}
 
-    <div class="card sec">
+{#snippet statusCard()}
+<div class="card sec">
       <h3>演出状态</h3>
       <p class="hint" style="margin-bottom: 12px;">控制首页列表显示哪些状态的演出（本地偏好，立即生效）</p>
       <div class="status-row">
@@ -589,8 +544,10 @@
         {/each}
       </div>
     </div>
+{/snippet}
 
-    <div class="card sec">
+{#snippet listCard()}
+<div class="card sec">
       <h3>列表</h3>
       <p class="hint" style="margin-bottom: 12px;">首页浏览辅助（本地偏好，立即生效）</p>
       <label class="switch-row">
@@ -599,8 +556,10 @@
       </label>
       <p class="hint" style="margin-top: 8px;">开启后每次打开演出列表会自动滚动到最近已发生（含今天）的演出；列表右下角也随时提供手动定位按钮</p>
     </div>
+{/snippet}
 
-    <div class="card sec">
+{#snippet backupCard()}
+<div class="card sec">
       <h3>自动备份</h3>
       <div class="s3-grid">
         <label class="field">
@@ -675,8 +634,10 @@
       {/if}
       <p class="hint" style="margin-top: 8px;">修改间隔或保留份数后需点击页面底部的「保存」才会生效；重启服务不会重置备份节奏（按最近一份快照的时间续算）。</p>
     </div>
+{/snippet}
 
-    <div class="card sec">
+{#snippet securityCard()}
+<div class="card sec">
       <h3>访问安全</h3>
       <label>
         访问令牌（可选）
@@ -693,8 +654,10 @@
         日历订阅地址会自动附带 ?token= 参数（日历客户端无法自定义请求头）。
       </p>
     </div>
+{/snippet}
 
-    <div class="card sec">
+{#snippet mapCard()}
+<div class="card sec">
       <h3>地图</h3>
       <label>默认底图</label>
       <select class="input" bind:value={mapSource} style="max-width: 280px;">
@@ -737,26 +700,140 @@
         <div class="banner error">⚠ {alignError}</div>
       {/if}
     </div>
+{/snippet}
+
+{#snippet s3Card()}
+<div class="card sec">
+      <h3>S3 对象存储</h3>
+      <p class="tiny muted" style="margin: 0 0 10px;">封面存储与自动备份的 S3 推送共用这组凭据；无论当前存储方式如何都可在此配置。</p>
+      <div class="s3-grid">
+        <label class="field">
+          <span>S3 Endpoint</span>
+          <input class="input" type="text" bind:value={settings.s3_endpoint} placeholder="https://<accountid>.r2.cloudflarestorage.com" autocomplete="off" spellcheck="false" />
+          <span class="hint">兼容 AWS S3 / Cloudflare R2 / MinIO / OSS 等 S3 协议端点；AWS 官方 S3 可留空</span>
+        </label>
+        <label class="field">
+          <span>Bucket</span>
+          <input class="input" type="text" bind:value={settings.s3_bucket} placeholder="mujian" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="field">
+          <span>Region</span>
+          <input class="input" type="text" bind:value={settings.s3_region} placeholder="us-east-1" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="field">
+          <span>Access Key ID</span>
+          <input class="input" type="text" bind:value={settings.s3_access_key} autocomplete="off" spellcheck="false" />
+          <span class="hint">已配置的 Access Key 会以掩码显示；保持不变即可保留原值，填入新值可覆盖</span>
+        </label>
+        <label class="field">
+          <span>Secret Access Key</span>
+          <input class="input" type="password" bind:value={settings.s3_secret_key} placeholder={loadedS3Secret || '未设置'} autocomplete="new-password" />
+          <span class="hint">已配置的密钥会以掩码显示；保持不变即可保留原密钥，清空后保存可移除</span>
+        </label>
+        <label class="field">
+          <span>公网访问地址（Public URL）</span>
+          <input class="input" type="text" bind:value={settings.s3_public_url} placeholder="https://cdn.example.com/mujian" spellcheck="false" />
+          <span class="hint">前端从该地址直接加载封面，要求桶可公开读取或挂了 CDN；留空则回退到 /uploads/ 路径（仅当反向代理把该路径映射到桶时可用）</span>
+        </label>
+      </div>
+
+      {#if settings.storage_type === 's3' && (!settings.s3_bucket.trim() || !settings.s3_access_key.trim())}
+        <div class="banner error">⚠ 存储方式为 S3：Bucket 与 Access Key 必须填写，否则重启后仍会退回本地存储</div>
+      {:else if settings.s3_bucket.trim() && settings.s3_access_key.trim()}
+        <p class="hint-row">✓ S3 配置已就绪，保存并重启服务后生效</p>
+      {/if}
+
+      {#if settings.s3_bucket.trim() && settings.s3_access_key.trim()}
+        <div class="convert-actions">
+          <button
+            class="btn"
+            class:disabled={migrating}
+            onclick={runMigrateToS3}
+            disabled={migrating}
+          >
+            {#if migrating}
+              迁移中…
+            {:else}
+              把本地封面上传到 S3
+            {/if}
+          </button>
+          <span class="hint">按原 key 上传本地 covers/ 下的全部文件（含缩略图）；S3 中已存在的对象自动跳过，可重复执行。建议在切换存储方式前先运行，实现无缝衔接</span>
+        </div>
+
+        {#if migrating && migrateProgress.total > 0}
+          <div class="banner info">
+            <span>⏳ 迁移中… {migrateProgress.processed}/{migrateProgress.total}</span>
+          </div>
+        {/if}
+
+        {#if migrateResult}
+          <div class="banner success">
+            ✓ 共 {migrateResult.total} 个文件：新上传 {migrateResult.migrated}，已存在跳过 {migrateResult.skipped}{#if migrateResult.failed}，失败 {migrateResult.failed}{/if}
+          </div>
+          {/if}
+          {#if migrateError}
+            <div class="banner error">⚠ {migrateError}</div>
+          {/if}
+      {/if}
     </div>
+{/snippet}
 
-    {#if error}<div class="banner error">⚠ {error}</div>{/if}
-    {#if saved}<div class="banner success">✓ 已保存</div>{/if}
-
-    <button class="btn primary" onclick={save}>保存设置</button>
+  <!-- 两列按卡片高度权重最短列优先分配（CARD_COLS），保证列高大致均衡 -->
+  <div class="col">
+    {#each CARD_COLS[0] as key (key)}
+			{#if key === "theme"}{@render themeCard()}
+			{:else if key === "storage"}{@render storageCard()}
+			{:else if key === "s3"}{@render s3Card()}
+			{:else if key === "encode"}{@render encodeCard()}
+			{:else if key === "calendar"}{@render calendarCard()}
+			{:else if key === "fields"}{@render fieldsCard()}
+			{:else if key === "status"}{@render statusCard()}
+			{:else if key === "list"}{@render listCard()}
+			{:else if key === "backup"}{@render backupCard()}
+			{:else if key === "security"}{@render securityCard()}
+			{:else if key === "map"}{@render mapCard()}
+			{/if}
+    {/each}
+  </div>
+  <div class="col">
+    {#each CARD_COLS[1] as key (key)}
+			{#if key === "theme"}{@render themeCard()}
+			{:else if key === "storage"}{@render storageCard()}
+			{:else if key === "s3"}{@render s3Card()}
+			{:else if key === "encode"}{@render encodeCard()}
+			{:else if key === "calendar"}{@render calendarCard()}
+			{:else if key === "fields"}{@render fieldsCard()}
+			{:else if key === "status"}{@render statusCard()}
+			{:else if key === "list"}{@render listCard()}
+			{:else if key === "backup"}{@render backupCard()}
+			{:else if key === "security"}{@render securityCard()}
+			{:else if key === "map"}{@render mapCard()}
+			{/if}
+    {/each}
+  </div>
+</div><button class="btn primary" onclick={save}>保存设置</button>
   {/if}
 </div>
 
 <style>
-  /* 窄屏单列。宽屏用 CSS 多列瀑布式排布：浏览器自动均衡两列总高度，
-     每张卡片保持自身高度——grid 的等高行会被内容最多的卡片撑高，
-     矮卡片一侧留出大片空白。 */
+  /* 宽屏两列独立容器（按权重最短列优先分配，见 CARD_COLS），卡片保持
+     自身高度；窄屏自动堆叠为单列。 */
   .settings-grid {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
     margin-bottom: 14px;
   }
-  .sec { padding: 18px 20px; margin-bottom: 14px; }
-  @media (min-width: 860px) {
-    .settings-grid { columns: 2; column-gap: 14px; }
-    .settings-grid .sec { break-inside: avoid; }
+  .settings-grid .col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .sec { padding: 18px 20px; margin-bottom: 0; }
+  @media (max-width: 859px) {
+    .settings-grid { flex-direction: column; }
   }
   .sec h3 { margin: 0 0 12px; font-size: 15.5px; }
 
