@@ -8,11 +8,16 @@ permissions:
   contents: write
 
 jobs:
-  frontend:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-latest, label: amd64 }
+          - { os: ubuntu-24.04-arm, label: arm64 }
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -22,73 +27,35 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'pnpm'
+          node-version: 22
+          cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
-
-      - name: Build frontend
-        working-directory: frontend
-        run: |
-          pnpm install
-          pnpm run build
-
-      - name: Upload frontend dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend/dist
-
-  build:
-    needs: frontend
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            suffix: ""
-          - goos: linux
-            goarch: arm64
-            suffix: ""
-          - goos: darwin
-            goarch: arm64
-            suffix: ""
-          - goos: darwin
-            goarch: amd64
-            suffix: ""
-          - goos: windows
-            goarch: amd64
-            suffix: ".exe"
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.27'
+          go-version: "1.27"
+          cache-dependency-path: backend/go.sum
 
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: backend/dist
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: frontend
+
+      - name: Build frontend
+        run: pnpm run build
+        working-directory: frontend
+
+      - name: Copy frontend dist to backend
+        run: cp -r frontend/dist backend/dist
 
       - name: Build backend
+        run: CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o mujian-${{ matrix.label }} .
         working-directory: backend
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          binary_name="mujian-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}"
-          go build -trimpath -ldflags="-s -w" -o "${binary_name}" .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mujian-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: mujian-${{ matrix.label }}
           path: backend/mujian-*
 
   release:
