@@ -419,9 +419,9 @@
 
       {#if settings.storage_type === 's3'}
         {#if !settings.s3_bucket.trim() || !settings.s3_access_key.trim()}
-          <div class="banner error">⚠ 存储方式为 S3，但下方「S3 对象存储」卡片的 Bucket / Access Key 未填写，重启后仍会退回本地存储</div>
+          <div class="banner error">⚠ 存储方式为 S3，但下方「S3 对象存储」卡片的 Bucket / Access Key 未填写，保存后会退回本地存储</div>
         {:else}
-          <p class="hint-row">✓ S3 凭据已配置（见下方「S3 对象存储」卡片），保存并重启服务后生效</p>
+          <p class="hint-row">✓ S3 凭据已配置（见下方「S3 对象存储」卡片），保存后立即生效，无需重启</p>
         {/if}
         <p class="hint-row">切换存储方式不会自动迁移已有封面：切到 S3 后旧图仍留在本地磁盘，新上传的才会写入 S3；可在下方 S3 卡片中执行「把本地封面上传到 S3」实现无缝衔接</p>
       {/if}
@@ -738,9 +738,9 @@
       </div>
 
       {#if settings.storage_type === 's3' && (!settings.s3_bucket.trim() || !settings.s3_access_key.trim())}
-        <div class="banner error">⚠ 存储方式为 S3：Bucket 与 Access Key 必须填写，否则重启后仍会退回本地存储</div>
+        <div class="banner error">⚠ 存储方式为 S3：Bucket 与 Access Key 必须填写，否则保存后退回本地存储</div>
       {:else if settings.s3_bucket.trim() && settings.s3_access_key.trim()}
-        <p class="hint-row">✓ S3 配置已就绪，保存并重启服务后生效</p>
+        <p class="hint-row">✓ S3 配置已就绪，保存后立即生效，无需重启</p>
       {/if}
 
       {#if settings.s3_bucket.trim() && settings.s3_access_key.trim()}

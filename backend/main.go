@@ -143,7 +143,9 @@ func main() {
 
 	cfg.LoadFromFile(filepath.Join(filepath.Dir(cfg.DBPath), "settings.json"))
 
-	st := storage.New(cfg)
+	// 存储后端按当前配置动态解析：设置页切换 本地↔S3 或改凭据即时生效，
+	// 无需重启（storage.New 仅保留给测试使用）。
+	st := storage.NewDynamic(cfg)
 
 	// Aggregate the database connection-pool stats into /metrics on scrape
 	// (never on the request hot path).
