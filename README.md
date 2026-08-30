@@ -6,13 +6,16 @@
 
 ## 功能特性
 
-- **演出记录** — 添加/编辑/删除演出，批量更新与删除，搜索与多条件筛选；关键词搜索支持空格分隔多词（AND 组合，如「牡丹亭 上海」）
+- **演出记录** — 添加/编辑/删除演出（删除进回收站，保留 30 天可恢复），批量更新与删除，搜索与多条件筛选；关键词搜索支持空格分隔多词（AND 组合，如「牡丹亭 上海」）
 - **复制新建** — 新建演出时可搜索既往演出，勾选需要的字段一键复制（内容类字段默认勾选，时间/封面/状态/评分/座位/同行默认不勾）
 - **剧目与折子** — 剧目（剧种）档案、折子别名、手动排序；演出自动关联剧目
 - **日历视图** — 按月查看演出，支持海报显示，导出 ICS 订阅
 - **数据分析** — 统计总览、月度趋势、分类/城市分布、消费统计、高分推荐
 - **地图** — Leaflet 地图按城市/场馆查看演出，同场馆坐标自动对齐
 - **封面管理** — 内容哈希去重合并、未引用封面清理与回收站、统一缩略图、批量格式转换（AVIF / WebP / JPEG）
+- **自动备份** — 设置页可配格式（数据库快照 / data.json / zip 含封面）、间隔与保留份数，定时快照到 `data/backups/`，支持手动备份、下载、在线恢复与推送 S3
+- **票根多图** — 每场演出可附加多张照片（票根/现场照），详情页相册浏览与管理
+- **存储热切换** — 本地 ↔ S3 保存后立即生效，无需重启
 - **导入导出** — 兼容「记录现场」导出的 `data.json` 与 `JI_LU_XIAN_CHANG.android.zip`（含 base64 封面），支持 JSON / ZIP 备份恢复
 - **AI 助手（MCP）** — 内置 Model Context Protocol 服务器，支持 AI 批量查询/修改/分析演出数据：按演员统一剧团、合并近似场馆写法、从互联网补充剧目常演折子等
 - **PWA 支持** — 可添加到主屏幕，离线缓存，推送通知提醒
@@ -105,7 +108,7 @@ cd backend && ./mujian        # MCP 随服务自动启动；opencode 用户由�
 2. **合并近似场馆** — 如「xx剧院」与「xx剧院（某某店）」实为同址，合并地址并同步坐标。
 3. **补充剧目常演折子** — AI 联网查证后批量写入剧目折子档案，供演出记录选用。
 
-所有批量修改均支持 `dry_run` 预览。详细说明见 [AGENTS.md](AGENTS.md) 与 [docs/mcp.md](docs/mcp.md)。
+所有批量修改均支持 `dry_run` 预览。配置 `MJ_AUTH_TOKEN` 后，MCP 客户端需在请求头携带 `Authorization: Bearer <令牌>`。详细说明见 [AGENTS.md](AGENTS.md) 与 [docs/mcp.md](docs/mcp.md)。
 
 ## 环境变量
 
@@ -122,6 +125,11 @@ cd backend && ./mujian        # MCP 随服务自动启动；opencode 用户由�
 | `S3_ENDPOINT` / `S3_BUCKET` / `S3_REGION` | — | S3 对象存储配置（使用 S3 时必填） |
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | — | S3 凭证 |
 | `S3_PUBLIC_URL` | — | S3 封面公开访问地址前缀 |
+| `MJ_AUTH_TOKEN` | — | 设置后所有 API/MCP 请求需携带该令牌（Bearer 头或 `?token=` 参数） |
+| `BACKUP_INTERVAL_HOURS` | `0` | 自动备份间隔（0 = 关闭），可在设置页改 |
+| `BACKUP_KEEP` | `10` | 备份快照保留份数 |
+| `BACKUP_FORMAT` | `db` | 备份格式（`db`/`json`/`zip`） |
+| `BACKUP_REMOTE` | `false` | 备份成功后推送到 S3 的 `backups/` 目录 |
 
 ## 项目结构
 
@@ -170,6 +178,10 @@ mujian/
 | GET | `/records/all` `/records/search` | 全量列表 / 搜索 |
 | POST | `/records/batch` `/records/batch/delete` | 批量更新 / 批量删除 |
 | POST | `/records/align-venues` | 同场馆坐标对齐 |
+| GET | `/records/deleted` | 回收站列表 |
+| POST | `/records/{id}/restore`、`/records/trash/purge` | 从回收站恢复 / 清空回收站 |
+| DELETE | `/records/{id}/purge` | 彻底删除（不可恢复） |
+| GET/POST/DELETE | `/records/{id}/photos` | 票根照片列表 / 关联 / 移除（`{pid}` 删除、`/reorder` 排序） |
 | POST | `/records/import` | 导入（JSON / 记录现场 ZIP） |
 | GET/POST | `/categories`；PUT/DELETE `/categories/{id}` | 分类管理 |
 | POST | `/categories/reorder` | 分类手动排序（`{"ids":[...]}`） |
@@ -186,7 +198,9 @@ mujian/
 | GET/PUT | `/settings` | 读取 / 更新设置 |
 | POST | `/upload` | 上传封面（≤8MB，按当前编码格式存储） |
 | GET | `/export?format=zip` | 导出 JSON / ZIP 备份 |
-| POST | `/backup/restore` | 从备份 JSON 恢复 |
+| POST | `/backup/run`、`/backup/restore-from` | 立即备份 / 从已有快照恢复（json/zip） |
+| GET | `/backup/list`、`/backup/download?file=` | 备份列表 / 下载快照 |
+| DELETE | `/backup?file=` | 删除一份备份 |
 | GET | `/covers` | 封面复用选择器 |
 | GET/POST | `/covers/duplicates` `/covers/merge` | 查重 / 合并重复封面 |
 | GET/POST | `/covers/orphans` `/covers/cleanup` | 未引用封面扫描 / 清理 |
@@ -206,7 +220,7 @@ mujian/
 | 0 | 正常 |
 | 1 | 想看 |
 | 2 | 已取消 |
-| 3 | 其他 |
+| 3 | 未赴约 |
 
 ## 封面与图片
 
