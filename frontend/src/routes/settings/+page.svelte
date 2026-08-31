@@ -15,18 +15,25 @@
     s3_region: 'us-east-1',
     s3_access_key: '',
     s3_secret_key: '',
-    s3_public_url: ''
+    s3_public_url: '',
+    ai_enabled: false,
+    ai_base_url: '',
+    ai_model: '',
+    ai_api_key: ''
   });
   // GET /api/settings 返回的 secret 是掩码值（如 "sk12****"）；保存时若未改动
   // 就不回传该字段，避免把掩码存成真实密钥（后端也会兜底忽略）。
   let loadedS3Secret = $state('');
+  // GET /api/settings 返回的 AI key 是掩码值（如 "sk-...****"）；未改动则不回传。
+  let loadedAIApiKey = $state('');
   // 设置卡片的两列归属：按预估高度最短列优先分配，列高大致均衡。
   // 新增/调整卡片时同步这里的权重即可。
   const CARD_COLS = (() => {
     // 权重 = 实测卡片高度（含间距，px）；内容变化时按需更新
     const cards = [
       ['theme', 162], ['storage', 158], ['s3', 823], ['encode', 305], ['calendar', 280],
-      ['fields', 349], ['status', 178], ['list', 224], ['backup', 988], ['security', 274], ['map', 435]
+      ['fields', 349], ['status', 178], ['list', 224], ['backup', 988], ['security', 274], ['map', 435],
+      ['ai', 360]
     ];
     const cols = [[], []];
     const hs = [0, 0];
@@ -199,6 +206,11 @@
       }
       if (!settings.s3_region) settings.s3_region = 'us-east-1';
       loadedS3Secret = settings.s3_secret_key;
+      settings.ai_enabled = settings.ai_enabled === true;
+      settings.ai_base_url = settings.ai_base_url || '';
+      settings.ai_model = settings.ai_model || '';
+      loadedAIApiKey = settings.ai_api_key || '';
+      settings.ai_api_key = settings.ai_api_key || '';
       if (typeof settings.show_friends !== 'boolean') settings.show_friends = true;
       if (typeof settings.show_pay_price !== 'boolean') settings.show_pay_price = true;
       if (typeof settings.show_other_cost !== 'boolean') settings.show_other_cost = true;
@@ -256,6 +268,12 @@
       if (settings.s3_secret_key && !settings.s3_secret_key.includes('****')) {
         payload.s3_secret_key = settings.s3_secret_key;
       }
+      // AI 填写配置：始终提交 key 原值（含空字符串）；后端会忽略掩码值（含 ****），
+      // 清空则真实移除，保持不变则保留已存密钥。
+      payload.ai_enabled = !!settings.ai_enabled;
+      payload.ai_base_url = settings.ai_base_url.trim();
+      payload.ai_model = settings.ai_model.trim();
+      payload.ai_api_key = settings.ai_api_key;
       await api.updateSettings(payload);
       resetStorageInfo();
       saved = true;
@@ -838,6 +856,33 @@
     </div>
 {/snippet}
 
+{#snippet aiCard()}
+<div class="card sec">
+      <h3>AI 填写</h3>
+      <p class="tiny muted" style="margin: 0 0 10px;">配置一个 OpenAI 兼容的聊天模型接口后，新建演出时可粘贴演出信息（购票短信 / 宣传文案等），一键把内容填进对应字段。密钥仅保存在服务端，不会下发到浏览器。</p>
+      <label class="switch-row">
+        <span>启用 AI 填写</span>
+        <input type="checkbox" bind:checked={settings.ai_enabled} />
+      </label>
+      <div class="s3-grid" style="margin-top: 12px;">
+        <label class="field">
+          <span>API 地址（Base URL）</span>
+          <input class="input" type="text" bind:value={settings.ai_base_url} placeholder="https://api.openai.com/v1" spellcheck="false" autocomplete="off" />
+          <span class="hint">OpenAI 兼容服务的 chat/completions 基址，如 https://api.openai.com/v1</span>
+        </label>
+        <label class="field">
+          <span>模型（Model）</span>
+          <input class="input" type="text" bind:value={settings.ai_model} placeholder="gpt-4o-mini" spellcheck="false" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>API Key</span>
+          <input class="input" type="password" bind:value={settings.ai_api_key} placeholder={loadedAIApiKey || '未设置'} autocomplete="new-password" />
+          <span class="hint">已配置的密钥会以掩码显示；保持不变即可保留原值，清空后保存可移除</span>
+        </label>
+      </div>
+    </div>
+{/snippet}
+
   <!-- 两列按卡片高度权重最短列优先分配（CARD_COLS），保证列高大致均衡 -->
   <div class="col">
     {#each CARD_COLS[0] as key (key)}
@@ -852,6 +897,7 @@
 			{:else if key === "backup"}{@render backupCard()}
 			{:else if key === "security"}{@render securityCard()}
 			{:else if key === "map"}{@render mapCard()}
+			{:else if key === "ai"}{@render aiCard()}
 			{/if}
     {/each}
   </div>
@@ -868,6 +914,7 @@
 			{:else if key === "backup"}{@render backupCard()}
 			{:else if key === "security"}{@render securityCard()}
 			{:else if key === "map"}{@render mapCard()}
+			{:else if key === "ai"}{@render aiCard()}
 			{/if}
     {/each}
   </div>

@@ -74,6 +74,22 @@
   let pickerOpen = $state(false);
   let fileInput = $state(null);
 
+  // AI 填写：粘贴演出信息后调用后端模型提取字段并批量填入表单
+  let aiEnabled = $state(false);
+  let aiOpen = $state(false);
+  let aiText = $state('');
+  let aiBusy = $state(false);
+  let aiErr = $state('');
+
+  onMount(async () => {
+    try {
+      const s = await api.getSettings();
+      aiEnabled = !!s.ai_enabled;
+    } catch (e) {
+      aiEnabled = false;
+    }
+  });
+
   // 演员：自由文本胶囊（未建档案的姓名）。编辑已有记录时，
   // 初始为 record.artist_names 中未关联到档案的部分（等演员列表载入后计算）。
   let freeNames = $state([]);
@@ -665,6 +681,71 @@
     form.rating = form.rating === n ? 0 : n;
   }
 
+  // AI 填写：把模型返回的结构化字段批量映射到表单。与「从既往演出复制」同口径——
+  // 只覆盖 AI 给出的字段，未提及的保持原样；演员因无法解析实体 ID，全部作为
+  // 自由文本胶囊补充（entity_ids 清空）。
+  async function applyAi() {
+    const text = aiText.trim();
+    if (!text) {
+      aiErr = '请先粘贴演出信息';
+      return;
+    }
+    aiBusy = true;
+    aiErr = '';
+    try {
+      const data = await api.aiParse(text);
+      const asStr = (v) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim());
+      const asArr = (v) => (Array.isArray(v) ? v.map((x) => asStr(x)).filter(Boolean) : []);
+      if (data.name) form.name = asStr(data.name);
+      if (data.city) form.city = asStr(data.city);
+      if (data.address) form.address = asStr(data.address);
+      if (data.channel) form.channel = asStr(data.channel);
+      if (data.company) form.company = asStr(data.company);
+      if (data.seat) form.seat = asStr(data.seat);
+      if (data.friends) form.friends = asStr(data.friends);
+      if (data.remark) form.remark = asStr(data.remark);
+      const cats = asArr(data.categoryNames);
+      if (cats.length) form.categoryNames = cats;
+      if (typeof data.rating === 'number' && data.rating > 0) {
+        form.rating = Math.max(0, Math.min(5, Math.round(data.rating)));
+      }
+      if (typeof data.duration === 'number' && data.duration > 0) {
+        form.duration = Math.round(data.duration);
+      }
+      if (typeof data.price === 'number' && data.price > 0) form.price = data.price;
+      if (typeof data.pay_price === 'number' && data.pay_price > 0) form.pay_price = data.pay_price;
+      if (typeof data.other_cost === 'number' && data.other_cost > 0) form.other_cost = data.other_cost;
+      const plays = asArr(data.play);
+      if (plays.length) form.play = plays.join(', ');
+      const guests = asArr(data.guest);
+      if (guests.length) form.guest = guests.join(', ');
+      if (typeof data.active_status === 'number') {
+        form.active_status = Math.max(0, Math.min(3, Math.round(data.active_status)));
+      }
+      // 时间：优先 date_local "YYYY-MM-DDTHH:MM"
+      if (typeof data.date_local === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(asStr(data.date_local))) {
+        form.date_local = asStr(data.date_local);
+      }
+      if (typeof data.lat === 'number') form.lat = String(data.lat);
+      if (typeof data.lng === 'number') form.lng = String(data.lng);
+      // 演员：全部作为自由文本胶囊补充
+      const names = asArr(data.artist_names);
+      if (names.length) {
+        form.artist_ids = [];
+        freeNames = [
+          ...freeNames,
+          ...names.filter((n) => !artistList.some((a) => a.name === n) && !freeNames.includes(n))
+        ];
+      }
+      aiErr = '';
+      aiOpen = false; // 填充完成后收起面板
+    } catch (e) {
+      aiErr = e.message || 'AI 解析失败';
+    } finally {
+      aiBusy = false;
+    }
+  }
+
   // 币种：下拉选择，避免自由文本输入币种缩写（如 cny/CNY/Cny）导致的数据不一致。
   const commonCurrencies = ['CNY', 'USD', 'HKD', 'TWD', 'JPY', 'EUR', 'GBP', 'KRW', 'AUD', 'SGD'];
   function currencyOptions(v) {
@@ -906,6 +987,34 @@
 <div class="two-col">
   <div class="col-left">
   {#if !record}
+  <!-- ============ AI 填写 ============ -->
+  {#if aiEnabled}
+  <div class="card section ai-card">
+    <div class="ai-head">
+      <h3>AI 填写</h3>
+      {#if !aiOpen}
+        <button type="button" class="btn sm" onclick={() => (aiOpen = true)}>粘贴信息并解析</button>
+      {/if}
+    </div>
+    {#if aiOpen}
+      <p class="ai-hint muted">把购票短信 / 宣传文案 / 观演记录等文本粘贴到下方，点「用 AI 解析并填充」即可把内容批量填入对应字段（只覆盖识别出的字段，未提及的保持不变）。</p>
+      <textarea
+        class="input ai-text"
+        rows="5"
+        bind:value={aiText}
+        placeholder="例如：大麦网 您已购票 昆剧《牡丹亭》 2026-05-01 19:30 上海大剧院 票价 580 实付 580 主演 张军、沈昳丽 江苏昆山当代昆剧院…"
+        spellcheck="false"
+      ></textarea>
+      <div class="ai-actions">
+        <button type="button" class="btn" disabled={aiBusy} onclick={applyAi}>
+          {aiBusy ? '解析中…' : '用 AI 解析并填充'}
+        </button>
+        <button type="button" class="btn ghost" disabled={aiBusy} onclick={() => (aiOpen = false)}>收起</button>
+      </div>
+      {#if aiErr}<div class="banner error">⚠ {aiErr}</div>{/if}
+    {/if}
+  </div>
+  {/if}
   <!-- ============ 从既往演出复制 ============ -->
   <div class="card section copy-card">
     <h3>从既往演出复制</h3>
@@ -1726,6 +1835,20 @@
   .ply-new[open] { flex: 1 1 100%; }
   .ply-new summary { cursor: pointer; color: var(--accent); }
   .ply-new-body { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* ---------- AI 填写 ---------- */
+  .ai-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .ai-hint { margin: 0 0 10px; font-size: 12.5px; color: var(--text-3); }
+  .ai-text {
+    width: 100%;
+    resize: vertical;
+    font-size: 13.5px;
+    line-height: 1.6;
+    font-family: var(--font-sans, inherit);
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .ai-actions { display: flex; gap: 8px; align-items: center; }
 
   /* ---------- 从既往演出复制 ---------- */
   .copy-hint { padding: 6px 2px 0; font-size: 13px; }

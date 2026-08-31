@@ -214,6 +214,9 @@ export const api = {
   updateSettings: (data) => request('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
   testS3Connection: (data) => request('/api/settings/test-s3', { method: 'POST', body: JSON.stringify(data) }),
 
+  // AI 填写：把粘贴的演出信息文本发给后端，由配置的模型提取结构化字段。
+  aiParse: (text) => request('/api/ai/parse', { method: 'POST', body: JSON.stringify({ text }) }),
+
   backupRun: () => request('/api/backup/run', { method: 'POST' }),
   listRecordPhotos: (id) => request(`/api/records/${id}/photos`),
   addRecordPhoto: (id, key) => request(`/api/records/${id}/photos`, { method: 'POST', body: JSON.stringify({ key }) }),

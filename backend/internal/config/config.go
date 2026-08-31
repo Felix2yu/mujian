@@ -39,7 +39,13 @@ type Config struct {
 	ShowPayPrice        bool   `json:"show_pay_price"`
 	ShowOtherCost       bool   `json:"show_other_cost"`
 	MultiCurrency       bool   `json:"multi_currency"`
-	mu                  sync.RWMutex
+	// AI 填写：调用 OpenAI 兼容的 Chat Completions 接口，从粘贴文本提取演出字段。
+	// 密钥仅存于服务端，不回显明文。
+	AIEnabled  bool   `json:"-"`
+	AIBaseURL  string `json:"-"`
+	AIAPIKey   string `json:"-"`
+	AIModel    string `json:"-"`
+	mu         sync.RWMutex
 }
 
 var (
@@ -72,6 +78,10 @@ func Load() *Config {
 		ShowPayPrice:        true,
 		ShowOtherCost:       true,
 		MultiCurrency:       true,
+		AIEnabled:           false,
+		AIBaseURL:           "https://api.openai.com/v1",
+		AIAPIKey:            "",
+		AIModel:             "",
 	}
 	return global
 }
@@ -145,6 +155,22 @@ func (c *Config) Update(s *SettingsUpdate) {
 	if s.MultiCurrency != nil {
 		c.MultiCurrency = *s.MultiCurrency
 	}
+	if s.AIEnabled != nil {
+		c.AIEnabled = *s.AIEnabled
+	}
+	if s.AIBaseURL != nil {
+		c.AIBaseURL = *s.AIBaseURL
+	}
+	if s.AIModel != nil {
+		c.AIModel = *s.AIModel
+	}
+	if s.AIAPIKey != nil {
+		// GET /api/settings masks this value; a client echoing the masked
+		// value back must not overwrite the real key.
+		if !strings.HasSuffix(*s.AIAPIKey, "****") {
+			c.AIAPIKey = *s.AIAPIKey
+		}
+	}
 	if s.AuthToken != nil {
 		c.AuthToken = *s.AuthToken
 	}
@@ -187,7 +213,12 @@ type SettingsUpdate struct {
 	ShowPayPrice  *bool   `json:"show_pay_price"`
 	ShowOtherCost *bool   `json:"show_other_cost"`
 	MultiCurrency *bool   `json:"multi_currency"`
-	AuthToken     *string `json:"auth_token"`
+	// AI 填写配置
+	AIEnabled  *bool   `json:"ai_enabled"`
+	AIBaseURL  *string `json:"ai_base_url"`
+	AIAPIKey   *string `json:"ai_api_key"`
+	AIModel    *string `json:"ai_model"`
+	AuthToken  *string `json:"auth_token"`
 	// 自动备份：0 = 关闭，单位小时；Keep 为快照保留份数（>=1）。
 	BackupIntervalHours *int    `json:"backup_interval_hours,omitempty"`
 	BackupKeep          *int    `json:"backup_keep,omitempty"`
@@ -227,6 +258,10 @@ func (c *Config) GetSettingsResponse() map[string]interface{} {
 		"show_pay_price":        c.ShowPayPrice,
 		"show_other_cost":       c.ShowOtherCost,
 		"multi_currency":        c.MultiCurrency,
+		"ai_enabled":            c.AIEnabled,
+		"ai_base_url":           c.AIBaseURL,
+		"ai_model":              c.AIModel,
+		"ai_api_key":            maskSecret(c.AIAPIKey),
 		"auth_required":         c.AuthToken != "",
 		"backup_interval_hours": c.BackupIntervalHours,
 		"backup_keep":           c.BackupKeep,
@@ -254,6 +289,26 @@ func (c *Config) GetStorageMode() (storageType string, allowLocal bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.StorageType, c.AllowLocalStorage
+}
+
+// AISettings is a point-in-time snapshot of the AI-fill configuration.
+type AISettings struct {
+	Enabled bool
+	BaseURL string
+	APIKey  string
+	Model   string
+}
+
+// GetAISettings snapshots the AI-fill configuration under the read lock.
+func (c *Config) GetAISettings() AISettings {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return AISettings{
+		Enabled: c.AIEnabled,
+		BaseURL: c.AIBaseURL,
+		APIKey:  c.AIAPIKey,
+		Model:   c.AIModel,
+	}
 }
 
 // S3Settings is a point-in-time snapshot of the S3 connection parameters.
@@ -339,6 +394,10 @@ func (c *Config) SaveToFile(path string) error {
 		"show_pay_price":        b2s(c.ShowPayPrice),
 		"show_other_cost":       b2s(c.ShowOtherCost),
 		"multi_currency":        b2s(c.MultiCurrency),
+		"ai_enabled":            b2s(c.AIEnabled),
+		"ai_base_url":           c.AIBaseURL,
+		"ai_model":              c.AIModel,
+		"ai_api_key":            c.AIAPIKey,
 		"auth_token":            c.AuthToken,
 		"backup_interval_hours": strconv.Itoa(c.BackupIntervalHours),
 		"backup_keep":           strconv.Itoa(c.BackupKeep),
@@ -410,6 +469,18 @@ func (c *Config) LoadFromFile(path string) error {
 	}
 	if v, ok := data["multi_currency"]; ok {
 		c.MultiCurrency = v == "true"
+	}
+	if v, ok := data["ai_enabled"]; ok {
+		c.AIEnabled = v == "true"
+	}
+	if v, ok := data["ai_base_url"]; ok {
+		c.AIBaseURL = v
+	}
+	if v, ok := data["ai_api_key"]; ok {
+		c.AIAPIKey = v
+	}
+	if v, ok := data["ai_model"]; ok {
+		c.AIModel = v
 	}
 	if v, ok := data["auth_token"]; ok {
 		c.AuthToken = v

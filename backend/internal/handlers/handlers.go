@@ -143,6 +143,9 @@ func (h *Handler) Routes() chi.Router {
 	r.Put("/settings", h.updateSettings)
 	r.Post("/settings/test-s3", h.testS3Connection)
 
+	// AI 填写：从粘贴文本提取结构化演出字段（密钥仅存于服务端）
+	r.Post("/ai/parse", h.parseAI)
+
 	r.Post("/upload", h.uploadFile)
 	r.Get("/export", h.exportRecords)
 	r.Post("/backup/restore", h.backupRestore)
