@@ -134,9 +134,8 @@
     await api.reorderRecordPhotos(id, ids).catch(loadPhotos);
   }
 
-  // 相关演出：同剧目 / 同场馆（不含自身，各取最近 6 场）
-  let relatedDrama = $state([]);
-  let relatedVenue = $state([]);
+  // 相关演出：按关联程度统一打分排序（同剧目 > 同演员 > 同场馆），取最相关若干，带封面缩略图
+  let related = $state([]);
 
   async function load() {
     loading = true;
@@ -158,25 +157,41 @@
     }
   }
 
+  // 相关演出：跨「同剧目 / 同演员 / 同场馆」三个维度累计关联度，合并去重后按
+  // 总分降序、日期降序取最相关的若干条。一条记录可同时命中多个维度（分数累加）。
+  const REL_WEIGHTS = { drama: 3, artist: 2, venue: 1.5 };
   async function loadRelated(r) {
-    relatedDrama = [];
-    relatedVenue = [];
+    related = [];
+    const byId = new Map();
+    const rollup = (list, reason, weight) => {
+      for (const x of list || []) {
+        if (!x?.id || x.id === r.id) continue;
+        const cur = byId.get(x.id);
+        if (cur) {
+          cur.score += weight;
+          if (!cur.reasons.includes(reason)) cur.reasons.push(reason);
+        } else {
+          byId.set(x.id, { ...x, score: weight, reasons: [reason] });
+        }
+      }
+    };
     const tasks = [];
-    if (r.drama_ids?.length) {
-      tasks.push(
-        api.listRecords({ drama: r.drama_ids[0], limit: 8 }).then((res) => {
-          relatedDrama = (res.records || []).filter((x) => x.id !== r.id).slice(0, 6);
-        }).catch(() => {})
-      );
+    // 同剧目：该演出关联的全部剧目（权重最高）
+    for (const did of r.drama_ids || []) {
+      if (did) tasks.push(api.listRecords({ drama: did, limit: 50 }).then((res) => rollup(res?.records, '同剧目', REL_WEIGHTS.drama)).catch(() => {}));
     }
+    // 同演员：该演出关联的前若干位演员（权重次之；封顶避免一条记录演员过多时请求爆炸）
+    for (const aid of (r.artist_ids || []).slice(0, 6)) {
+      if (aid) tasks.push(api.listRecords({ artist: aid, limit: 50 }).then((res) => rollup(res?.records, '同演员', REL_WEIGHTS.artist)).catch(() => {}));
+    }
+    // 同场馆：地址模糊匹配（权重最低）
     if (r.address) {
-      tasks.push(
-        api.getByField('address', r.address).then((res) => {
-          relatedVenue = (res || []).filter((x) => x.id !== r.id).slice(0, 6);
-        }).catch(() => {})
-      );
+      tasks.push(api.getByField('address', r.address).then((res) => rollup(res, '同场馆', REL_WEIGHTS.venue)).catch(() => {}));
     }
     await Promise.all(tasks);
+    related = [...byId.values()]
+      .sort((a, b) => b.score - a.score || (b.date || 0) - (a.date || 0))
+      .slice(0, 8);
   }
 
   async function remove() {
@@ -312,34 +327,6 @@
       </div>
     {/if}
 
-    {#if relatedDrama.length || relatedVenue.length}
-      <div class="card section">
-        <h3>相关演出</h3>
-        {#if relatedDrama.length}
-          <p class="rel-label muted tiny">同剧目其他场次</p>
-          <div class="rel-list">
-            {#each relatedDrama as x (x.id)}
-              <a class="rel-item" href={`/records/${x.id}`}>
-                <span class="rel-name">{x.name}</span>
-                <span class="rel-meta">{x.dateText ? x.dateText.slice(0, 10) : ''}{x.city ? ' · ' + x.city : ''}</span>
-              </a>
-            {/each}
-          </div>
-        {/if}
-        {#if relatedVenue.length}
-          <p class="rel-label muted tiny">同场馆「{rec.address}」其他场次</p>
-          <div class="rel-list">
-            {#each relatedVenue as x (x.id)}
-              <a class="rel-item" href={`/records/${x.id}`}>
-                <span class="rel-name">{x.name}</span>
-                <span class="rel-meta">{x.dateText ? x.dateText.slice(0, 10) : ''}{x.city ? ' · ' + x.city : ''}</span>
-              </a>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    {/if}
-
     <div class="cards-row">
       <div class="card section">
         <h3>演出信息</h3>
@@ -428,6 +415,33 @@
       <div class="card section">
         <h3>备注</h3>
         <p class="remark">{rec.remark}</p>
+      </div>
+    {/if}
+
+    {#if related.length}
+      <div class="card section">
+        <h3>相关演出</h3>
+        <p class="rel-hint muted tiny">按关联程度排序：同剧目 / 同演员 / 同场馆，命中越多越靠前</p>
+        <div class="rel-grid">
+          {#each related as x (x.id)}
+            <a class="rel-card" href={`/records/${x.id}`}>
+              <div class="rel-cover">
+                {#if x.coverThumb || x.coverFile}
+                  <img src={coverUrl(x.coverThumb || x.coverFile)} alt={x.name} loading="lazy" />
+                {:else}
+                  <div class="rel-no-cover"><span>{(x.name || '?').slice(0, 1)}</span></div>
+                {/if}
+              </div>
+              <div class="rel-info">
+                <span class="rel-name">{x.name}</span>
+                <span class="rel-meta">{x.dateText ? x.dateText.slice(0, 10) : ''}{x.city ? ' · ' + x.city : ''}</span>
+                <span class="rel-reasons">
+                  {#each x.reasons as reason (reason)}<span class="rel-reason">{reason}</span>{/each}
+                </span>
+              </div>
+            </a>
+          {/each}
+        </div>
       </div>
     {/if}
   </div>
@@ -637,16 +651,37 @@
     h1 { font-size: 22px; }
   }
 
-  .rel-label { margin: 10px 0 6px; }
-  .rel-list { display: flex; flex-direction: column; gap: 6px; }
-  .rel-item {
-    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-    padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm, 8px);
-    color: inherit; text-decoration: none;
+  .rel-hint { margin: 0 0 12px; }
+  .rel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+  .rel-card {
+    display: flex; flex-direction: column; gap: 8px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 8px; color: inherit; text-decoration: none;
+    transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
   }
-  .rel-item:hover { border-color: var(--accent); background: var(--accent-softer); }
-  .rel-name { font-weight: 500; font-size: 13.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rel-meta { color: var(--text-3); font-size: 12px; flex: none; }
+  .rel-card:hover { border-color: var(--accent); background: var(--accent-softer); transform: translateY(-2px); }
+  .rel-cover {
+    width: 100%; aspect-ratio: 3 / 4; border-radius: var(--radius-sm);
+    overflow: hidden; background: var(--surface-3); flex: 0 0 auto;
+  }
+  .rel-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .rel-no-cover {
+    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(160deg, var(--surface-3), var(--surface-2));
+  }
+  .rel-no-cover span { font-family: var(--font-serif); font-size: 36px; color: var(--text-3); opacity: 0.6; }
+  .rel-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .rel-name {
+    font-weight: 600; font-size: 13.5px; line-height: 1.3; color: var(--text);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .rel-meta { color: var(--text-3); font-size: 12px; }
+  .rel-reasons { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+  .rel-reason {
+    font-size: 11px; color: var(--accent); background: var(--accent-soft);
+    border-radius: 999px; padding: 1px 7px; white-space: nowrap;
+  }
 
   .photo-actions { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }

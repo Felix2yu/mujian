@@ -231,6 +231,7 @@ func (h *Handler) listRecords(w http.ResponseWriter, r *http.Request) {
 	f.Start = q.Get("start")
 	f.End = q.Get("end")
 	f.DramaID = q.Get("drama")
+	f.ArtistID = q.Get("artist")
 	f.ZheziID = q.Get("zhezi")
 	f.Missing = q.Get("missing")
 	f.Channel = q.Get("channel")
