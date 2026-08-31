@@ -3,7 +3,7 @@
   import { page } from '$app/stores';
   import { fade, scale } from 'svelte/transition';
   import { api, coverUrl, formatCurrency, formatDate } from '$lib/api.js';
-  import { STATUS_LABELS } from '$lib/statusPrefs.js';
+  import { STATUS_LABELS, ALL_STATUSES } from '$lib/statusPrefs.js';
   import BackLink from '$lib/components/BackLink.svelte';
 
   const id = $page.params.id;
@@ -26,6 +26,17 @@
   let deleting = $state(false);
   let dramaMap = $state(new Map());
   let zheziMap = $state(new Map());
+
+  // 详情页快速打分：点击星标即时保存到后端，无需进入编辑页
+  let hoverRating = $state(0);
+  let ratingBusy = $state(false);
+  let ratingSaved = $state(false);
+  let ratingError = $state('');
+
+  // 详情页快捷切换演出状态：点击状态即即时保存到后端，无需进入编辑页
+  let statusBusy = $state(false);
+  let statusSaved = $state(false);
+  let statusError = $state('');
 
   // 封面灯箱：点击放大查看
   // 列表/详情显示缩略图优先，灯箱使用原图
@@ -206,6 +217,54 @@
     }
   }
 
+  // 快速打分：乐观更新 + 失败回滚。直接把当前完整记录回写（Record 响应字段与
+  // RecordRequest 同构），仅改 rating，避免部分字段更新把其他列清零。
+  async function setRating(n) {
+    if (!rec) return;
+    const prev = rec.rating;
+    const next = prev === n ? 0 : n; // 再次点击同一星 → 清除评分
+    rec.rating = next;               // 乐观更新：星标与文字即时反映
+    hoverRating = 0;
+    ratingBusy = true;
+    ratingSaved = false;
+    ratingError = '';
+    try {
+      const updated = await api.updateRecord(id, { ...rec, rating: next });
+      rec = updated;                 // 以服务端返回为准
+      if (next > 0) {
+        ratingSaved = true;
+        setTimeout(() => { ratingSaved = false; }, 1600);
+      }
+    } catch (e) {
+      rec.rating = prev;             // 失败回滚
+      ratingError = e.message || '评分保存失败';
+    } finally {
+      ratingBusy = false;
+    }
+  }
+
+  // 快捷切换演出状态：与快速打分同理，乐观更新 + 失败回滚。回写完整记录
+  // （Record 响应字段与 RecordRequest 同构），仅改 active_status，避免把其他列清零。
+  async function setStatus(s) {
+    if (!rec || rec.active_status === s) return; // 已是该状态则跳过
+    const prev = rec.active_status;
+    rec.active_status = s;          // 乐观更新：状态药丸即时切换
+    statusBusy = true;
+    statusSaved = false;
+    statusError = '';
+    try {
+      const updated = await api.updateRecord(id, { ...rec, active_status: s });
+      rec = updated;                // 以服务端返回为准
+      statusSaved = true;
+      setTimeout(() => { statusSaved = false; }, 1600);
+    } catch (e) {
+      rec.active_status = prev;     // 失败回滚
+      statusError = e.message || '状态保存失败';
+    } finally {
+      statusBusy = false;
+    }
+  }
+
   onMount(load);
 </script>
 <svelte:head><title>{rec ? `${rec.name} - 幕间` : "演出 - 幕间"}</title></svelte:head>
@@ -254,8 +313,6 @@
           {#if rec.channel}
             <a class="pill" href={`/?q=${encodeURIComponent(rec.channel)}`}>{rec.channel}</a>
           {/if}
-          {#if rec.rating}<span class="pill gold">★ {rec.rating}</span>{/if}
-          <span class="pill status">{statusLabel[rec.active_status] ?? rec.active_status}</span>
         </div>
         <h1>{rec.name}</h1>
         <div class="sub">
@@ -271,6 +328,47 @@
         {#if rec.coordinate}
           <div class="sub tiny">📍 {rec.coordinate.latitude}, {rec.coordinate.longitude}</div>
         {/if}
+        <div class="rate-inline" aria-busy={ratingBusy}>
+          <span class="rate-label">我的评分</span>
+          <div class="star-row" role="radiogroup" aria-label="为这场演出评分">
+            {#each [1, 2, 3, 4, 5] as n}
+              <button
+                type="button"
+                class="star"
+                class:on={Math.max(rec.rating, hoverRating) >= n}
+                onclick={() => setRating(n)}
+                onmouseenter={() => (hoverRating = n)}
+                onmouseleave={() => (hoverRating = 0)}
+                onfocus={() => (hoverRating = n)}
+                onblur={() => (hoverRating = 0)}
+                aria-label={`评 ${n} 星`}
+                aria-pressed={rec.rating >= n}
+                disabled={ratingBusy}
+              >★</button>
+            {/each}
+            <span class="rate-text tiny">{rec.rating ? `${rec.rating} 分` : '未评分'}</span>
+            {#if ratingSaved}<span class="rate-saved tiny">✓ 已保存</span>{/if}
+            {#if ratingError}<span class="rate-err tiny">⚠ {ratingError}</span>{/if}
+          </div>
+        </div>
+        <div class="status-inline" aria-busy={statusBusy}>
+          <span class="status-label">演出状态</span>
+          <div class="status-row" role="radiogroup" aria-label="切换演出状态">
+            {#each ALL_STATUSES as s}
+              <button
+                type="button"
+                class="status-chip s{s}"
+                class:active={rec.active_status === s}
+                onclick={() => setStatus(s)}
+                disabled={statusBusy}
+                title={statusLabel[s]}
+                aria-pressed={rec.active_status === s}
+              >{statusLabel[s]}</button>
+            {/each}
+            {#if statusSaved}<span class="status-saved tiny">✓ 已保存</span>{/if}
+            {#if statusError}<span class="status-err tiny">⚠ {statusError}</span>{/if}
+          </div>
+        </div>
         <div class="actions">
           <a class="btn primary sm" href={`/records/${rec.id}/edit`}>编辑</a>
           <button class="btn danger sm" onclick={remove} disabled={deleting}>{deleting ? '删除中…' : '删除'}</button>
@@ -510,7 +608,6 @@
   .head { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
   .pill.gold { background: var(--gold-soft); color: var(--gold); }
-  .pill.status { background: var(--surface-3); color: var(--text-2); }
   h1 { font-size: 26px; margin: 0 0 8px; line-height: 1.25; }
   .sub { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; color: var(--text-2); margin-bottom: 4px; }
   .sub .date { color: var(--text-muted); }
@@ -518,6 +615,53 @@
   .loc { color: var(--text-2); border-bottom: 1px dashed var(--border-strong); transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
   .loc:hover { color: var(--accent); border-color: var(--accent); }
   .actions { display: flex; gap: 8px; margin-top: auto; padding-top: 16px; }
+
+  /* 详情页快速打分：星标控件 + 即时保存反馈 */
+  .rate-inline { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .rate-label { font-size: 13px; color: var(--text-muted); flex: 0 0 auto; }
+  .star-row { display: flex; align-items: center; gap: 2px; }
+  .star {
+    border: none;
+    background: none;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--border-strong);
+    cursor: pointer;
+    padding: 0 1px;
+    transition: transform var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  }
+  .star:hover { transform: scale(1.18); }
+  .star.on { color: var(--gold); }
+  .star:disabled { cursor: default; opacity: 0.7; }
+  .rate-text { margin-left: 6px; font-size: 12.5px; color: var(--text-muted); }
+  .rate-saved { margin-left: 4px; font-size: 12.5px; color: var(--accent); }
+  .rate-err { margin-left: 4px; font-size: 12.5px; color: var(--danger); }
+
+  /* 详情页快捷切换演出状态：状态药丸一键切换，当前状态高亮 */
+  .status-inline { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .status-label { font-size: 13px; color: var(--text-muted); flex: 0 0 auto; }
+  .status-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .status-chip {
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-2);
+    border-radius: 999px;
+    padding: 4px 13px;
+    font-size: 13px;
+    line-height: 1.5;
+    cursor: pointer;
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+  }
+  .status-chip:hover { border-color: var(--border-strong); color: var(--text); }
+  .status-chip:active { transform: scale(0.97); }
+  .status-chip.active { color: #fff; border-color: transparent; font-weight: 600; }
+  .status-chip.s0.active { background: var(--accent); }
+  .status-chip.s1.active { background: #926a18; }
+  .status-chip.s2.active { background: #5a5a60; text-decoration: line-through; }
+  .status-chip.s3.active { background: #5d3e6e; }
+  .status-chip:disabled { cursor: default; opacity: 0.7; }
+  .status-saved { margin-left: 4px; font-size: 12.5px; color: var(--accent); }
+  .status-err { margin-left: 4px; font-size: 12.5px; color: var(--danger); }
 
   .section { padding: 18px 20px; margin-top: 14px; }
   .section h3 { margin: 0 0 12px; font-size: 16px; }
