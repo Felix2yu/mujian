@@ -2,14 +2,16 @@
   import { goto } from '$app/navigation';
 
   // 返回导航策略：
-  // - 有站内历史（SvelteKit 记录了 index > 0）→ history.back()
-  // - 没有历史（直接打开详情页、刷新、新标签页等）→ goto(fallback)
+  // - 浏览器历史栈存在上一页（history.length > 1）→ history.back() 回到
+  //   真正的上一页（日历 / 列表 / 主页等，由 history 栈决定），符合预期。
+  // - 直接打开本页 URL（history.length <= 1，无站内历史）→ goto(fallback)。
+  // 注意：SvelteKit 2 的 history.state 不再携带 sveltekit:index，
+  // 且 afterNavigate 在本环境未稳定触发，故采用 history.length 判断。
   let { fallback = '/', label = '← 返回' } = $props();
 
   function onClick(e) {
     e.preventDefault();
-    const idx = window.history.state?.['sveltekit:index'] ?? 0;
-    if (idx > 0) {
+    if (window.history.length > 1) {
       history.back();
     } else {
       goto(fallback);
