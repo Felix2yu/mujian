@@ -12,6 +12,7 @@
     return {
       name: '', channel: '', city: '', address: '', categoryNames: [],
       rating: 0, seat: '', friends: '', company: '', remark: '',
+      duration: 0,
       price: 0, price_currency: 'CNY',
       pay_price: 0, pay_price_currency: 'CNY',
       other_cost: 0, other_cost_currency: 'CNY',
@@ -35,6 +36,7 @@
     f.address = r.address || '';
     f.categoryNames = (r.categoryNames && r.categoryNames.length ? r.categoryNames : r.categoryName ? [r.categoryName] : []).slice();
     f.rating = r.rating || 0;
+    f.duration = r.duration || 0;
     f.seat = r.seat || '';
     f.friends = r.friends || '';
     f.company = r.company || '';
@@ -613,6 +615,7 @@
       categoryName: form.categoryNames[0] || '',
       categoryNames: form.categoryNames.slice(),
       rating: Number(form.rating) || 0,
+      duration: Number(form.duration) || 0,
       seat: form.seat.trim(),
       friends: form.friends.trim(),
       company: form.company.trim(),
@@ -689,6 +692,7 @@
     { key: 'pay_price', label: '实付' },
     { key: 'other_cost', label: '其他花费' },
     { key: 'seat', label: '座位' },
+    { key: 'duration', label: '时长' },
     { key: 'friends', label: '同行' },
     { key: 'remark', label: '备注' },
     { key: 'rating', label: '评分' },
@@ -697,7 +701,7 @@
     { key: 'active_status', label: '演出状态' }
   ];
   // 座位/同行与时间/封面/状态/评分同属「每场大概率不同」的个人信息，默认不勾。
-  const COPY_DEFAULT_OFF = new Set(['date', 'cover', 'active_status', 'rating', 'seat', 'friends']);
+  const COPY_DEFAULT_OFF = new Set(['date', 'cover', 'active_status', 'rating', 'seat', 'duration', 'friends']);
 
   const COPY_SEARCH_PAGE = 20; // 每页搜索结果数
   let copySearch = $state('');
@@ -740,6 +744,7 @@
       case 'pay_price': return money(src.pay_price, src.pay_price_currency);
       case 'other_cost': return money(src.other_cost, src.other_cost_currency);
       case 'seat': return src.seat || '';
+      case 'duration': return src.duration ? `${src.duration} 分钟` : '';
       case 'friends': return src.friends || '';
       case 'remark': return src.remark || '';
       case 'rating': return src.rating ? `${src.rating} 分` : '';
@@ -881,6 +886,7 @@
       form.other_cost_currency = src.other_cost_currency || 'CNY';
     }
     if (on('seat')) form.seat = src.seat || '';
+    if (on('duration')) form.duration = src.duration || 0;
     if (on('friends')) form.friends = src.friends || '';
     if (on('remark')) form.remark = src.remark || '';
     if (on('rating')) form.rating = src.rating || 0;
@@ -1095,6 +1101,10 @@
           {/each}
           <span class="tiny rate-text">{form.rating ? `${form.rating} 分` : '未评分'}</span>
         </div>
+      </div>
+      <div class="f-xs">
+        <label>时长</label>
+        <div class="money"><input class="input" type="number" inputmode="numeric" min="0" step="1" bind:value={form.duration} placeholder="分钟" /><span class="unit">分钟</span></div>
       </div>
     </div>
     <div class="row">
@@ -1434,6 +1444,7 @@
   .row > .f-dt { flex: 0 1 215px; min-width: 180px; }
 
   .money { display: flex; gap: 6px; }
+  .money .unit { align-self: center; color: var(--text-3); font-size: 13px; white-space: nowrap; }
   /* 货币框收窄并让文字居中：默认左对齐 + 34px 箭头预留位会让 CNY 右侧
      剩下一截空白。select 右侧仍留箭头位，只是收窄并居中文字。 */
   /* 货币框宽度自适应最宽选项（币种都是 3 字母代码，约 30px），文字之后

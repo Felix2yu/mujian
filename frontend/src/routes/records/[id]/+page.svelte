@@ -12,6 +12,14 @@
     if (!ts) return '';
     return WEEKDAYS[new Date(ts * 1000).getDay()];
   }
+  // 演出时长（分钟）→ 友好文本；0 视为未知
+  function durationText(mins) {
+    if (!mins || mins <= 0) return '';
+    if (mins < 60) return `${mins} 分钟`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m ? `${h} 小时 ${m} 分钟` : `${h} 小时`;
+  }
   let rec = $state(null);
   let loading = $state(true);
   let error = $state('');
@@ -355,6 +363,9 @@
           {/if}
           {#if rec.seat}
             <div class="kv-row"><dt>座位</dt><dd>{rec.seat}</dd></div>
+          {/if}
+          {#if rec.duration}
+            <div class="kv-row"><dt>时长</dt><dd>{durationText(rec.duration)}</dd></div>
           {/if}
         </dl>
       </div>

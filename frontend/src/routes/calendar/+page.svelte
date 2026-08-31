@@ -50,7 +50,9 @@
       const u = new URL(location.href);
       u.searchParams.set('y', String(year));
       u.searchParams.set('m', String(month));
-      history.replaceState({}, '', u);
+      // 保留 SvelteKit 的历史状态（sveltekit:index 等），否则返回按钮会因
+      // 历史索引被清空而回退到主页而非日历。
+      history.replaceState(window.history.state ?? {}, '', u);
     } catch (e) {
       if (seq === calReqSeq) error = e.message;
     } finally {
@@ -124,7 +126,8 @@
 
   function openNew(d) {
     modalDay = null;
-    location.href = `/records/new?date=${dateStr(d)}`;
+    // 用 SPA 导航（而非整页跳转）保留历史栈，使新增页的返回按钮回到日历。
+    goto(`/records/new?date=${dateStr(d)}`);
   }
 
   function posterSrc(e) {

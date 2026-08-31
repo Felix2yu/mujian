@@ -1050,6 +1050,8 @@ func (h *Handler) getICS(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 500, err.Error())
 		return
 	}
+	// Resolve 折子 ids to names in one batch so DESCRIPTION can show 折子.
+	zheziNames, _ := h.db.GetZheziNames(collectZheziIDs(recs))
 	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
 	// 默认 inline 以便日历客户端直接订阅；?dl=1 时作为文件下载。
 	if r.URL.Query().Get("dl") == "1" {
@@ -1057,7 +1059,22 @@ func (h *Handler) getICS(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.Header().Set("Content-Disposition", "inline; filename=mujian.ics")
 	}
-	w.Write([]byte(ics.GenerateCalendar(recs, h.cfg.Location())))
+	w.Write([]byte(ics.GenerateCalendar(recs, h.cfg.Location(), zheziNames)))
+}
+
+// collectZheziIDs returns the deduplicated set of 折子 ids across records.
+func collectZheziIDs(recs []models.Record) []string {
+	seen := make(map[string]bool, len(recs))
+	var ids []string
+	for _, rec := range recs {
+		for _, zid := range rec.ZheziIDs {
+			if !seen[zid] {
+				seen[zid] = true
+				ids = append(ids, zid)
+			}
+		}
+	}
+	return ids
 }
 
 func (h *Handler) getAutocomplete(w http.ResponseWriter, r *http.Request) {

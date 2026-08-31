@@ -29,6 +29,7 @@ type CreateRecordInput struct {
 	ZheziIDs          StringOrArray      `json:"zhezi_ids,omitempty"`
 	DateText          string             `json:"date_text,omitempty"`
 	Rating            int                `json:"rating,omitempty"`
+	Duration          int                `json:"duration,omitempty"`
 	Seat              string             `json:"seat,omitempty"`
 	Friends           string             `json:"friends,omitempty"`
 	Company           string             `json:"company,omitempty"`
@@ -62,6 +63,7 @@ type UpdateRecordInput struct {
 	ZheziIDs          *ArrayOp           `json:"zhezi_ids,omitempty"`
 	DateText          *string            `json:"date_text,omitempty"`
 	Rating            *int               `json:"rating,omitempty"`
+	Duration          *int               `json:"duration,omitempty"`
 	Seat              *string            `json:"seat,omitempty"`
 	Friends           *string            `json:"friends,omitempty"`
 	Company           *string            `json:"company,omitempty"`
@@ -111,6 +113,7 @@ func (s *Server) handleCreateRecord(ctx context.Context, req *mcp.CallToolReques
 		ZheziIDs:          in.ZheziIDs,
 		DateText:          in.DateText,
 		Rating:            in.Rating,
+		Duration:          in.Duration,
 		Seat:              in.Seat,
 		Friends:           in.Friends,
 		Company:           in.Company,
@@ -229,6 +232,9 @@ func (s *Server) handleUpdateRecord(ctx context.Context, req *mcp.CallToolReques
 	}
 	if in.Rating != nil {
 		r.Rating = *in.Rating
+	}
+	if in.Duration != nil {
+		r.Duration = *in.Duration
 	}
 	if in.Seat != nil {
 		r.Seat = *in.Seat

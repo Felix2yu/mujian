@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-func GenerateCalendar(records []models.Record, loc *time.Location) string {
+// GenerateCalendar renders all records into an RFC 5545 VCALENDAR string.
+// zheziNames maps a 折子 id to its display name; pass nil if names are not
+// available (折子 will then be omitted from DESCRIPTION).
+func GenerateCalendar(records []models.Record, loc *time.Location, zheziNames map[string]string) string {
 	var b strings.Builder
 	b.WriteString("BEGIN:VCALENDAR\r\n")
 	b.WriteString("VERSION:2.0\r\n")
@@ -36,16 +39,23 @@ func GenerateCalendar(records []models.Record, loc *time.Location) string {
 	b.WriteString("END:VTIMEZONE\r\n")
 
 	for _, rec := range records {
-		writeEvent(&b, rec, loc)
+		writeEvent(&b, rec, loc, zheziNames)
 	}
 
 	b.WriteString("END:VCALENDAR\r\n")
 	return b.String()
 }
 
-func writeEvent(b *strings.Builder, rec models.Record, loc *time.Location) {
+func writeEvent(b *strings.Builder, rec models.Record, loc *time.Location, zheziNames map[string]string) {
 	start := time.Unix(rec.Date, 0).In(loc)
-	end := start.Add(2 * time.Hour).In(loc)
+	// End time reflects the real performance duration when recorded; fall back
+	// to a 2-hour default for records without a duration (keeps legacy events
+	// from collapsing to zero-length).
+	end := start.Add(2 * time.Hour)
+	if rec.Duration > 0 {
+		end = start.Add(time.Duration(rec.Duration) * time.Minute)
+	}
+	end = end.In(loc)
 	startStr := start.Format("20060102T150405")
 	endStr := end.Format("20060102T150405")
 
@@ -58,31 +68,24 @@ func writeEvent(b *strings.Builder, rec models.Record, loc *time.Location) {
 	if rec.Address != "" {
 		b.WriteString(fmt.Sprintf("LOCATION:%s\r\n", escapeICS(rec.Address)))
 	}
+	// GEO carries the lat/lng separately from the textual LOCATION so calendar
+	// clients can drop a map pin. RFC 5545 format is "LAT;LON".
+	if rec.Coordinate != nil {
+		b.WriteString(fmt.Sprintf("GEO:%f;%f\r\n", rec.Coordinate.Latitude, rec.Coordinate.Longitude))
+	}
 
 	var desc []string
-	if rec.Channel != "" {
-		desc = append(desc, "渠道: "+rec.Channel)
+	if len(rec.Play) > 0 {
+		desc = append(desc, "剧目: "+strings.Join(rec.Play, ", "))
 	}
-	if rec.Company != "" {
-		desc = append(desc, "剧团: "+rec.Company)
+	if names := zheziNameList(rec.ZheziIDs, zheziNames); len(names) > 0 {
+		desc = append(desc, "折子: "+strings.Join(names, ", "))
 	}
 	if len(rec.ArtistNames) > 0 {
 		desc = append(desc, "演员: "+strings.Join(rec.ArtistNames, ", "))
 	}
-	if len(rec.Play) > 0 {
-		desc = append(desc, "剧目: "+strings.Join(rec.Play, ", "))
-	}
-	if rec.Friends != "" {
-		desc = append(desc, "同行: "+rec.Friends)
-	}
-	if rec.Seat != "" {
-		desc = append(desc, "座位: "+rec.Seat)
-	}
-	if rec.Remark != "" {
-		desc = append(desc, "备注: "+rec.Remark)
-	}
-	if rec.Rating != 0 {
-		desc = append(desc, fmt.Sprintf("评分: %d", rec.Rating))
+	if rec.Company != "" {
+		desc = append(desc, "剧团: "+rec.Company)
 	}
 
 	if len(desc) > 0 {
@@ -94,6 +97,22 @@ func writeEvent(b *strings.Builder, rec models.Record, loc *time.Location) {
 
 	b.WriteString(fmt.Sprintf("CATEGORIES:%s\r\n", escapeICS(rec.CategoryName)))
 	b.WriteString("END:VEVENT\r\n")
+}
+
+// zheziNameList resolves a record's 折子 ids to display names using the
+// provided map. Returns nil when there are no ids or the map is nil, so the
+// caller can treat a nil result as "no 折子 line".
+func zheziNameList(ids []string, names map[string]string) []string {
+	if len(ids) == 0 || names == nil {
+		return nil
+	}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if n, ok := names[id]; ok && n != "" {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 func escapeICS(s string) string {

@@ -159,7 +159,8 @@ func (db *DB) migrate() error {
 			pay_price_currency TEXT NOT NULL DEFAULT 'CNY',
 			other_cost REAL NOT NULL DEFAULT 0,
 			other_cost_currency TEXT NOT NULL DEFAULT 'CNY',
-			total_cost REAL NOT NULL DEFAULT 0
+			total_cost REAL NOT NULL DEFAULT 0,
+			duration INTEGER NOT NULL DEFAULT 0
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_records_date ON records(date)`,
 		`CREATE INDEX IF NOT EXISTS idx_records_category ON records(category_name)`,
@@ -328,6 +329,10 @@ func (db *DB) migrate() error {
 		return fmt.Errorf("backfill records.total_cost: %w", err)
 	}
 	if err := db.addColumn("categories", "sort_order", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	// 演出时长（分钟）：新增字段，旧库加列并默认 0（未知）。
+	if err := db.addColumn("records", "duration", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
 
@@ -651,7 +656,7 @@ func unmarshalCoordinate(s string) *models.Coordinate {
 const recordColumns = `records.id, records.name, records.channel, records.city, records.address,
 	records.coordinate, records.cover, records.cover_file, records.cover_thumb,
 	records.custom_category_id, records.category_name, records.category_names, records.guest, records.play,
-	records.zhezi_ids, records.tag_ids, records.date, records.date_text, records.rating,
+	records.zhezi_ids, records.tag_ids, records.date, records.date_text, records.rating, records.duration,
 	records.seat, records.friends, records.company, records.remark, records.active_status,
 	records.price, records.price_currency, records.pay_price, records.pay_price_currency,
 	records.other_cost, records.other_cost_currency, records.total_cost`
@@ -666,7 +671,7 @@ func scanRecord(rows *sql.Rows, extra ...any) (*models.Record, error) {
 	dests := []any{
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
 		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &categoryNames, &guest, &play, &zheziIDs, &tagIDs,
-		&r.Date, &r.DateText, &r.Rating, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
+		&r.Date, &r.DateText, &r.Rating, &r.Duration, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
 		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency, &r.TotalCost,
 	}
 	err := rows.Scan(append(dests, extra...)...)
@@ -1205,7 +1210,7 @@ func scanRecordRow(row *sql.Row) (*models.Record, error) {
 	err := row.Scan(
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
 		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &categoryNames, &guest, &play, &zheziIDs, &tagIDs,
-		&r.Date, &r.DateText, &r.Rating, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
+		&r.Date, &r.DateText, &r.Rating, &r.Duration, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
 		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency, &r.TotalCost,
 	)
 	if err != nil {
@@ -1245,9 +1250,11 @@ const recordUpsertSQL = `
 	INSERT INTO records (
 		id, name, channel, city, address, coordinate, cover, cover_file, cover_thumb,
 		custom_category_id, category_name, category_names, artist_names, guest, play, drama_ids, zhezi_ids, tag_ids,
-		date, date_text, rating, seat, friends, company, remark, active_status,
+		date, date_text, rating, duration, seat, friends, company, remark, active_status,
 		price, price_currency, pay_price, pay_price_currency, other_cost, other_cost_currency, total_cost
-	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+	) VALUES (
+		?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+	)
 	ON CONFLICT(id) DO UPDATE SET
 		name=excluded.name, channel=excluded.channel, city=excluded.city, address=excluded.address,
 		coordinate=excluded.coordinate, cover=excluded.cover, cover_file=excluded.cover_file, cover_thumb=excluded.cover_thumb,
@@ -1255,7 +1262,7 @@ const recordUpsertSQL = `
 		category_names=excluded.category_names,
 		artist_names=excluded.artist_names, guest=excluded.guest, play=excluded.play,
 		drama_ids=excluded.drama_ids, zhezi_ids=excluded.zhezi_ids, tag_ids=excluded.tag_ids,
-		date=excluded.date, date_text=excluded.date_text, rating=excluded.rating, seat=excluded.seat,
+		date=excluded.date, date_text=excluded.date_text, rating=excluded.rating, duration=excluded.duration,
 		friends=excluded.friends, company=excluded.company, remark=excluded.remark, active_status=excluded.active_status,
 		price=excluded.price, price_currency=excluded.price_currency, pay_price=excluded.pay_price,
 		pay_price_currency=excluded.pay_price_currency, other_cost=excluded.other_cost, other_cost_currency=excluded.other_cost_currency,
@@ -1323,7 +1330,7 @@ func (db *DB) UpsertRecord(r models.Record) error {
 		r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
 		r.CustomCategoryID, r.CategoryName, marshalJSON(r.CategoryNames), marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
 		marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
-		r.Date, r.DateText, r.Rating, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
+		r.Date, r.DateText, r.Rating, r.Duration, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
 		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency, r.TotalCost,
 	); err != nil {
 		return err
@@ -1359,7 +1366,7 @@ func (db *DB) UpsertRecordTx(tx *sql.Tx, r models.Record) error {
 		r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
 		r.CustomCategoryID, r.CategoryName, marshalJSON(r.CategoryNames), marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
 		marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
-		r.Date, r.DateText, r.Rating, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
+		r.Date, r.DateText, r.Rating, r.Duration, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
 		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency, r.TotalCost,
 	); err != nil {
 		return err
@@ -1830,7 +1837,7 @@ func requestToRecord(r models.RecordRequest) models.Record {
 		Coordinate: r.Coordinate, Cover: r.Cover, CoverFile: r.CoverFile, CoverThumb: r.CoverThumb,
 		CustomCategoryID: r.CustomCategoryID, CategoryName: r.CategoryName, CategoryNames: r.CategoryNames,
 		ArtistIDs: aid, ArtistNames: a, Guest: g, Play: p, DramaIDs: d, ZheziIDs: z, TagIDs: t,
-		Date: r.Date, DateText: r.DateText, Rating: r.Rating, Seat: r.Seat,
+		Date: r.Date, DateText: r.DateText, Rating: r.Rating, Duration: r.Duration, Seat: r.Seat,
 		Friends: r.Friends, Company: r.Company, Remark: r.Remark, ActiveStatus: r.ActiveStatus,
 		Price: r.Price, PriceCurrency: r.PriceCurrency, PayPrice: r.PayPrice,
 		PayPriceCurrency: r.PayPriceCurrency, OtherCost: r.OtherCost, OtherCostCurrency: r.OtherCostCurrency,
@@ -2625,6 +2632,36 @@ func (db *DB) zheziByID(id string) (*models.Zhezi, error) {
 // GetZhezi returns a single zhezi by id (exported for MCP tooling).
 func (db *DB) GetZhezi(id string) (*models.Zhezi, error) {
 	return db.zheziByID(id)
+}
+
+// GetZheziNames resolves a batch of 折子 ids to their display names in a single
+// query. Missing ids are simply absent from the returned map. Used by the ICS
+// exporter to render 折子 names without per-record lookups.
+func (db *DB) GetZheziNames(ids []string) (map[string]string, error) {
+	out := make(map[string]string, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	ph := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		ph[i] = "?"
+		args[i] = id
+	}
+	rows, err := db.conn.Query(
+		"SELECT id, name FROM zhezis WHERE id IN ("+strings.Join(ph, ",")+")", args...)
+	if err != nil {
+		return nil, fmt.Errorf("get zhezi names: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return nil, fmt.Errorf("scan zhezi name: %w", err)
+		}
+		out[id] = name
+	}
+	return out, rows.Err()
 }
 
 func (db *DB) UpdateZhezi(z models.Zhezi) (*models.Zhezi, error) {

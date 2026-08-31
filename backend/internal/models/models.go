@@ -34,6 +34,7 @@ type Record struct {
 	TagIDs            []string    `json:"tagIds"`
 	Date              int64       `json:"date"` // unix seconds
 	DateText          string      `json:"dateText"`
+	Duration          int         `json:"duration"` // 演出时长（分钟），0 表示未知
 	Rating            int         `json:"rating"`
 	Seat              string      `json:"seat"`
 	Friends           string      `json:"friends"`
@@ -193,6 +194,7 @@ type RecordRequest struct {
 	TagIDs            []string    `json:"tagIds"`
 	Date              int64       `json:"date"`
 	DateText          string      `json:"dateText"`
+	Duration          int         `json:"duration"`
 	Rating            int         `json:"rating"`
 	Seat              string      `json:"seat"`
 	Friends           string      `json:"friends"`
