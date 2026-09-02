@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
   import BackLink from '$lib/components/BackLink.svelte';
   import RecordForm from '$lib/components/RecordForm.svelte';
@@ -11,7 +12,7 @@
   async function onSubmit(payload) {
     try {
       const rec = await api.createRecord(payload);
-      location.href = `/records/${rec.id}`;
+      goto(`/records/${rec.id}`, { replaceState: true });
     } catch (e) {
       error = e.message;
       throw e;

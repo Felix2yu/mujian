@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
   import BackLink from '$lib/components/BackLink.svelte';
   import RecordForm from '$lib/components/RecordForm.svelte';
@@ -14,7 +15,7 @@
   async function onSubmit(payload) {
     try {
       await api.updateRecord(id, payload);
-      location.href = `/records/${id}`;
+      goto(`/records/${id}`, { replaceState: true });
     } catch (e) {
       error = e.message;
       throw e;
