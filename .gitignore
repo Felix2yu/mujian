@@ -8,6 +8,7 @@ frontend/.svelte-kit/
 backend/mujian
 backend/mujian-server
 backend/dist/
+backend/coverage.out
 
 # Data
 data/
