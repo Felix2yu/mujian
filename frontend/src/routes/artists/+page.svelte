@@ -131,7 +131,7 @@
         >
           <a class="actor-link" href={`/artists/${a.id}`}>
             {#if a.coverFile}
-              <img class="avatar" src={coverUrl(a.coverFile)} alt={a.name} />
+              <img class="avatar coverable" src={coverUrl(a.coverFile)} alt={a.name} />
             {:else}
               <div class="avatar placeholder"><OperaIcon size={26} /></div>
             {/if}

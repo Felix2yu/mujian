@@ -128,7 +128,7 @@
         <div class="head-main">
           <div class="head-left">
             {#if form.coverFile}
-              <img class="avatar lg" src={coverUrl(form.coverFile)} alt="头像预览" />
+              <img class="avatar lg coverable" src={coverUrl(form.coverFile)} alt="头像预览" />
             {:else}
               <div class="avatar lg placeholder"><OperaIcon size={64} /></div>
             {/if}
@@ -151,7 +151,7 @@
         <div class="head-main">
           <div class="head-left">
             {#if artist.coverFile}
-              <img class="avatar lg" src={coverUrl(artist.coverFile)} alt={artist.name} />
+              <img class="avatar lg coverable" src={coverUrl(artist.coverFile)} alt={artist.name} />
             {:else}
               <div class="avatar lg placeholder"><OperaIcon size={64} /></div>
             {/if}

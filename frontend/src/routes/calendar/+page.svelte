@@ -134,6 +134,9 @@
   function posterSrc(e) {
     return coverUrl(e.coverThumb || e.coverFile || '');
   }
+  function posterFullSrc(e) {
+    return coverUrl(e.coverFile || e.coverThumb || '');
+  }
 
   const STATUS_LABEL = { 1: '想看', 2: '已取消', 3: '未赴约' };
   const STATUS_CLASS = { 1: 'status-wish', 2: 'status-cancel', 3: 'status-miss' };
@@ -263,7 +266,7 @@
                       title={e.name}
                     >
                       {#if posterSrc(e)}
-                        <img src={posterSrc(e)} alt="" loading="lazy" />
+                        <img class="coverable" src={posterSrc(e)} data-full={posterFullSrc(e)} alt="" loading="lazy" />
                       {:else}
                         <span class="p-ph">{e.name?.[0] ?? '?'}</span>
                       {/if}
@@ -321,7 +324,7 @@
             <li class="day-item" role="listitem">
               <a class="day-link" href={`/records/${e.id}`}>
                 {#if posterSrc(e)}
-                  <img src={posterSrc(e)} alt="" width="52" height="70" />
+                  <img class="coverable" src={posterSrc(e)} data-full={posterFullSrc(e)} alt="" width="52" height="70" />
                 {:else}
                   <span class="diph">{e.name?.[0] ?? '?'}</span>
                 {/if}

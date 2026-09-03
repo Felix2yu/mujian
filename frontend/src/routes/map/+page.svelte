@@ -188,11 +188,12 @@
         .map(
           (r) => {
             const cov = r.coverThumb ? coverUrl(r.coverThumb) : coverUrl(r.coverFile);
+            const full = r.coverFile ? coverUrl(r.coverFile) : cov;
             const dateStr = r.dateText ? r.dateText.split(' ')[0].replace('年', '.').replace('月', '.').replace('日', '') : '';
             const catStr = r.categoryName ? ' · ' + escapeHtml(r.categoryName) : '';
             return `
               <a class="mrow" href="/records/${encodeURIComponent(r.id)}">
-                ${cov ? `<img class="mcov" src="${escapeHtml(cov)}" alt=""/>` : '<div class="mcov ph"></div>'}
+                ${cov ? `<img class="mcov coverable" src="${escapeHtml(cov)}" data-full="${escapeHtml(full)}" alt=""/>` : '<div class="mcov ph"></div>'}
                 <div class="minfo">
                   <div class="mtitle">${escapeHtml(r.name)}</div>
                   <div class="msub">${escapeHtml(dateStr)}${catStr}</div>
@@ -216,6 +217,7 @@
 
   function createPopup(first, cityText, count, list, more) {
     const cover = first.coverThumb ? coverUrl(first.coverThumb) : coverUrl(first.coverFile);
+    const full = first.coverFile ? coverUrl(first.coverFile) : cover;
     const titleHtml = count > 1
       ? `<b>${escapeHtml(cityText)}</b> · ${count} 场`
       : `<b>${escapeHtml(first.name)}</b>`;
@@ -223,7 +225,7 @@
     return `
       <div class="pc">
         <div class="phead">
-          ${cover ? `<img src="${escapeHtml(cover)}" alt=""/>` : ''}
+          ${cover ? `<img class="coverable" src="${escapeHtml(cover)}" data-full="${escapeHtml(full)}" alt=""/>` : ''}
           <div class="ptext">${titleHtml}${address}</div>
         </div>
         <div class="plist">${list}</div>

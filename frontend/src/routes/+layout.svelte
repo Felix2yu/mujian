@@ -222,6 +222,32 @@
       clearTimeout(t);
     };
   });
+
+  // ============ 全局封面灯箱：事件委托 + 统一灯箱 UI ============
+  // 任何带 .coverable 类的元素点击都会弹出原图。支持：
+  //   - Leaflet 弹窗里 innerHTML 注入的 img （无法绑 Svelte 事件）
+  //   - Svelte 组件里的普通 img / button.coverable
+  //   原图 URL 从优先级读取：data-full  > src
+  let globalLightbox = $state(false);
+  let globalLightboxSrc = $state('');
+
+  $effect(() => {
+    const onClick = (e) => {
+      const el = e.target.closest('.coverable');
+      if (!el) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const full = el.dataset.full || (el.tagName === 'IMG' ? el.src : el.querySelector('img')?.src) || '';
+      if (full) { globalLightboxSrc = full; globalLightbox = true; }
+    };
+    const onKey = (e) => { if (e.key === 'Escape') { globalLightbox = false; globalLightboxSrc = ''; } };
+    document.addEventListener('click', onClick, true); // 捕获阶段，绕过 popup 等内部 stopPropagation
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('click', onClick, true);
+      window.removeEventListener('keydown', onKey);
+    };
+  });
 </script>
 
 <a class="skip-link" href="#main">跳到主要内容</a>
@@ -338,6 +364,12 @@
     </button>
   {/if}
 </div>
+
+{#if globalLightbox && globalLightboxSrc}
+  <button type="button" class="global-lightbox" onclick={() => { globalLightbox = false; globalLightboxSrc = ''; }} aria-label="关闭大图">
+    <img src={globalLightboxSrc} alt="" />
+  </button>
+{/if}
 
 <style>
   .app { min-height: 100vh; display: flex; flex-direction: column; }
@@ -609,4 +641,33 @@
   .auth-sub { margin: 0 0 6px; color: var(--text-2); font-size: 13px; }
   .auth-card .input { text-align: center; }
   .auth-error { color: var(--danger); font-size: 13px; }
+
+  /* 全局灯箱：被 .coverable 类元素点击触发 */
+  .global-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    border: none;
+    padding: 24px;
+    margin: 0;
+    background: rgba(0, 0, 0, 0.88);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    cursor: zoom-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .global-lightbox img {
+    max-width: min(92vw, 720px);
+    max-height: 88vh;
+    width: auto;
+    height: auto;
+    border-radius: var(--radius);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+  .coverable { cursor: zoom-in; }
+  .coverable img { cursor: zoom-in; }
 </style>
