@@ -1263,7 +1263,7 @@ const recordUpsertSQL = `
 		artist_names=excluded.artist_names, guest=excluded.guest, play=excluded.play,
 		drama_ids=excluded.drama_ids, zhezi_ids=excluded.zhezi_ids, tag_ids=excluded.tag_ids,
 		date=excluded.date, date_text=excluded.date_text, rating=excluded.rating, duration=excluded.duration,
-		friends=excluded.friends, company=excluded.company, remark=excluded.remark, active_status=excluded.active_status,
+		seat=excluded.seat, friends=excluded.friends, company=excluded.company, remark=excluded.remark, active_status=excluded.active_status,
 		price=excluded.price, price_currency=excluded.price_currency, pay_price=excluded.pay_price,
 		pay_price_currency=excluded.pay_price_currency, other_cost=excluded.other_cost, other_cost_currency=excluded.other_cost_currency,
 		total_cost=excluded.total_cost
