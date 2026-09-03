@@ -981,7 +981,20 @@
   }
 
   onDestroy(() => clearTimeout(copySearchTimer));
+
+  // 封面灯箱：点击预览放大查看原图
+  let lightbox = $state(false);
+  let lightboxSrc = $state('');
+  function openLightbox() {
+    const src = form.coverFile ? coverUrl(form.coverFile) : '';
+    if (src) { lightboxSrc = src; lightbox = true; }
+  }
+  function closeLightbox() { lightbox = false; lightboxSrc = ''; }
+  function onFormKeydown(e) {
+    if (e.key === 'Escape') closeLightbox();
+  }
 </script>
+<svelte:window onkeydown={onFormKeydown} />
 
 <form class="form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} onkeydown={(e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault(); }}>
 <div class="two-col">
@@ -1492,7 +1505,7 @@
     <h3>封面</h3>
     <div class="cover-layout">
       {#if form.coverFile}
-        <img class="preview" src={coverUrl(form.coverThumb || form.coverFile)} alt="封面预览" />
+        <img class="preview zoomable" src={coverUrl(form.coverThumb || form.coverFile)} alt="封面预览" onclick={openLightbox} role="button" tabindex={0} aria-label="点击放大查看封面" onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLightbox(); } }} />
       {/if}
       <div class="cover-main">
         <div class="upload-row">
@@ -1525,6 +1538,12 @@
 </form>
 
 <CoverPicker open={pickerOpen} onSelect={pickCover} onClose={() => (pickerOpen = false)} />
+
+{#if lightbox && lightboxSrc}
+  <button type="button" class="lightbox" onclick={closeLightbox} aria-label="关闭大图">
+    <img src={lightboxSrc} alt="" />
+  </button>
+{/if}
 
 <style>
   .form { display: flex; flex-direction: column; gap: 14px; max-width: 1200px; margin: 0 auto; }
@@ -1713,6 +1732,8 @@
     border: 1px solid var(--border);
     flex-shrink: 0;
   }
+  .preview.zoomable { cursor: zoom-in; transition: box-shadow var(--t-fast) var(--ease); }
+  .preview.zoomable:hover { box-shadow: 0 0 0 2px var(--accent-soft); }
 
   .actions { display: flex; gap: 10px; margin-top: 4px; }
 
@@ -1894,4 +1915,27 @@
   .copy-cover-thumb { width: 22px; height: 30px; object-fit: cover; border-radius: 3px; flex: none; }
   .copy-actions { display: flex; align-items: center; gap: 12px; }
   .copy-ok { color: var(--success); font-size: 13px; }
+
+  /* 封面灯箱 */
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    border: none;
+    padding: 24px;
+    margin: 0;
+    background: rgba(0, 0, 0, 0.86);
+    cursor: zoom-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lightbox img {
+    max-width: min(92vw, 720px);
+    max-height: 88vh;
+    width: auto;
+    height: auto;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+  }
 </style>

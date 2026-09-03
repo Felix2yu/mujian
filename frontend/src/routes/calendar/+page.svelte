@@ -321,7 +321,7 @@
             <li class="day-item" role="listitem">
               <a class="day-link" href={`/records/${e.id}`}>
                 {#if posterSrc(e)}
-                  <img src={posterSrc(e)} alt="" loading="lazy" width="52" height="70" />
+                  <img src={posterSrc(e)} alt="" width="52" height="70" />
                 {:else}
                   <span class="diph">{e.name?.[0] ?? '?'}</span>
                 {/if}

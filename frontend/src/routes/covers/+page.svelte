@@ -18,6 +18,12 @@
   let error = $state('');
   let info = $state('');
 
+  // 灯箱：点击封面放大查看
+  let lightbox = $state(false);
+  let lightboxSrc = $state('');
+  function openLightbox(src) { lightboxSrc = src; lightbox = true; }
+  function closeLightbox() { lightbox = false; lightboxSrc = ''; }
+
   function fmtSize(n) {
     if (!n) return '0 B';
     if (n < 1024) return n + ' B';
@@ -135,7 +141,12 @@
       thumbsBusy = false;
     }
   }
+
+  function onWindowKeydown(e) {
+    if (e.key === 'Escape') closeLightbox();
+  }
 </script>
+<svelte:window onkeydown={onWindowKeydown} />
 <svelte:head><title>封面 - 幕间</title></svelte:head>
 
 
@@ -163,7 +174,9 @@
         {#each groups as g}
           <label class="grow card">
             <input type="checkbox" checked={selectedHashes.has(g.hash)} onchange={() => toggleHash(g.hash)} />
-            <img src={coverUrl(g.records[0]?.cover_file)} alt="" loading="lazy" />
+            <button type="button" class="cover-th" onclick={() => openLightbox(coverUrl(g.records[0]?.cover_file))} aria-label="放大查看封面">
+              <img src={coverUrl(g.records[0]?.cover_file)} alt="" loading="lazy" />
+            </button>
             <div class="ginfo">
               <div class="gname">共 {g.count} 条记录引用相同内容 · {fmtSize(g.size)}</div>
               <div class="grecs">{g.records.map((r) => r.name).join(' / ')}</div>
@@ -209,7 +222,9 @@
         {#each orphans as o}
           <label class="orow">
             <input type="checkbox" checked={selectedOrphans.has(o.file_name)} onchange={() => toggleOrphan(o.file_name)} />
-            <img src={coverUrl(`covers/${o.file_name}`)} alt="" loading="lazy" />
+            <button type="button" class="cover-th-sm" onclick={() => openLightbox(coverUrl(`covers/${o.file_name}`))} aria-label="放大查看封面">
+              <img src={coverUrl(`covers/${o.file_name}`)} alt="" loading="lazy" />
+            </button>
             <span class="oname">{o.file_name}</span>
             <span class="osize tiny">{fmtSize(o.size)}</span>
           </label>
@@ -242,6 +257,12 @@
     <p class="tiny">为所有有封面的演出按当前编码格式重新生成缩略图（宽 ≤400px），并清理旧格式缩略图文件。</p>
   </div>
 </div>
+
+{#if lightbox && lightboxSrc}
+  <button type="button" class="lightbox" onclick={closeLightbox} aria-label="关闭大图">
+    <img src={lightboxSrc} alt="" />
+  </button>
+{/if}
 
 <style>
   .sec { padding: 18px 20px; margin-bottom: 14px; }
@@ -280,4 +301,39 @@
   .orow img { width: 30px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 5px; flex: 0 0 auto; }
   .oname { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono, monospace); }
   .osize { flex: 0 0 auto; }
+
+  /* 封面图可点击放大 */
+  .cover-th, .cover-th-sm {
+    flex: 0 0 auto;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: zoom-in;
+  }
+  .cover-th img { width: 44px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 6px; display: block; }
+  .cover-th-sm img { width: 30px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 5px; display: block; }
+
+  /* 灯箱 */
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    border: none;
+    padding: 24px;
+    margin: 0;
+    background: rgba(0, 0, 0, 0.86);
+    backdrop-filter: blur(4px);
+    cursor: zoom-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lightbox img {
+    max-width: min(92vw, 720px);
+    max-height: 88vh;
+    width: auto;
+    height: auto;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+  }
 </style>
