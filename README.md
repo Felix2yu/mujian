@@ -94,21 +94,16 @@ CI 中每次推送/PR 都会运行测试并上传 Codecov；`codecov.yml` 设定
 cd backend && ./mujian        # MCP 随服务自动启动；opencode 用户由项目根 opencode.json 接管（remote 指向 /mcp）
 ```
 
-工具分三类（共 15 个）：
-
-| 类别 | 工具 |
-|------|------|
-| 查询/分析 | `search_records`、`get_record`、`list_artists`、`get_artist_detail`、`list_dramas`、`get_drama_detail`、`list_venues`、`value_counts`、`get_stats` |
-| 批量修改 | `batch_update_company_by_artist`、`batch_merge_venues`、`batch_update_records` |
-| 折子管理 | `batch_create_zhezis`、`update_zhezi`、`delete_zhezi` |
+工具共 8 类 34 个，覆盖查询分析、CRUD、批量修改、剧目/折子/演员/分类/封面管理。详细清单见 [docs/mcp.md](docs/mcp.md)。
 
 典型场景：
 
 1. **按演员统一剧团** — 预览某演员全部演出的剧团写法，一次统一为标准名。
 2. **合并近似场馆** — 如「xx剧院」与「xx剧院（某某店）」实为同址，合并地址并同步坐标。
 3. **补充剧目常演折子** — AI 联网查证后批量写入剧目折子档案，供演出记录选用。
+4. **发现并清理重复封面** — 按内容哈希查重，合并引用后清理孤立文件。
 
-所有批量修改均支持 `dry_run` 预览。配置 `MJ_AUTH_TOKEN` 后，MCP 客户端需在请求头携带 `Authorization: Bearer <令牌>`。详细说明见 [AGENTS.md](AGENTS.md) 与 [docs/mcp.md](docs/mcp.md)。
+所有修改类工具均支持 `dry_run` 预览（默认 `true`）。配置 `MJ_AUTH_TOKEN` 后，MCP 客户端需在请求头携带 `Authorization: Bearer <令牌>`。详细说明见 [AGENTS.md](AGENTS.md) 与 [docs/mcp.md](docs/mcp.md)。
 
 ## 环境变量
 

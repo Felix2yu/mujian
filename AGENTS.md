@@ -12,21 +12,26 @@
 |------|------|------|
 | 查询 | `search_records` | 按关键词/演员/剧目/折子/城市/日期筛选演出 |
 | 查询 | `get_record` / `get_artist_detail` / `get_drama_detail` | 单条详情 |
-| 查询 | `list_artists` / `list_dramas` | 实体清单 |
-| 查询 | `list_venues` | 场馆按地址分组统计（次数/城市/坐标） |
-| 查询 | `value_counts` | company/city/channel/category_name 取值频次 |
-| 分析 | `get_stats` | 总览统计 |
+| 查询 | `list_artists` / `list_dramas` / `list_venues` | 实体清单 |
+| 查询 | `value_counts` / `get_stats` | 取值频次 / 总览统计 |
+| 记录 CRUD | `create_record` / `update_record` / `delete_record` / `batch_delete_records` | 演出记录增删改 |
 | 批量 | `batch_update_company_by_artist` | 统一某演员所有演出的剧团名（支持 dry_run） |
 | 批量 | `batch_merge_venues` | 合并同一场馆的不同写法（支持 dry_run、坐标同步） |
 | 批量 | `batch_update_records` | 按 ID 通用批量更新（标量赋值 + 数组 set/append/remove） |
-| 折子 | `batch_create_zhezis` | 给剧目批量写入折子（自动跳过重名） |
-| 折子 | `update_zhezi` / `delete_zhezi` | 维护折子 |
+| 剧目 | `create_drama` / `update_drama` / `delete_drama` | 剧目档案增删改 |
+| 折子 | `batch_create_zhezis` / `update_zhezi` / `delete_zhezi` | 折子批量创建与维护 |
+| 演员 | `create_artist` / `update_artist` / `delete_artist` | 演员档案增删改 |
+| 分类 | `list_categories` / `create_category` / `update_category` / `delete_category` | 剧种分类管理 |
+| 封面 | `list_covers` / `cover_duplicates` / `merge_covers` / `cover_orphans` / `cleanup_covers` | 封面去重与清理 |
+
+共 34 个工具，详细说明见 [docs/mcp.md](docs/mcp.md)。
 
 ### 典型工作流
 
 1. **按演员统一剧团**：`search_records(artist_name=…)` 或 `batch_update_company_by_artist(dry_run=true)` 预览 → 确认后 `dry_run=false` 执行。
 2. **合并近似场馆名**（如「xx剧院」与「xx剧院（某某店）」）：`list_venues(query=xx)` 找出候选 → 与用户确认对应关系 → `batch_merge_venues(source, target, sync_coordinates=true)`。拿不准时先 dry_run。
 3. **从互联网补充剧目常演折子**：先 `get_drama_detail(name=剧目名)` 看已有折子 → 用 websearch/webfetch 查证该剧目常演折子（维基百科、剧团官网、戏迷资料等，注意甄别可靠性） → `batch_create_zhezis(drama_id=…, names=[…])` 一次写入，重名自动跳过 → 之后用户在演出记录里即可选用这些折子。
+4. **发现并清理重复封面**：`cover_duplicates()` 查看重复分组 → `merge_covers(sources, target, dry_run=true)` 预览 → `merge_covers(sources, target)` 执行合并 → `cover_orphans()` 检查孤立文件 → `cleanup_covers(dry_run=true)` 预览 → `cleanup_covers()` 执行清理。
 
 ### 注意事项
 

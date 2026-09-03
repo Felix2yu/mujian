@@ -1,60 +1,216 @@
 # MCP 服务（mujian）
 
-幕间后端内置 MCP（Model Context Protocol）服务器，让 AI 编程助手（opencode、Claude Code 等）能够直接、安全地批量查找、修改、分析演出数据，而无需通过 HTTP API 或裸 SQL。
+幕间后端内置 MCP（Model Context Protocol）服务器，让 AI 编程助手能够直接、安全地批量查找、修改、分析演出数据，而无需通过 HTTP API 或裸 SQL。
 
 ## 架构
 
 ```
-opencode ──Streamable HTTP (JSON-RPC)──▶ https://<服务地址>/mcp ──▶ backend/data/mujian.db
+AI 客户端 ──Streamable HTTP (JSON-RPC)──▶ https://<服务地址>/mcp ──▶ backend/data/mujian.db
 ```
 
 - 传输：Streamable HTTP（Stateless + JSON 响应），MCP 服务随主 HTTP 服务一起启动，挂载在 `/mcp` 端点。
+
 - 数据库：与 HTTP API 共用同一个 SQLite（WAL）、同一个 `*db.DB` 实例。
+
 - 入口：`main.go` 的 `/mcp` 路由；实现在 `backend/internal/mcp/`。
-- 无鉴权：暴露面与 `/api` 一致，由反向代理（nginx）或内网边界保护。
+
+- 鉴权：若设置了 `MJ_AUTH_TOKEN` 环境变量，所有 MCP 请求需要在 HTTP 头携带 `Authorization: Bearer <令牌>`。
+
+- 无鉴权（开发环境）：暴露面与 `/api` 一致，由反向代理（nginx）或内网边界保护。
 
 ## 启动方式
 
 ```bash
 # MCP 随 HTTP 服务自动启动，无需单独运行
 cd backend && ./mujian   # 之后 AI 客户端连接 http://<服务地址>/mcp
-
-# opencode：项目根 opencode.json 已注册 remote MCP（url 经 {file:.mcp-url} 插值），
-# 本地新建 .mcp-url 文件写入你的服务地址（如 https://mujian.example.com/mcp，
-# 该文件已 gitignore），重启 opencode 即可使用全部 mujian 工具。
 ```
 
-## 工具清单（15 个）
+## 客户端配置
 
-### 查询 / 分析
+### opencode / Trae
 
-| 工具 | 说明 |
-|------|------|
-| `search_records` | 多条件筛选演出：关键词（名称/城市/场馆/剧团/备注/演员）、`artist_name`/`artist_id`、`drama_name`/`drama_id`、`zhezi_id`、城市、分类、年月或起止日期；默认返回 50 条，可用 `limit` 调整 |
-| `get_record` | 按 ID 取单条完整详情（含关联剧目/折子/演员） |
-| `list_artists` | 全部演员档案（含别名、演出次数） |
-| `get_artist_detail` | 演员详情 + 关联演出；支持 `id` 或姓名/别名 |
-| `list_dramas` | 全部剧目档案（剧种、折子数、演出次数） |
-| `get_drama_detail` | 剧目详情 + 折子列表 + 关联演出；支持 `id` 或名称 |
-| `list_venues` | 场馆按地址分组统计（次数/城市/坐标状态）；`query` 子串过滤，用于发现同址异名 |
-| `value_counts` | `company`/`city`/`channel`/`category_name` 取值频次，发现相似写法 |
-| `get_stats` | 总览统计（场次、消费、均分、城市数） |
+项目根 [`opencode.json`](../opencode.json) 已注册 remote MCP：
 
-### 批量修改
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "mujian": {
+      "type": "remote",
+      "url": "{file:.mcp-url}",
+      "enabled": true,
+      "timeout": 60000
+    }
+  }
+}
+```
 
-| 工具 | 说明 |
-|------|------|
-| `batch_update_company_by_artist` | 把某演员参与的所有演出的 `company` 统一为指定值；`dry_run=true` 只预览 |
-| `batch_merge_venues` | 将 `source_address` 的所有记录地址改写为 `target_address`；`sync_coordinates=true` 时把目标场馆已有坐标同步给合并后的记录；支持 `dry_run` |
-| `batch_update_records` | 按 ID 列表通用更新：标量字段直接赋值（company/city/address/rating 等）；数组字段（`drama_ids`/`zhezi_ids`/`artist_names`/`play`/`guest`）支持 `set`/`append`/`remove` 三种操作 |
+本地新建 `.mcp-url` 文件写入你的服务地址（如 `https://mujian.example.com/mcp`，该文件已 gitignore），重启 opencode 即可使用全部工具。
 
-### 折子管理
+### Claude Code
 
-| 工具 | 说明 |
-|------|------|
-| `batch_create_zhezis` | 给剧目批量写入折子清单，已存在的同名（或同别名）自动跳过；`drama_id` 与 `drama_name` 二选一 |
-| `update_zhezi` | 部分更新折子的名称/别名/备注 |
-| `delete_zhezi` | 删除折子并解除所有演出关联 |
+在项目根创建或编辑 `.claude/settings.json`：
+
+```json
+{
+  "mcpServers": {
+    "mujian": {
+      "type": "url",
+      "url": "https://mujian.example.com/mcp"
+    }
+  }
+}
+```
+
+### Cherry Studio
+
+在 Cherry Studio 的 MCP 配置中添加 remote MCP 服务：
+
+```json
+{
+  "mcpServers": {
+    "mujian": {
+      "type": "url",
+      "url": "https://mujian.example.com/mcp"
+    }
+  }
+}
+```
+
+如果服务配置了 `MJ_AUTH_TOKEN`，可在 Cherry Studio 自定义请求头中添加：
+
+```
+Authorization: Bearer <你的令牌>
+```
+
+### Continue.dev
+
+在 `~/.continue/config.json` 的 `experimental.mcpServers` 中添加：
+
+```json
+{
+  "experimental": {
+    "mcpServers": {
+      "mujian": {
+        "type": "url",
+        "url": "https://mujian.example.com/mcp"
+      }
+    }
+  }
+}
+```
+
+### Cursor
+
+在项目中创建 `.cursor/mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "mujian": {
+      "type": "url",
+      "url": "https://mujian.example.com/mcp"
+    }
+  }
+}
+```
+
+### Windsurf
+
+在项目中创建 `.windsurf/mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "mujian": {
+      "type": "url",
+      "url": "https://mujian.example.com/mcp"
+    }
+  }
+}
+```
+
+### 其他 MCP 客户端
+
+所有支持 **Streamable HTTP（URL）** 类型 MCP 的客户端均可使用上述配置模板。只需将 `url` 指向 `https://<你的服务地址>/mcp` 即可。如果服务配置了鉴权，参考客户端文档添加 `Authorization: Bearer <令牌>` 请求头。
+
+## 工具清单
+
+### 查询 / 分析（9 个）
+
+| 工具                  | 说明                                                                                                                                |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `search_records`    | 多条件筛选演出：关键词（名称/城市/场馆/剧团/备注/演员）、`artist_name`/`artist_id`、`drama_name`/`drama_id`、`zhezi_id`、城市、分类、年月或起止日期；默认返回 50 条，可用 `limit` 调整 |
+| `get_record`        | 按 ID 取单条完整详情（含关联剧目/折子/演员）                                                                                                         |
+| `list_artists`      | 全部演员档案（含别名、演出次数）                                                                                                                  |
+| `get_artist_detail` | 演员详情 + 关联演出；支持 `id` 或姓名/别名                                                                                                        |
+| `list_dramas`       | 全部剧目档案（剧种、折子数、演出次数）                                                                                                               |
+| `get_drama_detail`  | 剧目详情 + 折子列表 + 关联演出；支持 `id` 或名称                                                                                                    |
+| `list_venues`       | 场馆按地址分组统计（次数/城市/坐标状态）；`query` 子串过滤，用于发现同址异名                                                                                       |
+| `value_counts`      | `company`/`city`/`channel`/`category_name` 取值频次，发现相似写法                                                                            |
+| `get_stats`         | 总览统计（场次、消费、均分、城市数）                                                                                                                |
+
+### 演出记录 CRUD（4 个）
+
+| 工具                     | 说明                                         |
+| ---------------------- | ------------------------------------------ |
+| `create_record`        | 创建演出记录（`name` 必填），支持一次性传入演员/剧目/折子          |
+| `update_record`        | 更新单条演出记录的任意字段，数组支持 `set`/`append`/`remove` |
+| `delete_record`        | 删除单条演出记录                                   |
+| `batch_delete_records` | 按 ID 列表批量删除                                |
+
+### 批量修改（3 个）
+
+| 工具                               | 说明                                                    |
+| -------------------------------- | ----------------------------------------------------- |
+| `batch_update_company_by_artist` | 把某演员参与的所有演出的 `company` 统一为指定值                         |
+| `batch_merge_venues`             | 将 `source_address` 的所有记录地址改写为 `target_address`；可选同步坐标 |
+| `batch_update_records`           | 按 ID 列表通用更新：标量字段直接赋值，数组字段支持 `set`/`append`/`remove`   |
+
+### 剧目管理（3 个）
+
+| 工具             | 说明                            |
+| -------------- | ----------------------------- |
+| `create_drama` | 创建新剧目档案（`name` 必填），可附带别名和剧种   |
+| `update_drama` | 更新剧目名称/别名/备注/剧种；剧种为空数组时回到自动聚合 |
+| `delete_drama` | 删除剧目及其所有折子                    |
+
+### 折子管理（3 个）
+
+| 工具                    | 说明                           |
+| --------------------- | ---------------------------- |
+| `batch_create_zhezis` | 给剧目批量写入折子清单，已存在的同名（或同别名）自动跳过 |
+| `update_zhezi`        | 部分更新折子的名称/别名/备注              |
+| `delete_zhezi`        | 删除折子并解除所有演出关联                |
+
+### 演员管理（3 个）
+
+| 工具              | 说明                          |
+| --------------- | --------------------------- |
+| `create_artist` | 创建新演员档案（`name` 必填），可附带别名和简介 |
+| `update_artist` | 更新演员的名称/别名/备注/简介            |
+| `delete_artist` | 删除演员档案（同时解除与演出记录的关联）        |
+
+### 分类管理（4 个）
+
+| 工具                | 说明                  |
+| ----------------- | ------------------- |
+| `list_categories` | 列出所有分类（剧种），含演出计数和排序 |
+| `create_category` | 创建新分类               |
+| `update_category` | 更新分类名称              |
+| `delete_category` | 删除分类                |
+
+### 封面管理（5 个）
+
+| 工具                 | 说明                                           |
+| ------------------ | -------------------------------------------- |
+| `list_covers`      | 列出封面（去重），支持按文件名查询，含引用计数                      |
+| `cover_duplicates` | 查找内容哈希相同的重复封面分组                              |
+| `merge_covers`     | 合并重复封面：将 sources 的引用全部指向 target，然后删除 sources |
+| `cover_orphans`    | 查找没有被任何演出记录引用的孤立封面文件                         |
+| `cleanup_covers`   | 清理所有孤立封面（无引用的文件）                             |
+
+**共计 34 个工具。**
 
 ## 典型工作流
 
@@ -83,9 +239,25 @@ batch_merge_venues(source_address="上海大剧院（西店）",
 3. `batch_create_zhezis(drama_id=…, names=["游园","惊梦","拾画","画祭"], remark="来源：xxx")` 一次写入，重名自动跳过；
 4. 之后在演出记录编辑页即可选用这些折子。
 
+### 4. 发现并清理重复封面
+
+```
+cover_duplicates()                    # 查看所有重复封面分组
+merge_covers(sources=["abc.jpg","def.jpg"], target="ghi.jpg", dry_run=true)
+# 确认无误后执行
+merge_covers(sources=["abc.jpg","def.jpg"], target="ghi.jpg")
+cover_orphans()                       # 清理前检查有无孤立文件
+cleanup_covers(dry_run=true)          # 预览要删除的孤立文件
+cleanup_covers()                      # 真正清理
+```
+
 ## 设计要点
 
-- **dry_run 优先**：两个批量修改工具都带 `dry_run` 参数（默认 false）。约定流程是先预览影响范围、经用户确认再执行。
+- **dry\_run 优先**：所有修改类工具都带 `dry_run` 参数（默认 `true`）。约定流程是先预览影响范围、经用户确认再执行。
+
 - **模糊解析有兜底**：演员/剧目支持精确名 → 别名 → 不区分大小写的部分匹配；部分匹配唯一时直接采用，多个候选时返回候选列表要求指定 ID，绝不静默猜测。
+
 - **数据模型现实**：场馆没有独立实体表（以 `records.address` 为隐式标识），剧团是文本字段；因此「合并」就是批量改写字段值，坐标同步复用既有 `SyncVenueCoordinates`。
+
 - **错误走工具级**：可恢复错误（如未找到记录）以 `isError=true` 的结果返回给模型自行纠正，不中断协议会话。
+
