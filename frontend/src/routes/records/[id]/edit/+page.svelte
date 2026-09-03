@@ -1,12 +1,11 @@
 <script>
-  import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
   import BackLink from '$lib/components/BackLink.svelte';
   import RecordForm from '$lib/components/RecordForm.svelte';
 
-  const id = $page.params.id;
+  let id = $derived($page.params.id);
   let record = $state(null);
   let categories = $state([]);
   let loading = $state(true);
@@ -22,7 +21,9 @@
     }
   }
 
-  onMount(async () => {
+  async function load() {
+    loading = true;
+    error = '';
     try {
       [categories, record] = await Promise.all([api.listCategories(), api.getRecord(id)]);
     } catch (e) {
@@ -30,7 +31,9 @@
     } finally {
       loading = false;
     }
-  });
+  }
+
+  $effect(() => { if (id) load(); });
 </script>
 <svelte:head><title>{record ? `编辑 ${record.name} - 幕间` : "编辑演出 - 幕间"}</title></svelte:head>
 

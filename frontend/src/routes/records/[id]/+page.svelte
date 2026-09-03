@@ -1,12 +1,12 @@
 <script>
-  import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { fade, scale } from 'svelte/transition';
   import { api, coverUrl, formatCurrency, formatDate } from '$lib/api.js';
   import { STATUS_LABELS, ALL_STATUSES } from '$lib/statusPrefs.js';
   import BackLink from '$lib/components/BackLink.svelte';
 
-  const id = $page.params.id;
+  // 响应式：id 变化时重新加载
+  let id = $derived($page.params.id);
   const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   function weekday(ts) {
     if (!ts) return '';
@@ -265,7 +265,20 @@
     }
   }
 
-  onMount(load);
+  // SPA 跨 id 导航：同一组件不销毁重建，用 $effect 监听 id 变化重新加载
+  $effect(() => {
+    if (!id) return;
+    // 重置跨页面残留状态
+    lightbox = false;
+    lightboxSrc = '';
+    hoverRating = 0;
+    ratingSaved = false;
+    ratingError = '';
+    statusSaved = false;
+    statusError = '';
+    photoBusy = '';
+    load();
+  });
 </script>
 <svelte:head><title>{rec ? `${rec.name} - 幕间` : "演出 - 幕间"}</title></svelte:head>
 <svelte:window onkeydown={onWindowKeydown} />

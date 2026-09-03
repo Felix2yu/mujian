@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { fade, scale } from 'svelte/transition';
   import { api, coverUrl } from '$lib/api.js';
 

@@ -1,12 +1,11 @@
 <script>
-  import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
   import BackLink from '$lib/components/BackLink.svelte';
   import RecordCard from '$lib/components/RecordCard.svelte';
   import CategoryTags from '$lib/components/CategoryTags.svelte';
 
-  const id = $page.params.id;
+  let id = $derived($page.params.id);
   let drama = $state(null);
   let zhezis = $state([]);
   let records = $state([]);
@@ -156,7 +155,7 @@
     overIdx = -1;
   }
 
-  onMount(load);
+  $effect(() => { if (id) load(); });
 </script>
 <svelte:head><title>{drama ? `${drama.name} - 幕间` : "剧目 - 幕间"}</title></svelte:head>
 

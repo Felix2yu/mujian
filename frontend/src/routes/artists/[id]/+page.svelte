@@ -1,12 +1,11 @@
 <script>
-  import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { api, coverUrl } from '$lib/api.js';
   import BackLink from '$lib/components/BackLink.svelte';
   import RecordCard from '$lib/components/RecordCard.svelte';
   import OperaIcon from '$lib/components/OperaIcon.svelte';
 
-  const id = $page.params.id;
+  let id = $derived($page.params.id);
   let artist = $state(null);
   let records = $state([]);
   let loading = $state(true);
@@ -105,7 +104,7 @@
     }
   }
 
-  onMount(load);
+  $effect(() => { if (id) load(); });
 </script>
 <svelte:head><title>{artist ? `${artist.name} - 幕间` : "演员 - 幕间"}</title></svelte:head>
 
