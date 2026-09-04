@@ -541,7 +541,7 @@
     align-items: baseline;
     gap: 2px;
     flex-shrink: 0;
-    margin-left: auto;
+    margin-left: 16px;
   }
   .stat-num {
     font-family: var(--font-serif);
