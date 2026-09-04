@@ -31,7 +31,7 @@ func TestGenerateCalendar(t *testing.T) {
 		"BEGIN:VCALENDAR\r\n",
 		"VERSION:2.0\r\n",
 		"PRODID:-//Mujian//Record Tracker//CN\r\n",
-		"X-WR-CALNAME:现场记录\r\n",
+		"X-WR-CALNAME:幕间\r\n",
 		"X-WR-TIMEZONE:Asia/Shanghai\r\n",
 		"BEGIN:VTIMEZONE\r\n",
 		"TZID:Asia/Shanghai\r\n",

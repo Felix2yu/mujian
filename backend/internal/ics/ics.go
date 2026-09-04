@@ -17,7 +17,7 @@ func GenerateCalendar(records []models.Record, loc *time.Location, zheziNames ma
 	b.WriteString("PRODID:-//Mujian//Record Tracker//CN\r\n")
 	b.WriteString("CALSCALE:GREGORIAN\r\n")
 	b.WriteString("METHOD:PUBLISH\r\n")
-	b.WriteString("X-WR-CALNAME:现场记录\r\n")
+	b.WriteString("X-WR-CALNAME:幕间\r\n")
 	b.WriteString(fmt.Sprintf("X-WR-TIMEZONE:%s\r\n", loc.String()))
 	b.WriteString("BEGIN:VTIMEZONE\r\n")
 	b.WriteString(fmt.Sprintf("TZID:%s\r\n", loc.String()))
