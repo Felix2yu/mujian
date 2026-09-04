@@ -185,28 +185,17 @@
 <svelte:head><title>日历 - 幕间</title></svelte:head>
 
 <div class="fade-up">
-  <div class="page-head">
-    <h1>日历</h1>
-  </div>
-
   {#if error}<div class="banner error">⚠ {error}</div>{/if}
 
   <section class="calendar-card card" aria-label={`${year}年${month}月日历`}>
-    <!-- 工具栏 -->
+    <!-- 工具栏：← 今天  YYYY 年 M 月  →   场次 -->
     <header class="cal-header">
-      <div class="nav-group">
-        <button class="nav-btn" onclick={() => shift(-1)} aria-label="上个月" type="button">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-        <button class="today-btn" onclick={goToday} type="button">今天</button>
-        <button class="nav-btn" onclick={() => shift(1)} aria-label="下个月" type="button">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M9 18l6-6-6-6" />
-          </svg>
-        </button>
-      </div>
+      <button class="nav-btn" onclick={() => shift(-1)} aria-label="上个月" type="button">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+      </button>
+      <button class="today-btn" onclick={goToday} type="button">今天</button>
       <button
         class="ym-display"
         type="button"
@@ -215,10 +204,16 @@
         aria-haspopup="dialog"
       >
         <span class="y">{year}</span>
-        <span class="sep">·</span>
-        <span class="m">{pad(month)}</span>
+        <span class="sep">年</span>
+        <span class="m">{month}</span>
+        <span class="sep2">月</span>
         <svg class="ym-caret" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      <button class="nav-btn" onclick={() => shift(1)} aria-label="下个月" type="button">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M9 18l6-6-6-6" />
         </svg>
       </button>
       <div class="cal-stats">
@@ -439,88 +434,79 @@
   .cal-header {
     display: flex;
     align-items: center;
-    padding: 18px 20px 14px;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 16px;
     border-bottom: 1px solid var(--border);
     background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
-    gap: 16px;
-  }
-
-  .nav-group {
-    display: flex;
-    align-items: center;
-    gap: 4px;
   }
 
   .nav-btn {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid transparent;
+    border: none;
     border-radius: var(--radius-sm);
     background: transparent;
-    color: var(--text-2);
+    color: var(--text-3);
     cursor: pointer;
+    flex-shrink: 0;
     transition: background var(--t-fast) var(--ease),
       color var(--t-fast) var(--ease),
-      border-color var(--t-fast) var(--ease);
+      transform var(--t-fast) var(--ease);
   }
   .nav-btn:hover {
     background: var(--accent-soft);
     color: var(--accent);
-    border-color: var(--accent-soft);
   }
   .nav-btn:active { transform: scale(0.94); }
 
   .today-btn {
-    height: 32px;
-    padding: 0 14px;
+    height: 28px;
+    padding: 0 12px;
     border: 1px solid var(--border);
-    border-radius: 999px;
+    border-radius: 6px;
     background: var(--surface);
     color: var(--text-2);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
     cursor: pointer;
+    flex-shrink: 0;
     transition: background var(--t-fast) var(--ease),
       color var(--t-fast) var(--ease),
-      border-color var(--t-fast) var(--ease),
-      box-shadow var(--t-fast) var(--ease);
+      border-color var(--t-fast) var(--ease);
   }
   .today-btn:hover {
     background: var(--accent-soft);
     color: var(--accent);
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
   }
 
   .ym-display {
-    flex: 1;
-    display: flex;
+    display: inline-flex;
     align-items: baseline;
-    gap: 6px;
-    justify-content: center;
-    font-family: var(--font-serif);
+    gap: 2px;
     background: transparent;
     border: none;
     margin: 0;
-    padding: 4px 10px;
+    padding: 4px 8px;
     border-radius: var(--radius-sm);
     color: inherit;
-    font-size: inherit;
-    font-weight: inherit;
+    font-family: inherit;
     cursor: pointer;
     transition: background var(--t-fast) var(--ease),
       box-shadow var(--t-fast) var(--ease);
+    white-space: nowrap;
   }
   .ym-display:hover {
     background: var(--accent-soft);
-    box-shadow: 0 0 0 3px var(--accent-soft);
   }
   .ym-display:active { transform: scale(0.97); }
   .ym-caret {
     align-self: center;
+    margin-left: 2px;
     color: var(--text-3);
     transition: transform var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
   }
@@ -529,37 +515,43 @@
     transform: translateY(1px);
   }
   .ym-display .y {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 500;
     color: var(--text-3);
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
   }
   .ym-display .sep {
-    color: var(--border-strong);
-    font-size: 18px;
+    font-size: 13px;
+    color: var(--text-3);
+    margin-right: 2px;
+  }
+  .ym-display .sep2 {
+    font-size: 13px;
+    color: var(--text-3);
+    margin-left: 1px;
   }
   .ym-display .m {
-    font-size: 24px;
+    font-size: 16px;
     font-weight: 700;
     color: var(--text);
-    letter-spacing: 0.04em;
   }
 
   .cal-stats {
     display: flex;
     align-items: baseline;
-    gap: 3px;
+    gap: 2px;
     flex-shrink: 0;
+    margin-left: auto;
   }
   .stat-num {
     font-family: var(--font-serif);
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 700;
     color: var(--accent);
     line-height: 1;
   }
   .stat-label {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-3);
     letter-spacing: 0.04em;
   }
@@ -1058,16 +1050,18 @@
   /* ============ 响应式 ============ */
   @media (max-width: 640px) {
     .cal-header {
-      padding: 14px 14px 12px;
-      gap: 10px;
+      padding: 10px 10px;
+      gap: 4px;
     }
-    .nav-btn { width: 32px; height: 32px; }
-    .today-btn { height: 28px; padding: 0 10px; font-size: 12px; }
-    .ym-display { gap: 4px; }
-    .ym-display .y { font-size: 13px; }
-    .ym-display .m { font-size: 20px; }
-    .stat-num { font-size: 18px; }
-    .stat-label { font-size: 11px; }
+    .nav-btn { width: 30px; height: 30px; }
+    .today-btn { height: 26px; padding: 0 8px; font-size: 11px; border-radius: 5px; }
+    .ym-display { gap: 0; padding: 3px 6px; }
+    .ym-display .y { font-size: 12px; letter-spacing: 0.04em; }
+    .ym-display .sep, .ym-display .sep2 { font-size: 11px; }
+    .ym-display .m { font-size: 15px; }
+    .ym-caret { width: 12px; height: 12px; }
+    .stat-num { font-size: 16px; }
+    .stat-label { font-size: 10px; }
 
     .dow { padding: 8px 8px 2px; }
     .dow-cell { font-size: 11px; letter-spacing: 0.08em; }
@@ -1098,7 +1092,8 @@
   @media (max-width: 420px) {
     .ym-display .y { display: none; }
     .ym-display .sep { display: none; }
-    .ym-display .m { font-size: 22px; }
+    .ym-display .sep2 { display: none; }
+    .ym-display .m { font-size: 18px; }
     .month-grid { gap: 6px; padding: 14px; }
     .month-cell { padding: 13px 0; font-size: 14px; }
   }
