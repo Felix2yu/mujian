@@ -72,6 +72,8 @@ func writeEvent(b *strings.Builder, rec models.Record, loc *time.Location, zhezi
 	// clients can drop a map pin. RFC 5545 format is "LAT;LON".
 	if rec.Coordinate != nil {
 		b.WriteString(fmt.Sprintf("GEO:%f;%f\r\n", rec.Coordinate.Latitude, rec.Coordinate.Longitude))
+		// Apple Calendar: show map pin and "Open in Maps" link.
+		b.WriteString(fmt.Sprintf("X-APPLE-STRUCTURED-LOCATION;X-APPLE-MAPKIT-HANDLE=cn.place;X-APPLE-MAPKIT-HANDLE-TYPE=point;X-APPLE-MAPKIT-HANDLE-RECIPIENT=cn.place:geo:%f,%f\r\n", rec.Coordinate.Latitude, rec.Coordinate.Longitude))
 	}
 
 	var desc []string
