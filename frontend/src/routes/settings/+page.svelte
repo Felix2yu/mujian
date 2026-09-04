@@ -997,7 +997,7 @@
   .btn.disabled, .btn:disabled { opacity: 0.6; cursor: not-allowed; }
   .cal-actions { display: flex; flex-direction: column; gap: 8px; }
   .cal-subscribe { display: flex; gap: 8px; }
-  .cal-subscribe .input { flex: 1; font-size: 12.5px; color: var(--text-2); }
+  .cal-subscribe .input { flex: 1; font-size: 16px; color: var(--text-2); }
   .cal-subscribe .btn { white-space: nowrap; }
   .switch-row {
     display: flex;

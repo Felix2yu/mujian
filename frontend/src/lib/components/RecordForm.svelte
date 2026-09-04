@@ -1858,7 +1858,7 @@
   .ai-text {
     width: 100%;
     resize: vertical;
-    font-size: 13.5px;
+    font-size: 16px;
     line-height: 1.6;
     font-family: var(--font-sans, inherit);
     padding: 10px 12px;
