@@ -1,7 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="beam512" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFD700" stop-opacity="0.7"/>
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="50%" stop-color="#FFD700" stop-opacity="0.7"/>
       <stop offset="100%" stop-color="#FFD700" stop-opacity="0"/>
     </linearGradient>
     <linearGradient id="stage512" x1="0" y1="0" x2="0" y2="1">
@@ -17,8 +18,8 @@
     <!-- Stage floor -->
     <rect x="0" y="432" width="512" height="80" fill="url(#stage512)"/>
     <!-- Light beams from top -->
-    <polygon points="208,0 304,0 342,350 170,350" fill="url(#beam512)" opacity="0.35"/>
-    <polygon points="228,0 284,0 306,350 206,350" fill="url(#beam512)" opacity="0.25"/>
+    <polygon points="208,0 304,0 342,350 170,350" fill="url(#beam512)" opacity="0.5"/>
+    <polygon points="228,0 284,0 306,350 206,350" fill="url(#beam512)" opacity="0.4"/>
     <!-- Left curtain -->
     <path d="M0,0 L0,512 L152,512 C152,424 150,336 148,256 C146,176 148,96 150,32 L150,0 Z" fill="#B91C1C"/>
     <path d="M0,0 L0,512 L116,512 C116,424 114,336 112,256 C110,176 114,96 116,32 L116,0 Z" fill="#991B1B"/>

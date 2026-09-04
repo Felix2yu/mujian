@@ -196,7 +196,7 @@ a { color: inherit; text-decoration: none; }
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
-  font-size: 14px;
+  font-size: 16px;
   font-family: inherit;
   transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease),
     background var(--t-fast) var(--ease);
@@ -246,11 +246,11 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.6; }
 
 label { display: block; font-size: 13px; font-weight: 500; color: var(--text-2); margin: 14px 0 6px; }
 
-.row { display: flex; gap: 12px; flex-wrap: wrap; }
+.row { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
 /* 窄屏：字段宽度档位（f-sm=200px 等）是为并排设计的，单独换行后就是一条
    窄输入框，右侧大片留白。小屏直接改为纵向堆叠、每个字段占满整行。 */
 @media (max-width: 640px) {
-  .row { flex-direction: column; gap: 10px; }
+  .row { grid-template-columns: 1fr !important; gap: 10px; }
   .row > * { width: 100%; }
   .row > .f-xs, .row > .f-sm, .row > .f-md, .row > .f-lg, .row > .f-dt {
     /* !important：压过 RecordForm 组件内后加载的 .row > .f-* { flex: … }，
@@ -259,7 +259,7 @@ label { display: block; font-size: 13px; font-weight: 500; color: var(--text-2);
     min-width: 0;
   }
 }
-.row > * { flex: 1; min-width: 150px; }
+.row > * { min-width: 0; }
 
 /* ============ 徽章 / 标签 ============ */
 .pill {

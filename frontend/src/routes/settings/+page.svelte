@@ -19,7 +19,8 @@
     ai_enabled: false,
     ai_base_url: '',
     ai_model: '',
-    ai_api_key: ''
+    ai_api_key: '',
+    default_start_time: '19:30'
   });
   // GET /api/settings 返回的 secret 是掩码值（如 "sk12****"）；保存时若未改动
   // 就不回传该字段，避免把掩码存成真实密钥（后端也会兜底忽略）。
@@ -32,7 +33,7 @@
     // 权重 = 实测卡片高度（含间距，px）；内容变化时按需更新
     const cards = [
       ['theme', 162], ['storage', 158], ['s3', 823], ['encode', 305], ['calendar', 280],
-      ['fields', 349], ['status', 178], ['list', 224], ['backup', 988], ['security', 274], ['map', 435],
+      ['fields', 389], ['status', 178], ['list', 224], ['backup', 988], ['security', 274], ['map', 435],
       ['ai', 360]
     ];
     const cols = [[], []];
@@ -215,6 +216,7 @@
       if (typeof settings.show_pay_price !== 'boolean') settings.show_pay_price = true;
       if (typeof settings.show_other_cost !== 'boolean') settings.show_other_cost = true;
       if (typeof settings.multi_currency !== 'boolean') settings.multi_currency = true;
+      if (!settings.default_start_time) settings.default_start_time = '19:30';
       mapSource = loadPref('mujian:map_source', 'osm');
       mapKey = loadPref('mujian:map_custom_key', '');
       mapCustomUrl = loadPref('mujian:map_custom_url', '');
@@ -251,6 +253,7 @@
         show_pay_price: settings.show_pay_price,
         show_other_cost: settings.show_other_cost,
         multi_currency: settings.multi_currency,
+        default_start_time: settings.default_start_time || '19:30',
         backup_interval_hours: backupInterval,
         backup_keep: Math.max(1, Number(backupKeep) || 10),
         backup_format: backupFormat,
@@ -584,6 +587,10 @@
         <span>启用多币种（金额可单独选择币种）</span>
         <input type="checkbox" bind:checked={settings.multi_currency} />
       </label>
+      <div class="time-row">
+        <span>默认演出开始时间</span>
+        <input class="input" type="time" bind:value={settings.default_start_time} style="max-width: 120px;" />
+      </div>
     </div>
 {/snippet}
 
@@ -990,7 +997,7 @@
   .btn.disabled, .btn:disabled { opacity: 0.6; cursor: not-allowed; }
   .cal-actions { display: flex; flex-direction: column; gap: 8px; }
   .cal-subscribe { display: flex; gap: 8px; }
-  .cal-subscribe .input { flex: 1; font-size: 12.5px; color: var(--text-2); }
+  .cal-subscribe .input { flex: 1; font-size: 16px; color: var(--text-2); }
   .cal-subscribe .btn { white-space: nowrap; }
   .switch-row {
     display: flex;
@@ -1021,6 +1028,16 @@
   }
   .status-opt input { accent-color: var(--accent); cursor: pointer; }
   .status-opt.on { border-color: var(--accent); background: var(--accent-softer); color: var(--accent); font-weight: 600; }
+  .time-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    font-size: 14px;
+    color: var(--text-2);
+    border-top: 1px solid var(--border);
+  }
 
   /* ---------- 自动备份列表 ---------- */
   .backup-list { margin-top: 12px; border: 1px solid var(--border); border-radius: var(--radius, 10px); overflow: hidden; }
