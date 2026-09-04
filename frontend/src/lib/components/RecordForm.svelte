@@ -1106,18 +1106,18 @@
   <!-- ============ 基本信息 ============ -->
   <div class="card section">
     <h3>基本信息</h3>
-    <div class="row">
-      <div class="f-lg">
+    <div class="row two-flex">
+      <div>
         <label>名称 <span class="req">*</span></label>
         <input class="input" spellcheck="false" bind:value={form.name} placeholder="演出名称" />
       </div>
-      <div class="f-sm">
+      <div>
         <label>剧种（可多个）</label>
         <CategoryTags bind:values={form.categoryNames} {categories} placeholder="如：昆剧，回车添加" />
       </div>
     </div>
-    <div class="row">
-      <div class="f-sm">
+    <div class="row two-flex-reverse">
+      <div>
         <label>城市</label>
         <div class="combo">
           <input
@@ -1137,7 +1137,7 @@
           {/if}
         </div>
       </div>
-      <div class="f-lg">
+      <div>
         <label>场馆 / 地址</label>
         <div class="addr-row">
           <div class="combo addr-combo">
@@ -1207,12 +1207,12 @@
   <!-- ============ 观演信息 ============ -->
   <div class="card section">
     <h3>观演信息</h3>
-    <div class="row">
-      <div class="f-sm f-dt">
+    <div class="row four-equal">
+      <div>
         <label>演出时间</label>
         <input class="input" type="datetime-local" bind:value={form.date_local} autocomplete="off" />
       </div>
-      <div class="f-xs">
+      <div>
         <label>状态</label>
         <select class="input" bind:value={form.active_status}>
           <option value={0}>正常</option>
@@ -1221,7 +1221,7 @@
           <option value={3}>未赴约</option>
         </select>
       </div>
-      <div class="f-md">
+      <div>
         <label>评分</label>
         <div class="star-row">
           {#each [1, 2, 3, 4, 5] as n}
@@ -1230,13 +1230,13 @@
           <span class="tiny rate-text">{form.rating ? `${form.rating} 分` : '未评分'}</span>
         </div>
       </div>
-      <div class="f-xs">
+      <div>
         <label>时长</label>
         <div class="money"><input class="input" type="number" inputmode="numeric" min="0" step="1" bind:value={form.duration} placeholder="分钟" /><span class="unit">分钟</span></div>
       </div>
     </div>
-    <div class="row">
-      <div class="f-sm">
+    <div class="row two-equal">
+      <div>
         <label>座位</label>
         <input class="input" spellcheck="false" bind:value={form.seat} list="seat-list" placeholder="如：3排15座" />
         <datalist id="seat-list">
@@ -1244,7 +1244,7 @@
         </datalist>
       </div>
       {#if settings.show_friends}
-      <div class="f-md">
+      <div>
         <label>同行</label>
         <input class="input" spellcheck="false" bind:value={form.friends} list="friends-list" placeholder="同行人，多个用逗号分隔" />
         <datalist id="friends-list">
@@ -1258,8 +1258,8 @@
   <!-- ============ 费用与渠道 ============ -->
   <div class="card section">
     <h3>费用与渠道</h3>
-    <div class="row">
-      <div class="f-md">
+    <div class="row" style="grid-template-columns: 2fr 1fr 1fr 1fr;">
+      <div>
         <label>购买渠道</label>
         <div class="combo">
           <input
@@ -1279,18 +1279,18 @@
           {/if}
         </div>
       </div>
-      <div class="f-sm">
+      <div>
         <label>票价</label>
         <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.price} />{#if settings.multi_currency}<select class="input cur" bind:value={form.price_currency}>{#each currencyOptions(form.price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
       </div>
       {#if settings.show_pay_price}
-        <div class="f-sm">
+        <div>
           <label>实付</label>
           <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.pay_price} />{#if settings.multi_currency}<select class="input cur" bind:value={form.pay_price_currency}>{#each currencyOptions(form.pay_price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
         </div>
       {/if}
       {#if settings.show_other_cost}
-        <div class="f-sm">
+        <div>
           <label>其他花费</label>
           <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.other_cost} />{#if settings.multi_currency}<select class="input cur" bind:value={form.other_cost_currency}>{#each currencyOptions(form.other_cost_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
         </div>
@@ -1568,15 +1568,6 @@
   .req { color: var(--accent); }
   .hint { font-weight: 400; color: var(--text-3); font-size: 12px; }
 
-  /* 字段宽度档位：短字段不独占整行（需压过全局 .row > * 的 flex:1） */
-  .row > .f-xs { flex: 0 1 130px; min-width: 110px; }
-  /* grow 1：换行后最后一个字段拉伸占满剩余宽度，避免货币下拉右侧大片留白 */
-  .row > .f-sm { flex: 1 1 200px; min-width: 150px; }
-  .row > .f-md { flex: 1 1 240px; min-width: 180px; }
-  .row > .f-lg { flex: 2.4 1 320px; min-width: 220px; }
-  /* 演出时间：datetime-local 内容固定且偏宽，给略宽于 f-sm 的固定档 */
-  .row > .f-dt { flex: 0 1 215px; min-width: 180px; }
-
   .money { display: flex; gap: 6px; }
   .money .unit { align-self: center; color: var(--text-3); font-size: 13px; white-space: nowrap; }
   /* 货币框收窄并让文字居中：默认左对齐 + 34px 箭头预留位会让 CNY 右侧
@@ -1813,8 +1804,6 @@
 
   /* 可搜索下拉（演员 / 剧目共用） */
   .combo { position: relative; flex: 2; min-width: 200px; }
-  /* 表单栅格内的下拉容器：去掉演员区专用的最小宽度，避免窄屏溢出 */
-  .f-sm .combo, .f-md .combo { min-width: 0; }
   .combo-list {
     position: absolute;
     top: calc(100% + 4px);
