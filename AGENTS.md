@@ -11,6 +11,7 @@
 | 类别 | 工具 | 用途 |
 |------|------|------|
 | 查询 | `search_records` | 按关键词/演员/剧目/折子/城市/日期筛选演出 |
+| 查询 | `search_records_by_location` | 按坐标中心点和半径搜索附近演出 |
 | 查询 | `get_record` / `get_artist_detail` / `get_drama_detail` | 单条详情 |
 | 查询 | `list_artists` / `list_dramas` / `list_venues` | 实体清单 |
 | 查询 | `value_counts` / `get_stats` | 取值频次 / 总览统计 |
@@ -22,9 +23,14 @@
 | 折子 | `batch_create_zhezis` / `update_zhezi` / `delete_zhezi` | 折子批量创建与维护 |
 | 演员 | `create_artist` / `update_artist` / `delete_artist` | 演员档案增删改 |
 | 分类 | `list_categories` / `create_category` / `update_category` / `delete_category` | 剧种分类管理 |
+| 回收站 | `list_deleted_records` / `restore_record` / `purge_record` / `purge_deleted_records` | 已删除记录恢复与永久删除 |
+| 排序 | `reorder_categories` / `reorder_dramas` / `reorder_zhezis` / `reorder_artists` | 实体排序调整 |
 | 封面 | `list_covers` / `cover_duplicates` / `merge_covers` / `cover_orphans` / `cleanup_covers` | 封面去重与清理 |
+| 导入导出 | `export_data` / `import_data` | 数据导出为 JSON / 从 JSON 导入 |
+| 备份 | `run_backup` / `list_backups` / `delete_backup` / `restore_from_backup` | 备份管理与恢复 |
+| 地图 | `list_map_points` | 获取有坐标的演出记录（地图展示） |
 
-共 34 个工具，详细说明见 [docs/mcp.md](docs/mcp.md)。
+共 50 个工具，详细说明见 [docs/mcp.md](docs/mcp.md)。
 
 ### 典型工作流
 
