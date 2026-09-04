@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"math"
@@ -16,10 +17,11 @@ import (
 // identifier — so grouping by address with counts is how "the same place"
 // (including near-duplicate spellings) is surfaced for cleanup workflows.
 type VenueGroup struct {
-	Address     string   `json:"address"`
-	Cities      []string `json:"cities"`
-	RecordCount int      `json:"record_count"`
-	HasCoord    bool     `json:"has_coord"`
+	Address     string             `json:"address"`
+	Cities      []string           `json:"cities"`
+	RecordCount int                `json:"record_count"`
+	HasCoord    bool               `json:"has_coord"`
+	Coordinate  *models.Coordinate `json:"coordinate,omitempty"`
 }
 
 // ListVenueGroups returns address groups, optionally filtered by a
@@ -30,7 +32,13 @@ func (db *DB) ListVenueGroups(query string) ([]VenueGroup, error) {
 	rows, err := db.conn.Query(`
 		SELECT address,
 		       COUNT(*)          AS cnt,
-		       MAX(coordinate != '' AND coordinate != 'null') AS has_coord
+		       MAX(coordinate != '' AND coordinate != 'null') AS has_coord,
+		       (SELECT coordinate FROM records r2
+		        WHERE r2.address = records.address
+		        AND r2.deleted_at = 0
+		        AND r2.coordinate != ''
+		        AND r2.coordinate != 'null'
+		        LIMIT 1) AS coord_json
 		FROM records
 		WHERE deleted_at = 0 AND address != ''
 		GROUP BY address
@@ -44,11 +52,15 @@ func (db *DB) ListVenueGroups(query string) ([]VenueGroup, error) {
 	out := []VenueGroup{}
 	for rows.Next() {
 		var g VenueGroup
-		if err := rows.Scan(&g.Address, &g.RecordCount, &g.HasCoord); err != nil {
+		var coordJSON sql.NullString
+		if err := rows.Scan(&g.Address, &g.RecordCount, &g.HasCoord, &coordJSON); err != nil {
 			return nil, err
 		}
 		if q != "" && !strings.Contains(strings.ToLower(g.Address), q) {
 			continue
+		}
+		if g.HasCoord && coordJSON.Valid && coordJSON.String != "" {
+			g.Coordinate = unmarshalCoordinate(coordJSON.String)
 		}
 		g.Cities = []string{}
 		out = append(out, g)

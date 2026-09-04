@@ -22,7 +22,7 @@ func newTestServer(t *testing.T) *Server {
 		t.Fatalf("db.New: %v", err)
 	}
 	t.Cleanup(database.Close)
-	return New(database)
+	return New(database, nil)
 }
 
 func mustUpsert(t *testing.T, s *Server, r models.Record) {

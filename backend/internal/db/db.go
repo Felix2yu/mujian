@@ -93,6 +93,11 @@ func (db *DB) SetLocation(loc *time.Location) {
 	db.loc = loc
 }
 
+// Location returns the configured timezone for date parsing.
+func (db *DB) Location() *time.Location {
+	return db.loc
+}
+
 // SQLStats exposes the underlying database/sql pool statistics for the
 // /metrics endpoint (in-use, idle, wait counts...). Read-only.
 func (db *DB) SQLStats() sql.DBStats {
@@ -1153,9 +1158,9 @@ func parseTimeArg(s string, loc *time.Location) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// parseDateText parses the human-facing date text accepted by record forms
+// ParseDateText parses the human-facing date text accepted by record forms
 // ("2026-08-23 19:30" etc). Returns ok=false when no format matches.
-func parseDateText(s string, loc *time.Location) (time.Time, bool) {
+func ParseDateText(s string, loc *time.Location) (time.Time, bool) {
 	s = strings.TrimSpace(s)
 	for _, f := range []string{"2006-01-02 15:04", "2006-01-02 15:04:05", "2006-01-02T15:04:05", "2006-01-02"} {
 		if t, err := time.ParseInLocation(f, s, loc); err == nil {
@@ -1911,7 +1916,7 @@ func (db *DB) BatchUpdateRecords(params models.BatchUpdateParams) (int64, error)
 	}
 	if params.DateText != nil {
 		// 演出时间以文本为准，解析后联动 unix date 列；空串表示清空。
-		if t, ok := parseDateText(*params.DateText, db.loc); ok {
+		if t, ok := ParseDateText(*params.DateText, db.loc); ok {
 			simpleSets = append(simpleSets, "date = ?", "date_text = ?")
 			simpleArgs = append(simpleArgs, t.Unix(), t.Format("2006-01-02 15:04"))
 		} else if *params.DateText == "" {
@@ -1974,10 +1979,55 @@ func (db *DB) BatchUpdateRecords(params models.BatchUpdateParams) (int64, error)
 		if err != nil {
 			return 0, err
 		}
+		// 4. 同步坐标（数组操作完成后）
+		if params.Coordinate != nil {
+			db.syncBatchVenueCoordinates(params.IDs, params.Coordinate)
+		}
 		return updated, nil
 	}
 
+	// 4. 同步坐标（标量更新完成后）
+	if params.Coordinate != nil {
+		db.syncBatchVenueCoordinates(params.IDs, params.Coordinate)
+	}
+
 	return int64(len(params.IDs)), nil
+}
+
+// syncBatchVenueCoordinates 批量更新后同步同场馆坐标。
+// 查询受影响记录的所有 address（去重），然后对每个 address 调用 SyncVenueCoordinates。
+func (db *DB) syncBatchVenueCoordinates(ids []string, coord *models.Coordinate) {
+	if coord == nil || len(ids) == 0 {
+		return
+	}
+
+	placeholders := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	rows, err := db.conn.Query(
+		"SELECT DISTINCT address FROM records WHERE id IN ("+strings.Join(placeholders, ",")+") AND deleted_at = 0 AND address != ''",
+		args...,
+	)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	var addresses []string
+	for rows.Next() {
+		var addr string
+		if err := rows.Scan(&addr); err == nil {
+			addresses = append(addresses, addr)
+		}
+	}
+
+	for _, addr := range addresses {
+		db.SyncVenueCoordinates(addr, coord, "")
+	}
 }
 
 // applyArrayOps applies set/append/remove operations on JSON-array columns
@@ -3117,4 +3167,90 @@ func (db *DB) GetByField(field, value string) ([]models.Record, error) {
 		slog.Warn("backfill by-field artist ids", "err", err)
 	}
 	return out, nil
+}
+
+// ---------- 按坐标搜索 ----------
+
+// LocationResult 是按坐标搜索返回的结果，包含距离信息。
+type LocationResult struct {
+	ID         string             `json:"id"`
+	Name       string             `json:"name"`
+	City       string             `json:"city"`
+	Address    string             `json:"address"`
+	Coordinate *models.Coordinate `json:"coordinate"`
+	DateText   string             `json:"date_text"`
+	Rating     int                `json:"rating"`
+	Category   string             `json:"category_name"`
+	DistanceM  float64            `json:"distance_m"` // 距离（米）
+}
+
+// SearchByLocation 按坐标中心点和半径（米）搜索附近的演出记录。
+// 返回按距离排序的结果列表。
+func (db *DB) SearchByLocation(lat, lng, radiusM float64, limit int, category, city, startDate, endDate *string) ([]LocationResult, error) {
+	// Haversine 公式计算距离（单位：米）
+	// 6371000 = 地球平均半径（米）
+	query := `
+		SELECT id, name, city, address, coordinate, date_text, rating, category_name,
+		    (6371000 * acos(
+		        cos(radians(?)) * cos(radians(json_extract(coordinate, '$.latitude'))) *
+		        cos(radians(json_extract(coordinate, '$.longitude')) - radians(?)) +
+		        sin(radians(?)) * sin(radians(json_extract(coordinate, '$.latitude')))
+		    )) AS distance_m
+		FROM records
+		WHERE deleted_at = 0
+		  AND coordinate != '' 
+		  AND coordinate != 'null'
+		  AND (6371000 * acos(
+		        cos(radians(?)) * cos(radians(json_extract(coordinate, '$.latitude'))) *
+		        cos(radians(json_extract(coordinate, '$.longitude')) - radians(?)) +
+		        sin(radians(?)) * sin(radians(json_extract(coordinate, '$.latitude')))
+		  )) <= ?`
+
+	args := []any{lat, lng, lat, lat, lng, lat, radiusM}
+
+	if category != nil && *category != "" {
+		query += " AND category_name = ?"
+		args = append(args, *category)
+	}
+	if city != nil && *city != "" {
+		query += " AND city = ?"
+		args = append(args, *city)
+	}
+	if startDate != nil && *startDate != "" {
+		if t, ok := ParseDateText(*startDate, db.loc); ok {
+			query += " AND date >= ?"
+			args = append(args, t.Unix())
+		}
+	}
+	if endDate != nil && *endDate != "" {
+		if t, ok := ParseDateText(*endDate, db.loc); ok {
+			query += " AND date < ?"
+			args = append(args, t.Unix()+86400) // 加一天，使其包含结束日期当天
+		}
+	}
+
+	query += " ORDER BY distance_m LIMIT ?"
+	args = append(args, limit)
+
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []LocationResult
+	for rows.Next() {
+		var r LocationResult
+		var coordJSON string
+		if err := rows.Scan(&r.ID, &r.Name, &r.City, &r.Address, &coordJSON, &r.DateText, &r.Rating, &r.Category, &r.DistanceM); err != nil {
+			return nil, err
+		}
+		r.Coordinate = unmarshalCoordinate(coordJSON)
+		results = append(results, r)
+	}
+
+	if results == nil {
+		results = []LocationResult{}
+	}
+	return results, rows.Err()
 }

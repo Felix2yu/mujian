@@ -231,7 +231,7 @@ func main() {
 	// MCP over Streamable HTTP：与 /api 同进程同库，供 AI 客户端远程调用
 	// （默认无鉴权，暴露面与 /api 一致，由反向代理/内网边界保护；配置
 	// MJ_AUTH_TOKEN 后与 /api 一样要求 Bearer token）。
-	r.Mount("/mcp", authMiddleware(cfg)(mujianmcp.New(database).HTTPHandler()))
+	r.Mount("/mcp", authMiddleware(cfg)(mujianmcp.New(database, backupMgr).HTTPHandler()))
 
 	// Serve uploaded covers from the uploads dir, but constrain file access to
 	// that subtree using os.Root (Go 1.24) so path traversal outside the dir

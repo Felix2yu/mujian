@@ -1666,7 +1666,7 @@ func TestBatchUpdateNameDateTimeCoordinateMoney(t *testing.T) {
 	if got.Name != "改名后的演出" {
 		t.Fatalf("name: %q", got.Name)
 	}
-	wantT, ok := parseDateText("2026-08-23 19:30", db.loc)
+	wantT, ok := ParseDateText("2026-08-23 19:30", db.loc)
 	if !ok {
 		t.Fatal("parseDateText should accept the canonical format")
 	}

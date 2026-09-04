@@ -127,6 +127,15 @@ func (s *Server) handleCreateRecord(ctx context.Context, req *mcp.CallToolReques
 		OtherCostCurrency: in.OtherCostCurrency,
 	}
 
+	// 解析 date_text 并联动设置 date 字段
+	if t, ok := db.ParseDateText(in.DateText, s.db.Location()); ok {
+		r.Date = t.Unix()
+		r.DateText = t.Format("2006-01-02 15:04")
+	} else if in.DateText == "" {
+		r.Date = 0
+		r.DateText = ""
+	}
+
 	if dryRun(in.DryRun) {
 		return jsonResult(map[string]any{
 			"dry_run": true,
@@ -229,6 +238,14 @@ func (s *Server) handleUpdateRecord(ctx context.Context, req *mcp.CallToolReques
 	}
 	if in.DateText != nil {
 		r.DateText = *in.DateText
+		// 解析 date_text 并联动更新 date 字段
+		if t, ok := db.ParseDateText(*in.DateText, s.db.Location()); ok {
+			r.Date = t.Unix()
+			r.DateText = t.Format("2006-01-02 15:04")
+		} else if *in.DateText == "" {
+			r.Date = 0
+			r.DateText = ""
+		}
 	}
 	if in.Rating != nil {
 		r.Rating = *in.Rating

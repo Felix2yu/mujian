@@ -298,5 +298,40 @@ func (s *Server) handleGetStats(ctx context.Context, req *mcp.CallToolRequest, _
 	return jsonResult(stats)
 }
 
+// ---------- 按坐标搜索 ----------
+
+type SearchByLocationInput struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Radius    float64 `json:"radius"`               // 搜索半径（米）
+	Limit     *int    `json:"limit,omitempty"`       // 默认 50
+	Category  *string `json:"category,omitempty"`
+	City      *string `json:"city,omitempty"`
+	StartDate *string `json:"start_date,omitempty"` // "2024-01-01"
+	EndDate   *string `json:"end_date,omitempty"`   // "2024-12-31"
+}
+
+func (s *Server) handleSearchByLocation(ctx context.Context, req *mcp.CallToolRequest, in SearchByLocationInput) (*mcp.CallToolResult, any, error) {
+	limit := 50
+	if in.Limit != nil && *in.Limit > 0 {
+		limit = *in.Limit
+	}
+
+	results, err := s.db.SearchByLocation(in.Latitude, in.Longitude, in.Radius, limit, in.Category, in.City, in.StartDate, in.EndDate)
+	if err != nil {
+		return errResult("查询附近记录失败：%v", err)
+	}
+
+	return jsonResult(map[string]any{
+		"center": map[string]any{
+			"latitude":  in.Latitude,
+			"longitude": in.Longitude,
+		},
+		"radius_m": in.Radius,
+		"total":    len(results),
+		"records":  results,
+	})
+}
+
 // noInput is the input type for tools that take no parameters.
 type noInput struct{}

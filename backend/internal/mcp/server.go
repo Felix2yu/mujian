@@ -10,6 +10,7 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"mujian/internal/backup"
 	"mujian/internal/db"
 	"net/http"
 
@@ -21,16 +22,18 @@ import (
 type Server struct {
 	server *mcp.Server
 	db     *db.DB
+	backup *backup.Manager
 }
 
 // New creates an MCP server bound to the given database and registers all tools.
-func New(database *db.DB) *Server {
+func New(database *db.DB, backupMgr *backup.Manager) *Server {
 	s := &Server{
 		server: mcp.NewServer(&mcp.Implementation{
 			Name:    "mujian-mcp",
 			Version: "1.0.0",
 		}, nil),
-		db: database,
+		db:     database,
+		backup: backupMgr,
 	}
 	s.registerTools()
 	return s
@@ -101,6 +104,21 @@ func (s *Server) registerTools() {
 		Description: "获取整体统计概览（总场次、总消费、覆盖城市等）。",
 	}, s.handleGetStats)
 
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "search_records_by_location",
+		Description: "按坐标中心点和半径（米）搜索附近的演出记录。返回按距离排序的列表，含距离信息。建议半径不超过 10000（10公里）。",
+		InputSchema: toolSchema([]string{"latitude", "longitude", "radius"}, map[string]*jsonschema.Schema{
+			"latitude":   numProp(),
+			"longitude":  numProp(),
+			"radius":     numProp(),
+			"limit":      intProp(),
+			"category":   strProp(),
+			"city":       strProp(),
+			"start_date": strProp(),
+			"end_date":   strProp(),
+		}),
+	}, s.handleSearchByLocation)
+
 	// ---- 批量修改 ----
 	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "batch_update_company_by_artist",
@@ -167,6 +185,27 @@ func (s *Server) registerTools() {
 		Name:        "batch_delete_records",
 		Description: "批量删除多条演出记录（按 ID 列表）。dry_run 默认为 true（仅预览，不真正修改；显式传 dry_run=false 才执行）；预览不删除。",
 	}, s.handleBatchDeleteRecords)
+
+	// ---- 回收站 ----
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "list_deleted_records",
+		Description: "列出已删除的演出记录（回收站），支持分页。",
+	}, s.handleListDeletedRecords)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "restore_record",
+		Description: "恢复已删除的演出记录到正常状态。dry_run 默认为 true；预览不恢复。",
+	}, s.handleRestoreRecord)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "purge_record",
+		Description: "永久删除演出记录（不可恢复）。dry_run 默认为 true；预览不删除。",
+	}, s.handlePurgeRecord)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "purge_deleted_records",
+		Description: "清空回收站（永久删除所有已删除记录）。dry_run 默认为 true；预览不删除。",
+	}, s.handlePurgeDeletedRecords)
 
 	// ---- 剧目管理 ----
 	mcp.AddTool(s.server, &mcp.Tool{
@@ -259,6 +298,27 @@ func (s *Server) registerTools() {
 		Description: "删除分类。dry_run 默认为 true（仅预览，不真正修改；显式传 dry_run=false 才执行）；预览不删除。",
 	}, s.handleDeleteCategory)
 
+	// ---- 排序 ----
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "reorder_categories",
+		Description: "按指定顺序重新排列分类。ids 为完整排序后的 ID 列表。dry_run 默认为 true；预览不修改。",
+	}, s.handleReorderCategories)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "reorder_dramas",
+		Description: "按指定顺序重新排列剧目。ids 为完整排序后的 ID 列表。dry_run 默认为 true；预览不修改。",
+	}, s.handleReorderDramas)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "reorder_zhezis",
+		Description: "按指定顺序重新排列剧目下的折子。需提供 drama_id 和 ids。dry_run 默认为 true；预览不修改。",
+	}, s.handleReorderZhezis)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "reorder_artists",
+		Description: "按指定顺序重新排列演员。ids 为完整排序后的 ID 列表。dry_run 默认为 true；预览不修改。",
+	}, s.handleReorderArtists)
+
 	// ---- 封面管理 ----
 	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "list_covers",
@@ -284,6 +344,48 @@ func (s *Server) registerTools() {
 		Name:        "cleanup_covers",
 		Description: "清理所有孤立封面（无引用的文件）。dry_run 默认为 true（仅预览，不真正修改；显式传 dry_run=false 才执行）；预览不删除。",
 	}, s.handleCleanupCovers)
+
+	// ---- 导入导出 ----
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "export_data",
+		Description: "导出全部数据为 JSON 格式（含记录、分类、票根等）。",
+	}, s.handleExportData)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "import_data",
+		Description: "从 JSON 数据导入演出记录。dry_run 默认为 true；预览不导入。",
+		InputSchema: toolSchema([]string{"json_data"}, map[string]*jsonschema.Schema{
+			"json_data": strProp(),
+			"dry_run":   boolProp(),
+		}),
+	}, s.handleImportData)
+
+	// ---- 备份管理 ----
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "run_backup",
+		Description: "手动触发一次备份。dry_run 默认为 true；预览不执行。",
+	}, s.handleRunBackup)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "list_backups",
+		Description: "列出所有备份文件（按时间倒序）。",
+	}, s.handleListBackups)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "delete_backup",
+		Description: "删除指定备份文件。dry_run 默认为 true；预览不删除。",
+	}, s.handleDeleteBackup)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "restore_from_backup",
+		Description: "从指定备份文件恢复数据。支持 .json 格式。dry_run 默认为 true；预览不恢复。",
+	}, s.handleRestoreFromBackup)
+
+	// ---- 地图点位 ----
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "list_map_points",
+		Description: "获取所有有坐标的演出记录（用于地图展示），支持按城市/分类过滤。",
+	}, s.handleListMapPoints)
 }
 
 // jsonResult renders v as pretty JSON text content for the model.
