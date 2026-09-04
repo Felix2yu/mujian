@@ -278,7 +278,7 @@
                       title={formatEventTitle(e.name, e.categoryName, e.categoryNames)}
                     >
                       {#if posterSrc(e)}
-                        <img class="coverable" src={posterSrc(e)} data-full={posterFullSrc(e)} alt="" loading="lazy" />
+                        <img src={posterSrc(e)} alt="" loading="lazy" />
                       {:else}
                         <span class="p-ph">{e.name?.[0] ?? '?'}</span>
                       {/if}

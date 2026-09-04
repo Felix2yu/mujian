@@ -1917,20 +1917,22 @@
     inset: 0;
     z-index: 100;
     border: none;
-    padding: 24px;
+    padding: 12px;
     margin: 0;
     background: rgba(0, 0, 0, 0.86);
     cursor: zoom-out;
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
   }
   .lightbox img {
-    max-width: min(92vw, 720px);
-    max-height: 88vh;
+    max-width: min(90vw, 700px);
+    max-height: calc(100vh - 24px);
     width: auto;
     height: auto;
     border-radius: var(--radius);
     box-shadow: var(--shadow-lg);
+    object-fit: contain;
   }
 </style>

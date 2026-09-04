@@ -25,9 +25,9 @@
 <a class="card card-hover rec" href={`/records/${record.id}`}>
   <div class="cover">
     {#if record.coverThumb && !coverFailed}
-      <img class="coverable" src={coverUrl(record.coverThumb)} data-full={coverUrl(record.coverFile)} alt={record.name} loading="lazy" onerror={() => (coverFailed = true)} />
+      <img src={coverUrl(record.coverThumb)} alt={record.name} loading="lazy" onerror={() => (coverFailed = true)} />
     {:else if record.coverFile && !coverFailed}
-      <img class="coverable" src={coverUrl(record.coverFile)} alt={record.name} loading="lazy" onerror={() => (coverFailed = true)} />
+      <img src={coverUrl(record.coverFile)} alt={record.name} loading="lazy" onerror={() => (coverFailed = true)} />
     {:else}
       <div class="no-cover"><span>{(record.name || '?').slice(0, 1)}</span></div>
     {/if}
