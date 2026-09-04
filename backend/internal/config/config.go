@@ -39,6 +39,7 @@ type Config struct {
 	ShowPayPrice        bool   `json:"show_pay_price"`
 	ShowOtherCost       bool   `json:"show_other_cost"`
 	MultiCurrency       bool   `json:"multi_currency"`
+	DefaultStartTime    string `json:"default_start_time"`
 	// AI 填写：调用 OpenAI 兼容的 Chat Completions 接口，从粘贴文本提取演出字段。
 	// 密钥仅存于服务端，不回显明文。
 	AIEnabled  bool   `json:"-"`
@@ -78,6 +79,7 @@ func Load() *Config {
 		ShowPayPrice:        true,
 		ShowOtherCost:       true,
 		MultiCurrency:       true,
+		DefaultStartTime:    "19:30",
 		AIEnabled:           false,
 		AIBaseURL:           "https://api.openai.com/v1",
 		AIAPIKey:            "",
@@ -155,6 +157,9 @@ func (c *Config) Update(s *SettingsUpdate) {
 	if s.MultiCurrency != nil {
 		c.MultiCurrency = *s.MultiCurrency
 	}
+	if s.DefaultStartTime != nil {
+		c.DefaultStartTime = *s.DefaultStartTime
+	}
 	if s.AIEnabled != nil {
 		c.AIEnabled = *s.AIEnabled
 	}
@@ -213,6 +218,7 @@ type SettingsUpdate struct {
 	ShowPayPrice  *bool   `json:"show_pay_price"`
 	ShowOtherCost *bool   `json:"show_other_cost"`
 	MultiCurrency *bool   `json:"multi_currency"`
+	DefaultStartTime *string `json:"default_start_time"`
 	// AI 填写配置
 	AIEnabled  *bool   `json:"ai_enabled"`
 	AIBaseURL  *string `json:"ai_base_url"`
@@ -258,6 +264,7 @@ func (c *Config) GetSettingsResponse() map[string]interface{} {
 		"show_pay_price":        c.ShowPayPrice,
 		"show_other_cost":       c.ShowOtherCost,
 		"multi_currency":        c.MultiCurrency,
+		"default_start_time":    c.DefaultStartTime,
 		"ai_enabled":            c.AIEnabled,
 		"ai_base_url":           c.AIBaseURL,
 		"ai_model":              c.AIModel,

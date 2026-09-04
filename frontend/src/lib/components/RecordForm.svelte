@@ -12,7 +12,7 @@
     return {
       name: '', channel: '', city: '', address: '', categoryNames: [],
       rating: 0, seat: '', friends: '', company: '', remark: '',
-      duration: 0,
+      duration: 120,
       price: 0, price_currency: 'CNY',
       pay_price: 0, pay_price_currency: 'CNY',
       other_cost: 0, other_cost_currency: 'CNY',
@@ -27,7 +27,7 @@
   function fromRecord(r) {
     const f = emptyForm();
     if (!r) {
-      if (initialDate) f.date_local = `${initialDate}T19:30`;
+      if (initialDate) f.date_local = `${initialDate}T${settings.default_start_time}`;
       return f;
     }
     f.name = r.name || '';
@@ -95,7 +95,7 @@
   let freeNames = $state([]);
 
   // 字段显隐由「设置」控制（同行人 / 实付 / 其他花费），默认全部显示
-  let settings = $state({ show_friends: true, show_pay_price: true, show_other_cost: true, multi_currency: true });
+  let settings = $state({ show_friends: true, show_pay_price: true, show_other_cost: true, multi_currency: true, default_start_time: '19:30' });
 
   // 坐标默认折叠在「定位」图标后，点击图标才展开经纬度输入
   let showCoord = $state(false);
@@ -566,7 +566,13 @@
   onMount(async () => {
     // 读取「设置」中的字段显隐偏好，决定编辑界面是否渲染对应字段
     try {
-      settings = await api.getSettings();
+      const s = await api.getSettings();
+      settings = { ...settings, ...s };
+      // 新建记录时，根据设置中的默认开始时间更新date_local
+      if (!record && initialDate && form.date_local) {
+        const time = s.default_start_time || '19:30';
+        form.date_local = `${initialDate}T${time}`;
+      }
     } catch (e) {
       /* 读取失败则用默认（全部显示） */
     }
