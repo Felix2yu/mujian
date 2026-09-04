@@ -227,7 +227,15 @@ export const api = {
   purgeRecord: (id) => request(`/api/records/${id}/purge`, { method: 'DELETE' }),
   purgeRecordsTrash: () => request('/api/records/trash/purge', { method: 'POST' }),
   backupList: () => request('/api/backup/list'),
-  backupDownloadUrl: (file) => `${API_BASE}/api/backup/download?file=${encodeURIComponent(file)}`,
+  // 下载类直链（浏览器导航，无法带 X-Auth-Token 请求头）：与 ICS 订阅
+  // 同理，服务端启用 token 鉴权时改以 ?token= 查询参数传递，否则后端返回
+  // 401，浏览器会把 {"error":"unauthorized"} 存成下载文件。
+  backupDownloadUrl: (file) => {
+    const q = new URLSearchParams({ file });
+    const t = getAuthToken();
+    if (t) q.set('token', t);
+    return `${API_BASE}/api/backup/download?${q.toString()}`;
+  },
   backupRestoreFrom: (file) => request('/api/backup/restore-from', { method: 'POST', body: JSON.stringify({ file }) }),
   backupDelete: (file) => request(`/api/backup?file=${encodeURIComponent(file)}`, { method: 'DELETE' }),
 
@@ -247,7 +255,15 @@ export const api = {
     return res.json();
   },
 
-  getExportUrl: (format = '') => `${API_BASE}/api/export${format ? `?format=${format}` : ''}`,
+  // 同 backupDownloadUrl：导出直链也要带 ?token= 才能通过鉴权。
+  getExportUrl: (format = '') => {
+    const q = new URLSearchParams();
+    if (format) q.set('format', format);
+    const t = getAuthToken();
+    if (t) q.set('token', t);
+    const qs = q.toString();
+    return `${API_BASE}/api/export${qs ? `?${qs}` : ''}`;
+  },
 
   listCovers: (params = {}) => {
     const qs = new URLSearchParams();
