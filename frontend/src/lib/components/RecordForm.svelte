@@ -1915,7 +1915,7 @@
   .lightbox {
     position: fixed;
     inset: 0;
-    z-index: 100;
+    z-index: 9999;
     border: none;
     padding: 12px;
     margin: 0;
