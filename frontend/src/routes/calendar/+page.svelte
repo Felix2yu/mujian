@@ -161,6 +161,23 @@
     return `cat-${(h % 12)}`;
   }
 
+  // 不会作为"剧种前缀"加在剧名前的分类（汇总/类型而非具体剧种）
+  const NON_PREPEND_CATEGORIES = new Set(['拼盘', '音乐会', '音乐剧']);
+
+  // 根据剧种和剧名决定是否加剧种前缀
+  function formatEventTitle(name, categoryName, categoryNames) {
+    if (!categoryName || !name) return name;
+    // 多剧种（数组长度 > 1），不加剧种
+    if (categoryNames && categoryNames.length > 1) return name;
+    // 剧种属于汇总类（拼盘、音乐会等），不加
+    if (NON_PREPEND_CATEGORIES.has(categoryName)) return name;
+    // 剧名已包含剧种关键词，不加（避免重复）
+    if (name.includes(categoryName)) return name;
+    // 剧名首尾已有书名号则不再包裹
+    const alreadyBracketed = /^《.*》$/.test(name);
+    return alreadyBracketed ? `${categoryName} ${name}` : `${categoryName}《${name}》`;
+  }
+
   onMount(load);
 </script>
 
@@ -263,7 +280,7 @@
                       class="p-slot"
                       class:dimmed={e.active_status}
                       class:span-full={(layout.spans?.[idx] ?? 0) === 1}
-                      title={e.name}
+                      title={formatEventTitle(e.name, e.categoryName, e.categoryNames)}
                     >
                       {#if posterSrc(e)}
                         <img class="coverable" src={posterSrc(e)} data-full={posterFullSrc(e)} alt="" loading="lazy" />
@@ -330,15 +347,15 @@
                 {/if}
                 <div class="di-body">
                   <div class="di-top">
-                    <span class="di-name">{e.name}</span>
+                    <span class="di-name">{formatEventTitle(e.name, e.categoryName, e.categoryNames)}</span>
                     {#if statusLabel(e.active_status)}
                       <span class="di-status {statusClass(e.active_status)}">{statusLabel(e.active_status)}</span>
                     {/if}
                   </div>
                   <div class="di-meta">
                     <span class="di-time">{timeStr(e.date)}</span>
-                    {#if e.category_name}
-                      <span class="di-tag {categoryColor(e.category_name)}">{e.category_name}</span>
+                    {#if e.categoryName}
+                      <span class="di-tag {categoryColor(e.categoryName)}">{e.categoryName}</span>
                     {/if}
                     {#if e.city}<span class="di-city">{e.city}</span>{/if}
                   </div>

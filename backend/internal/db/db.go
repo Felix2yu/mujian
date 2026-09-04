@@ -3020,7 +3020,7 @@ func (db *DB) GetCalendarEvents(year, month int) ([]models.CalendarEvent, error)
 	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, db.loc)
 	end := start.AddDate(0, 1, 0)
 	rows, err := db.conn.Query(`
-		SELECT id, name, date, city, address, cover_file, cover_thumb, rating, active_status, category_name
+		SELECT id, name, date, city, address, cover_file, cover_thumb, rating, active_status, category_name, category_names
 		FROM records WHERE deleted_at = 0 AND date >= ? AND date < ? ORDER BY date ASC
 	`, start.Unix(), end.Unix())
 	if err != nil {
@@ -3030,10 +3030,12 @@ func (db *DB) GetCalendarEvents(year, month int) ([]models.CalendarEvent, error)
 	var out []models.CalendarEvent
 	for rows.Next() {
 		var e models.CalendarEvent
-		if err := rows.Scan(&e.ID, &e.Name, &e.Date, &e.City, &e.Address, &e.CoverFile, &e.CoverThumb, &e.Rating, &e.ActiveStatus, &e.CategoryName); err != nil {
+		var rawCategoryNames string
+		if err := rows.Scan(&e.ID, &e.Name, &e.Date, &e.City, &e.Address, &e.CoverFile, &e.CoverThumb, &e.Rating, &e.ActiveStatus, &e.CategoryName, &rawCategoryNames); err != nil {
 			slog.Warn("scan calendar event", "err", err)
 			continue
 		}
+		e.CategoryNames = unmarshalStrings(rawCategoryNames)
 		out = append(out, e)
 	}
 	if err := rows.Err(); err != nil {
