@@ -10,12 +10,53 @@
   );
   const statusText = $derived(STATUS_LABELS[record.active_status] ?? record.active_status);
 
-  // 剧团：最多展示 3 个，超出以 +N 收起，避免多剧团把卡片撑高。
+  // 剧团：按容器实际宽度计算最多能放下几个标签（限 2 行），
+  // 放不下的以 +N 收尾且 +N 必须落在第二行内，避免卡片被撑高。
   const troupeTags = $derived(
     (record.company || '').split(/[,，]/).map((s) => s.trim()).filter(Boolean)
   );
-  const shownTroupes = $derived(troupeTags.slice(0, 3));
-  const extraTroupes = $derived(troupeTags.length - shownTroupes.length);
+  let troupeEl = $state(null);
+  let troupeW = $state(0);
+
+  function measureCtx() {
+    if (typeof document === 'undefined') return null;
+    if (!measureCtx._ctx) measureCtx._ctx = document.createElement('canvas').getContext('2d');
+    return measureCtx._ctx;
+  }
+
+  const troupeLayout = $derived.by(() => {
+    const tags = troupeTags;
+    if (!tags.length) return { shown: [], extra: 0 };
+    // 容器宽度未知（首帧/SSR）时退化为最多 2 个标签，避免三行
+    if (!troupeW || !troupeEl) {
+      const shown = tags.slice(0, 2);
+      return { shown, extra: tags.length - shown.length };
+    }
+    const ctx = measureCtx();
+    if (!ctx) return { shown: tags.slice(0, 2), extra: tags.length - 2 };
+    const cs = getComputedStyle(troupeEl);
+    ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const GAP = 4; // 与 .troupes 的 gap 保持一致
+    const PADDING = 18; // 标签左右 padding 16 + 边框 2
+    const widthOf = (text) => Math.ceil(ctx.measureText(text).width) + PADDING;
+    const avail = troupeW - 2; // 留少量余量防误判
+    const linesNeeded = (widths) => {
+      let lines = 1, x = 0;
+      for (const w of widths) {
+        if (x === 0) x = w;
+        else if (x + GAP + w <= avail) x += GAP + w;
+        else { lines++; x = w; }
+      }
+      return lines;
+    };
+    for (let k = tags.length; k >= 1; k--) {
+      const extra = tags.length - k;
+      const widths = tags.slice(0, k).map(widthOf);
+      if (extra > 0) widths.push(widthOf(`+${extra}`));
+      if (linesNeeded(widths) <= 2) return { shown: tags.slice(0, k), extra };
+    }
+    return { shown: tags.slice(0, 1), extra: tags.length - 1 };
+  });
 
   function stars(n) {
     return '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
@@ -59,11 +100,11 @@
         {/each}{record.artist_names.length > 3 ? ' 等' : ''}
       {/if}
     </div>
-    <div class="troupes" title={troupeTags.join('、')}>
-      {#each shownTroupes as t}
+    <div class="troupes" bind:this={troupeEl} bind:clientWidth={troupeW} title={troupeTags.join('、')}>
+      {#each troupeLayout.shown as t}
         <span class="troupe-tag">{t}</span>
       {/each}
-      {#if extraTroupes > 0}<span class="troupe-tag more">+{extraTroupes}</span>{/if}
+      {#if troupeLayout.extra > 0}<span class="troupe-tag more">+{troupeLayout.extra}</span>{/if}
     </div>
     <div class="bottom">
       {#if record.address}<span class="tag venue" title={record.address}>{record.address}</span>{/if}
@@ -214,6 +255,9 @@
     padding: 1px 8px;
     white-space: nowrap;
     line-height: 1.6;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .troupe-tag.more {
     color: var(--text-muted);
