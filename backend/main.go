@@ -184,6 +184,31 @@ func caldavAuthMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 	}
 }
 
+// caldavCapabilityMiddleware advertises DAV capabilities on every CalDAV
+// response — including the 401 challenges emitted by the auth middleware.
+// Apple's CalendarAgent probes OPTIONS during account setup and requires the
+// "calendar-access" compliance class (RFC 4791 §5.2.1); go-webdav only emits
+// it from inside the handler, which auth would otherwise shield. OPTIONS is
+// answered directly (it leaks nothing) so first-contact discovery works.
+func caldavCapabilityMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Dav", "1, 3, calendar-access")
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Allow", "OPTIONS, GET, HEAD, PROPFIND, REPORT")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// caldavWellKnown redirects RFC 6764 discovery requests to the principal URL.
+// go-webdav's own well-known handling answers with 308, which some Apple
+// releases do not follow during account setup; 302 is universally supported.
+func caldavWellKnown(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/caldav/user/", http.StatusFound)
+}
+
 func main() {
 	cfg := config.Load()
 
@@ -289,10 +314,12 @@ func main() {
 	// CalDAV（只读）：让 iOS/macOS 原生日历以账户方式同步演出事件。CalDAV
 	// 同步进来的事件在本机地理编码，LOCATION 可出地图卡片——这是 ICS 订阅
 	// （Apple 对订阅源不渲染地图）做不到的。写操作在 backend 层一律 403。
-	// /.well-known/caldav 由 Handler 自行重定向到 principal。
+	// 能力头中间件在最外层（OPTIONS 直答、DAV 头对 401 也可见），其内是
+	// Basic/Bearer 鉴权，最内是 go-webdav 协议栈。
 	caldavHandler := &emcaldav.Handler{Backend: caldav.New(database), Prefix: "/caldav"}
-	r.Mount("/caldav", caldavAuthMiddleware(cfg)(caldavHandler))
-	r.Handle("/.well-known/caldav", caldavAuthMiddleware(cfg)(caldavHandler))
+	caldavStack := caldavCapabilityMiddleware(caldavAuthMiddleware(cfg)(caldavHandler))
+	r.Mount("/caldav", caldavStack)
+	r.Handle("/.well-known/caldav", caldavCapabilityMiddleware(caldavAuthMiddleware(cfg)(http.HandlerFunc(caldavWellKnown))))
 
 	// Serve uploaded covers from the uploads dir, but constrain file access to
 	// that subtree using os.Root (Go 1.24) so path traversal outside the dir
