@@ -75,6 +75,9 @@
   // 日历订阅链接（同源部署，取当前站点地址拼出完整 URL）
   let icsUrl = $state('');
   let icsCopied = $state(false);
+  // CalDAV 账户地址（iOS/macOS 原生日历，只读同步，支持地图卡片）
+  let caldavUrl = $state('');
+  let caldavCopied = $state(false);
 
   // 首页列表显示哪些演出状态（本地偏好，不进服务端设置）
   let statusFilter = $state([0, 1, 2, 3]);
@@ -244,6 +247,7 @@
     } catch (e) { /* ignore */ }
     // 令牌变了，订阅链接里的 ?token= 也要跟着刷新
     icsUrl = `${window.location.origin}${api.getICSUrl()}`;
+    caldavUrl = `${window.location.origin}/caldav/user/calendars/mujian/`;
     try {
       const payload = {
         theme: currentTheme,
@@ -412,6 +416,7 @@
       currentTheme = val;
     });
     icsUrl = `${window.location.origin}${api.getICSUrl()}`;
+    caldavUrl = `${window.location.origin}/caldav/user/calendars/mujian/`;
     statusFilter = loadStatusFilter();
     jumpNowPref = !!loadJsonPref('mujian:home_jump_now', false);
     load();
@@ -541,7 +546,9 @@
 {#snippet calendarCard()}
 <div class="card sec">
       <h3>日历</h3>
-      <p class="hint" style="margin-bottom: 12px;">将演出记录同步到系统日历：下载 .ics 文件导入，或复制订阅链接添加到日历应用（如 Apple 日历 → 订阅日历），内容会随记录更新</p>
+      <p class="hint" style="margin-bottom: 12px;">
+        两种把演出记录同步进系统日历的方式：<b>ICS 订阅</b>——兼容性最好，Google 日历 / 第三方客户端均可，但 Apple 日历对订阅源一律不渲染地图（平台限制）；<b>CalDAV 账户</b>——iOS / macOS 原生日历推荐方式，事件是本地一等事件，LOCATION 显示可点地图卡片，且随记录自动增量同步。详细对比与反向代理注意事项见项目仓库 docs/calendar.md。地址含令牌，请勿公开分享
+      </p>
       <div class="cal-actions">
         <a class="btn" href={api.getICSUrl({ dl: '1' })}>⇩ 导出日历 (.ics)</a>
         <div class="cal-subscribe">
@@ -562,7 +569,26 @@
             {icsCopied ? '已复制' : '复制'}
           </button>
         </div>
-        <span class="hint">订阅链接为完整地址，可在手机 / 电脑的日历应用中直接添加订阅；该地址无鉴权，请勿公开分享</span>
+        <span class="hint">ICS 订阅链接（自动附带 ?token=，日历客户端无法自定义请求头）</span>
+        <div class="cal-subscribe" style="margin-top: 8px;">
+          <input class="input" readonly value={caldavUrl} onfocus={(e) => e.currentTarget.select()} />
+          <button
+            type="button"
+            class="btn"
+            onclick={async () => {
+              try {
+                await navigator.clipboard.writeText(caldavUrl);
+                caldavCopied = true;
+                setTimeout(() => (caldavCopied = false), 2000);
+              } catch {
+                // 剪贴板不可用时退化为选中文本手动复制
+              }
+            }}
+          >
+            {caldavCopied ? '已复制' : '复制'}
+          </button>
+        </div>
+        <span class="hint">CalDAV 账户地址（只读）：iOS「设置 → 日历 → 账户 → 其他 → 添加 CalDAV 账户」/ macOS「系统设置 → 互联网账户」，服务器只填域名，用户名随意，密码填上面的访问令牌。需 HTTPS；CalDAV 与 ICS 订阅并存会导致事件重复，配好后请退订旧订阅</span>
       </div>
     </div>
 {/snippet}

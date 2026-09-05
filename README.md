@@ -9,7 +9,7 @@
 - **演出记录** — 添加/编辑/删除演出（删除进回收站，保留 30 天可恢复），批量更新与删除，搜索与多条件筛选；关键词搜索支持空格分隔多词（AND 组合，如「牡丹亭 上海」）
 - **复制新建** — 新建演出时可搜索既往演出，勾选需要的字段一键复制（内容类字段默认勾选，时间/封面/状态/评分/座位/同行默认不勾）
 - **剧目与折子** — 剧目（剧种）档案、折子别名、手动排序；演出自动关联剧目
-- **日历视图** — 按月查看演出，支持海报显示，导出 ICS 订阅
+- **日历视图** — 按月查看演出，支持海报显示；ICS 订阅 / 导出，以及只读 CalDAV 服务端（iOS/macOS 原生日历，LOCATION 显示地图卡片），详见 [docs/calendar.md](docs/calendar.md)
 - **数据分析** — 统计总览、月度趋势、分类/城市分布、消费统计、高分推荐
 - **地图** — Leaflet 地图按城市/场馆查看演出，同场馆坐标自动对齐
 - **封面管理** — 内容哈希去重合并、未引用封面清理与回收站、统一缩略图、批量格式转换（AVIF / WebP / JPEG）
@@ -145,13 +145,14 @@ mujian/
 │           └── settings/              # 设置
 │   └── static/sw.js           # Service Worker（PWA 缓存与推送）
 ├── backend/                   # Go 后端（前端 dist 通过 go:embed 内嵌）
-│   ├── main.go                # 入口、路由挂载（/api、/mcp）、uploads 静态服务（os.Root 防护）
+│   ├── main.go                # 入口、路由挂载（/api、/mcp、/caldav）、uploads 静态服务（os.Root 防护）
 │   ├── default.pgo            # PGO profile
 │   └── internal/
 │       ├── config/            # 配置加载与设置持久化
 │       ├── db/                # SQLite 数据层
 │       ├── handlers/          # HTTP 处理器（含流式进度接口）
 │       ├── ics/               # iCalendar 导出
+│       ├── caldav/            # 只读 CalDAV 服务端（go-webdav 适配）
 │       ├── mcp/               # MCP 服务器（AI 批量查询/修改/分析工具）
 │       ├── models/            # 数据模型
 │       └── storage/           # 封面存储（本地/S3）、图片编解码、格式嗅探
@@ -188,6 +189,7 @@ mujian/
 | POST | `/dramas/{id}/zhezis/reorder` | 折子排序 |
 | GET | `/dramas/tree` | 剧目+折子结构（选择器用） |
 | GET | `/calendar` `/calendar.ics` | 月历事件 / ICS 导出 |
+| PROPFIND/REPORT | `/caldav`（`/.well-known/caldav` 自动发现） | 只读 CalDAV 日历（密码=访问令牌），见 [docs/calendar.md](docs/calendar.md) |
 | GET | `/stats` `/dashboard` | 统计 / 仪表盘 |
 | GET | `/autocomplete/{field}` `/field/{field}/{value}` | 字段补全 / 字段筛选 |
 | GET/PUT | `/settings` | 读取 / 更新设置 |
