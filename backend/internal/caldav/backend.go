@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	stdpath "path"
 	"strings"
 	"time"
 
@@ -28,13 +29,18 @@ import (
 
 // Path layout (must stay consistent with Handler.Prefix = "/caldav" in main.go;
 // go-webdav classifies resources by counting path segments below the prefix).
+//
+// Collection paths end with "/" per CalDAV convention. Apple Calendar normalizes
+// collection URLs with a trailing slash when refreshing, so hrefs we advertise
+// must match what it will request — and all incoming paths are compared via
+// path.Clean so both slashed and unslashed forms resolve.
 const (
 	// PrincipalPath identifies the CalDAV user principal.
 	PrincipalPath = "/caldav/user/"
 	// HomeSetPath is the calendar-home-set container.
 	HomeSetPath = "/caldav/user/calendars/"
 	// CalendarPath is the single exposed calendar collection.
-	CalendarPath = "/caldav/user/calendars/mujian"
+	CalendarPath = "/caldav/user/calendars/mujian/"
 	// calendarDisplayName is shown as the calendar name in Calendar.app.
 	calendarDisplayName = "幕间"
 )
@@ -69,10 +75,11 @@ func (b *Backend) ListCalendars(ctx context.Context) ([]emcaldav.Calendar, error
 	return []emcaldav.Calendar{b.calendar()}, nil
 }
 
-// GetCalendar implements emcaldav.Backend.
-func (b *Backend) GetCalendar(ctx context.Context, path string) (*emcaldav.Calendar, error) {
-	if path != CalendarPath {
-		return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar %q not found", path))
+// GetCalendar implements emcaldav.Backend. Path comparison is Clean-normalized
+// so Apple's trailing-slash collection requests match the canonical href.
+func (b *Backend) GetCalendar(ctx context.Context, p string) (*emcaldav.Calendar, error) {
+	if stdpath.Clean(p) != stdpath.Clean(CalendarPath) {
+		return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar %q not found", p))
 	}
 	cal := b.calendar()
 	return &cal, nil
@@ -87,15 +94,30 @@ func (b *Backend) calendar() emcaldav.Calendar {
 	}
 }
 
-// GetCalendarObject implements emcaldav.Backend. Path is "<CalendarPath>/<id>.ics".
-func (b *Backend) GetCalendarObject(ctx context.Context, path string, req *emcaldav.CalendarCompRequest) (*emcaldav.CalendarObject, error) {
-	id, ok := objectID(path)
+// GetCalendarObject implements emcaldav.Backend. Object paths are
+// "<CalendarPath><id>.ics". A GET/PROPFIND on the collection itself (browsers do
+// this; Apple never does) falls back to serving the whole calendar as one
+// object so the URL is inspectable instead of a bare 404.
+func (b *Backend) GetCalendarObject(ctx context.Context, p string, req *emcaldav.CalendarCompRequest) (*emcaldav.CalendarObject, error) {
+	if stdpath.Clean(p) == stdpath.Clean(CalendarPath) {
+		recs, zheziNames, err := b.loadRecords(ctx)
+		if err != nil {
+			return nil, err
+		}
+		text := ics.GenerateCalendar(recs, b.DB.Location(), zheziNames)
+		co, err := calendarObjectFromICS(CalendarPath, text, time.Now())
+		if err != nil {
+			return nil, err
+		}
+		return &co, nil
+	}
+	id, ok := objectID(p)
 	if !ok {
-		return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar object %q not found", path))
+		return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar object %q not found", p))
 	}
 	rec, err := b.DB.GetRecord(id)
 	if err != nil {
-		return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar object %q not found", path))
+		return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar object %q not found", p))
 	}
 	names, err := b.DB.GetZheziNames(rec.ZheziIDs)
 	if err != nil {
@@ -184,12 +206,13 @@ func filterByTimeRange(recs []models.Record, start, end time.Time) []models.Reco
 	return out
 }
 
-// objectID extracts the record id from "<CalendarPath>/<id>.ics".
-func objectID(path string) (string, bool) {
-	if !strings.HasPrefix(path, CalendarPath+"/") {
+// objectID extracts the record id from "<CalendarPath><id>.ics".
+func objectID(p string) (string, bool) {
+	clean := stdpath.Clean(p)
+	if !strings.HasPrefix(clean, CalendarPath) {
 		return "", false
 	}
-	name := strings.TrimPrefix(path, CalendarPath+"/")
+	name := strings.TrimPrefix(clean, CalendarPath)
 	if !strings.HasSuffix(name, ".ics") || strings.Contains(name, "/") || name == ".ics" {
 		return "", false
 	}
@@ -228,14 +251,24 @@ func (b *Backend) toCalendarObjects(recs []models.Record, zheziNames map[string]
 // content-derived ETag (so client-side change detection works on edits).
 func (b *Backend) toCalendarObject(rec models.Record, zheziNames map[string]string) (emcaldav.CalendarObject, error) {
 	text := ics.EventCalendar(rec, b.DB.Location(), zheziNames)
+	co, err := calendarObjectFromICS(CalendarPath+rec.ID+".ics", text, time.Unix(rec.Date, 0))
+	if err != nil {
+		return emcaldav.CalendarObject{}, err
+	}
+	return co, nil
+}
+
+// calendarObjectFromICS parses rendered ICS text into a CalendarObject with a
+// content-derived ETag (first 16 bytes of SHA-256, quoted per RFC 7232).
+func calendarObjectFromICS(p, text string, modTime time.Time) (emcaldav.CalendarObject, error) {
 	cal, err := ical.NewDecoder(strings.NewReader(text)).Decode()
 	if err != nil {
 		return emcaldav.CalendarObject{}, fmt.Errorf("caldav: re-parsing generated ics: %w", err)
 	}
 	sum := sha256.Sum256([]byte(text))
 	return emcaldav.CalendarObject{
-		Path:          CalendarPath + "/" + rec.ID + ".ics",
-		ModTime:       time.Unix(rec.Date, 0),
+		Path:          p,
+		ModTime:       modTime,
 		ContentLength: int64(len(text)),
 		ETag:          `"` + hex.EncodeToString(sum[:16]) + `"`,
 		Data:          cal,

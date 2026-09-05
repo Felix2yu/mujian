@@ -75,7 +75,7 @@ func TestListCalendarObjects(t *testing.T) {
 		t.Fatalf("got %d objects, want 1", len(first))
 	}
 	co := first[0]
-	if co.Path != CalendarPath+"/rec-1.ics" {
+	if co.Path != CalendarPath+"rec-1.ics" {
 		t.Errorf("path = %q", co.Path)
 	}
 	if !strings.Contains(co.ETag, `"`) {
@@ -107,7 +107,7 @@ func TestGetCalendarObjectRoundTrip(t *testing.T) {
 	if err := b.DB.UpsertRecord(testRecord("rec-geo", "地理测试", at)); err != nil {
 		t.Fatalf("UpsertRecord: %v", err)
 	}
-	co, err := b.GetCalendarObject(ctx, CalendarPath+"/rec-geo.ics", nil)
+	co, err := b.GetCalendarObject(ctx, CalendarPath+"rec-geo.ics", nil)
 	if err != nil {
 		t.Fatalf("GetCalendarObject: %v", err)
 	}
@@ -120,11 +120,11 @@ func TestGetCalendarObjectNotFound(t *testing.T) {
 	b := newTestBackend(t)
 	ctx := context.Background()
 	for _, p := range []string{
-		CalendarPath + "/missing.ics",
-		CalendarPath + "/../etc/passwd.ics",
-		CalendarPath + "/sub/dir.ics",
+		CalendarPath + "missing.ics",
+		CalendarPath + "../etc/passwd.ics",
+		CalendarPath + "sub/dir.ics",
 		"/other/calendars/mujian/rec-1.ics",
-		CalendarPath,
+		"/caldav/user/calendars/other/",
 	} {
 		if _, err := b.GetCalendarObject(ctx, p, nil); err == nil {
 			t.Errorf("GetCalendarObject(%q) should fail", p)
@@ -184,13 +184,37 @@ func TestReadOnlyRejections(t *testing.T) {
 	b := newTestBackend(t)
 	ctx := context.Background()
 	cal := ical.NewCalendar()
-	if _, err := b.PutCalendarObject(ctx, CalendarPath+"/x.ics", cal, nil); err == nil {
+	if _, err := b.PutCalendarObject(ctx, CalendarPath+"x.ics", cal, nil); err == nil {
 		t.Error("PutCalendarObject should be rejected")
 	}
-	if err := b.DeleteCalendarObject(ctx, CalendarPath+"/x.ics"); err == nil {
+	if err := b.DeleteCalendarObject(ctx, CalendarPath+"x.ics"); err == nil {
 		t.Error("DeleteCalendarObject should be rejected")
 	}
 	if err := b.CreateCalendar(ctx, &emcaldav.Calendar{Path: HomeSetPath + "other"}); err == nil {
 		t.Error("CreateCalendar should be rejected")
+	}
+}
+
+// Apple Calendar normalizes collection URLs with a trailing slash when
+// refreshing; both forms must resolve to the calendar (the unslashed-refresh
+// mismatch is what produced "calendar not found on server" previously).
+func TestGetCalendarSlashTolerance(t *testing.T) {
+	b := newTestBackend(t)
+	ctx := context.Background()
+	for _, p := range []string{
+		CalendarPath,
+		CalendarPath[:len(CalendarPath)-1], // no trailing slash
+	} {
+		cal, err := b.GetCalendar(ctx, p)
+		if err != nil {
+			t.Errorf("GetCalendar(%q) = %v, want success", p, err)
+			continue
+		}
+		if cal.Name != calendarDisplayName {
+			t.Errorf("GetCalendar(%q).Name = %q", p, cal.Name)
+		}
+	}
+	if _, err := b.GetCalendar(ctx, "/caldav/user/calendars/other/"); err == nil {
+		t.Error("GetCalendar(other) should fail")
 	}
 }
