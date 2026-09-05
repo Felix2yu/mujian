@@ -46,10 +46,16 @@ func TestGenerateCalendar(t *testing.T) {
 		"END:VEVENT\r\n",
 		"END:VCALENDAR\r\n",
 	} {
-		if !strings.Contains(out, want) {
+		if !strings.Contains(unfold(out), want) {
 			t.Errorf("calendar missing %q\n---\n%s", want, out)
 		}
 	}
+}
+
+// unfold rejoins RFC 5545 folded continuation lines ("\r\n " -> "") so tests
+// can match logical content lines regardless of 75-octet folding.
+func unfold(s string) string {
+	return strings.ReplaceAll(s, "\r\n ", "")
 }
 
 func TestGenerateCalendarMinimalRecord(t *testing.T) {
@@ -90,6 +96,43 @@ func TestGenerateCalendarGeo(t *testing.T) {
 	}
 	if !strings.Contains(out, "GEO:31.230400;121.473700\r\n") {
 		t.Errorf("GEO should carry lat;lon:\n%s", out)
+	}
+	// Apple structured location: URI-valued with a geo: value and X-TITLE
+	// matching the venue (matches Apple Calendar's own export format).
+	wantLoc := "X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-APPLE-RADIUS=100;X-TITLE=\"上海大剧院\":geo:31.230400,121.473700\r\n"
+	if !strings.Contains(unfold(out), wantLoc) {
+		t.Errorf("X-APPLE-STRUCTURED-LOCATION should be %q, got:\n%s", wantLoc, out)
+	}
+}
+
+// Without an address the structured location is emitted without X-TITLE.
+func TestGenerateCalendarStructuredLocationNoAddress(t *testing.T) {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	rec := models.Record{
+		ID:         "rec-geo2",
+		Name:       "地理测试",
+		Coordinate: &models.Coordinate{Latitude: 31.2304, Longitude: 121.4737},
+		Date:       time.Date(2026, 9, 1, 19, 30, 0, 0, loc).Unix(),
+	}
+	out := GenerateCalendar([]models.Record{rec}, loc, nil)
+	want := "X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-APPLE-RADIUS=100:geo:31.230400,121.473700\r\n"
+	if !strings.Contains(unfold(out), want) {
+		t.Errorf("structured location without address should be %q, got:\n%s", want, out)
+	}
+}
+
+// foldICSLine must keep every line within 75 octets and never split a UTF-8
+// rune (CJK text is 3 bytes per character).
+func TestFoldICSLine(t *testing.T) {
+	long := "DESCRIPTION:" + strings.Repeat("昆", 100)
+	for _, line := range strings.Split(foldICSLine(long), "\r\n") {
+		if len(line) > 75 {
+			t.Errorf("folded line exceeds 75 octets (%d): %q", len(line), line)
+		}
+	}
+	unfolded := unfold(foldICSLine(long))
+	if unfolded != long {
+		t.Errorf("folding must be lossless:\n got %q\nwant %q", unfolded, long)
 	}
 }
 
@@ -138,7 +181,7 @@ func TestGenerateCalendarZhezi(t *testing.T) {
 	names := map[string]string{"z1": "游园", "z2": "惊梦"}
 	out := GenerateCalendar([]models.Record{rec}, loc, names)
 	want := "DESCRIPTION:剧目: 游园惊梦\\n折子: 游园\\, 惊梦\\n演员: 单雯\\n剧团: 上海昆剧团\r\n"
-	if !strings.Contains(out, want) {
+	if !strings.Contains(unfold(out), want) {
 		t.Errorf("DESCRIPTION with 折子 should be %q, got:\n%s", want, out)
 	}
 }
@@ -160,7 +203,7 @@ func TestGenerateCalendarZheziNoNames(t *testing.T) {
 	if strings.Contains(out, "折子:") {
 		t.Errorf("no 折子 line expected when name map is nil:\n%s", out)
 	}
-	if !strings.Contains(out, "DESCRIPTION:剧目: 游园惊梦\\n演员: 单雯\\n剧团: 上海昆剧团\r\n") {
+	if !strings.Contains(unfold(out), "DESCRIPTION:剧目: 游园惊梦\\n演员: 单雯\\n剧团: 上海昆剧团\r\n") {
 		t.Errorf("DESCRIPTION should omit 折子 but keep the rest:\n%s", out)
 	}
 }
@@ -209,6 +252,31 @@ func TestEscapeICS(t *testing.T) {
 		if got := escapeICS(in); got != "a\\nb" {
 			t.Errorf("escapeICS(%q) = %q, want %q", in, got, "a\\nb")
 		}
+	}
+}
+
+// EventCalendar renders one record as a standalone VCALENDAR with a
+// deterministic DTSTAMP (the CalDAV ETag hashes this rendering).
+func TestEventCalendar(t *testing.T) {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	rec := models.Record{
+		ID:      "rec-ev",
+		Name:    "单事件",
+		Address: "上海大剧院",
+		Date:    time.Date(2026, 9, 11, 19, 30, 0, 0, loc).Unix(),
+	}
+	out := EventCalendar(rec, loc, nil)
+	if got := strings.Count(out, "BEGIN:VEVENT"); got != 1 {
+		t.Errorf("expected exactly one VEVENT, got %d:\n%s", got, out)
+	}
+	if !strings.Contains(unfold(out), "DTSTAMP;TZID=Asia/Shanghai:20260911T193000\r\n") {
+		t.Errorf("DTSTAMP missing or non-deterministic:\n%s", out)
+	}
+	if !strings.Contains(unfold(out), "DTSTART;TZID=Asia/Shanghai:20260911T193000\r\n") {
+		t.Errorf("DTSTART wrong:\n%s", out)
+	}
+	if out2 := EventCalendar(rec, loc, nil); out2 != out {
+		t.Error("EventCalendar output must be deterministic for the same record")
 	}
 }
 

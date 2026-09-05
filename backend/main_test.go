@@ -105,3 +105,50 @@ func TestAuthMiddlewareExemptions(t *testing.T) {
 		t.Errorf("POST /api/metrics/client should be exempt, got %d", rec.Code)
 	}
 }
+
+func caldavTestHandler(cfg *config.Config) http.Handler {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+	return caldavAuthMiddleware(cfg)(inner)
+}
+
+// Apple Calendar authenticates CalDAV with HTTP Basic; the shared token must
+// be accepted as the Basic password, and the 401 challenge must advertise
+// Basic so first-contact discovery can proceed.
+func TestCaldavAuthMiddleware(t *testing.T) {
+	cfg := &config.Config{AuthToken: "secret-token"}
+	h := caldavTestHandler(cfg)
+
+	// Basic auth with the token as password is accepted.
+	rec := doAuthReq(h, "PROPFIND", "/caldav/user/", func(r *http.Request) {
+		r.SetBasicAuth("anything", "secret-token")
+	})
+	if rec.Code != http.StatusOK {
+		t.Errorf("Basic auth with token password should pass, got %d", rec.Code)
+	}
+	// Bearer is accepted too (parity with /api).
+	rec = doAuthReq(h, "PROPFIND", "/caldav/user/", func(r *http.Request) {
+		r.Header.Set("Authorization", "Bearer secret-token")
+	})
+	if rec.Code != http.StatusOK {
+		t.Errorf("Bearer auth should pass, got %d", rec.Code)
+	}
+	// Wrong password is rejected with a Basic challenge.
+	rec = doAuthReq(h, "PROPFIND", "/caldav/user/", func(r *http.Request) {
+		r.SetBasicAuth("u", "wrong")
+	})
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("wrong Basic password must be 401, got %d", rec.Code)
+	}
+	if ch := rec.Header().Get("WWW-Authenticate"); !strings.HasPrefix(ch, `Basic realm=`) {
+		t.Errorf("401 must advertise Basic, got %q", ch)
+	}
+	// No token configured: pass-through (intranet mode).
+	open := caldavTestHandler(&config.Config{})
+	rec = doAuthReq(open, "PROPFIND", "/caldav/user/", nil)
+	if rec.Code != http.StatusOK {
+		t.Errorf("no token configured should pass through, got %d", rec.Code)
+	}
+}

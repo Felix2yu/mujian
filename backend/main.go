@@ -14,12 +14,14 @@ import (
 	"time"
 
 	"mujian/internal/backup"
+	"mujian/internal/caldav"
 	"mujian/internal/config"
 	"mujian/internal/db"
 	"mujian/internal/handlers"
 	"mujian/internal/metrics"
 	"mujian/internal/storage"
 
+	emcaldav "github.com/emersion/go-webdav/caldav"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -29,6 +31,18 @@ import (
 func fatal(format string, args ...any) {
 	slog.Error(fmt.Sprintf(format, args...))
 	os.Exit(1)
+}
+
+func init() {
+	// chi's methodMap only knows the standard HTTP methods and answers 405
+	// for anything else. WebDAV methods must be registered BEFORE any routes
+	// are added: Handle/Mount with the all-methods mask snapshot the map, so
+	// registering early is what lets PROPFIND/REPORT reach the CalDAV handler.
+	for _, m := range []string{
+		"PROPFIND", "PROPPATCH", "MKCOL", "COPY", "MOVE", "LOCK", "UNLOCK", "REPORT",
+	} {
+		chi.RegisterMethod(m)
+	}
 }
 
 // slogLogger is a structured replacement for middleware.Logger. It skips the
@@ -127,6 +141,45 @@ func authMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Write([]byte(`{"error":"unauthorized"}`))
+		})
+	}
+}
+
+// caldavAuthMiddleware guards the CalDAV endpoints. Apple Calendar authenticates
+// with HTTP Basic (the account form has no custom-header option), so the shared
+// token is accepted as the Basic password (username is ignored) — in addition to
+// the same Bearer / X-Auth-Token / ?token= forms the /api middleware accepts.
+// The 401 challenge advertises Basic so first-contact discovery works.
+func caldavAuthMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := cfg.AuthTokenValue()
+			if token == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			provided := ""
+			if user, pass, ok := r.BasicAuth(); ok {
+				provided = pass
+				_ = user
+			}
+			if provided == "" {
+				if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+					provided = strings.TrimPrefix(h, "Bearer ")
+				}
+			}
+			if provided == "" {
+				provided = r.Header.Get("X-Auth-Token")
+			}
+			if provided == "" {
+				provided = r.URL.Query().Get("token")
+			}
+			if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) == 1 {
+				next.ServeHTTP(w, r)
+				return
+			}
+			w.Header().Set("WWW-Authenticate", `Basic realm="mujian"`)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 		})
 	}
 }
@@ -232,6 +285,14 @@ func main() {
 	// （默认无鉴权，暴露面与 /api 一致，由反向代理/内网边界保护；配置
 	// MJ_AUTH_TOKEN 后与 /api 一样要求 Bearer token）。
 	r.Mount("/mcp", authMiddleware(cfg)(mujianmcp.New(database, backupMgr).HTTPHandler()))
+
+	// CalDAV（只读）：让 iOS/macOS 原生日历以账户方式同步演出事件。CalDAV
+	// 同步进来的事件在本机地理编码，LOCATION 可出地图卡片——这是 ICS 订阅
+	// （Apple 对订阅源不渲染地图）做不到的。写操作在 backend 层一律 403。
+	// /.well-known/caldav 由 Handler 自行重定向到 principal。
+	caldavHandler := &emcaldav.Handler{Backend: caldav.New(database), Prefix: "/caldav"}
+	r.Mount("/caldav", caldavAuthMiddleware(cfg)(caldavHandler))
+	r.Handle("/.well-known/caldav", caldavAuthMiddleware(cfg)(caldavHandler))
 
 	// Serve uploaded covers from the uploads dir, but constrain file access to
 	// that subtree using os.Root (Go 1.24) so path traversal outside the dir

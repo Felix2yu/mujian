@@ -12,6 +12,28 @@ import (
 // available (折子 will then be omitted from DESCRIPTION).
 func GenerateCalendar(records []models.Record, loc *time.Location, zheziNames map[string]string) string {
 	var b strings.Builder
+	writeHeader(&b, loc)
+
+	for _, rec := range records {
+		writeEvent(&b, rec, loc, zheziNames)
+	}
+
+	b.WriteString("END:VCALENDAR\r\n")
+	return b.String()
+}
+
+// EventCalendar renders a single record as a standalone VCALENDAR with one
+// VEVENT. It is the object-resource representation served by the CalDAV
+// backend, sharing the exact same event formatting as the subscription feed.
+func EventCalendar(rec models.Record, loc *time.Location, zheziNames map[string]string) string {
+	var b strings.Builder
+	writeHeader(&b, loc)
+	writeEvent(&b, rec, loc, zheziNames)
+	b.WriteString("END:VCALENDAR\r\n")
+	return b.String()
+}
+
+func writeHeader(b *strings.Builder, loc *time.Location) {
 	b.WriteString("BEGIN:VCALENDAR\r\n")
 	b.WriteString("VERSION:2.0\r\n")
 	b.WriteString("PRODID:-//Mujian//Record Tracker//CN\r\n")
@@ -37,13 +59,6 @@ func GenerateCalendar(records []models.Record, loc *time.Location, zheziNames ma
 	b.WriteString(fmt.Sprintf("TZOFFSETTO:%s%02d%02d\r\n", sign, offsetH, offsetM))
 	b.WriteString("END:STANDARD\r\n")
 	b.WriteString("END:VTIMEZONE\r\n")
-
-	for _, rec := range records {
-		writeEvent(&b, rec, loc, zheziNames)
-	}
-
-	b.WriteString("END:VCALENDAR\r\n")
-	return b.String()
 }
 
 func writeEvent(b *strings.Builder, rec models.Record, loc *time.Location, zheziNames map[string]string) {
@@ -60,20 +75,42 @@ func writeEvent(b *strings.Builder, rec models.Record, loc *time.Location, zhezi
 	endStr := end.Format("20060102T150405")
 
 	b.WriteString("BEGIN:VEVENT\r\n")
-	b.WriteString(fmt.Sprintf("UID:%s@mujian\r\n", rec.ID))
-	b.WriteString(fmt.Sprintf("DTSTART;TZID=%s:%s\r\n", loc.String(), startStr))
-	b.WriteString(fmt.Sprintf("DTEND;TZID=%s:%s\r\n", loc.String(), endStr))
-	b.WriteString(fmt.Sprintf("SUMMARY:%s\r\n", escapeICS(rec.Name)))
+	// foldICSLine enforces RFC 5545 §3.1 (max 75 octets per line); every
+	// property below goes through it since DESCRIPTION and the Apple
+	// structured-location lines routinely exceed the limit with CJK text.
+	writeLine := func(s string) {
+		b.WriteString(foldICSLine(s))
+		b.WriteString("\r\n")
+	}
+	writeLine(fmt.Sprintf("UID:%s@mujian", rec.ID))
+	// DTSTAMP must be deterministic (derived from the event time, not
+	// time.Now) so the CalDAV ETag — a hash of this rendering — stays stable
+	// across syncs instead of forcing clients to re-fetch everything.
+	writeLine(fmt.Sprintf("DTSTAMP;TZID=%s:%s", loc.String(), startStr))
+	writeLine(fmt.Sprintf("DTSTART;TZID=%s:%s", loc.String(), startStr))
+	writeLine(fmt.Sprintf("DTEND;TZID=%s:%s", loc.String(), endStr))
+	writeLine(fmt.Sprintf("SUMMARY:%s", escapeICS(rec.Name)))
 
 	if rec.Address != "" {
-		b.WriteString(fmt.Sprintf("LOCATION:%s\r\n", escapeICS(rec.Address)))
+		writeLine(fmt.Sprintf("LOCATION:%s", escapeICS(rec.Address)))
 	}
 	// GEO carries the lat/lng separately from the textual LOCATION so calendar
 	// clients can drop a map pin. RFC 5545 format is "LAT;LON".
 	if rec.Coordinate != nil {
-		b.WriteString(fmt.Sprintf("GEO:%f;%f\r\n", rec.Coordinate.Latitude, rec.Coordinate.Longitude))
-		// Apple Calendar: show map pin and "Open in Maps" link.
-		b.WriteString(fmt.Sprintf("X-APPLE-STRUCTURED-LOCATION;X-APPLE-MAPKIT-HANDLE=cn.place;X-APPLE-MAPKIT-HANDLE-TYPE=point;X-APPLE-MAPKIT-HANDLE-RECIPIENT=cn.place:geo:%f,%f\r\n", rec.Coordinate.Latitude, rec.Coordinate.Longitude))
+		writeLine(fmt.Sprintf("GEO:%f;%f", rec.Coordinate.Latitude, rec.Coordinate.Longitude))
+		// Apple's own export format: a URI-valued structured location whose
+		// value is "geo:lat,lng". X-TITLE labels the pin with the venue name.
+		// (The invented X-APPLE-MAPKIT-* parameters previously used here are
+		// not part of any Apple export and are dropped.)
+		// Note: Apple Calendar ignores these for *subscribed* feeds — maps
+		// only render when the .ics is imported into a local/iCloud calendar.
+		loc1 := fmt.Sprintf("X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-APPLE-RADIUS=100:geo:%.6f,%.6f", rec.Coordinate.Latitude, rec.Coordinate.Longitude)
+		if rec.Address != "" {
+			title := escapeICS(rec.Address)
+			title = strings.ReplaceAll(title, "\"", "\\\"")
+			loc1 = fmt.Sprintf("X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-APPLE-RADIUS=100;X-TITLE=\"%s\":geo:%.6f,%.6f", title, rec.Coordinate.Latitude, rec.Coordinate.Longitude)
+		}
+		writeLine(loc1)
 	}
 
 	var desc []string
@@ -94,11 +131,11 @@ func writeEvent(b *strings.Builder, rec models.Record, loc *time.Location, zhezi
 		// Join with a real newline and let escapeICS turn it into the ICS "\n"
 		// escape. Escaping the joined string (rather than pre-escaping items)
 		// would double-escape the separator as "\\n".
-		b.WriteString(fmt.Sprintf("DESCRIPTION:%s\r\n", escapeICS(strings.Join(desc, "\n"))))
+		writeLine(fmt.Sprintf("DESCRIPTION:%s", escapeICS(strings.Join(desc, "\n"))))
 	}
 
-	b.WriteString(fmt.Sprintf("CATEGORIES:%s\r\n", escapeICS(rec.CategoryName)))
-	b.WriteString("END:VEVENT\r\n")
+	writeLine(fmt.Sprintf("CATEGORIES:%s", escapeICS(rec.CategoryName)))
+	writeLine("END:VEVENT")
 }
 
 // zheziNameList resolves a record's 折子 ids to display names using the
@@ -115,6 +152,39 @@ func zheziNameList(ids []string, names map[string]string) []string {
 		}
 	}
 	return out
+}
+
+// foldICSLine enforces RFC 5545 §3.1: content lines longer than 75 octets are
+// split into continuations starting with a single space. Split points are
+// backed off to UTF-8 rune boundaries so CJK text is never cut mid-character.
+func foldICSLine(line string) string {
+	const maxOctets = 75
+	if len(line) <= maxOctets {
+		return line
+	}
+	var out strings.Builder
+	pos := 0
+	for pos < len(line) {
+		if pos > 0 {
+			out.WriteString("\r\n ")
+		}
+		limit := maxOctets
+		if pos > 0 {
+			limit = maxOctets - 1 // one octet is consumed by the leading space
+		}
+		end := pos + limit
+		if end > len(line) {
+			end = len(line)
+		} else if end < len(line) {
+			// Back off to a rune boundary (continuation bytes are 0b10xxxxxx).
+			for end > pos && (line[end]&0xC0) == 0x80 {
+				end--
+			}
+		}
+		out.WriteString(line[pos:end])
+		pos = end
+	}
+	return out.String()
 }
 
 func escapeICS(s string) string {
