@@ -80,6 +80,7 @@
   let aiText = $state('');
   let aiBusy = $state(false);
   let aiErr = $state('');
+  let aiDone = $state(''); // 从链接解析成功时的来源提示（面板保持展开以展示）
 
   onMount(async () => {
     try {
@@ -690,6 +691,13 @@
   // AI 填写：把模型返回的结构化字段批量映射到表单。与「从既往演出复制」同口径——
   // 只覆盖 AI 给出的字段，未提及的保持原样；演员因无法解析实体 ID，全部作为
   // 自由文本胶囊补充（entity_ids 清空）。
+  // 收起 AI 面板并清空状态提示（保留 aiText，方便再次展开继续编辑）
+  function closeAi() {
+    aiOpen = false;
+    aiErr = '';
+    aiDone = '';
+  }
+
   async function applyAi() {
     const text = aiText.trim();
     if (!text) {
@@ -698,6 +706,7 @@
     }
     aiBusy = true;
     aiErr = '';
+    aiDone = '';
     try {
       const data = await api.aiParse(text);
       const asStr = (v) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim());
@@ -721,8 +730,39 @@
       if (typeof data.price === 'number' && data.price > 0) form.price = data.price;
       if (typeof data.pay_price === 'number' && data.pay_price > 0) form.pay_price = data.pay_price;
       if (typeof data.other_cost === 'number' && data.other_cost > 0) form.other_cost = data.other_cost;
-      const plays = asArr(data.play);
-      if (plays.length) form.play = plays.join(', ');
+      // 剧目/折子：AI 只给名字，best-effort 在剧目树上按名称（含别名）匹配并
+      // 勾选档案——提交时 play 由 drama_ids 推导，必须挂上档案才真正生效。
+      // 匹配不上的名字静默跳过，由用户在剧目选择器里手动补。
+      const stripMarks = (s) => s.replace(/[《》〈〉「」]/g, '').trim();
+      const plays = asArr(data.play).map(stripMarks).filter(Boolean);
+      for (const p of plays) {
+        const d = dramaTree.find((dd) => {
+          const dn = stripMarks(dd.name || '');
+          return (
+            (dn && (dn === p || (dn.length >= 2 && (dn.includes(p) || p.includes(dn))))) ||
+            (dd.aliases || []).some((a) => stripMarks(a) === p)
+          );
+        });
+        if (d && !form.drama_ids.includes(d.id)) form.drama_ids = [...form.drama_ids, d.id];
+      }
+      const zheziNames = asArr(data.zhezi_names).map(stripMarks).filter(Boolean);
+      if (zheziNames.length) {
+        // 已选剧目时只在这些剧目的折子里找，避免跨剧重名折子误挂
+        const pool = form.drama_ids.length
+          ? dramaTree.filter((d) => form.drama_ids.includes(d.id))
+          : dramaTree;
+        for (const d of pool) {
+          for (const z of d.zhezis || []) {
+            const zn = stripMarks(z.name || '');
+            const hit =
+              (zn && zheziNames.includes(zn)) ||
+              (z.aliases || []).some((a) => zheziNames.includes(stripMarks(a)));
+            if (hit && !form.zhezi_ids.includes(z.id)) {
+              form.zhezi_ids = [...form.zhezi_ids, z.id];
+            }
+          }
+        }
+      }
       const guests = asArr(data.guest);
       if (guests.length) form.guest = guests.join(', ');
       if (typeof data.active_status === 'number') {
@@ -744,7 +784,13 @@
         ];
       }
       aiErr = '';
-      aiOpen = false; // 填充完成后收起面板
+      const src = data._source || {};
+      if (src.url) {
+        // 链接场景保留面板，让用户确认抓取来源；纯文本场景仍自动收起
+        aiDone = src.title ? `已读取网页《${src.title}》并填充识别出的字段` : '已读取链接网页并填充识别出的字段';
+      } else {
+        aiOpen = false; // 填充完成后收起面板
+      }
     } catch (e) {
       aiErr = e.message || 'AI 解析失败';
     } finally {
@@ -1016,21 +1062,22 @@
       {/if}
     </div>
     {#if aiOpen}
-      <p class="ai-hint muted">把购票短信 / 宣传文案 / 观演记录等文本粘贴到下方，点「用 AI 解析并填充」即可把内容批量填入对应字段（只覆盖识别出的字段，未提及的保持不变）。</p>
+      <p class="ai-hint muted">把购票短信 / 宣传文案 / 观演记录等文本粘贴到下方，也可以直接粘贴演出推文链接（微信公众号文章等），AI 会先抓取网页正文，再从内容中提取时间、演员、剧目、折子等字段批量填入（只覆盖识别出的字段，未提及的保持不变）。</p>
       <textarea
         class="input ai-text"
         rows="5"
         bind:value={aiText}
-        placeholder="例如：大麦网 您已购票 昆剧《牡丹亭》 2026-05-01 19:30 上海大剧院 票价 580 实付 580 主演 张军、沈昳丽 江苏昆山当代昆剧院…"
+        placeholder="支持购票短信、演出推文链接（如 https://mp.weixin.qq.com/s/…）或宣传文案，例如：大麦网 您已购票 昆剧《牡丹亭》 2026-05-01 19:30 上海大剧院 票价 580 实付 580 主演 张军、沈昳丽 江苏昆山当代昆剧院…"
         spellcheck="false"
       ></textarea>
       <div class="ai-actions">
         <button type="button" class="btn" disabled={aiBusy} onclick={applyAi}>
           {aiBusy ? '解析中…' : '用 AI 解析并填充'}
         </button>
-        <button type="button" class="btn ghost" disabled={aiBusy} onclick={() => (aiOpen = false)}>收起</button>
+        <button type="button" class="btn ghost" disabled={aiBusy} onclick={closeAi}>收起</button>
       </div>
       {#if aiErr}<div class="banner error">⚠ {aiErr}</div>{/if}
+      {#if aiDone}<div class="banner success">✓ {aiDone}</div>{/if}
     {/if}
   </div>
   {/if}
