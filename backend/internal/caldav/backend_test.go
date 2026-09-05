@@ -218,3 +218,52 @@ func TestGetCalendarSlashTolerance(t *testing.T) {
 		t.Error("GetCalendar(other) should fail")
 	}
 }
+
+// GET/PROPFIND 打在集合本身时回退为返回整个日历，而不是 404。
+func TestGetCalendarObjectCollectionFallback(t *testing.T) {
+	b := newTestBackend(t)
+	ctx := context.Background()
+	at := time.Date(2026, 9, 11, 19, 30, 0, 0, time.UTC)
+	if err := b.DB.UpsertRecord(testRecord("rec-coll", "集合回退", at)); err != nil {
+		t.Fatalf("UpsertRecord: %v", err)
+	}
+	co, err := b.GetCalendarObject(ctx, CalendarPath, nil)
+	if err != nil {
+		t.Fatalf("GetCalendarObject(collection): %v", err)
+	}
+	if len(co.Data.Events()) == 0 {
+		t.Fatal("collection fallback should embed all events")
+	}
+	// 带尾斜杠的集合路径同样命中回退分支。
+	if _, err := b.GetCalendarObject(ctx, CalendarPath+"/", nil); err != nil {
+		t.Fatalf("GetCalendarObject(trailing slash): %v", err)
+	}
+}
+
+// 记录携带折子 id 时，单对象 GET 会批量解析折子名并写进 DESCRIPTION。
+func TestGetCalendarObjectResolvesZheziNames(t *testing.T) {
+	b := newTestBackend(t)
+	ctx := context.Background()
+	d, err := b.DB.SaveDrama(models.Drama{Name: "牡丹亭"})
+	if err != nil {
+		t.Fatalf("SaveDrama: %v", err)
+	}
+	z, err := b.DB.CreateZhezi(models.Zhezi{DramaID: d.ID, Name: "游园"})
+	if err != nil {
+		t.Fatalf("CreateZhezi: %v", err)
+	}
+	rec := testRecord("rec-zhezi", "折子测试", time.Date(2026, 9, 12, 14, 0, 0, 0, time.UTC))
+	// 重复 id 顺带覆盖 collectZheziIDs 的去重分支。
+	rec.ZheziIDs = []string{z.ID, z.ID}
+	if err := b.DB.UpsertRecord(rec); err != nil {
+		t.Fatalf("UpsertRecord: %v", err)
+	}
+	co, err := b.GetCalendarObject(ctx, CalendarPath+"rec-zhezi.ics", nil)
+	if err != nil {
+		t.Fatalf("GetCalendarObject: %v", err)
+	}
+	desc, err := co.Data.Events()[0].Props.Text(ical.PropDescription)
+	if err != nil || !strings.Contains(desc, "游园") {
+		t.Fatalf("DESCRIPTION should contain 折子 name 游园, got %q (%v)", desc, err)
+	}
+}

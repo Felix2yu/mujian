@@ -346,3 +346,57 @@ func TestBackupSettingsRoundTrip(t *testing.T) {
 		t.Errorf("keep=0 should clamp to minimum 1, got %d", c2.GetBackupKeep())
 	}
 }
+
+func TestGetAISettingsSnapshot(t *testing.T) {
+	c := &Config{}
+	c.mu.Lock()
+	c.AIEnabled = true
+	c.AIBaseURL = "https://api.example.com"
+	c.AIAPIKey = "sk-test"
+	c.AIModel = "glm-4"
+	c.mu.Unlock()
+
+	ai := c.GetAISettings()
+	if !ai.Enabled || ai.BaseURL != "https://api.example.com" || ai.APIKey != "sk-test" || ai.Model != "glm-4" {
+		t.Fatalf("GetAISettings: %+v", ai)
+	}
+
+	// 零值配置返回全部默认空值。
+	empty := (&Config{}).GetAISettings()
+	if empty.Enabled || empty.BaseURL != "" || empty.APIKey != "" || empty.Model != "" {
+		t.Fatalf("empty AISettings: %+v", empty)
+	}
+}
+
+func TestGetBackupFormatAndRemote(t *testing.T) {
+	// 空格式回退 "db"。
+	if got := (&Config{}).GetBackupFormat(); got != "db" {
+		t.Fatalf("default backup format = %q, want db", got)
+	}
+	if got := (&Config{BackupFormat: "zip"}).GetBackupFormat(); got != "zip" {
+		t.Fatalf("backup format = %q, want zip", got)
+	}
+	if (&Config{}).GetBackupRemote() {
+		t.Fatal("default BackupRemote should be false")
+	}
+	if !(&Config{BackupRemote: true}).GetBackupRemote() {
+		t.Fatal("BackupRemote=true should be reported")
+	}
+}
+
+func TestGetEnvIntAndB2S(t *testing.T) {
+	t.Setenv("MUJIAN_TEST_INT", "42")
+	if got := getEnvInt("MUJIAN_TEST_INT", 7); got != 42 {
+		t.Fatalf("getEnvInt valid = %d, want 42", got)
+	}
+	t.Setenv("MUJIAN_TEST_INT", "not-a-number")
+	if got := getEnvInt("MUJIAN_TEST_INT", 7); got != 7 {
+		t.Fatalf("getEnvInt invalid should fall back, got %d", got)
+	}
+	if got := getEnvInt("MUJIAN_TEST_UNSET", 7); got != 7 {
+		t.Fatalf("getEnvInt unset = %d, want 7", got)
+	}
+	if b2s(true) != "true" || b2s(false) != "false" {
+		t.Fatal("b2s mapping broken")
+	}
+}

@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"mujian/internal/models"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -81,8 +82,8 @@ func (s *Server) handleRestoreFromBackup(ctx context.Context, req *mcp.CallToolR
 		return errResult("读取备份失败：%v", err)
 	}
 
-	// 根据文件扩展名处理
-	switch ext := in.File[len(in.File)-4:]; ext {
+	// 根据文件扩展名处理（filepath.Ext 保留前导点，".json" 不会被切成 "json"）
+	switch ext := filepath.Ext(in.File); ext {
 	case ".json":
 		var exportData models.ExportData
 		if err := json.Unmarshal(data, &exportData); err != nil {

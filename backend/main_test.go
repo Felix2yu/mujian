@@ -152,3 +152,41 @@ func TestCaldavAuthMiddleware(t *testing.T) {
 		t.Errorf("no token configured should pass through, got %d", rec.Code)
 	}
 }
+
+// caldavCapabilityMiddleware advertises the DAV capability header on every
+// response (including 401 challenges) and answers OPTIONS directly with 204.
+func TestCaldavCapabilityMiddleware(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	h := caldavCapabilityMiddleware(inner)
+
+	// 普通请求透传，但带上 Dav 头。
+	rec := doAuthReq(h, "PROPFIND", "/caldav/user/", nil)
+	if rec.Code != http.StatusOK {
+		t.Errorf("PROPFIND passthrough: got %d, want 200", rec.Code)
+	}
+	if got := rec.Header().Get("Dav"); !strings.Contains(got, "calendar-access") {
+		t.Errorf("Dav header should advertise calendar-access, got %q", got)
+	}
+
+	// OPTIONS 直接由中间件应答 204 + Allow 清单。
+	rec = doAuthReq(h, "OPTIONS", "/caldav/user/", nil)
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("OPTIONS: got %d, want 204", rec.Code)
+	}
+	if allow := rec.Header().Get("Allow"); !strings.Contains(allow, "PROPFIND") {
+		t.Errorf("Allow header should list PROPFIND, got %q", allow)
+	}
+}
+
+// caldavWellKnown redirects RFC 6764 discovery to the principal URL with 302.
+func TestCaldavWellKnown(t *testing.T) {
+	rec := doAuthReq(http.HandlerFunc(caldavWellKnown), "GET", "/.well-known/caldav", nil)
+	if rec.Code != http.StatusFound {
+		t.Errorf("well-known: got %d, want 302", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/caldav/user/" {
+		t.Errorf("well-known Location: got %q, want /caldav/user/", loc)
+	}
+}
