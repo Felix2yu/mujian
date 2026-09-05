@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -23,6 +24,12 @@ type DB struct {
 	// Prepared statements, prepared once at open time and reused for every
 	// execution (database/sql binds them to the right connection / tx).
 	stmtUpsertRecord *sql.Stmt
+	// artistNameCache maps artist name/alias → artist ID so resolveArtistByName
+	// does not scan the whole artists table (and its aliases JSON) on every
+	// unmatched name during imports. Guarded by mu; entries are dropped
+	// whenever that artist's row is saved, merged or deleted.
+	mu              sync.RWMutex
+	artistNameCache map[string]string
 }
 
 func New(dbPath string) (*DB, error) {
@@ -51,7 +58,8 @@ func New(dbPath string) (*DB, error) {
 		"&_txlock=immediate"+
 		"&_pragma=foreign_keys(0)"+
 		"&_pragma=synchronous(NORMAL)"+
-		"&_pragma=cache_size(-8000)")
+		"&_pragma=cache_size(-8000)"+
+		"&_pragma=mmap_size(268435456)")
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
@@ -67,7 +75,7 @@ func New(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
 
-	db := &DB{conn: conn, loc: time.UTC}
+	db := &DB{conn: conn, loc: time.UTC, artistNameCache: map[string]string{}}
 
 	if err := db.migrate(); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
@@ -329,8 +337,12 @@ func (db *DB) migrate() error {
 	if err := db.addColumn("records", "deleted_at", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
-	// Backfill total_cost for existing records.
-	if _, err := db.conn.Exec(`UPDATE records SET total_cost = CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)`); err != nil {
+	// Backfill total_cost for existing records. Guarded so startup only rewrites
+	// rows whose stored value is out of sync — an unconditional UPDATE here would
+	// touch every row (and inflate the WAL) on every boot.
+	if _, err := db.conn.Exec(`UPDATE records SET total_cost =
+			CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)
+		WHERE total_cost != CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END + COALESCE(other_cost, 0)`); err != nil {
 		return fmt.Errorf("backfill records.total_cost: %w", err)
 	}
 	if err := db.addColumn("categories", "sort_order", "INTEGER NOT NULL DEFAULT 0"); err != nil {
@@ -486,6 +498,33 @@ func (db *DB) migrateZheziRelations() error {
 	return nil
 }
 
+// cachedArtistID returns the cached artist id for a name/alias.
+func (db *DB) cachedArtistID(name string) (string, bool) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	id, ok := db.artistNameCache[name]
+	return id, ok
+}
+
+// cacheArtistName remembers name → id for future resolves.
+func (db *DB) cacheArtistName(name, id string) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.artistNameCache[name] = id
+}
+
+// invalidateArtistCache drops every cached name that points at artist id, so
+// renames / merges / deletes are reflected on the next resolve.
+func (db *DB) invalidateArtistCache(id string) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	for name, aid := range db.artistNameCache {
+		if aid == id {
+			delete(db.artistNameCache, name)
+		}
+	}
+}
+
 // resolveArtistByName finds an existing artist by exact name (or alias), or
 // creates a new one. Used by the legacy artist_names migration and by the
 // upsert path so free-typed actor names become first-class entities.
@@ -495,14 +534,21 @@ func (db *DB) migrateZheziRelations() error {
 // missing artist writes to the table, and doing so on a pool connection while
 // the import transaction holds the write lock self-deadlocks until
 // busy_timeout expires (SQLITE_BUSY).
+//
+// Name/alias lookups are served from the in-memory artistNameCache when warm;
+// the alias fallback below is the O(artists-table) path that warms it.
 func (db *DB) resolveArtistByName(exec sqlExecutor, name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", fmt.Errorf("empty artist name")
 	}
+	if id, ok := db.cachedArtistID(name); ok {
+		return id, nil
+	}
 	// Exact name match first.
 	var id string
 	if err := exec.QueryRow("SELECT id FROM artists WHERE name = ?", name).Scan(&id); err == nil {
+		db.cacheArtistName(name, id)
 		return id, nil
 	}
 	// Alias match.
@@ -518,6 +564,7 @@ func (db *DB) resolveArtistByName(exec sqlExecutor, name string) (string, error)
 		}
 		for _, a := range unmarshalStrings(aliases) {
 			if a == name {
+				db.cacheArtistName(name, aid)
 				return aid, nil
 			}
 		}
@@ -531,6 +578,7 @@ func (db *DB) resolveArtistByName(exec sqlExecutor, name string) (string, error)
 	); err != nil {
 		return "", err
 	}
+	db.cacheArtistName(name, id)
 	return id, nil
 }
 
@@ -2671,6 +2719,8 @@ func (db *DB) SaveArtist(a models.Artist) (*models.Artist, error) {
 	if err != nil {
 		return nil, fmt.Errorf("save artist: %w", err)
 	}
+	// The row's name/aliases may have changed; drop stale cache entries.
+	db.invalidateArtistCache(a.ID)
 	return db.GetArtist(a.ID)
 }
 
@@ -2688,7 +2738,11 @@ func (db *DB) DeleteArtist(id string) error {
 	if _, err := tx.Exec("DELETE FROM artists WHERE id = ?", id); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	db.invalidateArtistCache(id)
+	return nil
 }
 
 func (db *DB) CreateZhezi(z models.Zhezi) (*models.Zhezi, error) {

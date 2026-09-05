@@ -111,6 +111,10 @@ func (db *DB) MergeArtists(sourceID, targetID string) (*MergeArtistsResult, erro
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
+	// The source row is gone and the target gained aliases; drop stale
+	// name/alias cache entries for both.
+	db.invalidateArtistCache(sourceID)
+	db.invalidateArtistCache(targetID)
 	return res, nil
 }
 
