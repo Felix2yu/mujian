@@ -49,10 +49,10 @@ func TestQueryHandlers(t *testing.T) {
 	}
 
 	// list_artists / list_dramas / get_stats。
-	if _, _, err := s.handleListArtists(ctx, nil, noInput{}); err != nil {
+	if _, _, err := s.handleListArtists(ctx, nil, ListQueryInput{}); err != nil {
 		t.Fatalf("list_artists: %v", err)
 	}
-	if _, _, err := s.handleListDramas(ctx, nil, noInput{}); err != nil {
+	if _, _, err := s.handleListDramas(ctx, nil, ListQueryInput{}); err != nil {
 		t.Fatalf("list_dramas: %v", err)
 	}
 	if _, _, err := s.handleGetStats(ctx, nil, noInput{}); err != nil {

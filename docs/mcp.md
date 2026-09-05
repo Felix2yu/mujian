@@ -136,20 +136,23 @@ Authorization: Bearer <你的令牌>
 
 ## 工具清单
 
-### 查询 / 分析（10 个）
+### 查询 / 分析（13 个）
 
 | 工具                       | 说明                                                                                                                                |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `search_records`         | 多条件筛选演出：关键词（名称/城市/场馆/剧团/备注/演员）、`artist_name`/`artist_id`、`drama_name`/`drama_id`、`zhezi_id`、城市、分类、年月或起止日期；默认返回 50 条，可用 `limit` 调整 |
+| `search_records`         | 多条件筛选演出：关键词（名称/城市/场馆/剧团/备注/演员）、`artist_name`/`artist_id`、`drama_name`/`drama_id`、`zhezi_id`、城市、分类、年月或起止日期，另支持渠道/剧团/评分与票价区间/演出状态/`missing`（查空字段，数据卫生）/`compact`（精简投影）/`limit`+`offset` 分页 |
 | `get_record`             | 按 ID 取单条完整详情（含关联剧目/折子/演员）                                                                                                         |
-| `list_artists`           | 全部演员档案（含别名、演出次数）                                                                                                                  |
+| `list_artists`           | 全部演员档案（含别名、演出次数）；`query` 按姓名/别名子串过滤                                                                                                |
 | `get_artist_detail`      | 演员详情 + 关联演出；支持 `id` 或姓名/别名                                                                                                        |
-| `list_dramas`            | 全部剧目档案（剧种、折子数、演出次数）                                                                                                               |
+| `list_dramas`            | 全部剧目档案（剧种、折子数、演出次数）；`query` 按名称/别名子串过滤                                                                                            |
 | `get_drama_detail`       | 剧目详情 + 折子列表 + 关联演出；支持 `id` 或名称                                                                                                    |
 | `list_venues`            | 场馆按地址分组统计（次数/城市/坐标状态）；`query` 子串过滤，用于发现同址异名                                                                                       |
 | `value_counts`           | `company`/`city`/`channel`/`category_name` 取值频次，发现相似写法                                                                            |
 | `get_stats`              | 总览统计（场次、消费、均分、城市数）                                                                                                                |
 | `search_records_by_location` | 按坐标中心点和半径（米）搜索附近的演出记录，返回按距离排序的列表；建议半径不超过 10000（10公里）                                                                       |
+| `get_analytics`          | 深度分析数据（与网页分析页一致）：观演频率与间隔、重看统计、剧种多样性、票价分布、星期分布、新剧发现曲线等                                                                             |
+| `get_dashboard`          | 看板统计（与网页首页一致）：总场次/总消费/均分、近 12 个月按月/按剧种/按城市分布、成本趋势、最高评分与最近记录                                                                        |
+| `list_record_photos`     | 列出某条演出记录附加的照片/票根文件名与排序（不含图片内容）                                                                                                    |
 
 ### 演出记录 CRUD（4 个）
 
@@ -166,7 +169,7 @@ Authorization: Bearer <你的令牌>
 | -------------------------------- | ----------------------------------------------------- |
 | `batch_update_company_by_artist` | 把某演员参与的所有演出的 `company` 统一为指定值                         |
 | `batch_merge_venues`             | 将 `source_address` 的所有记录地址改写为 `target_address`；可选同步坐标 |
-| `batch_update_records`           | 按 ID 列表通用更新：标量字段直接赋值，数组字段支持 `set`/`append`/`remove`   |
+| `batch_update_records`           | 按 ID 列表通用更新：标量字段直接赋值，数组字段（含 `artist_ids`，直接按档案 ID 改演员关联）支持 `set`/`append`/`remove` |
 
 ### 剧目管理（3 个）
 
@@ -191,6 +194,13 @@ Authorization: Bearer <你的令牌>
 | `create_artist` | 创建新演员档案（`name` 必填），可附带别名和简介 |
 | `update_artist` | 更新演员的名称/别名/备注/简介            |
 | `delete_artist` | 删除演员档案（同时解除与演出记录的关联）        |
+
+### 实体合并（2 个）
+
+| 工具             | 说明                                                                                     |
+| -------------- | ---------------------------------------------------------------------------------------- |
+| `merge_artists` | 合并重复演员档案：演出关联改挂 target，姓名与别名并入 target 别名，bio/备注/封面仅在 target 为空时补入，删除 source；双方支持 id 或姓名定位 |
+| `merge_dramas`  | 合并重复剧目档案：演出关联与折子并入 target（同名折子去重），姓名与别名并入 target 别名，删除 source；双方支持 id 或名称定位               |
 
 ### 分类管理（4 个）
 
@@ -233,14 +243,14 @@ Authorization: Bearer <你的令牌>
 
 | 工具            | 说明                                     |
 | ------------- | -------------------------------------- |
-| `export_data` | 导出全部数据为 JSON 格式（含记录、分类、票根等）        |
-| `import_data` | 从 JSON 数据导入演出记录，dry_run 预览不导入 |
+| `export_data` | 导出数据。默认返回统计概览（计数、分类列表）；`to_file=true` 写入备份目录 `export-*.json` 并返回路径；`include_records=true` 才在响应中内联全部记录 |
+| `import_data` | 从 JSON 导入演出记录（按记录 upsert：同 ID 覆盖，不删除未包含的现有数据）；数据可经 `json_data` 内联或 `file_path`（服务器本地文件）提供 |
 
 ### 备份管理（4 个）
 
 | 工具                   | 说明                          |
 | -------------------- | --------------------------- |
-| `run_backup`         | 手动触发一次备份                   |
+| `run_backup`         | 手动触发一次备份（非破坏性，直接执行，无 dry_run） |
 | `list_backups`       | 列出所有备份文件（按时间倒序）            |
 | `delete_backup`      | 删除指定备份文件                    |
 | `restore_from_backup`| 从指定备份文件恢复数据，支持 .json 格式 |
@@ -251,7 +261,7 @@ Authorization: Bearer <你的令牌>
 | ----------------- | ------------------------------------ |
 | `list_map_points` | 获取所有有坐标的演出记录，支持按城市/分类过滤 |
 
-**共计 50 个工具。**
+**共计 55 个工具。**
 
 ## 典型工作流
 
@@ -290,6 +300,16 @@ merge_covers(sources=["abc.jpg","def.jpg"], target="ghi.jpg")
 cover_orphans()                       # 清理前检查有无孤立文件
 cleanup_covers(dry_run=true)          # 预览要删除的孤立文件
 cleanup_covers()                      # 真正清理
+```
+
+### 5. 合并重复的演员/剧目档案
+
+```
+list_artists(query="张三")             # 发现同一演员的两个档案
+merge_artists(source_name="张 三", target_id="art_abc", dry_run=true)
+#   → 核对双方别名与演出次数，确认保留 target
+merge_artists(source_name="张 三", target_id="art_abc")
+#   → 演出关联改挂 target，"张 三" 并入别名，source 档案删除（剧目用 merge_dramas，同名折子自动去重）
 ```
 
 ## 设计要点

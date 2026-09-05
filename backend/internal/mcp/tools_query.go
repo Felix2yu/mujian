@@ -26,6 +26,22 @@ type SearchRecordsInput struct {
 	Start      string `json:"start,omitempty"`
 	End        string `json:"end,omitempty"`
 	Limit      int    `json:"limit,omitempty"`
+	Offset     int    `json:"offset,omitempty"`
+	// 扩展筛选维度（与前端筛选面板对齐）
+	Channel      string  `json:"channel,omitempty"`
+	Company      string  `json:"company,omitempty"`
+	RatingMin    int     `json:"rating_min,omitempty"`
+	PriceMin     float64 `json:"price_min,omitempty"`
+	PriceMax     float64 `json:"price_max,omitempty"`
+	ActiveStatus int     `json:"active_status,omitempty"` // 0=正常 1=想看 2=已取消 3=未赴约
+	Statuses     []int   `json:"statuses,omitempty"`      // 多选，优先于 active_status
+	Exact        bool    `json:"exact,omitempty"`         // 关键词按演出名精确匹配
+	// Missing 是逗号分隔的字段列表，匹配任一为空的记录（数据卫生查询）。
+	// 支持: category, city, address, company, channel, rating, price, cover,
+	// coordinate, artist, drama, zhezi, friends, remark, seat, play, guest。
+	Missing string `json:"missing,omitempty"`
+	// Compact 为 true 时每条记录只返回核心字段，大幅降低输出体积。
+	Compact bool `json:"compact,omitempty"`
 }
 
 type IDInput struct {
@@ -154,14 +170,24 @@ func (s *Server) resolveDrama(id, name string) (*models.Drama, error) {
 
 func (s *Server) handleSearchRecords(ctx context.Context, req *mcp.CallToolRequest, in SearchRecordsInput) (*mcp.CallToolResult, any, error) {
 	filter := db.RecordFilter{
-		Query:    in.Query,
-		City:     in.City,
-		Category: in.Category,
-		Year:     in.Year,
-		Month:    in.Month,
-		Start:    in.Start,
-		End:      in.End,
-		ZheziID:  in.ZheziID,
+		Query:        in.Query,
+		City:         in.City,
+		Category:     in.Category,
+		Year:         in.Year,
+		Month:        in.Month,
+		Start:        in.Start,
+		End:          in.End,
+		ZheziID:      in.ZheziID,
+		Channel:      in.Channel,
+		Company:      in.Company,
+		RatingMin:    in.RatingMin,
+		PriceMin:     in.PriceMin,
+		PriceMax:     in.PriceMax,
+		ActiveStatus: in.ActiveStatus,
+		Statuses:     in.Statuses,
+		Exact:        in.Exact,
+		Missing:      in.Missing,
+		Offset:       in.Offset,
 	}
 
 	if in.ArtistID != "" {
@@ -187,7 +213,7 @@ func (s *Server) handleSearchRecords(ctx context.Context, req *mcp.CallToolReque
 		filter.DramaID = drama.ID
 	}
 
-	records, err := s.db.ListRecords(filter)
+	records, err := s.db.ListRecordsContext(ctx, filter)
 	if err != nil {
 		return errResult("查询失败：%v", err)
 	}
@@ -202,12 +228,49 @@ func (s *Server) handleSearchRecords(ctx context.Context, req *mcp.CallToolReque
 		records = records[:limit]
 		truncated = true
 	}
+	if in.Compact {
+		compacted := make([]map[string]any, len(records))
+		for i, r := range records {
+			compacted[i] = compactRecord(&r)
+		}
+		return jsonResult(map[string]any{
+			"total":     total,
+			"returned":  len(compacted),
+			"truncated": truncated,
+			"offset":    in.Offset,
+			"records":   compacted,
+		})
+	}
 	return jsonResult(map[string]any{
 		"total":     total,
 		"returned":  len(records),
 		"truncated": truncated,
+		"offset":    in.Offset,
 		"records":   records,
 	})
+}
+
+// compactRecord projects a record onto the fields most list/cleanup workflows
+// need, cutting the per-record payload roughly in half. Field names mirror
+// models.Record's JSON tags.
+func compactRecord(r *models.Record) map[string]any {
+	out := map[string]any{
+		"id":            r.ID,
+		"name":          r.Name,
+		"dateText":      r.DateText,
+		"city":          r.City,
+		"address":       r.Address,
+		"company":       r.Company,
+		"channel":       r.Channel,
+		"categoryName":  r.CategoryName,
+		"rating":        r.Rating,
+		"active_status": r.ActiveStatus,
+		"artist_names":  r.ArtistNames,
+	}
+	if r.Coordinate != nil {
+		out["coordinate"] = r.Coordinate
+	}
+	return out
 }
 
 func (s *Server) handleGetRecord(ctx context.Context, req *mcp.CallToolRequest, in IDInput) (*mcp.CallToolResult, any, error) {
@@ -218,12 +281,49 @@ func (s *Server) handleGetRecord(ctx context.Context, req *mcp.CallToolRequest, 
 	return jsonResult(rec)
 }
 
-func (s *Server) handleListArtists(ctx context.Context, req *mcp.CallToolRequest, _ noInput) (*mcp.CallToolResult, any, error) {
+// ListQueryInput is the input for list endpoints that support an optional
+// in-memory substring filter over the entity's name and aliases.
+type ListQueryInput struct {
+	Query string `json:"query,omitempty"`
+}
+
+func filterByName[T any](items []T, query string, name func(*T) string, aliases func(*T) []string) []T {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return items
+	}
+	lower := strings.ToLower(query)
+	out := make([]T, 0, len(items))
+	for i := range items {
+		p := &items[i]
+		if strings.Contains(strings.ToLower(name(p)), lower) {
+			out = append(out, *p)
+			continue
+		}
+		for _, al := range aliases(p) {
+			if strings.Contains(strings.ToLower(al), lower) {
+				out = append(out, *p)
+				break
+			}
+		}
+	}
+	return out
+}
+
+func (s *Server) handleListArtists(ctx context.Context, req *mcp.CallToolRequest, in ListQueryInput) (*mcp.CallToolResult, any, error) {
 	artists, err := s.db.ListArtists()
 	if err != nil {
 		return errResult("查询失败：%v", err)
 	}
-	return jsonResult(artists)
+	total := len(artists)
+	artists = filterByName(artists, in.Query,
+		func(a *models.Artist) string { return a.Name },
+		func(a *models.Artist) []string { return a.Aliases })
+	return jsonResult(map[string]any{
+		"total":    total,
+		"returned": len(artists),
+		"artists":  artists,
+	})
 }
 
 func (s *Server) handleGetArtistDetail(ctx context.Context, req *mcp.CallToolRequest, in NameOrIDInput) (*mcp.CallToolResult, any, error) {
@@ -248,12 +348,20 @@ func (s *Server) handleGetArtistDetail(ctx context.Context, req *mcp.CallToolReq
 	return jsonResult(detail)
 }
 
-func (s *Server) handleListDramas(ctx context.Context, req *mcp.CallToolRequest, _ noInput) (*mcp.CallToolResult, any, error) {
+func (s *Server) handleListDramas(ctx context.Context, req *mcp.CallToolRequest, in ListQueryInput) (*mcp.CallToolResult, any, error) {
 	dramas, err := s.db.ListDramas()
 	if err != nil {
 		return errResult("查询失败：%v", err)
 	}
-	return jsonResult(dramas)
+	total := len(dramas)
+	dramas = filterByName(dramas, in.Query,
+		func(d *models.Drama) string { return d.Name },
+		func(d *models.Drama) []string { return d.Aliases })
+	return jsonResult(map[string]any{
+		"total":    total,
+		"returned": len(dramas),
+		"dramas":   dramas,
+	})
 }
 
 func (s *Server) handleGetDramaDetail(ctx context.Context, req *mcp.CallToolRequest, in NameOrIDInput) (*mcp.CallToolResult, any, error) {
@@ -332,6 +440,3 @@ func (s *Server) handleSearchByLocation(ctx context.Context, req *mcp.CallToolRe
 		"records":  results,
 	})
 }
-
-// noInput is the input type for tools that take no parameters.
-type noInput struct{}

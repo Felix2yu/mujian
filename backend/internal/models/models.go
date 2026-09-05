@@ -530,4 +530,5 @@ type BatchUpdateParams struct {
 	Play              *BatchArrayOp
 	Guest             *BatchArrayOp
 	ArtistNames       *BatchArrayOp
+	ArtistIDs         *BatchArrayOp // 直接操作 record_artists（演员 ID 只存关联表）
 }

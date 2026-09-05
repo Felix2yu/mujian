@@ -1246,6 +1246,7 @@ func newID() string {
 // pool, or the only connection deadlocks).
 type sqlExecutor interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
+	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
@@ -1956,6 +1957,7 @@ func (db *DB) BatchUpdateRecords(params models.BatchUpdateParams) (int64, error)
 	hasArrayOps := params.DramaIDs != nil || params.ZheziIDs != nil ||
 		params.Play != nil || params.Guest != nil ||
 		params.ArtistNames != nil ||
+		params.ArtistIDs != nil ||
 		params.CategoryNames != nil
 
 	// 2. Apply simple scalar updates (one SQL for all)
@@ -2052,6 +2054,11 @@ func (db *DB) applyArrayOps(params models.BatchUpdateParams) (int64, error) {
 	if params.CategoryNames != nil {
 		arrayCols["category_names"] = params.CategoryNames
 	}
+	// artist_ids 特殊：它不是 records 列，而是 record_artists 关联表，
+	// 由 syncRecordRelationsAfterBatch 单独处理（下面的循环只处理 JSON 列）。
+	if params.ArtistIDs != nil {
+		arrayCols["artist_ids"] = params.ArtistIDs
+	}
 
 	var total int64
 	for _, id := range params.IDs {
@@ -2059,6 +2066,9 @@ func (db *DB) applyArrayOps(params models.BatchUpdateParams) (int64, error) {
 		colArgs := []interface{}{}
 
 		for col, op := range arrayCols {
+			if col == "artist_ids" {
+				continue
+			}
 			var existing []string
 			row := db.conn.QueryRow("SELECT "+col+" FROM records WHERE id = ? AND deleted_at = 0", id)
 			var raw string
@@ -2084,11 +2094,13 @@ func (db *DB) applyArrayOps(params models.BatchUpdateParams) (int64, error) {
 			}
 		}
 
-		if len(colUpdates) > 0 {
-			colArgs = append(colArgs, id)
-			sql := "UPDATE records SET " + strings.Join(colUpdates, ", ") + " WHERE id = ? AND deleted_at = 0"
-			if _, err := db.conn.Exec(sql, colArgs...); err != nil {
-				return total, err
+		if len(colUpdates) > 0 || arrayCols["artist_ids"] != nil {
+			if len(colUpdates) > 0 {
+				colArgs = append(colArgs, id)
+				sql := "UPDATE records SET " + strings.Join(colUpdates, ", ") + " WHERE id = ? AND deleted_at = 0"
+				if _, err := db.conn.Exec(sql, colArgs...); err != nil {
+					return total, err
+				}
 			}
 			// 关联表同步：读取路径从 record_dramas / record_zhezis /
 			// record_artists 回填（JSON 列只是遗留兜底），批量改写后必须
@@ -2142,7 +2154,37 @@ func (db *DB) syncRecordRelationsAfterBatch(exec sqlExecutor, recordID string, c
 			return err
 		}
 	}
+	if cols["artist_ids"] != nil {
+		// artist_ids 只存在 record_artists，没有 records JSON 列可读：
+		// 以关联表现有链接为基线做 set/append/remove。
+		cur, err := db.recordArtistIDs(exec, recordID)
+		if err != nil {
+			return err
+		}
+		next := applyArrayOp(cur, cols["artist_ids"])
+		if err := db.setRecordArtists(exec, recordID, next, nil); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// recordArtistIDs reads an artist's current record_artists links.
+func (db *DB) recordArtistIDs(exec sqlExecutor, recordID string) ([]string, error) {
+	rows, err := exec.Query("SELECT artist_id FROM record_artists WHERE record_id = ? ORDER BY sort_order, artist_id", recordID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // applyArrayOp applies the op (set/append/remove) to existing values.

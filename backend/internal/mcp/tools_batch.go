@@ -59,6 +59,9 @@ type BatchUpdateRecordsInput struct {
 	Play        *ArrayOp `json:"play,omitempty"`
 	Guest       *ArrayOp `json:"guest,omitempty"`
 	ArtistNames *ArrayOp `json:"artist_names,omitempty"`
+	// ArtistIDs 直接按档案 ID 操作演员关联（record_artists），不会像
+	// artist_names 那样自动补建缺失档案。
+	ArtistIDs *ArrayOp `json:"artist_ids,omitempty"`
 
 	DryRun *bool `json:"dry_run,omitempty"`
 }
@@ -76,7 +79,7 @@ func (s *Server) handleBatchUpdateCompanyByArtist(ctx context.Context, req *mcp.
 		return errResult("未找到演员「%s」，候选：%v", in.ArtistName, partial)
 	}
 
-	records, err := s.db.ListRecords(db.RecordFilter{ArtistID: artist.ID})
+	records, err := s.db.ListRecordsContext(ctx, db.RecordFilter{ArtistID: artist.ID})
 	if err != nil {
 		return errResult("查询演出失败：%v", err)
 	}
@@ -137,7 +140,7 @@ func (s *Server) handleBatchMergeVenues(ctx context.Context, req *mcp.CallToolRe
 		return errResult("source_address 与 target_address 相同，无需合并")
 	}
 
-	sourceRecords, err := s.db.ListRecords(db.RecordFilter{Query: ""})
+	sourceRecords, err := s.db.ListRecordsContext(ctx, db.RecordFilter{Query: ""})
 	if err != nil {
 		return errResult("查询失败：%v", err)
 	}
@@ -279,6 +282,9 @@ func (s *Server) handleBatchUpdateRecords(ctx context.Context, req *mcp.CallTool
 		if in.ArtistNames != nil {
 			changes = append(changes, fieldChange{"artist_names", in.ArtistNames})
 		}
+		if in.ArtistIDs != nil {
+			changes = append(changes, fieldChange{"artist_ids", in.ArtistIDs})
+		}
 		return jsonResult(map[string]any{
 			"dry_run":   true,
 			"requested": len(in.IDs),
@@ -314,6 +320,7 @@ func (s *Server) handleBatchUpdateRecords(ctx context.Context, req *mcp.CallTool
 		Play:              (*models.BatchArrayOp)(in.Play),
 		Guest:             (*models.BatchArrayOp)(in.Guest),
 		ArtistNames:       (*models.BatchArrayOp)(in.ArtistNames),
+		ArtistIDs:         (*models.BatchArrayOp)(in.ArtistIDs),
 	}
 	n, err := s.db.BatchUpdateRecords(params)
 	if err != nil {

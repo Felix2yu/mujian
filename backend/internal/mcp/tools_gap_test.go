@@ -194,13 +194,8 @@ func TestBackupTools(t *testing.T) {
 	s := newBackupTestServer(t)
 	ctx := context.Background()
 
-	// dry run 只预览。
-	if res, _, _ := s.handleRunBackup(ctx, nil, RunBackupInput{}); res.IsError {
-		t.Fatalf("run backup dry run: %v", res)
-	}
-
-	// 实际备份。
-	res, _, err := s.handleRunBackup(ctx, nil, RunBackupInput{DryRun: boolPtr(false)})
+	// 备份是非破坏性操作，无 dry_run 步骤，直接执行。
+	res, _, err := s.handleRunBackup(ctx, nil, noInput{})
 	if err != nil || res.IsError {
 		t.Fatalf("run backup: %v %v", res, err)
 	}
@@ -251,7 +246,7 @@ func TestExportImportTools(t *testing.T) {
 	ctx := context.Background()
 	mustUpsert(t, s, models.Record{ID: "rec-exp", Name: "导出测试", Date: time.Now().Unix()})
 
-	// 导出。
+	// 导出：默认概览（不带记录正文），include_records=true 才内联。
 	res, _, err := s.handleExportData(ctx, nil, ExportDataInput{})
 	if err != nil || res.IsError {
 		t.Fatalf("export: %v %v", res, err)
@@ -260,8 +255,15 @@ func TestExportImportTools(t *testing.T) {
 	if num(t, m, "record_count") != 1 && num(t, m, "record_count") != 0 {
 		t.Fatalf("export record_count: %v", m["record_count"])
 	}
-	if _, ok := m["records"]; !ok {
-		t.Fatalf("export should carry records: %v", m)
+	if _, ok := m["records"]; ok {
+		t.Fatalf("default export should not inline records: %v", m)
+	}
+	res, _, err = s.handleExportData(ctx, nil, ExportDataInput{IncludeRecords: boolPtr(true)})
+	if err != nil || res.IsError {
+		t.Fatalf("export include_records: %v %v", res, err)
+	}
+	if _, ok := resultMap(t, res)["records"]; !ok {
+		t.Fatal("include_records export should carry records")
 	}
 
 	// 导入：空数据、坏 JSON、dry run、真实导入。

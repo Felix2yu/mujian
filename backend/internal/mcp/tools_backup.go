@@ -11,10 +11,6 @@ import (
 
 // ---------- 输入类型 ----------
 
-type RunBackupInput struct {
-	DryRun *bool `json:"dry_run,omitempty"`
-}
-
 type DeleteBackupInput struct {
 	File   string `json:"file"`
 	DryRun *bool  `json:"dry_run,omitempty"`
@@ -27,14 +23,9 @@ type RestoreFromBackupInput struct {
 
 // ---------- 工具实现 ----------
 
-func (s *Server) handleRunBackup(ctx context.Context, req *mcp.CallToolRequest, in RunBackupInput) (*mcp.CallToolResult, any, error) {
-	if dryRun(in.DryRun) {
-		return jsonResult(map[string]any{
-			"dry_run": true,
-			"message": "将触发一次备份",
-		})
-	}
-
+// handleRunBackup triggers a snapshot. Backup is non-destructive, so unlike
+// the other mutating tools there is no dry_run step.
+func (s *Server) handleRunBackup(ctx context.Context, req *mcp.CallToolRequest, _ noInput) (*mcp.CallToolResult, any, error) {
 	name, err := s.backup.RunNow()
 	if err != nil {
 		return errResult("备份失败：%v", err)

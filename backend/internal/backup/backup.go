@@ -104,6 +104,13 @@ type BackupInfo struct {
 	ModTime int64  `json:"modified"`
 }
 
+// Dir returns the backup directory. Used by the MCP export tool to drop
+// full-data JSON files next to the snapshots, where list/delete/restore can
+// manage them like any other artifact.
+func (m *Manager) Dir() string {
+	return m.dir
+}
+
 // List returns all snapshots, newest first.
 func (m *Manager) List() []BackupInfo {
 	m.mu.Lock()
