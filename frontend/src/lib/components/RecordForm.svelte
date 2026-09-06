@@ -353,8 +353,12 @@
   let showArtistList = $state(false);
   let creatingArtist = $state(false);
 
+  // 顺序跟随 form.artist_ids（即用户添加/拖拽的顺序），而不是档案全局排序，
+  // 否则新添加的演员会按档案 sort_order 跳到前面，退格删除的也不是末位胶囊
   const chosenArtists = $derived(
-    artistList.filter((a) => form.artist_ids.includes(a.id))
+    form.artist_ids
+      .map((id) => artistList.find((a) => a.id === id))
+      .filter(Boolean)
   );
   const addableArtists = $derived(
     artistList.filter((a) => !form.artist_ids.includes(a.id))
