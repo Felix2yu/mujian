@@ -59,6 +59,12 @@
       const d = new Date(r.date * 1000);
       const pad = (n) => String(n).padStart(2, '0');
       f.date_local = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } else if (r.dateText) {
+      // 历史数据可能只有 dateText 没有时间戳（详情页能显示但编辑框为空），兜底解析文本
+      const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(r.dateText.trim());
+      if (m) {
+        f.date_local = `${m[1]}-${m[2]}-${m[3]}T${m[4] || '00'}:${m[5] || '00'}`;
+      }
     }
     if (r.coordinate) {
       f.lat = r.coordinate.latitude ?? '';

@@ -1218,6 +1218,28 @@ func ParseDateText(s string, loc *time.Location) (time.Time, bool) {
 	return time.Time{}, false
 }
 
+// normalizeRecordDate enforces the date <-> date_text invariant on any record
+// about to be written. The edit form only reads the unix column while the
+// detail page only reads the text column, so a record with text but no
+// timestamp would show a date it can't be edited back into. Fill whichever
+// side is missing from the other, regenerate unparseable text from date, and
+// drop text that has no usable timestamp behind it; a valid pair is left
+// untouched.
+func (db *DB) normalizeRecordDate(r *models.Record) {
+	if r.Date == 0 {
+		if t, ok := ParseDateText(r.DateText, db.loc); ok {
+			r.Date = t.Unix()
+			r.DateText = t.Format("2006-01-02 15:04")
+		} else {
+			r.DateText = ""
+		}
+		return
+	}
+	if _, ok := ParseDateText(r.DateText, db.loc); !ok {
+		r.DateText = time.Unix(r.Date, 0).Format("2006-01-02 15:04")
+	}
+}
+
 func isAllDigits(s string) bool {
 	if s == "" {
 		return false
@@ -1373,6 +1395,7 @@ func (db *DB) UpsertRecord(r models.Record) error {
 		r.ID = newID()
 	}
 	normalizeCategories(&r)
+	db.normalizeRecordDate(&r)
 	// Compute total_cost: effective price + other_cost
 	r.TotalCost = (func() float64 {
 		if r.PayPrice > 0 {
@@ -1409,6 +1432,7 @@ func (db *DB) UpsertRecordTx(tx *sql.Tx, r models.Record) error {
 		r.ID = newID()
 	}
 	normalizeCategories(&r)
+	db.normalizeRecordDate(&r)
 	// Compute total_cost: effective price + other_cost
 	r.TotalCost = (func() float64 {
 		if r.PayPrice > 0 {

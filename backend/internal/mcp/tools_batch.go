@@ -199,6 +199,12 @@ func (s *Server) handleBatchUpdateRecords(ctx context.Context, req *mcp.CallTool
 	if len(in.IDs) == 0 {
 		return errResult("ids 不能为空")
 	}
+	// date_text 在 db 层解析失败会被静默跳过，这里提前报错避免「预览了却没改」
+	if in.DateText != nil && *in.DateText != "" {
+		if _, ok := db.ParseDateText(*in.DateText, s.db.Location()); !ok {
+			return errResult("date_text 无法解析：「%s」，支持的格式如 2026-08-23 19:30、2026-08-23", *in.DateText)
+		}
+	}
 
 	// 收集非零的更新字段名，用于 dry_run 预览
 	if dryRun(in.DryRun) {

@@ -134,6 +134,8 @@ func (s *Server) handleCreateRecord(ctx context.Context, req *mcp.CallToolReques
 	} else if in.DateText == "" {
 		r.Date = 0
 		r.DateText = ""
+	} else {
+		return errResult("date_text 无法解析：「%s」，支持的格式如 2026-08-23 19:30、2026-08-23", in.DateText)
 	}
 
 	if dryRun(in.DryRun) {
@@ -245,6 +247,8 @@ func (s *Server) handleUpdateRecord(ctx context.Context, req *mcp.CallToolReques
 		} else if *in.DateText == "" {
 			r.Date = 0
 			r.DateText = ""
+		} else {
+			return errResult("date_text 无法解析：「%s」，支持的格式如 2026-08-23 19:30、2026-08-23", *in.DateText)
 		}
 	}
 	if in.Rating != nil {

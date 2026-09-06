@@ -9,6 +9,7 @@ import (
 
 	"mujian/internal/backup"
 	"mujian/internal/config"
+	"mujian/internal/db"
 	"mujian/internal/models"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -313,5 +314,61 @@ func TestMapAndLocationTools(t *testing.T) {
 	m = resultMap(t, res)
 	if num(t, m, "total") != 0 {
 		t.Fatalf("search by location category filter: %v", m)
+	}
+}
+
+// date_text 解析失败必须显式报错而不是静默落库/跳过：
+// 存储层会丢弃无法换算成时间戳的文本，静默等于调用方以为写上了日期。
+func TestDateTextUnparseableErrors(t *testing.T) {
+	s := newTestServer(t)
+	ctx := context.Background()
+	bad := "2026年8月23日 晚上七点半"
+
+	// create_record：报错，且不落库
+	if res, _, _ := s.handleCreateRecord(ctx, nil, CreateRecordInput{Name: "牡丹亭", DateText: bad}); !res.IsError {
+		t.Fatal("create_record with unparseable date_text should error")
+	}
+	recs, _ := s.db.ListRecordsContext(ctx, db.RecordFilter{Query: "牡丹亭"})
+	if len(recs) != 0 {
+		t.Fatalf("create_record should not persist, got %d records", len(recs))
+	}
+
+	// 先造一条合法记录供 update / batch 使用
+	base := time.Date(2026, 8, 22, 19, 30, 0, 0, s.db.Location()).Unix()
+	mustUpsert(t, s, models.Record{ID: "rec-date", Name: "惊梦", Date: base, DateText: "2026-08-22 19:30"})
+
+	// update_record：报错，原值不动
+	if res, _, _ := s.handleUpdateRecord(ctx, nil, UpdateRecordInput{ID: "rec-date", DateText: &bad}); !res.IsError {
+		t.Fatal("update_record with unparseable date_text should error")
+	}
+	got, err := s.db.GetRecord("rec-date")
+	if err != nil {
+		t.Fatalf("GetRecord: %v", err)
+	}
+	if got.Date != base || got.DateText != "2026-08-22 19:30" {
+		t.Errorf("failed update should leave record untouched: date=%d text=%q", got.Date, got.DateText)
+	}
+
+	// batch_update_records：报错，不执行
+	if res, _, _ := s.handleBatchUpdateRecords(ctx, nil, BatchUpdateRecordsInput{
+		IDs: []string{"rec-date"}, DateText: &bad,
+	}); !res.IsError {
+		t.Fatal("batch_update_records with unparseable date_text should error")
+	}
+
+	// 合法 date_text 仍然联动 date，batch 空串清空两个日期字段
+	good := "2026-08-23 20:00"
+	if res, _, err := s.handleBatchUpdateRecords(ctx, nil, BatchUpdateRecordsInput{
+		IDs: []string{"rec-date"}, DateText: &good, DryRun: boolPtr(false),
+	}); err != nil || res.IsError {
+		t.Fatalf("batch_update_records valid date_text: %v %v", res, err)
+	}
+	got, err = s.db.GetRecord("rec-date")
+	if err != nil {
+		t.Fatalf("GetRecord: %v", err)
+	}
+	want := time.Date(2026, 8, 23, 20, 0, 0, 0, s.db.Location()).Unix()
+	if got.Date != want || got.DateText != "2026-08-23 20:00" {
+		t.Errorf("batch valid date_text: got date=%d text=%q, want date=%d", got.Date, got.DateText, want)
 	}
 }

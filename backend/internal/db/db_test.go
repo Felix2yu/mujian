@@ -2299,3 +2299,80 @@ func TestRecordFilterMultiTokenQuery(t *testing.T) {
 		t.Fatalf("exact with space should not split tokens: got %d, want 0", len(exactSpace))
 	}
 }
+
+// 详情页只读 date_text、编辑表单只读 date，两者必须始终一致：
+// 只有文本没有时间戳的记录会「看得到日期却编辑不了」。
+func TestUpsertRecordNormalizesDatePair(t *testing.T) {
+	db := newTestDB(t)
+
+	// 只有 dateText：从文本推导 unix date
+	r := sampleRecord("rec-text-only", 0)
+	r.DateText = "2026-08-22 19:30"
+	if err := db.UpsertRecord(r); err != nil {
+		t.Fatalf("UpsertRecord(text only): %v", err)
+	}
+	got, err := db.GetRecord("rec-text-only")
+	if err != nil {
+		t.Fatalf("GetRecord: %v", err)
+	}
+	want := time.Date(2026, 8, 22, 19, 30, 0, 0, time.Local).Unix()
+	if got.Date != want || got.DateText != "2026-08-22 19:30" {
+		t.Errorf("text only: got date=%d text=%q, want date=%d text=2026-08-22 19:30", got.Date, got.DateText, want)
+	}
+
+	// 只有 date：补齐 dateText
+	r = sampleRecord("rec-date-only", want)
+	r.DateText = ""
+	if err := db.UpsertRecord(r); err != nil {
+		t.Fatalf("UpsertRecord(date only): %v", err)
+	}
+	got, err = db.GetRecord("rec-date-only")
+	if err != nil {
+		t.Fatalf("GetRecord: %v", err)
+	}
+	if got.Date != want || got.DateText != "2026-08-22 19:30" {
+		t.Errorf("date only: got date=%d text=%q, want date=%d text=2026-08-22 19:30", got.Date, got.DateText, want)
+	}
+
+	// 两者都有效：保持原样不覆盖
+	r = sampleRecord("rec-both", want)
+	r.DateText = "2026-08-22 19:30:05"
+	if err := db.UpsertRecord(r); err != nil {
+		t.Fatalf("UpsertRecord(both): %v", err)
+	}
+	got, err = db.GetRecord("rec-both")
+	if err != nil {
+		t.Fatalf("GetRecord: %v", err)
+	}
+	if got.Date != want || got.DateText != "2026-08-22 19:30:05" {
+		t.Errorf("both valid: got date=%d text=%q, want untouched pair", got.Date, got.DateText)
+	}
+
+	// 无法解析的文本且无时间戳：清空，不留「显示得出却编辑不了」的脏数据
+	r = sampleRecord("rec-garbage", 0)
+	r.DateText = "2026年8月23日 晚上七点半"
+	if err := db.UpsertRecord(r); err != nil {
+		t.Fatalf("UpsertRecord(garbage): %v", err)
+	}
+	got, err = db.GetRecord("rec-garbage")
+	if err != nil {
+		t.Fatalf("GetRecord: %v", err)
+	}
+	if got.Date != 0 || got.DateText != "" {
+		t.Errorf("garbage text: got date=%d text=%q, want both empty", got.Date, got.DateText)
+	}
+
+	// 无法解析的文本但有时间戳：从 date 重新生成文本
+	r = sampleRecord("rec-garbage-date", want)
+	r.DateText = "08/22/2026"
+	if err := db.UpsertRecord(r); err != nil {
+		t.Fatalf("UpsertRecord(garbage with date): %v", err)
+	}
+	got, err = db.GetRecord("rec-garbage-date")
+	if err != nil {
+		t.Fatalf("GetRecord: %v", err)
+	}
+	if got.Date != want || got.DateText != "2026-08-22 19:30" {
+		t.Errorf("garbage with date: got date=%d text=%q, want text regenerated from date", got.Date, got.DateText)
+	}
+}
