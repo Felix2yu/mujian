@@ -312,6 +312,20 @@ merge_artists(source_name="张 三", target_id="art_abc")
 #   → 演出关联改挂 target，"张 三" 并入别名，source 档案删除（剧目用 merge_dramas，同名折子自动去重）
 ```
 
+## Prompts（工作流提示）
+
+除了工具，服务端还注册了 5 个 MCP prompts：服务端预定义的工作流剧本，客户端会把它们暴露为斜杠命令（如 Claude Code 中的 `/mcp__mujian__unify_company`）。用户触发后，提示文本会把对应的「典型工作流」分步注入对话，引导模型按 **预览 → 用户确认 → 执行** 的安全路径调用工具。对没有 workspace 指令（如 AGENTS.md）的客户端尤其有用。
+
+| Prompt          | 参数            | 说明                                                         |
+| --------------- | --------------- | ------------------------------------------------------------ |
+| `data_checkup`  | 无              | 数据体检：`value_counts` 找重复写法、`cover_duplicates`/`cover_orphans` 查封面、`missing` 查空字段，输出报告与建议修复动作 |
+| `unify_company` | `artist_name`   | 按演员统一剧团：查现状 → 确认剧团名 → `batch_update_company_by_artist` 预览 → 执行 |
+| `merge_venues`  | `venue_keyword` | 合并场馆写法：`list_venues` 找候选 → 逐对确认 → 预览 → `batch_merge_venues` 执行 |
+| `enrich_zhezis` | `drama_name`    | 补充常演折子：查已有折子 → 网络查证 → 用户确认 → `batch_create_zhezis` 写入 |
+| `backup_export` | 无              | 引导完成快照备份（`run_backup`）、JSON 导出（`export_data`）或恢复（`restore_from_backup`） |
+
+注意：各客户端对 prompts 的支持不一——Claude Code / Claude Desktop / Cherry Studio 等会以斜杠命令或菜单展示；部分客户端仅支持 tools、不展示 prompts（此时工作流知识仍可参考下方「典型工作流」）。参数均可省略，省略时提示会引导模型先询问用户。
+
 ## 设计要点
 
 - **dry\_run 优先**：所有修改类工具都带 `dry_run` 参数（默认 `true`）。约定流程是先预览影响范围、经用户确认再执行。

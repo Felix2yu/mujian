@@ -30,12 +30,13 @@ func New(database *db.DB, backupMgr *backup.Manager) *Server {
 	s := &Server{
 		server: mcp.NewServer(&mcp.Implementation{
 			Name:    "mujian-mcp",
-			Version: "1.1.0",
+			Version: "1.2.0",
 		}, nil),
 		db:     database,
 		backup: backupMgr,
 	}
 	s.registerTools()
+	s.registerPrompts()
 	return s
 }
 

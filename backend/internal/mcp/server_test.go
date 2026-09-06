@@ -422,6 +422,85 @@ func TestHTTPRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPromptsHTTP(t *testing.T) {
+	// 端到端：通过 Streamable HTTP transport 握手（capabilities 含 prompts）
+	// 后列出并获取 prompt，验证远程客户端将看到的完整链路。
+	if testing.Short() {
+		t.Skip("short mode")
+	}
+	s := newTestServer(t)
+
+	srv := httptest.NewServer(s.HTTPHandler())
+	defer srv.Close()
+
+	ctx := context.Background()
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v0"}, nil)
+	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint:             srv.URL,
+		DisableStandaloneSSE: true, // 服务端为 Stateless，不提供独立 SSE 流
+	}, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer session.Close()
+
+	listed, err := session.ListPrompts(ctx, nil)
+	if err != nil {
+		t.Fatalf("list prompts: %v", err)
+	}
+	want := map[string]bool{
+		"data_checkup": false, "unify_company": false, "merge_venues": false,
+		"enrich_zhezis": false, "backup_export": false,
+	}
+	if len(listed.Prompts) != len(want) {
+		t.Fatalf("prompts = %d, want %d", len(listed.Prompts), len(want))
+	}
+	for _, p := range listed.Prompts {
+		if _, ok := want[p.Name]; !ok {
+			t.Fatalf("unexpected prompt %q", p.Name)
+		}
+		want[p.Name] = true
+	}
+	for name, seen := range want {
+		if !seen {
+			t.Fatalf("prompt %q missing from list", name)
+		}
+	}
+
+	// 带参数获取：参数应替换进消息文本。
+	got, err := session.GetPrompt(ctx, &mcp.GetPromptParams{
+		Name:      "unify_company",
+		Arguments: map[string]string{"artist_name": "张军"},
+	})
+	if err != nil {
+		t.Fatalf("get prompt: %v", err)
+	}
+	if len(got.Messages) != 1 {
+		t.Fatalf("messages = %d, want 1", len(got.Messages))
+	}
+	msg := got.Messages[0]
+	if msg.Role != "user" {
+		t.Fatalf("role = %q, want user", msg.Role)
+	}
+	text, ok := msg.Content.(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content is %T, want *mcp.TextContent", msg.Content)
+	}
+	if !strings.Contains(text.Text, "张军") || !strings.Contains(text.Text, "batch_update_company_by_artist") {
+		t.Fatalf("prompt text missing substituted name or tool guidance:\n%s", text.Text)
+	}
+
+	// 不带参数获取：应引导模型先询问用户，而不是出现空占位。
+	got, err = session.GetPrompt(ctx, &mcp.GetPromptParams{Name: "merge_venues"})
+	if err != nil {
+		t.Fatalf("get prompt without args: %v", err)
+	}
+	text = got.Messages[0].Content.(*mcp.TextContent)
+	if !strings.Contains(text.Text, "询问用户") {
+		t.Fatalf("prompt without args should ask the user:\n%s", text.Text)
+	}
+}
+
 func TestUpdateDrama(t *testing.T) {
 	s := newTestServer(t)
 	d, _ := s.db.SaveDrama(models.Drama{Name: "牡丹亭", Remark: "旧备注"})

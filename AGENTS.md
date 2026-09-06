@@ -34,6 +34,10 @@
 
 共 55 个工具，详细说明见 [docs/mcp.md](docs/mcp.md)。
 
+### Prompts
+
+除工具外还提供 5 个工作流 prompts（`data_checkup`、`unify_company`、`merge_venues`、`enrich_zhezis`、`backup_export`）：支持 prompts 的客户端会把它们暴露为斜杠命令，触发后注入对应的分步工作流剧本（含 dry_run 安全路径）。参数可省略，省略时先询问用户。
+
 ### 典型工作流
 
 1. **按演员统一剧团**：`search_records(artist_name=…)` 或 `batch_update_company_by_artist(dry_run=true)` 预览 → 确认后 `dry_run=false` 执行。
