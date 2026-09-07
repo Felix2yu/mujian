@@ -23,7 +23,7 @@ var alreadyBracketedRe = regexp.MustCompile(`^《.*》$`)
 //   - multiple categories (variety show) → as-is
 //   - umbrella category (拼盘/音乐会/音乐剧) → as-is
 //   - name already contains the category keyword → as-is
-//   - name longer than 7 characters → as-is
+//   - name longer than 14 characters → as-is
 //   - name already wrapped in 《》 → "genre name"
 //   - otherwise → "genre《name》"
 func formatEventTitle(name, categoryName string, categoryNames []string) string {
@@ -39,7 +39,7 @@ func formatEventTitle(name, categoryName string, categoryNames []string) string 
 	if strings.Contains(name, categoryName) {
 		return name
 	}
-	if len([]rune(name)) > 7 {
+	if len([]rune(name)) > 14 {
 		return name
 	}
 	if alreadyBracketedRe.MatchString(name) {
