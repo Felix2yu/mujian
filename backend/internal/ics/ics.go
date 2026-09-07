@@ -3,9 +3,50 @@ package ics
 import (
 	"fmt"
 	"mujian/internal/models"
+	"regexp"
 	"strings"
 	"time"
 )
+
+// nonPrependCategories lists category names that should NOT be prepended as a
+// genre prefix before the show name (umbrella / variety types rather than a
+// specific genre).
+var nonPrependCategories = map[string]bool{
+	"拼盘": true, "音乐会": true, "音乐剧": true,
+}
+
+var alreadyBracketedRe = regexp.MustCompile(`^《.*》$`)
+
+// formatEventTitle prepends the genre (category) to the show name for ICS
+// SUMMARY display, following the same rules as the web calendar frontend:
+//   - no category or no name → return as-is
+//   - multiple categories (variety show) → as-is
+//   - umbrella category (拼盘/音乐会/音乐剧) → as-is
+//   - name already contains the category keyword → as-is
+//   - name longer than 7 characters → as-is
+//   - name already wrapped in 《》 → "genre name"
+//   - otherwise → "genre《name》"
+func formatEventTitle(name, categoryName string, categoryNames []string) string {
+	if categoryName == "" || name == "" {
+		return name
+	}
+	if len(categoryNames) > 1 {
+		return name
+	}
+	if nonPrependCategories[categoryName] {
+		return name
+	}
+	if strings.Contains(name, categoryName) {
+		return name
+	}
+	if len([]rune(name)) > 7 {
+		return name
+	}
+	if alreadyBracketedRe.MatchString(name) {
+		return categoryName + " " + name
+	}
+	return categoryName + "《" + name + "》"
+}
 
 // GenerateCalendar renders all records into an RFC 5545 VCALENDAR string.
 // zheziNames maps a 折子 id to its display name; pass nil if names are not
@@ -117,7 +158,7 @@ func writeEvent(b *strings.Builder, rec models.Record, loc *time.Location, zhezi
 	writeLine(fmt.Sprintf("DTSTAMP;TZID=%s:%s", loc.String(), startStr))
 	writeLine(fmt.Sprintf("DTSTART;TZID=%s:%s", loc.String(), startStr))
 	writeLine(fmt.Sprintf("DTEND;TZID=%s:%s", loc.String(), endStr))
-	writeLine(fmt.Sprintf("SUMMARY:%s", escapeICS(rec.Name)))
+	writeLine(fmt.Sprintf("SUMMARY:%s", escapeICS(formatEventTitle(rec.Name, rec.CategoryName, rec.CategoryNames))))
 
 	if rec.Address != "" {
 		writeLine(fmt.Sprintf("LOCATION:%s", escapeICS(rec.Address)))
@@ -185,7 +226,7 @@ func writeTodo(b *strings.Builder, rec models.Record, loc *time.Location, zheziN
 	writeLine(fmt.Sprintf("DTSTAMP;TZID=%s:%s", loc.String(), startStr))
 	writeLine(fmt.Sprintf("DTSTART;TZID=%s:%s", loc.String(), startStr))
 	writeLine(fmt.Sprintf("DUE;TZID=%s:%s", loc.String(), startStr))
-	writeLine(fmt.Sprintf("SUMMARY:%s", escapeICS(rec.Name)))
+	writeLine(fmt.Sprintf("SUMMARY:%s", escapeICS(formatEventTitle(rec.Name, rec.CategoryName, rec.CategoryNames))))
 
 	var desc []string
 	if len(rec.Play) > 0 {

@@ -39,7 +39,7 @@ func TestGenerateCalendar(t *testing.T) {
 		"UID:rec-1@mujian\r\n",
 		"DTSTART;TZID=Asia/Shanghai:20260822T193000\r\n",
 		"DTEND;TZID=Asia/Shanghai:20260822T213000\r\n",
-		"SUMMARY:牡丹亭\\, 游园\r\n",
+		"SUMMARY:昆曲《牡丹亭\\, 游园》\r\n",
 		"LOCATION:上海大剧院\\; 主厅\r\n",
 		"DESCRIPTION:剧目: 惊梦\\n演员: 张军\\, 单雯\\n剧团: 上海昆剧团\r\n",
 		"CATEGORIES:昆曲\r\n",

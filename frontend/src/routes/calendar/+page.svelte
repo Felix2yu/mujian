@@ -173,6 +173,8 @@
     if (NON_PREPEND_CATEGORIES.has(categoryName)) return name;
     // 剧名已包含剧种关键词，不加（避免重复）
     if (name.includes(categoryName)) return name;
+    // 剧名超过7个字，不加
+    if ([...name].length > 7) return name;
     // 剧名首尾已有书名号则不再包裹
     const alreadyBracketed = /^《.*》$/.test(name);
     return alreadyBracketed ? `${categoryName} ${name}` : `${categoryName}《${name}》`;
