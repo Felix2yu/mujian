@@ -473,15 +473,15 @@
         <div class="fee-cards">
           <div class="fee-card">
             <span class="fee-label">票价</span>
-            <span class="fee-amount" class:is-empty={!rec.price}>{rec.price ? formatCurrency(rec.price, rec.price_currency) : '—'}</span>
+            <span class="fee-amount" class:is-empty={rec.price === null || rec.price === undefined}>{rec.price === null || rec.price === undefined ? '—' : rec.price === 0 ? '免费' : formatCurrency(rec.price, rec.price_currency)}</span>
           </div>
           <div class="fee-card">
             <span class="fee-label">实付</span>
-            <span class="fee-amount" class:is-empty={!rec.pay_price}>{rec.pay_price ? formatCurrency(rec.pay_price, rec.pay_price_currency) : '—'}</span>
+            <span class="fee-amount" class:is-empty={rec.pay_price === null || rec.pay_price === undefined}>{rec.pay_price === null || rec.pay_price === undefined ? '—' : rec.pay_price === 0 ? '免费' : formatCurrency(rec.pay_price, rec.pay_price_currency)}</span>
           </div>
           <div class="fee-card">
             <span class="fee-label">其他花费</span>
-            <span class="fee-amount" class:is-empty={!rec.other_cost}>{rec.other_cost ? formatCurrency(rec.other_cost, rec.other_cost_currency) : '—'}</span>
+            <span class="fee-amount" class:is-empty={rec.other_cost === null || rec.other_cost === undefined}>{rec.other_cost === null || rec.other_cost === undefined ? '—' : rec.other_cost === 0 ? '免费' : formatCurrency(rec.other_cost, rec.other_cost_currency)}</span>
           </div>
         </div>
         {#if rec.total_cost > 0}

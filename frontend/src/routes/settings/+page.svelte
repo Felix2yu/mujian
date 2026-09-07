@@ -34,7 +34,7 @@
     const cards = [
       ['theme', 162], ['storage', 158], ['s3', 823], ['encode', 305], ['calendar', 280],
       ['fields', 389], ['status', 178], ['list', 224], ['backup', 988], ['security', 274], ['map', 435],
-      ['ai', 360]
+      ['ai', 360], ['costWizard', 200]
     ];
     const cols = [[], []];
     const hs = [0, 0];
@@ -65,6 +65,35 @@
   let migrateResult = $state(null);
   let migrateError = $state('');
   let migrateProgress = $state({ processed: 0, total: 0 });
+
+  // 费用补全向导
+  let zeroCostRecords = $state([]);
+  let costWizardLoading = $state(false);
+  let costWizardError = $state('');
+  let costWizardProcessing = $state(false);
+  async function loadZeroCostRecords() {
+    costWizardLoading = true;
+    costWizardError = '';
+    try {
+      const res = await api.searchRecords({ missing: 'price', limit: 1000 });
+      zeroCostRecords = res.records || [];
+    } catch (e) {
+      costWizardError = '加载失败：' + e.message;
+    } finally {
+      costWizardLoading = false;
+    }
+  }
+  async function markCostField(ids, field, value) {
+    costWizardProcessing = true;
+    try {
+      await api.batchUpdate(ids, { [field]: value });
+      await loadZeroCostRecords();
+    } catch (e) {
+      costWizardError = '操作失败：' + e.message;
+    } finally {
+      costWizardProcessing = false;
+    }
+  }
 
   // S3 连接自检：用当前（合并掩码后的）配置做一次真实读写探测，验证连通性 /
   // 凭据 / 桶存在 / path-style 寻址；不落库。
@@ -916,6 +945,36 @@
     </div>
 {/snippet}
 
+{#snippet costWizardCard()}
+<div class="card sec">
+  <h3>费用补全</h3>
+  <p class="tiny muted" style="margin: 0 0 10px;">将所有费用为 0 的记录标记为「免费」或「未填写」，以便区分。</p>
+  {#if costWizardLoading}
+    <div class="banner info">加载中…</div>
+  {:else if costWizardError}
+    <div class="banner error">⚠ {costWizardError}</div>
+  {:else if zeroCostRecords.length === 0}
+    <div class="banner success">✓ 所有费用字段已补全</div>
+  {:else}
+    <div class="banner info">共 {zeroCostRecords.length} 条记录费用为 0</div>
+    <div style="margin-top: 10px; max-height: 300px; overflow-y: auto;">
+      {#each zeroCostRecords as rec}
+        <div style="display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border);">
+          <span style="flex: 1; font-size: 13px;">{new Date(rec.date * 1000).toLocaleDateString()} {rec.name}</span>
+          <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'price', 0)}>免费</button>
+          <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'price', null)}>未填写</button>
+        </div>
+      {/each}
+    </div>
+    <div style="margin-top: 10px; display: flex; gap: 8px;">
+      <button class="btn" disabled={costWizardProcessing} onclick={() => markCostField(zeroCostRecords.map(r => r.id), 'price', 0)}>全部标记免费</button>
+      <button class="btn" disabled={costWizardProcessing} onclick={() => markCostField(zeroCostRecords.map(r => r.id), 'price', null)}>全部标记未填写</button>
+    </div>
+  {/if}
+  <button class="btn sm" style="margin-top: 8px;" onclick={loadZeroCostRecords}>刷新列表</button>
+</div>
+{/snippet}
+
   <!-- 两列按卡片高度权重最短列优先分配（CARD_COLS），保证列高大致均衡 -->
   <div class="col">
     {#each CARD_COLS[0] as key (key)}
@@ -931,6 +990,7 @@
 			{:else if key === "security"}{@render securityCard()}
 			{:else if key === "map"}{@render mapCard()}
 			{:else if key === "ai"}{@render aiCard()}
+			{:else if key === "costWizard"}{@render costWizardCard()}
 			{/if}
     {/each}
   </div>
@@ -948,6 +1008,7 @@
 			{:else if key === "security"}{@render securityCard()}
 			{:else if key === "map"}{@render mapCard()}
 			{:else if key === "ai"}{@render aiCard()}
+			{:else if key === "costWizard"}{@render costWizardCard()}
 			{/if}
     {/each}
   </div>

@@ -35,11 +35,11 @@ type CreateRecordInput struct {
 	Company           string             `json:"company,omitempty"`
 	Remark            string             `json:"remark,omitempty"`
 	ActiveStatus      int                `json:"active_status,omitempty"`
-	Price             float64            `json:"price,omitempty"`
+	Price             *float64           `json:"price,omitempty"`
 	PriceCurrency     string             `json:"price_currency,omitempty"`
-	PayPrice          float64            `json:"pay_price,omitempty"`
+	PayPrice          *float64           `json:"pay_price,omitempty"`
 	PayPriceCurrency  string             `json:"pay_price_currency,omitempty"`
-	OtherCost         float64            `json:"other_cost,omitempty"`
+	OtherCost         *float64           `json:"other_cost,omitempty"`
 	OtherCostCurrency string             `json:"other_cost_currency,omitempty"`
 	DryRun            *bool              `json:"dry_run,omitempty"`
 }
@@ -273,19 +273,19 @@ func (s *Server) handleUpdateRecord(ctx context.Context, req *mcp.CallToolReques
 		r.ActiveStatus = *in.ActiveStatus
 	}
 	if in.Price != nil {
-		r.Price = *in.Price
+		r.Price = in.Price
 	}
 	if in.PriceCurrency != nil {
 		r.PriceCurrency = *in.PriceCurrency
 	}
 	if in.PayPrice != nil {
-		r.PayPrice = *in.PayPrice
+		r.PayPrice = in.PayPrice
 	}
 	if in.PayPriceCurrency != nil {
 		r.PayPriceCurrency = *in.PayPriceCurrency
 	}
 	if in.OtherCost != nil {
-		r.OtherCost = *in.OtherCost
+		r.OtherCost = in.OtherCost
 	}
 	if in.OtherCostCurrency != nil {
 		r.OtherCostCurrency = *in.OtherCostCurrency

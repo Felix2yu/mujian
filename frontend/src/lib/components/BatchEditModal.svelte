@@ -117,11 +117,12 @@
       if (fields.friends.enabled) payload.friends = fields.friends.value;
       if (fields.remark.enabled) payload.remark = fields.remark.value;
       if (fields.seat.enabled) payload.seat = fields.seat.value;
-      if (fields.price.enabled) payload.price = parseFloat(fields.price.value) || 0;
+      // 费用字段：空字符串表示未填写（null），0 表示免费，其他为具体金额
+      if (fields.price.enabled) payload.price = fields.price.value === '' ? null : parseFloat(fields.price.value);
       if (fields.priceCurrency.enabled) payload.price_currency = fields.priceCurrency.value;
-      if (fields.payPrice.enabled) payload.pay_price = parseFloat(fields.payPrice.value) || 0;
+      if (fields.payPrice.enabled) payload.pay_price = fields.payPrice.value === '' ? null : parseFloat(fields.payPrice.value);
       if (fields.payPriceCurrency.enabled) payload.pay_price_currency = fields.payPriceCurrency.value;
-      if (fields.otherCost.enabled) payload.other_cost = parseFloat(fields.otherCost.value) || 0;
+      if (fields.otherCost.enabled) payload.other_cost = fields.otherCost.value === '' ? null : parseFloat(fields.otherCost.value);
       if (fields.otherCostCurrency.enabled) payload.other_cost_currency = fields.otherCostCurrency.value;
 
       // 数组字段

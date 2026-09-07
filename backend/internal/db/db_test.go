@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+func fltPtr(f float64) *float64 { return &f }
+
 func newTestDB(t *testing.T) *DB {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "test.db")
@@ -37,8 +39,8 @@ func sampleRecord(id string, date int64) models.Record {
 		Play: []string{"惊梦"}, DramaIDs: []string{"d-1"}, ZheziIDs: []string{"z-1"},
 		TagIDs: []string{"tag-1"}, Date: date, DateText: "2026-08-22 19:30",
 		Rating: 5, Seat: "A1", Friends: "老王", Company: "上昆", Remark: "很好",
-		ActiveStatus: 1, Price: 280, PriceCurrency: "CNY",
-		PayPrice: 180, PayPriceCurrency: "CNY", OtherCost: 20, OtherCostCurrency: "CNY",
+		ActiveStatus: 1, Price: fltPtr(280), PriceCurrency: "CNY",
+		PayPrice: fltPtr(180), PayPriceCurrency: "CNY", OtherCost: fltPtr(20), OtherCostCurrency: "CNY",
 	}
 }
 
@@ -522,8 +524,8 @@ func TestStatsAndDashboard(t *testing.T) {
 	now := time.Now()
 	recent := now.AddDate(0, -1, 0).Unix()
 	old := now.AddDate(-3, 0, 0).Unix()
-	_ = db.UpsertRecord(models.Record{ID: "s1", Name: "A", City: "上海", CategoryName: "昆曲", Date: recent, Rating: 5, PayPrice: 100})
-	_ = db.UpsertRecord(models.Record{ID: "s2", Name: "B", City: "上海", Date: recent, Rating: 4, OtherCost: 50})
+	_ = db.UpsertRecord(models.Record{ID: "s1", Name: "A", City: "上海", CategoryName: "昆曲", Date: recent, Rating: 5, PayPrice: fltPtr(100)})
+	_ = db.UpsertRecord(models.Record{ID: "s2", Name: "B", City: "上海", Date: recent, Rating: 4, OtherCost: fltPtr(50)})
 	_ = db.UpsertRecord(models.Record{ID: "s3", Name: "C", City: "北京", Date: old, Rating: 0})
 
 	stats, err := db.GetStats()
@@ -1676,7 +1678,7 @@ func TestBatchUpdateNameDateTimeCoordinateMoney(t *testing.T) {
 	if got.Coordinate == nil || got.Coordinate.Latitude != 31.3 {
 		t.Fatalf("coordinate: %+v", got.Coordinate)
 	}
-	if got.Price != 180 {
+	if got.Price == nil || *got.Price != 180 {
 		t.Fatalf("price: %v", got.Price)
 	}
 
@@ -1696,8 +1698,7 @@ func TestBatchUpdateNameDateTimeCoordinateMoney(t *testing.T) {
 	}
 }
 
-func strPtr(s string) *string   { return &s }
-func fltPtr(f float64) *float64 { return &f }
+func strPtr(s string) *string { return &s }
 
 // 批量数组操作必须同步关联表（record_dramas / record_artists），
 // 否则读取回填看不到变更——水浒记合并时曾因此丢失关联。
@@ -1943,9 +1944,9 @@ func TestGetAnalytics(t *testing.T) {
 			Date:          date.Unix(),
 			DateText:      date.Format("2006-01-02 15:04"),
 			Rating:        []int{1, 2, 3, 4, 5, 0}[i%6], // 含未评分
-			Price:         float64(50 + i*5),
-			PayPrice:      float64(30 + i*4),
-			OtherCost:     float64(i * 2),
+			Price:         fltPtr(float64(50 + i*5)),
+			PayPrice:      fltPtr(float64(30 + i*4)),
+			OtherCost:     fltPtr(float64(i * 2)),
 			PriceCurrency: "CNY",
 			Company:       []string{"上昆", "苏昆", "浙昆", "京昆"}[i%4],
 			ActiveStatus:  1,
@@ -1963,9 +1964,9 @@ func TestGetAnalytics(t *testing.T) {
 
 	// 再来几个没有评分/没有价格的边缘记录
 	edges := []models.Record{
-		{ID: "edge-no-rating", Name: "无评分", City: "上海", Channel: "大麦", Date: base.AddDate(0, -2, 0).Unix(), DateText: base.AddDate(0, -2, 0).Format("2006-01-02 15:04"), Price: 200, PayPrice: 200, CategoryName: "昆曲", ActiveStatus: 1, ArtistNames: []string{"张军"}},
-		{ID: "edge-zero-price", Name: "零票价", City: "南京", Channel: "现场", Date: base.AddDate(0, -1, 0).Unix(), DateText: base.AddDate(0, -1, 0).Format("2006-01-02 15:04"), Price: 0, PayPrice: 0, CategoryName: "昆曲", ActiveStatus: 1},
-		{ID: "edge-old", Name: "老记录", City: "苏州", Channel: "朋友送", Date: time.Now().AddDate(-3, 0, 0).Unix(), DateText: time.Now().AddDate(-3, 0, 0).Format("2006-01-02 15:04"), Rating: 4, Price: 800, PayPrice: 500, CategoryName: "昆曲", ActiveStatus: 1},
+		{ID: "edge-no-rating", Name: "无评分", City: "上海", Channel: "大麦", Date: base.AddDate(0, -2, 0).Unix(), DateText: base.AddDate(0, -2, 0).Format("2006-01-02 15:04"), Price: fltPtr(200), PayPrice: fltPtr(200), CategoryName: "昆曲", ActiveStatus: 1, ArtistNames: []string{"张军"}},
+		{ID: "edge-zero-price", Name: "零票价", City: "南京", Channel: "现场", Date: base.AddDate(0, -1, 0).Unix(), DateText: base.AddDate(0, -1, 0).Format("2006-01-02 15:04"), Price: fltPtr(0), PayPrice: fltPtr(0), CategoryName: "昆曲", ActiveStatus: 1},
+		{ID: "edge-old", Name: "老记录", City: "苏州", Channel: "朋友送", Date: time.Now().AddDate(-3, 0, 0).Unix(), DateText: time.Now().AddDate(-3, 0, 0).Format("2006-01-02 15:04"), Rating: 4, Price: fltPtr(800), PayPrice: fltPtr(500), CategoryName: "昆曲", ActiveStatus: 1},
 	}
 	for _, r := range edges {
 		if err := db.UpsertRecord(r); err != nil {

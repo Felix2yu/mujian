@@ -41,11 +41,11 @@ type Record struct {
 	Company           string      `json:"company"`
 	Remark            string      `json:"remark"`
 	ActiveStatus      int         `json:"active_status"`
-	Price             float64     `json:"price"`
+	Price             *float64    `json:"price,omitempty"`
 	PriceCurrency     string      `json:"price_currency"`
-	PayPrice          float64     `json:"pay_price"`
+	PayPrice          *float64    `json:"pay_price,omitempty"`
 	PayPriceCurrency  string      `json:"pay_price_currency"`
-	OtherCost         float64     `json:"other_cost"`
+	OtherCost         *float64    `json:"other_cost,omitempty"`
 	OtherCostCurrency string      `json:"other_cost_currency"`
 	TotalCost         float64     `json:"total_cost"` // pay_price > 0 ? pay_price : price + other_cost
 	// Watched marks a performance as 已观看/已到场. It is the CalDAV VTODO
@@ -205,11 +205,11 @@ type RecordRequest struct {
 	Company           string      `json:"company"`
 	Remark            string      `json:"remark"`
 	ActiveStatus      int         `json:"active_status"`
-	Price             float64     `json:"price"`
+	Price             *float64    `json:"price,omitempty"`
 	PriceCurrency     string      `json:"price_currency"`
-	PayPrice          float64     `json:"pay_price"`
+	PayPrice          *float64    `json:"pay_price,omitempty"`
 	PayPriceCurrency  string      `json:"pay_price_currency"`
-	OtherCost         float64     `json:"other_cost"`
+	OtherCost         *float64    `json:"other_cost,omitempty"`
 	OtherCostCurrency string      `json:"other_cost_currency"`
 	// Watched mirrors Record.Watched (已观看/已到场). See Record.Watched for
 	// the CalDAV VTODO completion semantics.

@@ -14,10 +14,10 @@ func TestFilterDimensions(t *testing.T) {
 	base := int64(1_760_000_000)
 
 	seed := []models.RecordRequest{
-		{Name: "京剧·A", Channel: "线下", Company: "A剧团", Rating: 8, Price: 120, ActiveStatus: 0, Date: base + 1},
-		{Name: "昆曲·B", Channel: "线上", Company: "B剧团", Rating: 5, Price: 50, ActiveStatus: 1, Date: base + 2},
-		{Name: "京剧·C", Channel: "线下", Company: "A剧团", Rating: 9, Price: 200, ActiveStatus: 2, Date: base + 3},
-		{Name: "无渠道", Channel: "", Company: "", Rating: 0, Price: 0, ActiveStatus: 3, Date: base + 4},
+		{Name: "京剧·A", Channel: "线下", Company: "A剧团", Rating: 8, Price: fltPtr(120), ActiveStatus: 0, Date: base + 1},
+		{Name: "昆曲·B", Channel: "线上", Company: "B剧团", Rating: 5, Price: fltPtr(50), ActiveStatus: 1, Date: base + 2},
+		{Name: "京剧·C", Channel: "线下", Company: "A剧团", Rating: 9, Price: fltPtr(200), ActiveStatus: 2, Date: base + 3},
+		{Name: "无渠道", Channel: "", Company: "", Rating: 0, Price: nil, ActiveStatus: 3, Date: base + 4},
 	}
 	for i, r := range seed {
 		if _, err := d.CreateRecord(r); err != nil {
@@ -42,8 +42,8 @@ func TestFilterDimensions(t *testing.T) {
 		{"company=A剧团", RecordFilter{Company: "A剧团"}, 2},
 		{"rating>=8", RecordFilter{RatingMin: 8}, 2},
 		{"price>=100", RecordFilter{PriceMin: 100}, 2},
-		{"price<=100", RecordFilter{PriceMax: 100}, 2},
-		{"price 60~150", RecordFilter{PriceMin: 60, PriceMax: 150}, 1},
+		{"price<=100", RecordFilter{PriceMax: 100}, 1}, // NULL 价格不参与比较，只有"昆曲·B"匹配
+		{"price 60~150", RecordFilter{PriceMin: 60, PriceMax: 150}, 1}, // NULL 价格不参与比较，只有"京剧·A"匹配
 		{"status=1(想看)", RecordFilter{ActiveStatus: 1}, 1},
 		{"exact 京剧·A", RecordFilter{Query: "京剧·A", Exact: true}, 1},
 		{"exact 京剧 (no exact name)", RecordFilter{Query: "京剧", Exact: true}, 0},

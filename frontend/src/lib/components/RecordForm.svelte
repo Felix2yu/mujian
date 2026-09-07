@@ -41,11 +41,12 @@
     f.friends = r.friends || '';
     f.company = r.company || '';
     f.remark = r.remark || '';
-    f.price = r.price || 0;
+    // 费用字段：null/undefined 表示未填写，0 表示免费，其他为具体金额
+    f.price = r.price === null || r.price === undefined ? '' : r.price;
     f.price_currency = r.price_currency || 'CNY';
-    f.pay_price = r.pay_price || 0;
+    f.pay_price = r.pay_price === null || r.pay_price === undefined ? '' : r.pay_price;
     f.pay_price_currency = r.pay_price_currency || 'CNY';
-    f.other_cost = r.other_cost || 0;
+    f.other_cost = r.other_cost === null || r.other_cost === undefined ? '' : r.other_cost;
     f.other_cost_currency = r.other_cost_currency || 'CNY';
     f.artist_ids = (r.artist_ids || []).slice();
     f.play = (r.play || []).join(', ');
@@ -653,11 +654,12 @@
       friends: form.friends.trim(),
       company: form.company.trim(),
       remark: form.remark.trim(),
-      price: Number(form.price) || 0,
+      // 费用字段：空字符串表示未填写（null），0 表示免费，其他为具体金额
+      price: form.price === '' ? null : Number(form.price),
       price_currency: form.price_currency || 'CNY',
-      pay_price: Number(form.pay_price) || 0,
+      pay_price: form.pay_price === '' ? null : Number(form.pay_price),
       pay_price_currency: form.pay_price_currency || 'CNY',
-      other_cost: Number(form.other_cost) || 0,
+      other_cost: form.other_cost === '' ? null : Number(form.other_cost),
       other_cost_currency: form.other_cost_currency || 'CNY',
       // 演员以关联实体为准：已选演员的名称 + 自由文本胶囊中未匹配档案的名字
       artist_names: [
@@ -1017,15 +1019,15 @@
       form.zhezi_ids = (src.zhezi_ids || []).slice();
     }
     if (on('price')) {
-      form.price = src.price || 0;
+      form.price = src.price === null || src.price === undefined ? '' : src.price;
       form.price_currency = src.price_currency || 'CNY';
     }
     if (on('pay_price')) {
-      form.pay_price = src.pay_price || 0;
+      form.pay_price = src.pay_price === null || src.pay_price === undefined ? '' : src.pay_price;
       form.pay_price_currency = src.pay_price_currency || 'CNY';
     }
     if (on('other_cost')) {
-      form.other_cost = src.other_cost || 0;
+      form.other_cost = src.other_cost === null || src.other_cost === undefined ? '' : src.other_cost;
       form.other_cost_currency = src.other_cost_currency || 'CNY';
     }
     if (on('seat')) form.seat = src.seat || '';

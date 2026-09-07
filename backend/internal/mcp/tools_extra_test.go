@@ -67,7 +67,7 @@ func TestCreateRecord(t *testing.T) {
 		CategoryName:  "昆曲",
 		CategoryNames: StringOrArray{"昆曲", "京昆"},
 		ArtistNames:   StringOrArray{"魏春荣"},
-		Price:         180,
+		Price:         fltPtrT(180),
 		DryRun:        boolPtr(true),
 	})
 	if err != nil || res.IsError {
@@ -89,7 +89,7 @@ func TestCreateRecord(t *testing.T) {
 		CategoryName:  "昆曲",
 		CategoryNames: StringOrArray{"昆曲", "京昆"},
 		ArtistNames:   StringOrArray{"魏春荣"},
-		Price:         180,
+		Price:         fltPtrT(180),
 		DryRun:        boolPtr(false),
 	})
 	if err != nil || res.IsError {
@@ -104,7 +104,7 @@ func TestCreateRecord(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetRecord: %v", err)
 	}
-	if got.Name != "长生殿" || got.City != "北京" || got.Price != 180 {
+	if got.Name != "长生殿" || got.City != "北京" || got.Price == nil || *got.Price != 180 {
 		t.Fatalf("created record mismatch: %+v", got)
 	}
 	if len(got.CategoryNames) != 2 || len(got.ArtistNames) != 1 || got.ArtistNames[0] != "魏春荣" {
@@ -142,7 +142,7 @@ func TestUpdateRecord(t *testing.T) {
 		t.Fatalf("expected dry_run flag")
 	}
 	unchanged, _ := s.db.GetRecord(recID)
-	if unchanged.Name != "牡丹亭" || unchanged.Price != 0 {
+	if unchanged.Name != "牡丹亭" || unchanged.Price != nil {
 		t.Fatalf("dry run must not write; got %+v", unchanged)
 	}
 
@@ -158,7 +158,7 @@ func TestUpdateRecord(t *testing.T) {
 		t.Fatalf("apply: %v %v", res, err)
 	}
 	got, _ := s.db.GetRecord(recID)
-	if got.Name != "牡丹亭·上本" || got.Price != 220 {
+	if got.Name != "牡丹亭·上本" || got.Price == nil || *got.Price != 220 {
 		t.Fatalf("scalar update failed: %+v", got)
 	}
 	if len(got.CategoryNames) != 2 {
@@ -306,7 +306,7 @@ func TestUpdateRecordDryRunPreview(t *testing.T) {
 	if updated["name"] != "预览名" || updated["city"] != "苏州" || updated["company"] != "苏昆" || updated["channel"] != "线下" {
 		t.Fatalf("preview missing fields: %v", updated)
 	}
-	if updated["rating"] != float64(4) || updated["price"] != float64(88) || updated["seat"] != "A1" || updated["remark"] != "备注" {
+	if updated["rating"] != float64(4) || updated["price"] != 88.0 || updated["seat"] != "A1" || updated["remark"] != "备注" {
 		t.Fatalf("preview scalar mismatch: %v", updated)
 	}
 	// 库不变。
@@ -364,7 +364,7 @@ func TestBatchUpdateRecordsDryRun(t *testing.T) {
 		t.Fatalf("updated mismatch: %v", resultMap(t, res)["updated"])
 	}
 	got, _ := s.db.GetRecord(recID)
-	if got.Name != "更新名" || got.City != "杭州" || got.Company != "浙昆" || got.Rating != 5 || got.Price != 99 {
+	if got.Name != "更新名" || got.City != "杭州" || got.Company != "浙昆" || got.Rating != 5 || got.Price == nil || *got.Price != 99 {
 		t.Fatalf("batch apply scalar mismatch: %+v", got)
 	}
 	if len(got.CategoryNames) != 2 || got.CategoryNames[1] != "婺剧" {

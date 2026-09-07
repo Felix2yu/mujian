@@ -381,6 +381,20 @@ func (db *DB) migrate() error {
 		return err
 	}
 
+	// 费用字段改为可空：区分"未填写"(NULL)和"免费"(0)。
+	// SQLite 3.35+ 支持 ALTER COLUMN DROP NOT NULL，重跑安全（已是 nullable 则无操作）。
+	for _, col := range []string{"price", "pay_price", "other_cost"} {
+		var notnull int
+		if err := db.conn.QueryRow("SELECT \"notnull\" FROM pragma_table_info('records') WHERE name = ?", col).Scan(&notnull); err != nil {
+			return fmt.Errorf("pragma records.%s: %w", col, err)
+		}
+		if notnull == 1 {
+			if _, err := db.conn.Exec(fmt.Sprintf("ALTER TABLE records ALTER COLUMN %s DROP NOT NULL", col)); err != nil {
+				return fmt.Errorf("alter records.%s: %w", col, err)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -725,17 +739,28 @@ func scanRecord(rows *sql.Rows, extra ...any) (*models.Record, error) {
 	var r models.Record
 	var (
 		coordinate, guest, play, zheziIDs, tagIDs, categoryNames string
+		price, payPrice, otherCost sql.NullFloat64
 	)
 	dests := []any{
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
 		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &categoryNames, &guest, &play, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Duration, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
-		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency, &r.TotalCost,
+		&price, &r.PriceCurrency, &payPrice, &r.PayPriceCurrency, &otherCost, &r.OtherCostCurrency, &r.TotalCost,
 		&r.Watched,
 	}
 	err := rows.Scan(append(dests, extra...)...)
 	if err != nil {
 		return nil, err
+	}
+	// 将 sql.NullFloat64 转换为 *float64：Valid=false 表示 NULL（未填写）
+	if price.Valid {
+		r.Price = &price.Float64
+	}
+	if payPrice.Valid {
+		r.PayPrice = &payPrice.Float64
+	}
+	if otherCost.Valid {
+		r.OtherCost = &otherCost.Float64
 	}
 	r.Coordinate = unmarshalCoordinate(coordinate)
 	r.Guest = unmarshalStrings(guest)
@@ -1287,16 +1312,27 @@ func scanRecordRow(row *sql.Row) (*models.Record, error) {
 	var r models.Record
 	var (
 		coordinate, guest, play, zheziIDs, tagIDs, categoryNames string
+		price, payPrice, otherCost sql.NullFloat64
 	)
 	err := row.Scan(
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
 		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &categoryNames, &guest, &play, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Duration, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
-		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency, &r.TotalCost,
+		&price, &r.PriceCurrency, &payPrice, &r.PayPriceCurrency, &otherCost, &r.OtherCostCurrency, &r.TotalCost,
 		&r.Watched,
 	)
 	if err != nil {
 		return nil, err
+	}
+	// 将 sql.NullFloat64 转换为 *float64：Valid=false 表示 NULL（未填写）
+	if price.Valid {
+		r.Price = &price.Float64
+	}
+	if payPrice.Valid {
+		r.PayPrice = &payPrice.Float64
+	}
+	if otherCost.Valid {
+		r.OtherCost = &otherCost.Float64
 	}
 	r.Coordinate = unmarshalCoordinate(coordinate)
 	r.Guest = unmarshalStrings(guest)
@@ -1404,12 +1440,24 @@ func (db *DB) UpsertRecord(r models.Record) error {
 	normalizeCategories(&r)
 	db.normalizeRecordDate(&r)
 	// Compute total_cost: effective price + other_cost
-	r.TotalCost = (func() float64 {
-		if r.PayPrice > 0 {
-			return r.PayPrice
-		}
-		return r.Price
-	})() + r.OtherCost
+	// NULL 字段视为 0 参与计算
+	priceVal := 0.0
+	if r.Price != nil {
+		priceVal = *r.Price
+	}
+	payPriceVal := 0.0
+	if r.PayPrice != nil {
+		payPriceVal = *r.PayPrice
+	}
+	otherCostVal := 0.0
+	if r.OtherCost != nil {
+		otherCostVal = *r.OtherCost
+	}
+	if payPriceVal > 0 {
+		r.TotalCost = payPriceVal + otherCostVal
+	} else {
+		r.TotalCost = priceVal + otherCostVal
+	}
 	if _, err := db.stmtUpsertRecord.Exec(
 		r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
 		r.CustomCategoryID, r.CategoryName, marshalJSON(r.CategoryNames), marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),
@@ -1442,12 +1490,24 @@ func (db *DB) UpsertRecordTx(tx *sql.Tx, r models.Record) error {
 	normalizeCategories(&r)
 	db.normalizeRecordDate(&r)
 	// Compute total_cost: effective price + other_cost
-	r.TotalCost = (func() float64 {
-		if r.PayPrice > 0 {
-			return r.PayPrice
-		}
-		return r.Price
-	})() + r.OtherCost
+	// NULL 字段视为 0 参与计算
+	priceVal := 0.0
+	if r.Price != nil {
+		priceVal = *r.Price
+	}
+	payPriceVal := 0.0
+	if r.PayPrice != nil {
+		payPriceVal = *r.PayPrice
+	}
+	otherCostVal := 0.0
+	if r.OtherCost != nil {
+		otherCostVal = *r.OtherCost
+	}
+	if payPriceVal > 0 {
+		r.TotalCost = payPriceVal + otherCostVal
+	} else {
+		r.TotalCost = priceVal + otherCostVal
+	}
 	if _, err := tx.Exec(recordUpsertSQL,
 		r.ID, r.Name, r.Channel, r.City, r.Address, marshalJSON(r.Coordinate), r.Cover, r.CoverFile, r.CoverThumb,
 		r.CustomCategoryID, r.CategoryName, marshalJSON(r.CategoryNames), marshalJSON(r.ArtistNames), marshalJSON(r.Guest), marshalJSON(r.Play),

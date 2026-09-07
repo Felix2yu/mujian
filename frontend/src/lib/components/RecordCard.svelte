@@ -108,7 +108,9 @@
     </div>
     <div class="bottom">
       {#if record.address}<span class="tag venue" title={record.address}>{record.address}</span>{/if}
-      {#if record.price}<span class="price">{formatCurrency(record.price, record.price_currency)}</span>{/if}
+      {#if record.price !== null && record.price !== undefined}
+        <span class="price">{record.price === 0 ? '免费' : formatCurrency(record.price, record.price_currency)}</span>
+      {/if}
     </div>
   </div>
 </a>

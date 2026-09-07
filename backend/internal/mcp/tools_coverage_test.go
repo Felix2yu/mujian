@@ -107,7 +107,7 @@ func TestMutationHandlers(t *testing.T) {
 		t.Fatalf("batch_update_records: %v %v", res, err)
 	}
 	got, _ := s.db.GetRecord(recID)
-	if got.Name != "牡丹亭·纪念场" || got.Price != 199 || len(got.CategoryNames) != 2 {
+	if got.Name != "牡丹亭·纪念场" || got.Price == nil || *got.Price != 199 || len(got.CategoryNames) != 2 {
 		t.Fatalf("batch result: %+v", got)
 	}
 
