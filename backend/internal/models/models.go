@@ -48,6 +48,10 @@ type Record struct {
 	OtherCost         float64     `json:"other_cost"`
 	OtherCostCurrency string      `json:"other_cost_currency"`
 	TotalCost         float64     `json:"total_cost"` // pay_price > 0 ? pay_price : price + other_cost
+	// Watched marks a performance as 已观看/已到场. It is the CalDAV VTODO
+	// completion state: ticking a reminder in a CalDAV task client (e.g. Apple
+	// Reminders) round-trips here as STATUS:COMPLETED.
+	Watched bool `json:"watched"`
 }
 
 // Category mirrors the export's top-level `categories` array.
@@ -207,6 +211,9 @@ type RecordRequest struct {
 	PayPriceCurrency  string      `json:"pay_price_currency"`
 	OtherCost         float64     `json:"other_cost"`
 	OtherCostCurrency string      `json:"other_cost_currency"`
+	// Watched mirrors Record.Watched (已观看/已到场). See Record.Watched for
+	// the CalDAV VTODO completion semantics.
+	Watched bool `json:"watched"`
 }
 
 type CalendarEvent struct {

@@ -588,7 +588,7 @@
             {caldavCopied ? '已复制' : '复制'}
           </button>
         </div>
-        <span class="hint">CalDAV 账户地址（只读）：iOS「设置 → 日历 → 账户 → 其他 → 添加 CalDAV 账户」/ macOS「系统设置 → 互联网账户」，服务器只填域名，用户名随意，密码填上面的访问令牌。需 HTTPS；CalDAV 与 ICS 订阅并存会导致事件重复，配好后请退订旧订阅</span>
+        <span class="hint">CalDAV 账户地址：iOS「设置 → 日历 → 账户 → 其他 → 添加 CalDAV 账户」/ macOS「系统设置 → 互联网账户」，服务器只填域名，用户名随意，密码填上面的访问令牌。需 HTTPS；CalDAV 与 ICS 订阅并存会导致事件重复，配好后请退订旧订阅。同一账户下还会出现「幕间·提醒」任务清单（提醒事项 App）：每场演出是一条到期提醒，勾选完成即标记「已观看/已到场」并同步回幕间</span>
       </div>
     </div>
 {/snippet}

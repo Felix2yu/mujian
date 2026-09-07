@@ -353,6 +353,11 @@ func (db *DB) migrate() error {
 		return err
 	}
 
+	// watched（已观看/已到场）：CalDAV VTODO 完成状态回写；旧库加列默认 0。
+	if err := db.addColumn("records", "watched", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+
 	// One-time migration: expand legacy records.drama_ids JSON into the
 	// record_dramas relation table. Idempotent — existing relation rows are
 	// preserved and only missing links are inserted.
@@ -712,7 +717,7 @@ const recordColumns = `records.id, records.name, records.channel, records.city, 
 	records.zhezi_ids, records.tag_ids, records.date, records.date_text, records.rating, records.duration,
 	records.seat, records.friends, records.company, records.remark, records.active_status,
 	records.price, records.price_currency, records.pay_price, records.pay_price_currency,
-	records.other_cost, records.other_cost_currency, records.total_cost`
+	records.other_cost, records.other_cost_currency, records.total_cost, records.watched`
 
 // scanRecord scans recordColumns in order; extra destinations (appended after
 // the fixed columns, e.g. deleted_at) are supported via extra.
@@ -726,6 +731,7 @@ func scanRecord(rows *sql.Rows, extra ...any) (*models.Record, error) {
 		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &categoryNames, &guest, &play, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Duration, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
 		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency, &r.TotalCost,
+		&r.Watched,
 	}
 	err := rows.Scan(append(dests, extra...)...)
 	if err != nil {
@@ -1287,6 +1293,7 @@ func scanRecordRow(row *sql.Row) (*models.Record, error) {
 		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &categoryNames, &guest, &play, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Duration, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
 		&r.Price, &r.PriceCurrency, &r.PayPrice, &r.PayPriceCurrency, &r.OtherCost, &r.OtherCostCurrency, &r.TotalCost,
+		&r.Watched,
 	)
 	if err != nil {
 		return nil, err
@@ -1327,9 +1334,9 @@ const recordUpsertSQL = `
 		id, name, channel, city, address, coordinate, cover, cover_file, cover_thumb,
 		custom_category_id, category_name, category_names, artist_names, guest, play, drama_ids, zhezi_ids, tag_ids,
 		date, date_text, rating, duration, seat, friends, company, remark, active_status,
-		price, price_currency, pay_price, pay_price_currency, other_cost, other_cost_currency, total_cost
+		price, price_currency, pay_price, pay_price_currency, other_cost, other_cost_currency, total_cost, watched
 	) VALUES (
-		?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+		?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
 	)
 	ON CONFLICT(id) DO UPDATE SET
 		name=excluded.name, channel=excluded.channel, city=excluded.city, address=excluded.address,
@@ -1342,7 +1349,7 @@ const recordUpsertSQL = `
 		seat=excluded.seat, friends=excluded.friends, company=excluded.company, remark=excluded.remark, active_status=excluded.active_status,
 		price=excluded.price, price_currency=excluded.price_currency, pay_price=excluded.pay_price,
 		pay_price_currency=excluded.pay_price_currency, other_cost=excluded.other_cost, other_cost_currency=excluded.other_cost_currency,
-		total_cost=excluded.total_cost
+		total_cost=excluded.total_cost, watched=excluded.watched
 `
 
 // normalizeCategories reconciles the scalar primary category with the
@@ -1409,6 +1416,7 @@ func (db *DB) UpsertRecord(r models.Record) error {
 		marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
 		r.Date, r.DateText, r.Rating, r.Duration, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
 		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency, r.TotalCost,
+		r.Watched,
 	); err != nil {
 		return err
 	}
@@ -1446,6 +1454,7 @@ func (db *DB) UpsertRecordTx(tx *sql.Tx, r models.Record) error {
 		marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
 		r.Date, r.DateText, r.Rating, r.Duration, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
 		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency, r.TotalCost,
+		r.Watched,
 	); err != nil {
 		return err
 	}
@@ -1919,6 +1928,7 @@ func requestToRecord(r models.RecordRequest) models.Record {
 		Friends: r.Friends, Company: r.Company, Remark: r.Remark, ActiveStatus: r.ActiveStatus,
 		Price: r.Price, PriceCurrency: r.PriceCurrency, PayPrice: r.PayPrice,
 		PayPriceCurrency: r.PayPriceCurrency, OtherCost: r.OtherCost, OtherCostCurrency: r.OtherCostCurrency,
+		Watched: r.Watched,
 	}
 }
 
@@ -1927,6 +1937,17 @@ func (db *DB) DeleteRecord(id string) error {
 	// kept so a restore brings everything back; every read path filters
 	// deleted_at = 0, so counts and lists drop the record immediately.
 	return db.SoftDeleteRecord(id)
+}
+
+// SetRecordWatched toggles the 已观看/已到场 flag — the CalDAV VTODO completion
+// state. It is a targeted UPDATE (not a full upsert) so it never disturbs the
+// other columns, and only affects non-deleted records.
+func (db *DB) SetRecordWatched(id string, watched bool) error {
+	_, err := db.conn.Exec(
+		"UPDATE records SET watched = ? WHERE id = ? AND deleted_at = 0",
+		watched, id,
+	)
+	return err
 }
 
 // BatchUpdateRecords accepts models.BatchUpdateParams for batch field updates.

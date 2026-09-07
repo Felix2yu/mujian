@@ -22,6 +22,20 @@ func GenerateCalendar(records []models.Record, loc *time.Location, zheziNames ma
 	return b.String()
 }
 
+// GenerateTodos renders all records into a RFC 5545 VCALENDAR string whose
+// members are VTODO (tasks) instead of VEVENTs — the CalDAV task projection.
+func GenerateTodos(records []models.Record, loc *time.Location, zheziNames map[string]string) string {
+	var b strings.Builder
+	writeHeader(&b, loc)
+
+	for _, rec := range records {
+		writeTodo(&b, rec, loc, zheziNames)
+	}
+
+	b.WriteString("END:VCALENDAR\r\n")
+	return b.String()
+}
+
 // EventCalendar renders a single record as a standalone VCALENDAR with one
 // VEVENT. It is the object-resource representation served by the CalDAV
 // backend, sharing the exact same event formatting as the subscription feed.
@@ -29,6 +43,20 @@ func EventCalendar(rec models.Record, loc *time.Location, zheziNames map[string]
 	var b strings.Builder
 	writeHeader(&b, loc)
 	writeEvent(&b, rec, loc, zheziNames)
+	b.WriteString("END:VCALENDAR\r\n")
+	return b.String()
+}
+
+// TodoCalendar renders a single record as a standalone VCALENDAR with one
+// VTODO (task). It backs the CalDAV task projection: a record becomes a
+// reminder whose DUE is the performance time, so the user's task client
+// (e.g. Apple Reminders) fires native due notifications. STATUS reflects
+// rec.Watched (已观看/已到场) — ticking the reminder in the client round-trips
+// back as STATUS:COMPLETED and is stored on the record via SetRecordWatched.
+func TodoCalendar(rec models.Record, loc *time.Location, zheziNames map[string]string) string {
+	var b strings.Builder
+	writeHeader(&b, loc)
+	writeTodo(&b, rec, loc, zheziNames)
 	b.WriteString("END:VCALENDAR\r\n")
 	return b.String()
 }
@@ -136,6 +164,65 @@ func writeEvent(b *strings.Builder, rec models.Record, loc *time.Location, zhezi
 
 	writeLine(fmt.Sprintf("CATEGORIES:%s", escapeICS(rec.CategoryName)))
 	writeLine("END:VEVENT")
+}
+
+// writeTodo renders one record as a VTODO. DUE is the performance start time,
+// so a task client surfaces it as a due reminder; STATUS reflects rec.Watched
+// (已观看/已到场) and a VALARM fires a native notification shortly before the
+// show. LOCATION is included for context (task clients don't drop map pins).
+func writeTodo(b *strings.Builder, rec models.Record, loc *time.Location, zheziNames map[string]string) {
+	start := time.Unix(rec.Date, 0).In(loc)
+	startStr := start.Format("20060102T150405")
+
+	writeLine := func(s string) {
+		b.WriteString(foldICSLine(s))
+		b.WriteString("\r\n")
+	}
+	writeLine(fmt.Sprintf("BEGIN:VTODO"))
+	writeLine(fmt.Sprintf("UID:%s@mujian", rec.ID))
+	// DTSTAMP deterministic (derived from the event time) so the CalDAV ETag
+	// stays stable across syncs instead of forcing re-fetches.
+	writeLine(fmt.Sprintf("DTSTAMP;TZID=%s:%s", loc.String(), startStr))
+	writeLine(fmt.Sprintf("DTSTART;TZID=%s:%s", loc.String(), startStr))
+	writeLine(fmt.Sprintf("DUE;TZID=%s:%s", loc.String(), startStr))
+	writeLine(fmt.Sprintf("SUMMARY:%s", escapeICS(rec.Name)))
+
+	var desc []string
+	if len(rec.Play) > 0 {
+		desc = append(desc, "剧目: "+strings.Join(rec.Play, ", "))
+	}
+	if names := zheziNameList(rec.ZheziIDs, zheziNames); len(names) > 0 {
+		desc = append(desc, "折子: "+strings.Join(names, ", "))
+	}
+	if len(rec.ArtistNames) > 0 {
+		desc = append(desc, "演员: "+strings.Join(rec.ArtistNames, ", "))
+	}
+	if rec.Company != "" {
+		desc = append(desc, "剧团: "+rec.Company)
+	}
+	if len(desc) > 0 {
+		writeLine(fmt.Sprintf("DESCRIPTION:%s", escapeICS(strings.Join(desc, "\n"))))
+	}
+	if rec.Address != "" {
+		writeLine(fmt.Sprintf("LOCATION:%s", escapeICS(rec.Address)))
+	}
+	writeLine(fmt.Sprintf("CATEGORIES:%s", escapeICS(rec.CategoryName)))
+	if rec.Watched {
+		writeLine("STATUS:COMPLETED")
+		// COMPLETED is derived from the event time so the ETag stays stable
+		// while the task is in the completed state.
+		writeLine(fmt.Sprintf("COMPLETED;TZID=%s:%s", loc.String(), startStr))
+	} else {
+		writeLine("STATUS:NEEDS-ACTION")
+	}
+	// VALARM: remind 12 hours before the show. Task clients (Apple Reminders,
+	// Thunderbird, …) fire a native notification from this.
+	writeLine("BEGIN:VALARM")
+	writeLine("ACTION:DISPLAY")
+	writeLine("DESCRIPTION:演出提醒")
+	writeLine("TRIGGER:-PT12H")
+	writeLine("END:VALARM")
+	writeLine("END:VTODO")
 }
 
 // zheziNameList resolves a record's 折子 ids to display names using the

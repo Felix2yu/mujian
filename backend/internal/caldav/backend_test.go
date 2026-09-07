@@ -47,7 +47,7 @@ func TestDiscoveryPaths(t *testing.T) {
 		t.Errorf("home set = %q, want %q", p, HomeSetPath)
 	}
 	cals, err := b.ListCalendars(ctx)
-	if err != nil || len(cals) != 1 {
+	if err != nil || len(cals) != 2 {
 		t.Fatalf("ListCalendars = %v, %v", cals, err)
 	}
 	if cals[0].Path != CalendarPath || cals[0].Name != calendarDisplayName {
@@ -55,6 +55,13 @@ func TestDiscoveryPaths(t *testing.T) {
 	}
 	if len(cals[0].SupportedComponentSet) != 1 || cals[0].SupportedComponentSet[0] != "VEVENT" {
 		t.Errorf("supported components = %v, want [VEVENT]", cals[0].SupportedComponentSet)
+	}
+	// 任务集合：VTODO 组件，供提醒事项类客户端订阅。
+	if cals[1].Path != TasksPath || cals[1].Name != tasksDisplayName {
+		t.Errorf("task calendar = %+v", cals[1])
+	}
+	if len(cals[1].SupportedComponentSet) != 1 || cals[1].SupportedComponentSet[0] != "VTODO" {
+		t.Errorf("task supported components = %v, want [VTODO]", cals[1].SupportedComponentSet)
 	}
 }
 
@@ -265,5 +272,148 @@ func TestGetCalendarObjectResolvesZheziNames(t *testing.T) {
 	desc, err := co.Data.Events()[0].Props.Text(ical.PropDescription)
 	if err != nil || !strings.Contains(desc, "游园") {
 		t.Fatalf("DESCRIPTION should contain 折子 name 游园, got %q (%v)", desc, err)
+	}
+}
+
+// findTodo returns the first VTODO component of a calendar (go-ical exposes
+// only an Events() helper; VTODOs need manual iteration).
+func findTodo(cal *ical.Calendar) *ical.Component {
+	for _, child := range cal.Children {
+		if child.Name == ical.CompToDo {
+			return child
+		}
+	}
+	return nil
+}
+
+// taskCal builds a minimal VCALENDAR carrying one VTODO with the given STATUS,
+// as a task client would PUT when ticking/unticking a reminder.
+func taskCal(t *testing.T, status string) *ical.Calendar {
+	t.Helper()
+	text := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//mujian//CN\r\n" +
+		"BEGIN:VTODO\r\nUID:x@mujian\r\nSTATUS:" + status + "\r\nEND:VTODO\r\n" +
+		"END:VCALENDAR\r\n"
+	cal, err := ical.NewDecoder(strings.NewReader(text)).Decode()
+	if err != nil {
+		t.Fatalf("decode task ics: %v", err)
+	}
+	return cal
+}
+
+// 任务集合按 VTODO 渲染：DUE=演出开始，未观看时 STATUS:NEEDS-ACTION。
+func TestTaskListingRendersVTODO(t *testing.T) {
+	b := newTestBackend(t)
+	ctx := context.Background()
+	at := time.Date(2026, 9, 11, 19, 30, 0, 0, time.UTC)
+	if err := b.DB.UpsertRecord(testRecord("rec-todo", "提醒测试", at)); err != nil {
+		t.Fatalf("UpsertRecord: %v", err)
+	}
+	objs, err := b.ListCalendarObjects(ctx, TasksPath, nil)
+	if err != nil {
+		t.Fatalf("ListCalendarObjects(TasksPath): %v", err)
+	}
+	if len(objs) != 1 {
+		t.Fatalf("got %d task objects, want 1", len(objs))
+	}
+	if objs[0].Path != TasksPath+"rec-todo.ics" {
+		t.Errorf("task path = %q", objs[0].Path)
+	}
+	todo := findTodo(objs[0].Data)
+	if todo == nil {
+		t.Fatal("no VTODO component in task object")
+	}
+	status, _ := todo.Props.Text("STATUS")
+	if status != "NEEDS-ACTION" {
+		t.Errorf("STATUS = %q, want NEEDS-ACTION", status)
+	}
+	dueProp := todo.Props.Get("DUE")
+	// 19:30 UTC → 上海时间次日 03:30（数据库时区 Asia/Shanghai）。
+	if dueProp == nil || dueProp.Value != "20260912T033000" {
+		t.Errorf("DUE = %v, want 20260912T033000 (Asia/Shanghai)", dueProp)
+	}
+	// 事件集合仍走 VEVENT，不受任务投影影响。
+	events, err := b.ListCalendarObjects(ctx, CalendarPath, nil)
+	if err != nil || len(events) != 1 {
+		t.Fatalf("event listing = %d objects, %v", len(events), err)
+	}
+	if todo := findTodo(events[0].Data); todo != nil {
+		t.Error("event object must not contain VTODO components")
+	}
+}
+
+// 勾选/取消勾选：PUT STATUS:COMPLETED ↔ records.watched 的双向映射。
+func TestPutTaskCompletion(t *testing.T) {
+	b := newTestBackend(t)
+	ctx := context.Background()
+	at := time.Date(2026, 9, 11, 19, 30, 0, 0, time.UTC)
+	if err := b.DB.UpsertRecord(testRecord("rec-done", "勾选测试", at)); err != nil {
+		t.Fatalf("UpsertRecord: %v", err)
+	}
+
+	// 勾选：STATUS:COMPLETED → watched=true，返回的规范对象也应是完成态。
+	co, err := b.PutCalendarObject(ctx, TasksPath+"rec-done.ics", taskCal(t, "COMPLETED"), nil)
+	if err != nil {
+		t.Fatalf("PutCalendarObject(COMPLETED): %v", err)
+	}
+	rec, err := b.DB.GetRecord("rec-done")
+	if err != nil {
+		t.Fatalf("GetRecord: %v", err)
+	}
+	if !rec.Watched {
+		t.Error("STATUS:COMPLETED must persist watched=true")
+	}
+	todo := findTodo(co.Data)
+	if todo == nil {
+		t.Fatal("PUT response has no VTODO")
+	}
+	status, _ := todo.Props.Text("STATUS")
+	if status != "COMPLETED" {
+		t.Errorf("canonical STATUS = %q, want COMPLETED", status)
+	}
+
+	// 取消勾选：STATUS:NEEDS-ACTION → watched=false。
+	if _, err := b.PutCalendarObject(ctx, TasksPath+"rec-done.ics", taskCal(t, "NEEDS-ACTION"), nil); err != nil {
+		t.Fatalf("PutCalendarObject(NEEDS-ACTION): %v", err)
+	}
+	rec, err = b.DB.GetRecord("rec-done")
+	if err != nil {
+		t.Fatalf("GetRecord: %v", err)
+	}
+	if rec.Watched {
+		t.Error("STATUS:NEEDS-ACTION must clear watched")
+	}
+
+	// 客户端发来的其它字段改动被忽略：SUMMARY 改了也不落库。
+	cal := taskCal(t, "COMPLETED")
+	for i := range cal.Children {
+		if cal.Children[i].Name == ical.CompToDo {
+			cal.Children[i].Props.SetText(ical.PropSummary, "被篡改的标题")
+		}
+	}
+	if _, err := b.PutCalendarObject(ctx, TasksPath+"rec-done.ics", cal, nil); err != nil {
+		t.Fatalf("PutCalendarObject(tampered): %v", err)
+	}
+	rec, _ = b.DB.GetRecord("rec-done")
+	if rec.Name != "勾选测试" {
+		t.Errorf("client SUMMARY edit leaked through: %q", rec.Name)
+	}
+}
+
+// 任务写路径只对已有记录的 VTODO 开放：事件对象与未知 UID 一律拒绝。
+func TestPutTaskRejections(t *testing.T) {
+	b := newTestBackend(t)
+	ctx := context.Background()
+	cal := taskCal(t, "COMPLETED")
+	// VEVENT 对象：只读。
+	if _, err := b.PutCalendarObject(ctx, CalendarPath+"x.ics", cal, nil); err == nil {
+		t.Error("PUT on event object should be rejected")
+	}
+	// 未知 UID（含新建任务的尝试）。
+	if _, err := b.PutCalendarObject(ctx, TasksPath+"ghost.ics", cal, nil); err == nil {
+		t.Error("PUT on unknown task UID should be rejected")
+	}
+	// 删除提醒 ≠ 删除演出记录。
+	if err := b.DeleteCalendarObject(ctx, TasksPath+"x.ics"); err == nil {
+		t.Error("DeleteCalendarObject on task object should be rejected")
 	}
 }

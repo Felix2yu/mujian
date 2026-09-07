@@ -39,10 +39,16 @@ const (
 	PrincipalPath = "/caldav/user/"
 	// HomeSetPath is the calendar-home-set container.
 	HomeSetPath = "/caldav/user/calendars/"
-	// CalendarPath is the single exposed calendar collection.
+	// CalendarPath is the exposed event calendar collection (VEVENT).
 	CalendarPath = "/caldav/user/calendars/mujian/"
+	// TasksPath is the exposed task collection (VTODO). Ticking a task in a
+	// CalDAV task client (e.g. Apple Reminders) round-trips back as
+	// STATUS:COMPLETED and is stored on the record as 已观看/已到场.
+	TasksPath = "/caldav/user/calendars/mujian-tasks/"
 	// calendarDisplayName is shown as the calendar name in Calendar.app.
 	calendarDisplayName = "幕间"
+	// tasksDisplayName is shown as the task-list name in Reminders.app.
+	tasksDisplayName = "幕间·提醒"
 )
 
 // Backend implements emcaldav.Backend on top of the records database.
@@ -70,19 +76,26 @@ func (b *Backend) CreateCalendar(ctx context.Context, calendar *emcaldav.Calenda
 	return webdav.NewHTTPError(403, errors.New("caldav: read-only backend"))
 }
 
-// ListCalendars implements emcaldav.Backend with the single mujian calendar.
+// ListCalendars implements emcaldav.Backend with the mujian event calendar
+// and the mujian-tasks task collection (both live under the same home-set, so
+// Calendar.app picks up the VEVENT one and Reminders.app the VTODO one).
 func (b *Backend) ListCalendars(ctx context.Context) ([]emcaldav.Calendar, error) {
-	return []emcaldav.Calendar{b.calendar()}, nil
+	return []emcaldav.Calendar{b.calendar(), b.tasksCalendar()}, nil
 }
 
 // GetCalendar implements emcaldav.Backend. Path comparison is Clean-normalized
 // so Apple's trailing-slash collection requests match the canonical href.
 func (b *Backend) GetCalendar(ctx context.Context, p string) (*emcaldav.Calendar, error) {
-	if stdpath.Clean(p) != stdpath.Clean(CalendarPath) {
+	switch stdpath.Clean(p) {
+	case stdpath.Clean(CalendarPath):
+		cal := b.calendar()
+		return &cal, nil
+	case stdpath.Clean(TasksPath):
+		cal := b.tasksCalendar()
+		return &cal, nil
+	default:
 		return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar %q not found", p))
 	}
-	cal := b.calendar()
-	return &cal, nil
 }
 
 func (b *Backend) calendar() emcaldav.Calendar {
@@ -94,12 +107,26 @@ func (b *Backend) calendar() emcaldav.Calendar {
 	}
 }
 
+// tasksCalendar is the VTODO collection. It is read-only for listing but a
+// task client may tick items (STATUS:COMPLETED), which the backend persists
+// as the record's 已观看/已到场 flag (see PutCalendarObject).
+func (b *Backend) tasksCalendar() emcaldav.Calendar {
+	return emcaldav.Calendar{
+		Path:                  TasksPath,
+		Name:                  tasksDisplayName,
+		Description:           "幕间演出提醒（可勾选完成）",
+		SupportedComponentSet: []string{ical.CompToDo},
+	}
+}
+
 // GetCalendarObject implements emcaldav.Backend. Object paths are
-// "<CalendarPath><id>.ics". A GET/PROPFIND on the collection itself (browsers do
-// this; Apple never does) falls back to serving the whole calendar as one
-// object so the URL is inspectable instead of a bare 404.
+// "<CalendarPath|TasksPath><id>.ics". A GET/PROPFIND on a collection itself
+// (browsers do this; Apple never does) falls back to serving the whole
+// calendar as one object so the URL is inspectable instead of a bare 404.
 func (b *Backend) GetCalendarObject(ctx context.Context, p string, req *emcaldav.CalendarCompRequest) (*emcaldav.CalendarObject, error) {
-	if stdpath.Clean(p) == stdpath.Clean(CalendarPath) {
+	clean := stdpath.Clean(p)
+	switch clean {
+	case stdpath.Clean(CalendarPath):
 		recs, zheziNames, err := b.loadRecords(ctx)
 		if err != nil {
 			return nil, err
@@ -110,8 +137,19 @@ func (b *Backend) GetCalendarObject(ctx context.Context, p string, req *emcaldav
 			return nil, err
 		}
 		return &co, nil
+	case stdpath.Clean(TasksPath):
+		recs, zheziNames, err := b.loadRecords(ctx)
+		if err != nil {
+			return nil, err
+		}
+		text := ics.GenerateTodos(recs, b.DB.Location(), zheziNames)
+		co, err := calendarObjectFromICS(TasksPath, text, time.Now())
+		if err != nil {
+			return nil, err
+		}
+		return &co, nil
 	}
-	id, ok := objectID(p)
+	id, isTask, ok := objectID(p)
 	if !ok {
 		return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar object %q not found", p))
 	}
@@ -123,25 +161,26 @@ func (b *Backend) GetCalendarObject(ctx context.Context, p string, req *emcaldav
 	if err != nil {
 		names = nil
 	}
-	co, err := b.toCalendarObject(*rec, names)
+	co, err := b.toCalendarObject(*rec, names, isTask)
 	if err != nil {
 		return nil, err
 	}
 	return &co, nil
 }
 
-// ListCalendarObjects implements emcaldav.Backend (full listing).
+// ListCalendarObjects implements emcaldav.Backend (full listing). The served
+// component kind (VEVENT vs VTODO) follows the requested collection.
 func (b *Backend) ListCalendarObjects(ctx context.Context, path string, req *emcaldav.CalendarCompRequest) ([]emcaldav.CalendarObject, error) {
 	recs, zheziNames, err := b.loadRecords(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return b.toCalendarObjects(recs, zheziNames)
+	return b.toCalendarObjects(recs, zheziNames, stdpath.Clean(path) == stdpath.Clean(TasksPath))
 }
 
 // QueryCalendarObjects implements emcaldav.Backend. Time-range filters (the
-// VEVENT comp of the client's comp-filter) are honored; prop-filters are
-// ignored — over-returning events is protocol-legal, the client drops them.
+// VEVENT/VTODO comp of the client's comp-filter) are honored; prop-filters are
+// ignored — over-returning objects is protocol-legal, the client drops them.
 func (b *Backend) QueryCalendarObjects(ctx context.Context, path string, query *emcaldav.CalendarQuery) ([]emcaldav.CalendarObject, error) {
 	recs, zheziNames, err := b.loadRecords(ctx)
 	if err != nil {
@@ -152,12 +191,39 @@ func (b *Backend) QueryCalendarObjects(ctx context.Context, path string, query *
 			recs = filterByTimeRange(recs, start, end)
 		}
 	}
-	return b.toCalendarObjects(recs, zheziNames)
+	return b.toCalendarObjects(recs, zheziNames, stdpath.Clean(path) == stdpath.Clean(TasksPath))
 }
 
-// PutCalendarObject is rejected: records are edited through the mujian UI/API.
+// PutCalendarObject accepts completion writes for VTODO (task) objects only.
+// The backend is still read-only for VEVENT objects and for any unknown UID —
+// ticking a reminder in a task client round-trips here as STATUS:COMPLETED,
+// which we persist as the record's 已观看/已到场 flag. We then re-render the
+// canonical VTODO from the database (ignoring any other fields the client may
+// have sent) so the served object stays authoritative and its ETag updates.
 func (b *Backend) PutCalendarObject(ctx context.Context, path string, calendar *ical.Calendar, opts *emcaldav.PutCalendarObjectOptions) (*emcaldav.CalendarObject, error) {
-	return nil, webdav.NewHTTPError(403, errors.New("caldav: read-only backend"))
+	id, isTask, ok := objectID(path)
+	if !ok || !isTask {
+		return nil, webdav.NewHTTPError(403, errors.New("caldav: only task completion is writable"))
+	}
+	watched := vtodoStatusCompleted(calendar)
+	if err := b.DB.SetRecordWatched(id, watched); err != nil {
+		return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar object %q not found", path))
+	}
+	// Re-render the canonical object from the database so the client sees the
+	// authoritative state (and a fresh ETag) rather than what it just sent.
+	rec, err := b.DB.GetRecord(id)
+	if err != nil {
+		return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar object %q not found", path))
+	}
+	names, err := b.DB.GetZheziNames(rec.ZheziIDs)
+	if err != nil {
+		names = nil
+	}
+	co, err := b.toCalendarObject(*rec, names, true)
+	if err != nil {
+		return nil, err
+	}
+	return &co, nil
 }
 
 // DeleteCalendarObject is rejected: records are edited through the mujian UI/API.
@@ -206,21 +272,44 @@ func filterByTimeRange(recs []models.Record, start, end time.Time) []models.Reco
 	return out
 }
 
-// objectID extracts the record id from "<CalendarPath><id>.ics".
-func objectID(p string) (string, bool) {
+// objectID extracts the record id (and whether the path is a task object)
+// from "<CalendarPath|TasksPath><id>.ics".
+func objectID(p string) (id string, isTask bool, ok bool) {
 	clean := stdpath.Clean(p)
-	if !strings.HasPrefix(clean, CalendarPath) {
-		return "", false
+	switch {
+	case strings.HasPrefix(clean, TasksPath):
+		id, isTask, ok = strings.TrimPrefix(clean, TasksPath), true, true
+	case strings.HasPrefix(clean, CalendarPath):
+		id, isTask, ok = strings.TrimPrefix(clean, CalendarPath), false, true
+	default:
+		return "", false, false
 	}
-	name := strings.TrimPrefix(clean, CalendarPath)
-	if !strings.HasSuffix(name, ".ics") || strings.Contains(name, "/") || name == ".ics" {
-		return "", false
+	if !strings.HasSuffix(id, ".ics") || strings.Contains(id, "/") || id == ".ics" {
+		return "", false, false
 	}
-	id := strings.TrimSuffix(name, ".ics")
+	id = strings.TrimSuffix(id, ".ics")
 	if id == "" {
-		return "", false
+		return "", false, false
 	}
-	return id, true
+	return id, isTask, true
+}
+
+// vtodoStatusCompleted reports whether a parsed calendar's VTODO carries
+// STATUS:COMPLETED (i.e. the reminder was ticked off). Non-task or missing
+// STATUS defaults to false (NEEDS-ACTION).
+func vtodoStatusCompleted(cal *ical.Calendar) bool {
+	if cal == nil {
+		return false
+	}
+	for _, comp := range cal.Children {
+		if comp.Name != ical.CompToDo {
+			continue
+		}
+		if prop := comp.Props.Get("STATUS"); prop != nil {
+			return strings.EqualFold(prop.Value, "COMPLETED")
+		}
+	}
+	return false
 }
 
 func (b *Backend) loadRecords(ctx context.Context) ([]models.Record, map[string]string, error) {
@@ -235,10 +324,10 @@ func (b *Backend) loadRecords(ctx context.Context) ([]models.Record, map[string]
 	return recs, zheziNames, nil
 }
 
-func (b *Backend) toCalendarObjects(recs []models.Record, zheziNames map[string]string) ([]emcaldav.CalendarObject, error) {
+func (b *Backend) toCalendarObjects(recs []models.Record, zheziNames map[string]string, isTask bool) ([]emcaldav.CalendarObject, error) {
 	out := make([]emcaldav.CalendarObject, 0, len(recs))
 	for _, rec := range recs {
-		co, err := b.toCalendarObject(rec, zheziNames)
+		co, err := b.toCalendarObject(rec, zheziNames, isTask)
 		if err != nil {
 			return nil, err
 		}
@@ -249,9 +338,18 @@ func (b *Backend) toCalendarObjects(recs []models.Record, zheziNames map[string]
 
 // toCalendarObject renders one record into a parsed ical.Calendar plus a
 // content-derived ETag (so client-side change detection works on edits).
-func (b *Backend) toCalendarObject(rec models.Record, zheziNames map[string]string) (emcaldav.CalendarObject, error) {
-	text := ics.EventCalendar(rec, b.DB.Location(), zheziNames)
-	co, err := calendarObjectFromICS(CalendarPath+rec.ID+".ics", text, time.Unix(rec.Date, 0))
+// isTask selects the VTODO projection over the default VEVENT one.
+func (b *Backend) toCalendarObject(rec models.Record, zheziNames map[string]string, isTask bool) (emcaldav.CalendarObject, error) {
+	var text string
+	var objPath string
+	if isTask {
+		text = ics.TodoCalendar(rec, b.DB.Location(), zheziNames)
+		objPath = TasksPath + rec.ID + ".ics"
+	} else {
+		text = ics.EventCalendar(rec, b.DB.Location(), zheziNames)
+		objPath = CalendarPath + rec.ID + ".ics"
+	}
+	co, err := calendarObjectFromICS(objPath, text, time.Unix(rec.Date, 0))
 	if err != nil {
 		return emcaldav.CalendarObject{}, err
 	}
