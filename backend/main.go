@@ -194,7 +194,7 @@ func caldavCapabilityMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Dav", "1, 3, calendar-access")
 		if r.Method == http.MethodOptions {
-			w.Header().Set("Allow", "OPTIONS, GET, HEAD, PROPFIND, REPORT")
+			w.Header().Set("Allow", "OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, REPORT")
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}

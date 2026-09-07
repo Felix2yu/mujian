@@ -155,7 +155,7 @@ func (b *Backend) GetCalendarObject(ctx context.Context, p string, req *emcaldav
 	}
 	rec, err := b.DB.GetRecord(id)
 	if err != nil {
-		return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar object %q not found", p))
+		return nil, webdav.NewHTTPError(503, fmt.Errorf("caldav: database temporarily unavailable: %w", err))
 	}
 	names, err := b.DB.GetZheziNames(rec.ZheziIDs)
 	if err != nil {
@@ -207,13 +207,13 @@ func (b *Backend) PutCalendarObject(ctx context.Context, path string, calendar *
 	}
 	watched := vtodoStatusCompleted(calendar)
 	if err := b.DB.SetRecordWatched(id, watched); err != nil {
-		return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar object %q not found", path))
+		return nil, webdav.NewHTTPError(503, fmt.Errorf("caldav: database temporarily unavailable: %w", err))
 	}
 	// Re-render the canonical object from the database so the client sees the
 	// authoritative state (and a fresh ETag) rather than what it just sent.
 	rec, err := b.DB.GetRecord(id)
 	if err != nil {
-		return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar object %q not found", path))
+		return nil, webdav.NewHTTPError(503, fmt.Errorf("caldav: database temporarily unavailable: %w", err))
 	}
 	names, err := b.DB.GetZheziNames(rec.ZheziIDs)
 	if err != nil {
@@ -315,7 +315,7 @@ func vtodoStatusCompleted(cal *ical.Calendar) bool {
 func (b *Backend) loadRecords(ctx context.Context) ([]models.Record, map[string]string, error) {
 	recs, err := b.DB.ListRecordsContext(ctx, db.RecordFilter{NoLimit: true})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, webdav.NewHTTPError(503, fmt.Errorf("caldav: database temporarily unavailable: %w", err))
 	}
 	zheziNames, err := b.DB.GetZheziNames(collectZheziIDs(recs))
 	if err != nil {
