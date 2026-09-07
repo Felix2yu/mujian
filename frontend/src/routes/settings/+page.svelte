@@ -75,7 +75,7 @@
     costWizardLoading = true;
     costWizardError = '';
     try {
-      const res = await api.listRecords({ missing: 'price', limit: '1000' });
+      const res = await api.listRecords({ missing: 'price,pay_price,other_cost', limit: '1000' });
       zeroCostRecords = res.records || [];
     } catch (e) {
       costWizardError = '加载失败：' + e.message;
@@ -93,6 +93,11 @@
     } finally {
       costWizardProcessing = false;
     }
+  }
+  function hasUnclearField(rec) {
+    return (rec.price === null || rec.price === 0) ||
+           (rec.pay_price === null || rec.pay_price === 0) ||
+           (rec.other_cost === null || rec.other_cost === 0);
   }
 
   // S3 连接自检：用当前（合并掩码后的）配置做一次真实读写探测，验证连通性 /
@@ -948,7 +953,7 @@
 {#snippet costWizardCard()}
 <div class="card sec">
   <h3>费用补全</h3>
-  <p class="tiny muted" style="margin: 0 0 10px;">将所有费用为 0 的记录标记为「免费」或「未填写」，以便区分。</p>
+  <p class="tiny muted" style="margin: 0 0 10px;">将费用为 0 或未填写的记录标记为「免费」或「未填写」，以便区分。</p>
   {#if costWizardLoading}
     <div class="banner info">加载中…</div>
   {:else if costWizardError}
@@ -956,19 +961,46 @@
   {:else if zeroCostRecords.length === 0}
     <div class="banner success">✓ 所有费用字段已补全</div>
   {:else}
-    <div class="banner info">共 {zeroCostRecords.length} 条记录费用为 0</div>
-    <div style="margin-top: 10px; max-height: 300px; overflow-y: auto;">
+    <div class="banner info">共 {zeroCostRecords.length} 条记录需要确认</div>
+    <div style="margin-top: 10px; max-height: 400px; overflow-y: auto;">
       {#each zeroCostRecords as rec}
-        <div style="display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border);">
-          <span style="flex: 1; font-size: 13px;">{new Date(rec.date * 1000).toLocaleDateString()} {rec.name}</span>
-          <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'price', 0)}>免费</button>
-          <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'price', null)}>未填写</button>
+        <div style="padding: 8px 0; border-bottom: 1px solid var(--border);">
+          <div style="font-size: 13px; margin-bottom: 6px; color: var(--text-2);">{new Date(rec.date * 1000).toLocaleDateString()} {rec.name}</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            {#if rec.price === null || rec.price === 0}
+              <div style="display: flex; align-items: center; gap: 4px; font-size: 12px;">
+                <span style="color: var(--text-3);">票价:</span>
+                <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'price', 0)}>免费</button>
+                <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'price', null)}>未填写</button>
+              </div>
+            {/if}
+            {#if rec.pay_price === null || rec.pay_price === 0}
+              <div style="display: flex; align-items: center; gap: 4px; font-size: 12px;">
+                <span style="color: var(--text-3);">实付:</span>
+                <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'pay_price', 0)}>免费</button>
+                <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'pay_price', null)}>未填写</button>
+              </div>
+            {/if}
+            {#if rec.other_cost === null || rec.other_cost === 0}
+              <div style="display: flex; align-items: center; gap: 4px; font-size: 12px;">
+                <span style="color: var(--text-3);">其他:</span>
+                <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'other_cost', 0)}>无开销</button>
+                <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'other_cost', null)}>未填写</button>
+              </div>
+            {/if}
+          </div>
         </div>
       {/each}
     </div>
-    <div style="margin-top: 10px; display: flex; gap: 8px;">
-      <button class="btn" disabled={costWizardProcessing} onclick={() => markCostField(zeroCostRecords.map(r => r.id), 'price', 0)}>全部标记免费</button>
-      <button class="btn" disabled={costWizardProcessing} onclick={() => markCostField(zeroCostRecords.map(r => r.id), 'price', null)}>全部标记未填写</button>
+    <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
+      <button class="btn sm" disabled={costWizardProcessing} onclick={() => {
+        const ids = zeroCostRecords.map(r => r.id);
+        markCostField(ids, 'price', 0);
+      }}>票价全部免费</button>
+      <button class="btn sm" disabled={costWizardProcessing} onclick={() => {
+        const ids = zeroCostRecords.map(r => r.id);
+        markCostField(ids, 'price', null);
+      }}>票价全部未填写</button>
     </div>
   {/if}
   <button class="btn sm" style="margin-top: 8px;" onclick={loadZeroCostRecords}>刷新列表</button>
