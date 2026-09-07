@@ -75,7 +75,7 @@
     costWizardLoading = true;
     costWizardError = '';
     try {
-      const res = await api.searchRecords({ missing: 'price', limit: 1000 });
+      const res = await api.listRecords({ missing: 'price', limit: '1000' });
       zeroCostRecords = res.records || [];
     } catch (e) {
       costWizardError = '加载失败：' + e.message;
