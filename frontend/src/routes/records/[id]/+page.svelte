@@ -481,7 +481,7 @@
           </div>
           <div class="fee-card">
             <span class="fee-label">其他花费</span>
-            <span class="fee-amount" class:is-empty={rec.other_cost === null || rec.other_cost === undefined}>{rec.other_cost === null || rec.other_cost === undefined ? '—' : rec.other_cost === 0 ? '免费' : formatCurrency(rec.other_cost, rec.other_cost_currency)}</span>
+            <span class="fee-amount" class:is-empty={rec.other_cost === null || rec.other_cost === undefined}>{rec.other_cost === null || rec.other_cost === undefined ? '—' : formatCurrency(rec.other_cost, rec.other_cost_currency)}</span>
           </div>
         </div>
         {#if rec.total_cost > 0}
