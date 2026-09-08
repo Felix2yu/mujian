@@ -18,6 +18,7 @@
 - **存储热切换** — 本地 ↔ S3 保存后立即生效，无需重启
 - **导入导出** — 兼容「记录现场」导出的 `data.json` 与 `JI_LU_XIAN_CHANG.android.zip`（含 base64 封面），支持 JSON / ZIP 备份恢复
 - **AI 助手（MCP）** — 内置 Model Context Protocol 服务器，支持 AI 批量查询/修改/分析演出数据：按演员统一剧团、合并近似场馆写法、从互联网补充剧目常演折子等
+- **货殖账单关联** — 与自建记账系统「货殖」打通，演出可绑定账单 ID，详情页展示「门票实付 / 其他开销」分项与合计，优先采用货殖金额而非内建费用，详见 [docs/huozhi.md](docs/huozhi.md)
 - **PWA 支持** — 可添加到主屏幕，离线缓存，推送通知提醒
 - **暗色模式** — 跟随系统或手动切换
 
@@ -121,6 +122,11 @@ cd backend && ./mujian        # MCP 随服务自动启动；opencode 用户由�
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | — | S3 凭证 |
 | `S3_PUBLIC_URL` | — | S3 封面公开访问地址前缀 |
 | `MJ_AUTH_TOKEN` | — | 设置后所有 API/MCP 请求需携带该令牌（Bearer 头或 `?token=` 参数） |
+| `HUOZHI_ENABLED` | `false` | 货殖账单关联总开关 |
+| `HUOZHI_DOMAIN` | — | 货殖实例域名 |
+| `HUOZHI_API_KEY` | — | 货殖 API Key（`X-API-Key`） |
+| `HUOZHI_BILL_PATH` | `/bills/{id}` | 账单页路径模板（`{id}` 替换为账单 ID） |
+| `HUOZHI_TICKET_CATEGORIES` | `娱乐,演出,门票,戏,剧,综艺,电影,演唱会,音乐会,话剧,曲艺,相声` | 命中即归「门票实付」的分类关键词（逗号分隔） |
 | `BACKUP_INTERVAL_HOURS` | `0` | 自动备份间隔（0 = 关闭），可在设置页改 |
 | `BACKUP_KEEP` | `10` | 备份快照保留份数 |
 | `BACKUP_FORMAT` | `db` | 备份格式（`db`/`json`/`zip`） |
@@ -193,6 +199,9 @@ mujian/
 | GET | `/stats` `/dashboard` | 统计 / 仪表盘 |
 | GET | `/autocomplete/{field}` `/field/{field}/{value}` | 字段补全 / 字段筛选 |
 | GET/PUT | `/settings` | 读取 / 更新设置 |
+| GET | `/records/{id}/bills` | 解析演出关联的货殖账单（明细 / 分项 / 合计），见 [docs/huozhi.md](docs/huozhi.md) |
+| POST | `/huozhi/bills` | 保存前批量预览货殖账单 |
+| POST | `/settings/test-huozhi` | 校验货殖配置（可带 `bill_id` 真实拉取一次） |
 | POST | `/upload` | 上传封面（≤8MB，按当前编码格式存储） |
 | GET | `/export?format=zip` | 导出 JSON / ZIP 备份 |
 | POST | `/backup/run`、`/backup/restore-from` | 立即备份 / 从已有快照恢复（json/zip） |

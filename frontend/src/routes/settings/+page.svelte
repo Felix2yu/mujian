@@ -617,7 +617,7 @@
         {:else}
           <p class="hint-row">✓ S3 凭据已配置（见下方「S3 对象存储」卡片），保存后立即生效，无需重启</p>
         {/if}
-        <p class="hint-row">切换存储方式不会自动迁移已有封面：切到 S3 后旧图仍留在本地磁盘，新上传的才会写入 S3；可在下方 S3 卡片中执行「把本地封面上传到 S3」实现无缝衔接</p>
+        <p class="hint-row">切换存储方式不会自动迁移已有封面：切到 S3 后旧图仍留在本地磁盘，新上传的才会写入 S3；<br />可在下方 S3 卡片中执行「把本地封面上传到 S3」实现无缝衔接</p>
       {/if}
     </div>
 {/snippet}
@@ -677,7 +677,9 @@
 <div class="card sec">
       <h3>日历</h3>
       <p class="hint" style="margin-bottom: 12px;">
-        两种把演出记录同步进系统日历的方式：<b>ICS 订阅</b>——兼容性最好，Google 日历 / 第三方客户端均可，但 Apple 日历对订阅源一律不渲染地图（平台限制）；<b>CalDAV 账户</b>——iOS / macOS 原生日历推荐方式，事件是本地一等事件，LOCATION 显示可点地图卡片，且随记录自动增量同步。详细对比与反向代理注意事项见项目仓库 docs/calendar.md。地址含令牌，请勿公开分享
+        两种把演出记录同步进系统日历的方式：<b>ICS 订阅</b>——兼容性最好，Google 日历 / 第三方客户端均可，但 Apple 日历对订阅源一律不渲染地图（平台限制）；<b>CalDAV 账户</b>——iOS / macOS 原生日历推荐方式，事件是本地一等事件，LOCATION 显示可点地图卡片，且随记录自动增量同步。<br />
+        详细对比与反向代理注意事项见项目仓库 docs/calendar.md。<br />
+        地址含令牌，请勿公开分享
       </p>
       <div class="cal-actions">
         <a class="btn" href={api.getICSUrl({ dl: '1' })}>⇩ 导出日历 (.ics)</a>
@@ -718,7 +720,9 @@
             {caldavCopied ? '已复制' : '复制'}
           </button>
         </div>
-        <span class="hint">CalDAV 账户地址：iOS「设置 → 日历 → 账户 → 其他 → 添加 CalDAV 账户」/ macOS「系统设置 → 互联网账户」，服务器只填域名，用户名随意，密码填上面的访问令牌。需 HTTPS；CalDAV 与 ICS 订阅并存会导致事件重复，配好后请退订旧订阅。同一账户下还会出现「幕间·提醒」任务清单（提醒事项 App）：每场演出是一条到期提醒，勾选完成即标记「已观看/已到场」并同步回幕间</span>
+        <span class="hint">CalDAV 账户地址：iOS「设置 → 日历 → 账户 → 其他 → 添加 CalDAV 账户」/ macOS「系统设置 → 互联网账户」，服务器只填域名，用户名随意，密码填上面的访问令牌。<br />
+        需 HTTPS；CalDAV 与 ICS 订阅并存会导致事件重复，配好后请退订旧订阅。<br />
+        同一账户下还会出现「幕间·提醒」任务清单（提醒事项 App）：每场演出是一条到期提醒，勾选完成即标记「已观看/已到场」并同步回幕间</span>
       </div>
     </div>
 {/snippet}
@@ -864,14 +868,14 @@
       </label>
       <input class="input" type="password" bind:value={authToken} placeholder="未设置" autocomplete="new-password" style="max-width: 320px;" />
       <p class="hint" style="margin-top: 8px;">
-        在服务器上配置环境变量 MJ_AUTH_TOKEN（或设置文件中的 auth_token）即启用鉴权，此后所有 API/MCP 请求都必须携带这个令牌。
+        在服务器上配置环境变量 MJ_AUTH_TOKEN（或设置文件中的 auth_token）即启用鉴权，此后所有 API/MCP 请求都必须携带这个令牌。<br />
         在上方填入与服务器相同的值并保存即可正常使用：本页只把它记在本机浏览器（localStorage），每次请求自动附带；
         保存时不会把令牌发回服务器——服务器已经从环境变量拿到了这个值，无需再存一份。
-        {#if authRequired}
-          服务端已启用鉴权：未填写或填错时，除本页外的所有页面和接口都会提示 401 未授权，填对后立即恢复，无需重启。
-        {/if}
-        日历订阅地址会自动附带 ?token= 参数（日历客户端无法自定义请求头）。
       </p>
+      {#if authRequired}
+      <p class="hint" style="margin-top: 8px;">服务端已启用鉴权：未填写或填错时，除本页外的所有页面和接口都会提示 401 未授权，填对后立即恢复，无需重启。</p>
+      {/if}
+      <p class="hint" style="margin-top: 8px;">日历订阅地址会自动附带 ?token= 参数（日历客户端无法自定义请求头）。</p>
     </div>
 {/snippet}
 
@@ -952,7 +956,7 @@
         <label class="field">
           <span>公网访问地址（Public URL）</span>
           <input class="input" type="text" bind:value={settings.s3_public_url} placeholder="https://cdn.example.com/mujian" spellcheck="false" />
-          <span class="hint">前端从该地址直接加载封面，要求桶可公开读取或挂了 CDN；留空则回退到 /uploads/ 路径（仅当反向代理把该路径映射到桶时可用）</span>
+          <span class="hint">前端从该地址直接加载封面，要求桶可公开读取或挂了 CDN。<br />留空则回退到 /uploads/ 路径（仅当反向代理把该路径映射到桶时可用）</span>
         </label>
       </div>
 
@@ -1048,9 +1052,11 @@
 
 {#snippet huozhiCard()}
 <div class="card sec">
-      <h3>货殖账单关联</h3>
+      <h3>「货殖」账单关联</h3>
       <p class="tiny muted" style="margin: 0 0 10px;">
-        货殖是自建的记账站点。配置后，演出记录可绑定货殖账单 ID：详情页会展示这些账单的合计金额（悬停看描述 / 账户等明细，点击跳转账单页），并在货殖有数据时优先采用接口金额而非内建费用。历史演出不做回溯关联，只在新建 / 编辑时手动绑定。
+        货殖是自建的个人记账系统。<a href="https://github.com/Felix2yu/huozhi" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: underline; text-underline-offset: 2px;">项目主页 ↗</a><br />
+        配置后，演出记录可绑定货殖账单 ID：详情页会展示这些账单的合计金额（悬停看描述 / 账户等明细，点击跳转账单页），并在货殖有数据时优先采用接口金额而非内建费用。<br />
+        历史演出不做回溯关联，只在新建 / 编辑时手动绑定。
       </p>
       <label class="switch-row">
         <span>启用货殖关联</span>
