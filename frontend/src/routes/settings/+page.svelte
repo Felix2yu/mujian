@@ -307,6 +307,7 @@
       settings.huozhi_bill_path = settings.huozhi_bill_path || '/bills/{id}';
       loadedHuozhiApiKey = settings.huozhi_api_key || '';
       settings.huozhi_api_key = settings.huozhi_api_key || '';
+      settings.huozhi_ticket_categories = settings.huozhi_ticket_categories || '';
       if (typeof settings.show_friends !== 'boolean') settings.show_friends = true;
       if (typeof settings.show_pay_price !== 'boolean') settings.show_pay_price = true;
       if (typeof settings.show_other_cost !== 'boolean') settings.show_other_cost = true;
@@ -378,6 +379,7 @@
       payload.huozhi_enabled = !!settings.huozhi_enabled;
       payload.huozhi_domain = settings.huozhi_domain.trim();
       payload.huozhi_bill_path = settings.huozhi_bill_path.trim() || '/bills/{id}';
+      payload.huozhi_ticket_categories = settings.huozhi_ticket_categories.trim();
       payload.huozhi_api_key = settings.huozhi_api_key;
       await api.updateSettings(payload);
       resetStorageInfo();
@@ -1069,6 +1071,11 @@
           <span>账单页面路径</span>
           <input class="input" type="text" bind:value={settings.huozhi_bill_path} placeholder={'/bills/{id}'} spellcheck="false" autocomplete="off" />
           <span class="hint">详情页跳转用的网页路径模板，其中的 id 会替换成账单 ID</span>
+        </label>
+        <label class="field">
+          <span>门票分类关键词</span>
+          <input class="input" type="text" bind:value={settings.huozhi_ticket_categories} placeholder="娱乐,演出,门票" spellcheck="false" autocomplete="off" />
+          <span class="hint">货殖账单的分类（category）匹配这些关键词（逗号分隔）则归为「门票实付」，其余（交通/酒店等）归为「其他开销」</span>
         </label>
       </div>
       <div class="huozhi-test">

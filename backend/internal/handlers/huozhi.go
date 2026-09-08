@@ -29,6 +29,9 @@ type recordBillsResponse struct {
 	Total         float64 `json:"total"`
 	Currency      string  `json:"currency"`
 	MixedCurrency bool    `json:"mixed_currency"`
+	// Breakdown 按 bill 角色分组（门票实付 / 其他开销），各组给出小计。
+	// 前端据此分别展示，而不只是显示一个总和。
+	Breakdown []billGroup `json:"breakdown"`
 	// 内建费用合计（pay_price 优先，否则 price + other_cost）
 	LocalTotal    float64 `json:"local_total"`
 	LocalCurrency string  `json:"local_currency"`
@@ -40,6 +43,22 @@ type recordBillsResponse struct {
 	// failure (not configured / unreachable).
 	Errors map[string]string `json:"errors,omitempty"`
 	Error  string            `json:"error,omitempty"`
+}
+
+// billGroup is one role bucket of the 货殖 breakdown: 门票实付 or 其他开销.
+type billGroup struct {
+	Role     string         `json:"role"` // "ticket" | "other"
+	Label    string         `json:"label"`
+	Total    float64        `json:"total"`
+	Currency string         `json:"currency"`
+	Mixed    bool           `json:"mixed_currency"`
+	Bills    []*huozhi.Bill `json:"bills"`
+}
+
+// billRoleLabels maps the role key to its Chinese label.
+var billRoleLabels = map[string]string{
+	"ticket": "门票实付",
+	"other":  "其他开销",
 }
 
 // GET /api/records/{id}/bills — 解析该演出关联的货殖账单。外部接口不可用
@@ -89,6 +108,7 @@ func (h *Handler) recordBills(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(bills) > 0 {
 		resp.Total, resp.Currency, resp.MixedCurrency = sumBills(bills)
+		resp.Breakdown = groupBills(bills, s.TicketCategories)
 		// 货殖优先级更高：接口返回了有效数据就采用接口数据
 		resp.EffectiveTotal = resp.Total
 		resp.EffectiveCurrency = firstNonEmpty(resp.Currency, resp.LocalCurrency)
@@ -122,6 +142,50 @@ func sumBills(bills []*huozhi.Bill) (total float64, currency string, mixed bool)
 		currency = "CNY"
 	}
 	return total, currency, mixed
+}
+
+// groupBills buckets bills by role (ticket / other) using the configured
+// ticket-category keywords, returning one group per non-empty role. Each group
+// carries its own subtotal and currency so the UI can show 门票实付 and 其他开销
+// separately instead of only the grand total.
+func groupBills(bills []*huozhi.Bill, ticketCategories string) []billGroup {
+	ticket := billGroup{Role: "ticket", Label: billRoleLabels["ticket"]}
+	other := billGroup{Role: "other", Label: billRoleLabels["other"]}
+	for _, b := range bills {
+		if b == nil {
+			continue
+		}
+		role := huozhi.ClassifyBillRole(b, ticketCategories)
+		g := &other
+		if role == "ticket" {
+			g = &ticket
+		}
+		g.Total += b.Amount
+		c := strings.ToUpper(strings.TrimSpace(b.Currency))
+		if c != "" {
+			switch {
+			case g.Currency == "":
+				g.Currency = c
+			case g.Currency != c:
+				g.Mixed = true
+			}
+		}
+		g.Bills = append(g.Bills, b)
+	}
+	out := make([]billGroup, 0, 2)
+	if len(ticket.Bills) > 0 {
+		if ticket.Currency == "" {
+			ticket.Currency = "CNY"
+		}
+		out = append(out, ticket)
+	}
+	if len(other.Bills) > 0 {
+		if other.Currency == "" {
+			other.Currency = "CNY"
+		}
+		out = append(out, other)
+	}
+	return out
 }
 
 // ---------- POST /api/huozhi/bills（表单填写时校验 / 预览） ----------
@@ -167,6 +231,7 @@ func (h *Handler) lookupHuozhiBills(w http.ResponseWriter, r *http.Request) {
 		"total":          total,
 		"currency":       currency,
 		"mixed_currency": mixed,
+		"breakdown":      groupBills(bills, s.TicketCategories),
 	})
 }
 

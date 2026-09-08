@@ -32,11 +32,53 @@ type Settings struct {
 	// BillPath is the bill page path template; "{id}" is replaced by the bill
 	// id (default "/bills/{id}").
 	BillPath string
+	// TicketCategories is a comma-separated list of category keywords that map a
+	// 货殖 bill to the "ticket" role (门票实付). Anything else (transport,
+	// hotel, …) is treated as "other" (其他开销). Empty means use
+	// DefaultTicketCategories.
+	TicketCategories string
 }
+
+// DefaultTicketCategories covers the common 娱乐/演出 family so most ticket
+// bills land in 门票实付 without extra configuration.
+const DefaultTicketCategories = "娱乐,演出,门票,戏,剧,综艺,电影,演唱会,音乐会,话剧,曲艺,相声"
 
 // Configured reports whether the integration can actually issue requests.
 func (s Settings) Configured() bool {
 	return s.Enabled && s.Domain != "" && s.APIKey != ""
+}
+
+// ClassifyBillRole maps a bill to "ticket" (门票实付) or "other" (其他开销)
+// based on its category. A bill is a ticket payment when its category contains
+// any of the configured ticket keywords (substring match, case-insensitive).
+// An empty category defaults to "ticket", because the primary reason to
+// associate a 货殖 bill with a performance is the ticket itself; users can set
+// an explicit category in 货殖 (e.g. 交通/酒店) to push a bill into 其他开销.
+func (s Settings) ClassifyBillRole(b *Bill) string {
+	return ClassifyBillRole(b, s.TicketCategories)
+}
+
+// ClassifyBillRole is the stateless form of Settings.ClassifyBillRole, used by
+// callers that already resolved the ticket-category list.
+func ClassifyBillRole(b *Bill, ticketCategories string) string {
+	cats := strings.TrimSpace(ticketCategories)
+	if cats == "" {
+		cats = DefaultTicketCategories
+	}
+	cat := strings.TrimSpace(b.Category)
+	if cat == "" {
+		return "ticket"
+	}
+	for _, kw := range strings.Split(cats, ",") {
+		kw = strings.TrimSpace(kw)
+		if kw == "" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(cat), strings.ToLower(kw)) {
+			return "ticket"
+		}
+	}
+	return "other"
 }
 
 // Bill is one 货殖 bill. Fields are the ones the public API documents; unknown

@@ -57,6 +57,9 @@ type Config struct {
 	// HuozhiBillPath 是货殖账单网页地址模板中的路径部分，"{id}" 会被替换为
 	// 账单 ID。默认 "/bills/{id}"。
 	HuozhiBillPath string `json:"-"`
+	// HuozhiTicketCategories 是逗号分隔的分类关键词，匹配则归为「门票实付」，
+	// 否则（交通/酒店等）归为「其他开销」。默认取 huozhi.DefaultTicketCategories。
+	HuozhiTicketCategories string `json:"-"`
 	mu             sync.RWMutex
 }
 
@@ -99,6 +102,7 @@ func Load() *Config {
 		HuozhiDomain:        os.Getenv("HUOZHI_DOMAIN"),
 		HuozhiAPIKey:        os.Getenv("HUOZHI_API_KEY"),
 		HuozhiBillPath:      getEnv("HUOZHI_BILL_PATH", "/bills/{id}"),
+		HuozhiTicketCategories: getEnv("HUOZHI_TICKET_CATEGORIES", huozhi.DefaultTicketCategories),
 	}
 	return global
 }
@@ -207,6 +211,9 @@ func (c *Config) Update(s *SettingsUpdate) {
 			c.HuozhiAPIKey = *s.HuozhiAPIKey
 		}
 	}
+	if s.HuozhiTicketCategories != nil {
+		c.HuozhiTicketCategories = strings.TrimSpace(*s.HuozhiTicketCategories)
+	}
 	if s.AuthToken != nil {
 		c.AuthToken = *s.AuthToken
 	}
@@ -260,6 +267,7 @@ type SettingsUpdate struct {
 	HuozhiDomain   *string `json:"huozhi_domain"`
 	HuozhiAPIKey   *string `json:"huozhi_api_key"`
 	HuozhiBillPath *string `json:"huozhi_bill_path"`
+	HuozhiTicketCategories *string `json:"huozhi_ticket_categories"`
 	AuthToken      *string `json:"auth_token"`
 	// 自动备份：0 = 关闭，单位小时；Keep 为快照保留份数（>=1）。
 	BackupIntervalHours *int    `json:"backup_interval_hours,omitempty"`
@@ -309,6 +317,7 @@ func (c *Config) GetSettingsResponse() map[string]interface{} {
 		"huozhi_domain":         c.HuozhiDomain,
 		"huozhi_api_key":        maskSecret(c.HuozhiAPIKey),
 		"huozhi_bill_path":      c.HuozhiBillPath,
+		"huozhi_ticket_categories": c.HuozhiTicketCategories,
 		"auth_required":         c.AuthToken != "",
 		"backup_interval_hours": c.BackupIntervalHours,
 		"backup_keep":           c.BackupKeep,
@@ -392,10 +401,11 @@ func (c *Config) GetHuozhiSettings() HuozhiSettings {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return HuozhiSettings{
-		Enabled:  c.HuozhiEnabled,
-		Domain:   c.HuozhiDomain,
-		APIKey:   c.HuozhiAPIKey,
-		BillPath: c.HuozhiBillPath,
+		Enabled:           c.HuozhiEnabled,
+		Domain:            c.HuozhiDomain,
+		APIKey:            c.HuozhiAPIKey,
+		BillPath:          c.HuozhiBillPath,
+		TicketCategories:  c.HuozhiTicketCategories,
 	}
 }
 
@@ -498,6 +508,7 @@ func (c *Config) SaveToFile(path string) error {
 		"huozhi_domain":         c.HuozhiDomain,
 		"huozhi_api_key":        c.HuozhiAPIKey,
 		"huozhi_bill_path":      c.HuozhiBillPath,
+		"huozhi_ticket_categories": c.HuozhiTicketCategories,
 		"backup_interval_hours": strconv.Itoa(c.BackupIntervalHours),
 		"backup_keep":           strconv.Itoa(c.BackupKeep),
 		"backup_format":         c.BackupFormat,
@@ -592,6 +603,9 @@ func (c *Config) LoadFromFile(path string) error {
 	}
 	if v, ok := data["huozhi_bill_path"]; ok {
 		c.HuozhiBillPath = normalizeBillPath(v)
+	}
+	if v, ok := data["huozhi_ticket_categories"]; ok {
+		c.HuozhiTicketCategories = strings.TrimSpace(v)
 	}
 	if v, ok := data["auth_token"]; ok {
 		c.AuthToken = v

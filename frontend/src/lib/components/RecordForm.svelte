@@ -682,7 +682,8 @@
         errors: res.errors || {},
         total: res.total || 0,
         currency: res.currency || 'CNY',
-        mixed_currency: !!res.mixed_currency
+        mixed_currency: !!res.mixed_currency,
+        breakdown: res.breakdown || []
       };
       if (!huozhiPreview.bills.length) huozhiError = '未拉取到任何账单，请检查 ID 与货殖配置';
     } catch (e) {
@@ -1438,6 +1439,17 @@
           <div class="huozhi-msg ok">
             ✓ 共 {huozhiPreview.bills.length} 笔，合计 {formatHuozhiMoney(huozhiPreview.total, huozhiPreview.currency)}{#if huozhiPreview.mixed_currency}（币种不一致，已直接相加）{/if}
           </div>
+          {#if huozhiPreview.breakdown && huozhiPreview.breakdown.length}
+            <div class="huozhi-breakdown">
+              {#each huozhiPreview.breakdown as g (g.role)}
+                <span class="hz-bd-item">
+                  <span class="hz-bd-label">{g.label}</span>
+                  <span class="hz-bd-amt">{formatHuozhiMoney(g.total, g.currency)}</span>
+                  {#if g.mixed}<span class="hz-bd-mixed">混合币种</span>{/if}
+                </span>
+              {/each}
+            </div>
+          {/if}
           <ul class="huozhi-list">
             {#each huozhiPreview.bills as b (b.id)}
               <li>
@@ -1758,6 +1770,27 @@
   .hz-acct, .hz-date { color: var(--text-3); font-size: 12px; }
   .hz-amt { font-variant-numeric: tabular-nums; }
   .hz-fail { color: #e5484d; }
+  /* 表单预览的「实付 / 其他开销」分项小计 */
+  .huozhi-breakdown {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .hz-bd-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--text-2);
+  }
+  .hz-bd-label { color: var(--text-3); }
+  .hz-bd-amt { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
+  .hz-bd-mixed { font-size: 11px; color: var(--text-3); }
 
   .money { display: flex; gap: 6px; }
   .money .unit { align-self: center; color: var(--text-3); font-size: 13px; white-space: nowrap; }

@@ -514,7 +514,7 @@
         {#if billCount > 0}
           <!-- 货殖优先级更高：接口返回有效数据时采用账单合计，内建合计降为附注 -->
           <div class="fee-total">
-            <span class="fee-total-label">合计</span>
+            <span class="fee-total-label">货殖合计</span>
             <span class="hz-badge" title="数据来自货殖">货殖</span>
             <span class="hz-wrap">
               {#if billCount === 1}
@@ -548,6 +548,16 @@
               </span>
             </span>
           </div>
+          {#if bills.breakdown && bills.breakdown.length}
+            <div class="hz-breakdown">
+              {#each bills.breakdown as g (g.role)}
+                <div class="hz-bd-row">
+                  <span class="hz-bd-label">{g.label}</span>
+                  <span class="hz-bd-amt">{formatCurrency(g.total, g.currency || billsCurrency)}</span>
+                </div>
+              {/each}
+            </div>
+          {/if}
           <div class="fee-total-sub tiny muted">
             内建合计 {formatCurrency(bills.local_total, bills.local_currency || 'CNY')}
             {#if bills.errors && Object.keys(bills.errors).length}
@@ -879,6 +889,17 @@
   .fee-total-sub { margin-top: 6px; text-align: right; }
   .fee-hz-hint { margin-top: 8px; }
   .fee-hz-err { color: #e5484d; }
+  /* 货殖账单按角色拆分（门票实付 / 其他开销） */
+  .hz-breakdown {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    align-items: flex-end;
+  }
+  .hz-bd-row { display: flex; align-items: baseline; gap: 10px; font-size: 13px; }
+  .hz-bd-label { color: var(--text-2); }
+  .hz-bd-amt { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 
   /* 悬停（或点击展开）显示账单明细气泡 */
   .hz-pop {
