@@ -82,6 +82,11 @@ func (h *Handler) Routes() chi.Router {
 	// 票根/现场照（多图）
 	r.Get("/records/{id}/photos", h.listRecordPhotos)
 	r.Post("/records/{id}/photos", h.addRecordPhoto)
+
+	// 货殖（huozhi）账单关联：解析本场演出绑定的账单
+	r.Get("/records/{id}/bills", h.recordBills)
+	// 表单填写时按 ID 预览账单
+	r.Post("/huozhi/bills", h.lookupHuozhiBills)
 	r.Delete("/records/{id}/photos/{pid}", h.deleteRecordPhoto)
 	r.Post("/records/{id}/photos/reorder", h.reorderRecordPhotos)
 
@@ -142,6 +147,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/settings", h.getSettings)
 	r.Put("/settings", h.updateSettings)
 	r.Post("/settings/test-s3", h.testS3Connection)
+	r.Post("/settings/test-huozhi", h.testHuozhiConnection)
 
 	// AI 填写：从粘贴文本提取结构化演出字段（密钥仅存于服务端）
 	r.Post("/ai/parse", h.parseAI)

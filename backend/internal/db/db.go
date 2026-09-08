@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -350,6 +351,12 @@ func (db *DB) migrate() error {
 	}
 	// 演出时长（分钟）：新增字段，旧库加列并默认 0（未知）。
 	if err := db.addColumn("records", "duration", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+
+	// 货殖账单关联：存 JSON 数组（账单 ID 列表）。该能力为后续追加，历史演出
+	// 不做回溯关联，故默认空数组即可。
+	if err := db.addColumn("records", "huozhi_bill_ids", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
 		return err
 	}
 
@@ -703,6 +710,47 @@ func unmarshalStrings(s string) []string {
 	return out
 }
 
+// unmarshalInt64s reads a JSON array of bill ids. Accepts numbers and numeric
+// strings (the record form posts ids as text); anything else is dropped so a
+// malformed column can never break a record read.
+func unmarshalInt64s(s string) []int64 {
+	if s == "" || s == "null" {
+		return []int64{}
+	}
+	var raw []json.RawMessage
+	if err := json.Unmarshal([]byte(s), &raw); err != nil {
+		return []int64{}
+	}
+	out := make([]int64, 0, len(raw))
+	for _, r := range raw {
+		var n int64
+		if err := json.Unmarshal(r, &n); err == nil {
+			out = append(out, n)
+			continue
+		}
+		var str string
+		if err := json.Unmarshal(r, &str); err == nil {
+			if v, err := strconv.ParseInt(strings.TrimSpace(str), 10, 64); err == nil {
+				out = append(out, v)
+			}
+		}
+	}
+	return out
+}
+
+// marshalInt64s always writes a JSON array (never "null") so the column stays
+// uniformly parseable.
+func marshalInt64s(v []int64) string {
+	if v == nil {
+		return "[]"
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
 func unmarshalCoordinate(s string) *models.Coordinate {
 	if s == "" || s == "null" {
 		return nil
@@ -731,7 +779,8 @@ const recordColumns = `records.id, records.name, records.channel, records.city, 
 	records.zhezi_ids, records.tag_ids, records.date, records.date_text, records.rating, records.duration,
 	records.seat, records.friends, records.company, records.remark, records.active_status,
 	records.price, records.price_currency, records.pay_price, records.pay_price_currency,
-	records.other_cost, records.other_cost_currency, records.total_cost, records.watched`
+	records.other_cost, records.other_cost_currency, records.total_cost, records.watched,
+	records.huozhi_bill_ids`
 
 // scanRecord scans recordColumns in order; extra destinations (appended after
 // the fixed columns, e.g. deleted_at) are supported via extra.
@@ -739,14 +788,15 @@ func scanRecord(rows *sql.Rows, extra ...any) (*models.Record, error) {
 	var r models.Record
 	var (
 		coordinate, guest, play, zheziIDs, tagIDs, categoryNames string
-		price, payPrice, otherCost sql.NullFloat64
+		huozhiBillIDs                                            string
+		price, payPrice, otherCost                               sql.NullFloat64
 	)
 	dests := []any{
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
 		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &categoryNames, &guest, &play, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Duration, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
 		&price, &r.PriceCurrency, &payPrice, &r.PayPriceCurrency, &otherCost, &r.OtherCostCurrency, &r.TotalCost,
-		&r.Watched,
+		&r.Watched, &huozhiBillIDs,
 	}
 	err := rows.Scan(append(dests, extra...)...)
 	if err != nil {
@@ -767,6 +817,7 @@ func scanRecord(rows *sql.Rows, extra ...any) (*models.Record, error) {
 	r.Play = unmarshalStrings(play)
 	r.ZheziIDs = unmarshalStrings(zheziIDs)
 	r.TagIDs = unmarshalStrings(tagIDs)
+	r.HuozhiBillIDs = unmarshalInt64s(huozhiBillIDs)
 	applyCategoryFallback(&r, categoryNames)
 	return &r, nil
 }
@@ -1314,14 +1365,15 @@ func scanRecordRow(row *sql.Row) (*models.Record, error) {
 	var r models.Record
 	var (
 		coordinate, guest, play, zheziIDs, tagIDs, categoryNames string
-		price, payPrice, otherCost sql.NullFloat64
+		huozhiBillIDs                                            string
+		price, payPrice, otherCost                               sql.NullFloat64
 	)
 	err := row.Scan(
 		&r.ID, &r.Name, &r.Channel, &r.City, &r.Address, &coordinate, &r.Cover, &r.CoverFile,
 		&r.CoverThumb, &r.CustomCategoryID, &r.CategoryName, &categoryNames, &guest, &play, &zheziIDs, &tagIDs,
 		&r.Date, &r.DateText, &r.Rating, &r.Duration, &r.Seat, &r.Friends, &r.Company, &r.Remark, &r.ActiveStatus,
 		&price, &r.PriceCurrency, &payPrice, &r.PayPriceCurrency, &otherCost, &r.OtherCostCurrency, &r.TotalCost,
-		&r.Watched,
+		&r.Watched, &huozhiBillIDs,
 	)
 	if err != nil {
 		return nil, err
@@ -1341,6 +1393,7 @@ func scanRecordRow(row *sql.Row) (*models.Record, error) {
 	r.Play = unmarshalStrings(play)
 	r.ZheziIDs = unmarshalStrings(zheziIDs)
 	r.TagIDs = unmarshalStrings(tagIDs)
+	r.HuozhiBillIDs = unmarshalInt64s(huozhiBillIDs)
 	applyCategoryFallback(&r, categoryNames)
 	return &r, nil
 }
@@ -1372,9 +1425,10 @@ const recordUpsertSQL = `
 		id, name, channel, city, address, coordinate, cover, cover_file, cover_thumb,
 		custom_category_id, category_name, category_names, artist_names, guest, play, drama_ids, zhezi_ids, tag_ids,
 		date, date_text, rating, duration, seat, friends, company, remark, active_status,
-		price, price_currency, pay_price, pay_price_currency, other_cost, other_cost_currency, total_cost, watched
+		price, price_currency, pay_price, pay_price_currency, other_cost, other_cost_currency, total_cost, watched,
+		huozhi_bill_ids
 	) VALUES (
-		?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+		?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
 	)
 	ON CONFLICT(id) DO UPDATE SET
 		name=excluded.name, channel=excluded.channel, city=excluded.city, address=excluded.address,
@@ -1387,7 +1441,7 @@ const recordUpsertSQL = `
 		seat=excluded.seat, friends=excluded.friends, company=excluded.company, remark=excluded.remark, active_status=excluded.active_status,
 		price=excluded.price, price_currency=excluded.price_currency, pay_price=excluded.pay_price,
 		pay_price_currency=excluded.pay_price_currency, other_cost=excluded.other_cost, other_cost_currency=excluded.other_cost_currency,
-		total_cost=excluded.total_cost, watched=excluded.watched
+		total_cost=excluded.total_cost, watched=excluded.watched, huozhi_bill_ids=excluded.huozhi_bill_ids
 `
 
 // normalizeCategories reconciles the scalar primary category with the
@@ -1466,7 +1520,7 @@ func (db *DB) UpsertRecord(r models.Record) error {
 		marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
 		r.Date, r.DateText, r.Rating, r.Duration, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
 		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency, r.TotalCost,
-		r.Watched,
+		r.Watched, marshalInt64s(r.HuozhiBillIDs),
 	); err != nil {
 		return err
 	}
@@ -1516,7 +1570,7 @@ func (db *DB) UpsertRecordTx(tx *sql.Tx, r models.Record) error {
 		marshalJSON(r.DramaIDs), marshalJSON(r.ZheziIDs), marshalJSON(r.TagIDs),
 		r.Date, r.DateText, r.Rating, r.Duration, r.Seat, r.Friends, r.Company, r.Remark, r.ActiveStatus,
 		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency, r.TotalCost,
-		r.Watched,
+		r.Watched, marshalInt64s(r.HuozhiBillIDs),
 	); err != nil {
 		return err
 	}
@@ -1981,6 +2035,10 @@ func requestToRecord(r models.RecordRequest) models.Record {
 	if t == nil {
 		t = []string{}
 	}
+	hb := r.HuozhiBillIDs
+	if hb == nil {
+		hb = []int64{}
+	}
 	return models.Record{
 		Name: r.Name, Channel: r.Channel, City: r.City, Address: r.Address,
 		Coordinate: r.Coordinate, Cover: r.Cover, CoverFile: r.CoverFile, CoverThumb: r.CoverThumb,
@@ -1990,7 +2048,7 @@ func requestToRecord(r models.RecordRequest) models.Record {
 		Friends: r.Friends, Company: r.Company, Remark: r.Remark, ActiveStatus: r.ActiveStatus,
 		Price: r.Price, PriceCurrency: r.PriceCurrency, PayPrice: r.PayPrice,
 		PayPriceCurrency: r.PayPriceCurrency, OtherCost: r.OtherCost, OtherCostCurrency: r.OtherCostCurrency,
-		Watched: r.Watched,
+		Watched: r.Watched, HuozhiBillIDs: hb,
 	}
 }
 

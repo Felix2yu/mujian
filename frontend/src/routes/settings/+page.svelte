@@ -20,6 +20,10 @@
     ai_base_url: '',
     ai_model: '',
     ai_api_key: '',
+    huozhi_enabled: false,
+    huozhi_domain: '',
+    huozhi_api_key: '',
+    huozhi_bill_path: '/bills/{id}',
     default_start_time: '19:30'
   });
   // GET /api/settings 返回的 secret 是掩码值（如 "sk12****"）；保存时若未改动
@@ -27,6 +31,8 @@
   let loadedS3Secret = $state('');
   // GET /api/settings 返回的 AI key 是掩码值（如 "sk-...****"）；未改动则不回传。
   let loadedAIApiKey = $state('');
+  // 货殖 API Key 同理：掩码值表示未改动。
+  let loadedHuozhiApiKey = $state('');
   // 设置卡片的两列归属：按预估高度最短列优先分配，列高大致均衡。
   // 新增/调整卡片时同步这里的权重即可。
   const CARD_COLS = (() => {
@@ -34,7 +40,7 @@
     const cards = [
       ['theme', 162], ['storage', 158], ['s3', 823], ['encode', 305], ['calendar', 280],
       ['fields', 389], ['status', 178], ['list', 224], ['backup', 988], ['security', 274], ['map', 435],
-      ['ai', 360], ['costWizard', 200]
+      ['ai', 360], ['costWizard', 200], ['huozhi', 470]
     ];
     const cols = [[], []];
     const hs = [0, 0];
@@ -144,6 +150,13 @@
   let testingS3 = $state(false);
   let s3TestOk = $state(false);
   let s3TestError = $state('');
+
+  // 货殖连接自检：可选地带一个账单 ID 真实拉取一次；不落库。
+  let testingHuozhi = $state(false);
+  let huozhiTestOk = $state(false);
+  let huozhiTestError = $state('');
+  let huozhiTestMsg = $state('');
+  let huozhiTestBillId = $state('');
 
   // 日历订阅链接（同源部署，取当前站点地址拼出完整 URL）
   let icsUrl = $state('');
@@ -288,6 +301,12 @@
       settings.ai_model = settings.ai_model || '';
       loadedAIApiKey = settings.ai_api_key || '';
       settings.ai_api_key = settings.ai_api_key || '';
+      // 货殖账单关联
+      settings.huozhi_enabled = settings.huozhi_enabled === true;
+      settings.huozhi_domain = settings.huozhi_domain || '';
+      settings.huozhi_bill_path = settings.huozhi_bill_path || '/bills/{id}';
+      loadedHuozhiApiKey = settings.huozhi_api_key || '';
+      settings.huozhi_api_key = settings.huozhi_api_key || '';
       if (typeof settings.show_friends !== 'boolean') settings.show_friends = true;
       if (typeof settings.show_pay_price !== 'boolean') settings.show_pay_price = true;
       if (typeof settings.show_other_cost !== 'boolean') settings.show_other_cost = true;
@@ -355,6 +374,11 @@
       payload.ai_base_url = settings.ai_base_url.trim();
       payload.ai_model = settings.ai_model.trim();
       payload.ai_api_key = settings.ai_api_key;
+      // 货殖账单关联：域名/路径始终提交；密钥掩码（含 ****）表示未改动，不回传。
+      payload.huozhi_enabled = !!settings.huozhi_enabled;
+      payload.huozhi_domain = settings.huozhi_domain.trim();
+      payload.huozhi_bill_path = settings.huozhi_bill_path.trim() || '/bills/{id}';
+      payload.huozhi_api_key = settings.huozhi_api_key;
       await api.updateSettings(payload);
       resetStorageInfo();
       saved = true;
@@ -476,6 +500,36 @@
       s3TestError = e.message;
     } finally {
       testingS3 = false;
+    }
+  }
+
+  async function testHuozhi() {
+    testingHuozhi = true;
+    huozhiTestOk = false;
+    huozhiTestError = '';
+    huozhiTestMsg = '';
+    try {
+      const payload = {
+        huozhi_domain: settings.huozhi_domain.trim(),
+        huozhi_bill_path: settings.huozhi_bill_path.trim() || '/bills/{id}'
+      };
+      // 掩码值（含 ****）说明用户没有改密钥，不回传；后端用已保存的真实值兜底
+      if (settings.huozhi_api_key && !settings.huozhi_api_key.includes('****')) {
+        payload.huozhi_api_key = settings.huozhi_api_key;
+      }
+      const bid = String(huozhiTestBillId || '').trim();
+      if (bid) payload.bill_id = bid;
+      const res = await api.testHuozhiConnection(payload);
+      huozhiTestOk = !!res.ok;
+      if (res.ok) {
+        huozhiTestMsg = res.message || '连接成功';
+      } else {
+        huozhiTestError = res.error || '货殖连接测试失败';
+      }
+    } catch (e) {
+      huozhiTestError = e.message;
+    } finally {
+      testingHuozhi = false;
     }
   }
 
@@ -990,6 +1044,60 @@
     </div>
 {/snippet}
 
+{#snippet huozhiCard()}
+<div class="card sec">
+      <h3>货殖账单关联</h3>
+      <p class="tiny muted" style="margin: 0 0 10px;">
+        货殖是自建的记账站点。配置后，演出记录可绑定货殖账单 ID：详情页会展示这些账单的合计金额（悬停看描述 / 账户等明细，点击跳转账单页），并在货殖有数据时优先采用接口金额而非内建费用。历史演出不做回溯关联，只在新建 / 编辑时手动绑定。
+      </p>
+      <label class="switch-row">
+        <span>启用货殖关联</span>
+        <input type="checkbox" bind:checked={settings.huozhi_enabled} />
+      </label>
+      <div class="s3-grid" style="margin-top: 12px;">
+        <label class="field">
+          <span>货殖域名</span>
+          <input class="input" type="text" bind:value={settings.huozhi_domain} placeholder="https://huozhi.example.com" spellcheck="false" autocomplete="off" />
+          <span class="hint">站点根地址，接口会拼成 {域名}/api/public/bills/{账单ID}；只填主机名时自动补 https://</span>
+        </label>
+        <label class="field">
+          <span>API Key</span>
+          <input class="input" type="password" bind:value={settings.huozhi_api_key} placeholder={loadedHuozhiApiKey || '未设置'} autocomplete="new-password" />
+          <span class="hint">以 X-API-Key 请求头发送，仅存服务端；保持不变即保留原值，清空后保存可移除</span>
+        </label>
+        <label class="field">
+          <span>账单页面路径</span>
+          <input class="input" type="text" bind:value={settings.huozhi_bill_path} placeholder="/bills/{id}" spellcheck="false" autocomplete="off" />
+          <span class="hint">详情页跳转用的网页路径模板，{id} 会替换成账单 ID</span>
+        </label>
+      </div>
+      <div class="huozhi-test">
+        <input
+          class="input"
+          type="text"
+          bind:value={huozhiTestBillId}
+          placeholder="账单 ID（可选，如 123）"
+          spellcheck="false"
+          autocomplete="off"
+          style="max-width: 220px;"
+        />
+        <button class="btn sm" onclick={testHuozhi} disabled={testingHuozhi}>
+          {testingHuozhi ? '测试中…' : '测试连接'}
+        </button>
+        <span class="hint">填写账单 ID 会真实拉取一次账单以验证接口返回；留空则只探测连通性</span>
+      </div>
+      {#if huozhiTestOk}
+        <div class="banner success">✓ {huozhiTestMsg}</div>
+      {/if}
+      {#if huozhiTestError}
+        <div class="banner error">⚠ 货殖连接失败：{huozhiTestError}</div>
+      {/if}
+      {#if settings.huozhi_enabled && !settings.huozhi_domain.trim()}
+        <div class="banner error">⚠ 已启用但未填写货殖域名，保存后不会生效</div>
+      {/if}
+    </div>
+{/snippet}
+
 {#snippet costWizardCard()}
 <div class="card sec">
   <h3>费用补全</h3>
@@ -1185,6 +1293,7 @@
 			{:else if key === "map"}{@render mapCard()}
 			{:else if key === "ai"}{@render aiCard()}
 			{:else if key === "costWizard"}{@render costWizardCard()}
+			{:else if key === "huozhi"}{@render huozhiCard()}
 			{/if}
     {/each}
   </div>
@@ -1203,6 +1312,7 @@
 			{:else if key === "map"}{@render mapCard()}
 			{:else if key === "ai"}{@render aiCard()}
 			{:else if key === "costWizard"}{@render costWizardCard()}
+			{:else if key === "huozhi"}{@render huozhiCard()}
 			{/if}
     {/each}
   </div>
@@ -1264,6 +1374,14 @@
     gap: 12px 16px;
     margin-top: 14px;
   }
+  .huozhi-test {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+  .huozhi-test .hint { margin-top: 0; }
   .field { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--text-2); }
 
   .convert-actions {

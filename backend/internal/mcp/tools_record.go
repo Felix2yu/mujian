@@ -41,7 +41,9 @@ type CreateRecordInput struct {
 	PayPriceCurrency  string             `json:"pay_price_currency,omitempty"`
 	OtherCost         *float64           `json:"other_cost,omitempty"`
 	OtherCostCurrency string             `json:"other_cost_currency,omitempty"`
-	DryRun            *bool              `json:"dry_run,omitempty"`
+	// HuozhiBillIDs 关联「货殖」账单 ID（数字数组；空数组表示清空关联）。
+	HuozhiBillIDs []int64 `json:"huozhi_bill_ids,omitempty"`
+	DryRun        *bool   `json:"dry_run,omitempty"`
 }
 
 type UpdateRecordInput struct {
@@ -75,7 +77,9 @@ type UpdateRecordInput struct {
 	PayPriceCurrency  *string            `json:"pay_price_currency,omitempty"`
 	OtherCost         *float64           `json:"other_cost,omitempty"`
 	OtherCostCurrency *string            `json:"other_cost_currency,omitempty"`
-	DryRun            *bool              `json:"dry_run,omitempty"`
+	// HuozhiBillIDs 关联「货殖」账单 ID；nil 表示不改，空数组表示清空关联。
+	HuozhiBillIDs []int64 `json:"huozhi_bill_ids,omitempty"`
+	DryRun        *bool   `json:"dry_run,omitempty"`
 }
 
 type DeleteRecordInput struct {
@@ -125,6 +129,7 @@ func (s *Server) handleCreateRecord(ctx context.Context, req *mcp.CallToolReques
 		PayPriceCurrency:  in.PayPriceCurrency,
 		OtherCost:         in.OtherCost,
 		OtherCostCurrency: in.OtherCostCurrency,
+		HuozhiBillIDs:     in.HuozhiBillIDs,
 	}
 
 	// 解析 date_text 并联动设置 date 字段
@@ -191,6 +196,7 @@ func (s *Server) handleUpdateRecord(ctx context.Context, req *mcp.CallToolReques
 		PayPriceCurrency:  existing.PayPriceCurrency,
 		OtherCost:         existing.OtherCost,
 		OtherCostCurrency: existing.OtherCostCurrency,
+		HuozhiBillIDs:     existing.HuozhiBillIDs,
 	}
 
 	if in.Name != nil {
@@ -289,6 +295,9 @@ func (s *Server) handleUpdateRecord(ctx context.Context, req *mcp.CallToolReques
 	}
 	if in.OtherCostCurrency != nil {
 		r.OtherCostCurrency = *in.OtherCostCurrency
+	}
+	if in.HuozhiBillIDs != nil {
+		r.HuozhiBillIDs = in.HuozhiBillIDs
 	}
 
 	if dryRun(in.DryRun) {

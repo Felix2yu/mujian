@@ -20,7 +20,9 @@
       active_status: 0,
       date_local: '', coverFile: '', coverThumb: '',
       lat: '', lng: '',
-      drama_ids: [], zhezi_ids: [], artist_ids: []
+      drama_ids: [], zhezi_ids: [], artist_ids: [],
+      // 货殖账单 ID 以文本形式编辑（逗号分隔），提交前解析成数字数组
+      huozhiBillIdsText: ''
     };
   }
 
@@ -48,6 +50,7 @@
     f.pay_price_currency = r.pay_price_currency || 'CNY';
     f.other_cost = r.other_cost === null || r.other_cost === undefined ? '' : r.other_cost;
     f.other_cost_currency = r.other_cost_currency || 'CNY';
+    f.huozhiBillIdsText = (r.huozhi_bill_ids || []).join(', ');
     f.artist_ids = (r.artist_ids || []).slice();
     f.play = (r.play || []).join(', ');
     f.guest = (r.guest || []).join(', ');
@@ -89,12 +92,20 @@
   let aiErr = $state('');
   let aiDone = $state(''); // 从链接解析成功时的来源提示（面板保持展开以展示）
 
+  // 货殖账单关联：仅在设置页启用后才显示账单 ID 输入框
+  let huozhiEnabled = $state(false);
+  let huozhiBusy = $state(false);
+  let huozhiError = $state('');
+  let huozhiPreview = $state(null); // { bills, errors, total, currency, mixed_currency }
+
   onMount(async () => {
     try {
       const s = await api.getSettings();
       aiEnabled = !!s.ai_enabled;
+      huozhiEnabled = !!s.huozhi_enabled;
     } catch (e) {
       aiEnabled = false;
+      huozhiEnabled = false;
     }
   });
 
@@ -634,6 +645,53 @@
     return (s || '').split(/[,，]/).map((x) => x.trim()).filter(Boolean);
   }
 
+  // 货殖账单 ID：文本 → 数字数组（去重、丢弃非法值）
+  function parseHuozhiIds(text) {
+    const out = [];
+    const seen = new Set();
+    for (const raw of splitList(text)) {
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n <= 0 || seen.has(n)) continue;
+      seen.add(n);
+      out.push(n);
+    }
+    return out;
+  }
+
+  function formatHuozhiMoney(amount, currency) {
+    const c = currency || 'CNY';
+    const symbol = c === 'CNY' ? '¥' : c + ' ';
+    return symbol + (Number(amount) || 0).toFixed(2);
+  }
+
+  // 校验：按 ID 真实查询货殖，预览账单明细。失败不影响保存，只提示。
+  async function verifyHuozhiBills() {
+    const ids = parseHuozhiIds(form.huozhiBillIdsText);
+    if (!ids.length) {
+      huozhiError = '请填写至少一个数字账单 ID';
+      huozhiPreview = null;
+      return;
+    }
+    huozhiBusy = true;
+    huozhiError = '';
+    huozhiPreview = null;
+    try {
+      const res = await api.lookupHuozhiBills(ids);
+      huozhiPreview = {
+        bills: res.bills || [],
+        errors: res.errors || {},
+        total: res.total || 0,
+        currency: res.currency || 'CNY',
+        mixed_currency: !!res.mixed_currency
+      };
+      if (!huozhiPreview.bills.length) huozhiError = '未拉取到任何账单，请检查 ID 与货殖配置';
+    } catch (e) {
+      huozhiError = e.message || '校验失败';
+    } finally {
+      huozhiBusy = false;
+    }
+  }
+
   async function handleSubmit() {
     error = '';
     if (!form.name.trim()) {
@@ -661,6 +719,8 @@
       pay_price_currency: form.pay_price_currency || 'CNY',
       other_cost: form.other_cost === '' ? null : Number(form.other_cost),
       other_cost_currency: form.other_cost_currency || 'CNY',
+      // 货殖账单关联：解析文本输入；功能关闭时保留原有值，避免误清空
+      huozhi_bill_ids: huozhiEnabled ? parseHuozhiIds(form.huozhiBillIdsText) : (record?.huozhi_bill_ids || []),
       // 演员以关联实体为准：已选演员的名称 + 自由文本胶囊中未匹配档案的名字
       artist_names: [
         ...chosenArtists.map((a) => a.name),
@@ -1355,6 +1415,46 @@
         </div>
       {/if}
     </div>
+
+    {#if huozhiEnabled}
+      <div class="huozhi-box">
+        <label>货殖账单 ID <span class="hint">多个用逗号分隔，如 123,124；保存前可点「校验」确认账单存在</span></label>
+        <div class="huozhi-row">
+          <input
+            class="input"
+            type="text"
+            bind:value={form.huozhiBillIdsText}
+            placeholder="123"
+            spellcheck="false"
+            autocomplete="off"
+          />
+          <button type="button" class="btn sm" onclick={verifyHuozhiBills} disabled={huozhiBusy || !form.huozhiBillIdsText.trim()}>
+            {huozhiBusy ? '校验中…' : '校验'}
+          </button>
+        </div>
+        {#if huozhiError}
+          <div class="huozhi-msg err">⚠ {huozhiError}</div>
+        {:else if huozhiPreview}
+          <div class="huozhi-msg ok">
+            ✓ 共 {huozhiPreview.bills.length} 笔，合计 {formatHuozhiMoney(huozhiPreview.total, huozhiPreview.currency)}{#if huozhiPreview.mixed_currency}（币种不一致，已直接相加）{/if}
+          </div>
+          <ul class="huozhi-list">
+            {#each huozhiPreview.bills as b (b.id)}
+              <li>
+                <span class="hz-id">#{b.id}</span>
+                <span class="hz-desc">{b.description || b.remark || '（无描述）'}</span>
+                {#if b.account}<span class="hz-acct">{b.account}</span>{/if}
+                {#if b.tx_date}<span class="hz-date">{b.tx_date.slice(0, 10)}</span>{/if}
+                <span class="hz-amt">{formatHuozhiMoney(b.amount, b.currency)}</span>
+              </li>
+            {/each}
+            {#each Object.entries(huozhiPreview.errors || {}) as [bid, msg] (bid)}
+              <li class="hz-fail">#{bid} 拉取失败：{msg}</li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+    {/if}
   </div>
 
   <!-- ============ 阵容 ============ -->
@@ -1626,6 +1726,38 @@
   .section h3 { margin: 0 0 6px; font-size: 15.5px; color: var(--text-2); }
   .req { color: var(--accent); }
   .hint { font-weight: 400; color: var(--text-3); font-size: 12px; }
+
+  /* ---- 货殖账单关联 ---- */
+  .huozhi-box {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
+  }
+  .huozhi-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+  .huozhi-row .input { max-width: 260px; }
+  .huozhi-msg { font-size: 12.5px; margin-top: 6px; }
+  .huozhi-msg.ok { color: var(--text-2); }
+  .huozhi-msg.err { color: #e5484d; }
+  .huozhi-list {
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .huozhi-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--text-2);
+  }
+  .hz-id { color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .hz-desc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hz-acct, .hz-date { color: var(--text-3); font-size: 12px; }
+  .hz-amt { font-variant-numeric: tabular-nums; }
+  .hz-fail { color: #e5484d; }
 
   .money { display: flex; gap: 6px; }
   .money .unit { align-self: center; color: var(--text-3); font-size: 13px; white-space: nowrap; }

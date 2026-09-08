@@ -48,6 +48,10 @@ type Record struct {
 	OtherCost         *float64    `json:"other_cost,omitempty"`
 	OtherCostCurrency string      `json:"other_cost_currency"`
 	TotalCost         float64     `json:"total_cost"` // pay_price > 0 ? pay_price : price + other_cost
+	// HuozhiBillIDs 关联到自建记账站点「货殖」的账单 ID。该字段为后续追加，
+	// 历史演出不做回溯关联（默认空数组）；非空且货殖接口返回有效数据时，
+	// 详情页优先采用货殖账单合计作为本场演出的实际花费。
+	HuozhiBillIDs []int64 `json:"huozhi_bill_ids"`
 	// Watched marks a performance as 已观看/已到场. It is the CalDAV VTODO
 	// completion state: ticking a reminder in a CalDAV task client (e.g. Apple
 	// Reminders) round-trips here as STATUS:COMPLETED.
@@ -211,6 +215,8 @@ type RecordRequest struct {
 	PayPriceCurrency  string      `json:"pay_price_currency"`
 	OtherCost         *float64    `json:"other_cost,omitempty"`
 	OtherCostCurrency string      `json:"other_cost_currency"`
+	// HuozhiBillIDs 关联「货殖」账单 ID；nil 表示未改动，空数组表示清空。
+	HuozhiBillIDs []int64 `json:"huozhi_bill_ids"`
 	// Watched mirrors Record.Watched (已观看/已到场). See Record.Watched for
 	// the CalDAV VTODO completion semantics.
 	Watched bool `json:"watched"`

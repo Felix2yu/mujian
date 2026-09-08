@@ -213,6 +213,12 @@ export const api = {
   getSettings: () => request('/api/settings'),
   updateSettings: (data) => request('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
   testS3Connection: (data) => request('/api/settings/test-s3', { method: 'POST', body: JSON.stringify(data) }),
+  // 货殖：测试连接（未落库，仅用表单值 + 已保存值合并后探测）
+  testHuozhiConnection: (data) => request('/api/settings/test-huozhi', { method: 'POST', body: JSON.stringify(data) }),
+  // 货殖：演出详情页解析关联账单（含内建费用与最终采用值）
+  getRecordBills: (id) => request(`/api/records/${id}/bills`),
+  // 货殖：表单里按 ID 预览账单
+  lookupHuozhiBills: (ids) => request('/api/huozhi/bills', { method: 'POST', body: JSON.stringify({ ids }) }),
 
   // AI 填写：把粘贴的演出信息文本发给后端，由配置的模型提取结构化字段。
   aiParse: (text) => request('/api/ai/parse', { method: 'POST', body: JSON.stringify({ text }) }),

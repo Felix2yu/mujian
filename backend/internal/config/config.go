@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"mujian/internal/huozhi"
 )
 
 type Config struct {
@@ -42,11 +44,20 @@ type Config struct {
 	DefaultStartTime    string `json:"default_start_time"`
 	// AI 填写：调用 OpenAI 兼容的 Chat Completions 接口，从粘贴文本提取演出字段。
 	// 密钥仅存于服务端，不回显明文。
-	AIEnabled  bool   `json:"-"`
-	AIBaseURL  string `json:"-"`
-	AIAPIKey   string `json:"-"`
-	AIModel    string `json:"-"`
-	mu         sync.RWMutex
+	AIEnabled bool   `json:"-"`
+	AIBaseURL string `json:"-"`
+	AIAPIKey  string `json:"-"`
+	AIModel   string `json:"-"`
+	// 货殖（huozhi）账单关联：可选的外部记账站点集成。启用后，演出记录可绑定
+	// 货殖账单 ID，详情页展示账单合计（优先级高于内建费用字段）。
+	// API Key 仅存于服务端，不回显明文。
+	HuozhiEnabled bool   `json:"-"`
+	HuozhiDomain  string `json:"-"`
+	HuozhiAPIKey  string `json:"-"`
+	// HuozhiBillPath 是货殖账单网页地址模板中的路径部分，"{id}" 会被替换为
+	// 账单 ID。默认 "/bills/{id}"。
+	HuozhiBillPath string `json:"-"`
+	mu             sync.RWMutex
 }
 
 var (
@@ -84,6 +95,10 @@ func Load() *Config {
 		AIBaseURL:           "https://api.openai.com/v1",
 		AIAPIKey:            "",
 		AIModel:             "",
+		HuozhiEnabled:       os.Getenv("HUOZHI_ENABLED") == "true",
+		HuozhiDomain:        os.Getenv("HUOZHI_DOMAIN"),
+		HuozhiAPIKey:        os.Getenv("HUOZHI_API_KEY"),
+		HuozhiBillPath:      getEnv("HUOZHI_BILL_PATH", "/bills/{id}"),
 	}
 	return global
 }
@@ -176,6 +191,22 @@ func (c *Config) Update(s *SettingsUpdate) {
 			c.AIAPIKey = *s.AIAPIKey
 		}
 	}
+	if s.HuozhiEnabled != nil {
+		c.HuozhiEnabled = *s.HuozhiEnabled
+	}
+	if s.HuozhiDomain != nil {
+		c.HuozhiDomain = normalizeHuozhiDomain(*s.HuozhiDomain)
+	}
+	if s.HuozhiBillPath != nil {
+		c.HuozhiBillPath = normalizeBillPath(*s.HuozhiBillPath)
+	}
+	if s.HuozhiAPIKey != nil {
+		// GET /api/settings masks this value; a client echoing the masked
+		// value back must not overwrite the real key.
+		if !strings.HasSuffix(*s.HuozhiAPIKey, "****") {
+			c.HuozhiAPIKey = *s.HuozhiAPIKey
+		}
+	}
 	if s.AuthToken != nil {
 		c.AuthToken = *s.AuthToken
 	}
@@ -205,26 +236,31 @@ func (c *Config) Update(s *SettingsUpdate) {
 }
 
 type SettingsUpdate struct {
-	Theme         *string `json:"theme"`
-	StorageType   *string `json:"storage_type"`
-	ImageFormat   *string `json:"image_format"`
-	S3Endpoint    *string `json:"s3_endpoint"`
-	S3Bucket      *string `json:"s3_bucket"`
-	S3Region      *string `json:"s3_region"`
-	S3AccessKey   *string `json:"s3_access_key"`
-	S3SecretKey   *string `json:"s3_secret_key"`
-	S3PublicURL   *string `json:"s3_public_url"`
-	ShowFriends   *bool   `json:"show_friends"`
-	ShowPayPrice  *bool   `json:"show_pay_price"`
-	ShowOtherCost *bool   `json:"show_other_cost"`
-	MultiCurrency *bool   `json:"multi_currency"`
+	Theme            *string `json:"theme"`
+	StorageType      *string `json:"storage_type"`
+	ImageFormat      *string `json:"image_format"`
+	S3Endpoint       *string `json:"s3_endpoint"`
+	S3Bucket         *string `json:"s3_bucket"`
+	S3Region         *string `json:"s3_region"`
+	S3AccessKey      *string `json:"s3_access_key"`
+	S3SecretKey      *string `json:"s3_secret_key"`
+	S3PublicURL      *string `json:"s3_public_url"`
+	ShowFriends      *bool   `json:"show_friends"`
+	ShowPayPrice     *bool   `json:"show_pay_price"`
+	ShowOtherCost    *bool   `json:"show_other_cost"`
+	MultiCurrency    *bool   `json:"multi_currency"`
 	DefaultStartTime *string `json:"default_start_time"`
 	// AI 填写配置
-	AIEnabled  *bool   `json:"ai_enabled"`
-	AIBaseURL  *string `json:"ai_base_url"`
-	AIAPIKey   *string `json:"ai_api_key"`
-	AIModel    *string `json:"ai_model"`
-	AuthToken  *string `json:"auth_token"`
+	AIEnabled *bool   `json:"ai_enabled"`
+	AIBaseURL *string `json:"ai_base_url"`
+	AIAPIKey  *string `json:"ai_api_key"`
+	AIModel   *string `json:"ai_model"`
+	// 货殖账单关联
+	HuozhiEnabled  *bool   `json:"huozhi_enabled"`
+	HuozhiDomain   *string `json:"huozhi_domain"`
+	HuozhiAPIKey   *string `json:"huozhi_api_key"`
+	HuozhiBillPath *string `json:"huozhi_bill_path"`
+	AuthToken      *string `json:"auth_token"`
 	// 自动备份：0 = 关闭，单位小时；Keep 为快照保留份数（>=1）。
 	BackupIntervalHours *int    `json:"backup_interval_hours,omitempty"`
 	BackupKeep          *int    `json:"backup_keep,omitempty"`
@@ -269,6 +305,10 @@ func (c *Config) GetSettingsResponse() map[string]interface{} {
 		"ai_base_url":           c.AIBaseURL,
 		"ai_model":              c.AIModel,
 		"ai_api_key":            maskSecret(c.AIAPIKey),
+		"huozhi_enabled":        c.HuozhiEnabled,
+		"huozhi_domain":         c.HuozhiDomain,
+		"huozhi_api_key":        maskSecret(c.HuozhiAPIKey),
+		"huozhi_bill_path":      c.HuozhiBillPath,
 		"auth_required":         c.AuthToken != "",
 		"backup_interval_hours": c.BackupIntervalHours,
 		"backup_keep":           c.BackupKeep,
@@ -342,6 +382,54 @@ func (c *Config) GetS3Settings() S3Settings {
 	}
 }
 
+// HuozhiSettings is a point-in-time snapshot of the 货殖 integration config.
+// It is an alias for huozhi.Settings so handlers can hand it straight to the
+// client without a field-by-field conversion.
+type HuozhiSettings = huozhi.Settings
+
+// GetHuozhiSettings snapshots the 货殖 configuration under the read lock.
+func (c *Config) GetHuozhiSettings() HuozhiSettings {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return HuozhiSettings{
+		Enabled:  c.HuozhiEnabled,
+		Domain:   c.HuozhiDomain,
+		APIKey:   c.HuozhiAPIKey,
+		BillPath: c.HuozhiBillPath,
+	}
+}
+
+// normalizeHuozhiDomain trims whitespace and a trailing slash, and adds an
+// https:// scheme when the user typed a bare host.
+func normalizeHuozhiDomain(d string) string {
+	d = strings.TrimSpace(d)
+	d = strings.TrimRight(d, "/")
+	if d == "" {
+		return ""
+	}
+	if !strings.Contains(d, "://") {
+		d = "https://" + d
+	}
+	return d
+}
+
+// normalizeBillPath keeps the bill-page path template sane: empty falls back to
+// the default, and a template without the {id} placeholder gets it appended so
+// the generated link always points at one specific bill.
+func normalizeBillPath(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return "/bills/{id}"
+	}
+	if !strings.Contains(p, "{id}") {
+		p = strings.TrimRight(p, "/") + "/{id}"
+	}
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return p
+}
+
 // AuthTokenValue returns the current bearer token under the read lock.
 func (c *Config) AuthTokenValue() string {
 	c.mu.RLock()
@@ -406,6 +494,10 @@ func (c *Config) SaveToFile(path string) error {
 		"ai_model":              c.AIModel,
 		"ai_api_key":            c.AIAPIKey,
 		"auth_token":            c.AuthToken,
+		"huozhi_enabled":        b2s(c.HuozhiEnabled),
+		"huozhi_domain":         c.HuozhiDomain,
+		"huozhi_api_key":        c.HuozhiAPIKey,
+		"huozhi_bill_path":      c.HuozhiBillPath,
 		"backup_interval_hours": strconv.Itoa(c.BackupIntervalHours),
 		"backup_keep":           strconv.Itoa(c.BackupKeep),
 		"backup_format":         c.BackupFormat,
@@ -488,6 +580,18 @@ func (c *Config) LoadFromFile(path string) error {
 	}
 	if v, ok := data["ai_model"]; ok {
 		c.AIModel = v
+	}
+	if v, ok := data["huozhi_enabled"]; ok {
+		c.HuozhiEnabled = v == "true"
+	}
+	if v, ok := data["huozhi_domain"]; ok {
+		c.HuozhiDomain = normalizeHuozhiDomain(v)
+	}
+	if v, ok := data["huozhi_api_key"]; ok {
+		c.HuozhiAPIKey = v
+	}
+	if v, ok := data["huozhi_bill_path"]; ok {
+		c.HuozhiBillPath = normalizeBillPath(v)
 	}
 	if v, ok := data["auth_token"]; ok {
 		c.AuthToken = v

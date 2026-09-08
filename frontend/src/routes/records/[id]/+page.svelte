@@ -96,9 +96,33 @@
 
   const statusLabel = STATUS_LABELS;
 
+  // 货殖账单：关联账单的合计与明细。拉取失败不影响页面其余部分（降级为内建费用）。
+  let bills = $state(null);
+  let billsLoading = $state(false);
+  let billsOpen = $state(false);
+  // 多条账单时，悬停或点击合计展开明细气泡（触屏没有 hover）
+  const billsTotal = $derived(bills?.total ?? 0);
+  const billsCurrency = $derived(bills?.currency || rec?.pay_price_currency || 'CNY');
+  const billCount = $derived(bills?.bills?.length ?? 0);
+
+  async function loadBills() {
+    billsLoading = true;
+    billsOpen = false;
+    try {
+      bills = await api.getRecordBills(id);
+    } catch (e) {
+      bills = null;
+    } finally {
+      billsLoading = false;
+    }
+  }
+
+  function billTitle(b) {
+    return [b.description || b.remark || '（无描述）', b.account ? `账户：${b.account}` : '', b.merchant ? `商家：${b.merchant}` : ''].filter(Boolean).join(' · ');
+  }
+
   // 票根/现场照
-  let photos = $state([]);
-  let photoBusy = $state('');
+  let photos = $state([]);  let photoBusy = $state('');
   let photoFile = $state(null);
   let photoFileList = $state(null);
   let lightboxSrc = $state(''); // 空字符串 = 关闭；支持封面与多张照片
@@ -161,6 +185,7 @@
       }
       loadRelated(r);
       loadPhotos();
+      loadBills();
     } catch (e) {
       error = e.message;
     } finally {
@@ -277,6 +302,8 @@
     statusSaved = false;
     statusError = '';
     photoBusy = '';
+    bills = null;
+    billsOpen = false;
     load();
   });
 </script>
@@ -484,10 +511,60 @@
             <span class="fee-amount" class:is-empty={rec.other_cost === null || rec.other_cost === undefined}>{rec.other_cost === null || rec.other_cost === undefined ? '—' : rec.other_cost === 0 ? '无额外开销' : formatCurrency(rec.other_cost, rec.other_cost_currency)}</span>
           </div>
         </div>
-        {#if rec.total_cost > 0}
+        {#if billCount > 0}
+          <!-- 货殖优先级更高：接口返回有效数据时采用账单合计，内建合计降为附注 -->
+          <div class="fee-total">
+            <span class="fee-total-label">合计</span>
+            <span class="hz-badge" title="数据来自货殖">货殖</span>
+            <span class="hz-wrap">
+              {#if billCount === 1}
+                <a
+                  class="fee-total-amount hz-link"
+                  href={bills.bills[0].url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={billTitle(bills.bills[0])}
+                >{formatCurrency(billsTotal, billsCurrency)}</a>
+              {:else}
+                <button
+                  type="button"
+                  class="fee-total-amount hz-link"
+                  onclick={() => (billsOpen = !billsOpen)}
+                  aria-expanded={billsOpen}
+                >{formatCurrency(billsTotal, billsCurrency)} <span class="hz-count">（{billCount} 笔）</span></button>
+              {/if}
+              <span class="hz-pop" class:open={billsOpen}>
+                <span class="hz-pop-title">货殖账单明细</span>
+                {#each bills.bills as b (b.id)}
+                  <a class="hz-pop-row" href={b.url} target="_blank" rel="noopener noreferrer">
+                    <span class="hz-pop-desc">{b.description || b.remark || '（无描述）'}</span>
+                    {#if b.account}<span class="hz-pop-acct">账户：{b.account}</span>{/if}
+                    {#if b.tx_date}<span class="hz-pop-date">{b.tx_date.slice(0, 10)}</span>{/if}
+                    <span class="hz-pop-amt">{formatCurrency(b.amount, b.currency || billsCurrency)}</span>
+                  </a>
+                {/each}
+                {#if bills.mixed_currency}<span class="hz-pop-note">⚠ 币种不一致，合计为直接相加</span>{/if}
+                <span class="hz-pop-note">点击任一条跳转货殖账单页</span>
+              </span>
+            </span>
+          </div>
+          <div class="fee-total-sub tiny muted">
+            内建合计 {formatCurrency(bills.local_total, bills.local_currency || 'CNY')}
+            {#if bills.errors && Object.keys(bills.errors).length}
+              · {Object.keys(bills.errors).length} 个账单未取到
+            {/if}
+          </div>
+        {:else if rec.total_cost > 0}
           <div class="fee-total">
             <span class="fee-total-label">合计</span>
             <span class="fee-total-amount">{formatCurrency(rec.total_cost, rec.pay_price_currency || 'CNY')}</span>
+          </div>
+        {/if}
+        {#if billsLoading}
+          <div class="tiny muted fee-hz-hint">正在读取货殖账单…</div>
+        {:else if bills && bills.bill_ids && bills.bill_ids.length && billCount === 0}
+          <div class="tiny fee-hz-hint fee-hz-err">
+            ⚠ 已关联 {bills.bill_ids.length} 个货殖账单但未取到数据{bills.error ? `：${bills.error}` : ''}（当前显示内建费用）
           </div>
         {/if}
         {#if rec.channel}
@@ -772,6 +849,83 @@
     padding-top: 12px;
     border-top: 1px solid var(--border);
   }
+  /* ---- 货殖账单合计 ---- */
+  .hz-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    padding: 1px 7px;
+    margin-right: auto;
+    white-space: nowrap;
+  }
+  .hz-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: baseline;
+  }
+  .hz-link {
+    color: var(--text);
+    text-decoration: none;
+    border-bottom: 1px dashed var(--border-strong);
+    cursor: pointer;
+    background: none;
+    padding: 0;
+    font-family: inherit;
+  }
+  .hz-link:hover { color: var(--accent); }
+  .hz-count { font-size: 13px; font-weight: 500; color: var(--text-3); }
+  .fee-total-sub { margin-top: 6px; text-align: right; }
+  .fee-hz-hint { margin-top: 8px; }
+  .fee-hz-err { color: #e5484d; }
+
+  /* 悬停（或点击展开）显示账单明细气泡 */
+  .hz-pop {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    z-index: 30;
+    min-width: 260px;
+    max-width: 340px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-2);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(4px);
+    transition: opacity 0.14s ease, transform 0.14s ease, visibility 0.14s;
+    pointer-events: none;
+  }
+  .hz-wrap:hover .hz-pop,
+  .hz-wrap:focus-within .hz-pop,
+  .hz-pop.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  .hz-pop-title { font-size: 12px; font-weight: 600; color: var(--text-2); }
+  .hz-pop-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 10px;
+    padding: 6px 0;
+    border-top: 1px solid var(--border);
+    color: var(--text);
+    text-decoration: none;
+  }
+  .hz-pop-row:hover .hz-pop-desc { color: var(--accent); }
+  .hz-pop-desc { font-size: 13px; grid-column: 1; }
+  .hz-pop-amt { font-size: 13px; font-weight: 600; grid-column: 2; font-variant-numeric: tabular-nums; }
+  .hz-pop-acct, .hz-pop-date { font-size: 11.5px; color: var(--text-3); grid-column: 1; }
+  .hz-pop-note { font-size: 11px; color: var(--text-3); }
+
   .fee-total-label { font-size: 14px; font-weight: 600; color: var(--text-2); }
   .fee-total-amount {
     font-size: 20px;
