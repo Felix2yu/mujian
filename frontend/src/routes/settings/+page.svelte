@@ -1067,7 +1067,7 @@
         </label>
         <label class="field">
           <span>账单页面路径</span>
-          <input class="input" type="text" bind:value={settings.huozhi_bill_path} placeholder="/bills/{id}" spellcheck="false" autocomplete="off" />
+          <input class="input" type="text" bind:value={settings.huozhi_bill_path} placeholder={'/bills/{id}'} spellcheck="false" autocomplete="off" />
           <span class="hint">详情页跳转用的网页路径模板，其中的 id 会替换成账单 ID</span>
         </label>
       </div>
