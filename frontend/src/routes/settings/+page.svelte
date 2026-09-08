@@ -1058,7 +1058,7 @@
         <label class="field">
           <span>货殖域名</span>
           <input class="input" type="text" bind:value={settings.huozhi_domain} placeholder="https://huozhi.example.com" spellcheck="false" autocomplete="off" />
-          <span class="hint">站点根地址，接口会拼成 {域名}/api/public/bills/{账单ID}；只填主机名时自动补 https://</span>
+          <span class="hint">站点根地址；接口按「域名 + /api/public/bills/账单ID」拼接，只填主机名时自动补 https://</span>
         </label>
         <label class="field">
           <span>API Key</span>
@@ -1068,7 +1068,7 @@
         <label class="field">
           <span>账单页面路径</span>
           <input class="input" type="text" bind:value={settings.huozhi_bill_path} placeholder="/bills/{id}" spellcheck="false" autocomplete="off" />
-          <span class="hint">详情页跳转用的网页路径模板，{id} 会替换成账单 ID</span>
+          <span class="hint">详情页跳转用的网页路径模板，其中的 id 会替换成账单 ID</span>
         </label>
       </div>
       <div class="huozhi-test">
