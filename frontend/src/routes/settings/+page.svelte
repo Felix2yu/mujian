@@ -66,38 +66,77 @@
   let migrateError = $state('');
   let migrateProgress = $state({ processed: 0, total: 0 });
 
-  // 费用补全向导
-  let zeroCostRecords = $state([]);
+  // 费用补全向导（分组模式 + 场馆筛选）
+  let allRecords = $state([]);
   let costWizardLoading = $state(false);
   let costWizardError = $state('');
   let costWizardProcessing = $state(false);
-  async function loadZeroCostRecords() {
+  let costWizardExpanded = $state(null); // 当前展开的分组: 'price' | 'pay_price' | 'other_cost' | null
+  let costWizardVenue = $state(''); // 选中的场馆（空 = 全部）
+
+  // 提取场馆列表（按记录数降序）
+  let venueOptions = $derived.by(() => {
+    const map = new Map();
+    for (const r of allRecords) {
+      if (r.address) {
+        map.set(r.address, (map.get(r.address) || 0) + 1);
+      }
+    }
+    return [...map.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([addr, cnt]) => ({ address: addr, count: cnt }));
+  });
+
+  // 按场馆筛选后的记录
+  let filteredRecords = $derived(
+    costWizardVenue
+      ? allRecords.filter(r => r.address === costWizardVenue)
+      : allRecords
+  );
+
+  // 按字段分组：哪些记录的该字段为 NULL/0
+  let priceMissingRecords = $derived(filteredRecords.filter(r => r.price === null || r.price === 0));
+  let payPriceMissingRecords = $derived(filteredRecords.filter(r => r.pay_price === null || r.pay_price === 0));
+  let otherCostMissingRecords = $derived(filteredRecords.filter(r => r.other_cost === null || r.other_cost === 0));
+
+  async function loadCostWizardRecords() {
     costWizardLoading = true;
     costWizardError = '';
     try {
       const res = await api.listRecords({ missing: 'price,pay_price,other_cost', limit: '1000' });
-      zeroCostRecords = res.records || [];
+      allRecords = res.records || [];
     } catch (e) {
       costWizardError = '加载失败：' + e.message;
     } finally {
       costWizardLoading = false;
     }
   }
-  async function markCostField(ids, field, value) {
+
+  async function batchMarkCostField(field, value) {
+    const ids = filteredRecords
+      .filter(r => r[field] === null || r[field] === 0)
+      .map(r => r.id);
+    if (ids.length === 0) return;
+
     costWizardProcessing = true;
     try {
       await api.batchUpdate(ids, { [field]: value });
-      await loadZeroCostRecords();
+      // 立即更新本地状态，不重新加载
+      allRecords = allRecords.map(r => {
+        if (ids.includes(r.id)) {
+          return { ...r, [field]: value };
+        }
+        return r;
+      });
     } catch (e) {
       costWizardError = '操作失败：' + e.message;
     } finally {
       costWizardProcessing = false;
     }
   }
-  function hasUnclearField(rec) {
-    return (rec.price === null || rec.price === 0) ||
-           (rec.pay_price === null || rec.pay_price === 0) ||
-           (rec.other_cost === null || rec.other_cost === 0);
+
+  function toggleCostGroup(field) {
+    costWizardExpanded = costWizardExpanded === field ? null : field;
   }
 
   // S3 连接自检：用当前（合并掩码后的）配置做一次真实读写探测，验证连通性 /
@@ -265,6 +304,7 @@
       backupRemote = settings.backup_remote === true;
       lastBackupAt = typeof settings.last_backup_at === 'number' ? settings.last_backup_at : 0;
       refreshBackups();
+      loadCostWizardRecords();
     } catch (e) {
       error = e.message;
     } finally {
@@ -953,57 +993,179 @@
 {#snippet costWizardCard()}
 <div class="card sec">
   <h3>费用补全</h3>
-  <p class="tiny muted" style="margin: 0 0 10px;">将费用为 0 或未填写的记录标记为「免费」或「未填写」，以便区分。</p>
+  <p class="tiny muted" style="margin: 0 0 10px;">将费用为 0 或未填写的记录标记为「免费」或「未填写」，以便区分。点击分组可展开查看具体记录。</p>
   {#if costWizardLoading}
     <div class="banner info">加载中…</div>
   {:else if costWizardError}
     <div class="banner error">⚠ {costWizardError}</div>
-  {:else if zeroCostRecords.length === 0}
+  {:else if allRecords.length === 0}
     <div class="banner success">✓ 所有费用字段已补全</div>
   {:else}
-    <div class="banner info">共 {zeroCostRecords.length} 条记录需要确认</div>
-    <div style="margin-top: 10px; max-height: 400px; overflow-y: auto;">
-      {#each zeroCostRecords as rec}
-        <div style="padding: 8px 0; border-bottom: 1px solid var(--border);">
-          <div style="font-size: 13px; margin-bottom: 6px; color: var(--text-2);">{new Date(rec.date * 1000).toLocaleDateString()} {rec.name}</div>
-          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-            {#if rec.price === null || rec.price === 0}
-              <div style="display: flex; align-items: center; gap: 4px; font-size: 12px;">
-                <span style="color: var(--text-3);">票价:</span>
-                <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'price', 0)}>免费</button>
-                <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'price', null)}>未填写</button>
-              </div>
-            {/if}
-            {#if rec.pay_price === null || rec.pay_price === 0}
-              <div style="display: flex; align-items: center; gap: 4px; font-size: 12px;">
-                <span style="color: var(--text-3);">实付:</span>
-                <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'pay_price', 0)}>免费</button>
-                <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'pay_price', null)}>未填写</button>
-              </div>
-            {/if}
-            {#if rec.other_cost === null || rec.other_cost === 0}
-              <div style="display: flex; align-items: center; gap: 4px; font-size: 12px;">
-                <span style="color: var(--text-3);">其他:</span>
-                <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'other_cost', 0)}>无开销</button>
-                <button class="btn sm" disabled={costWizardProcessing} onclick={() => markCostField([rec.id], 'other_cost', null)}>未填写</button>
-              </div>
-            {/if}
+    <div class="banner info">共 {allRecords.length} 条记录需要确认</div>
+
+    <!-- 场馆筛选 -->
+    {#if venueOptions.length > 0}
+      <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <label style="font-size: 12.5px; color: var(--text-3); white-space: nowrap;">按场馆筛选:</label>
+        <select
+          class="input cost-venue-select"
+          bind:value={costWizardVenue}
+          disabled={costWizardProcessing}
+        >
+          <option value="">全部场馆 ({allRecords.length} 条)</option>
+          {#each venueOptions as v}
+            <option value={v.address}>{v.address} ({v.count} 条)</option>
+          {/each}
+        </select>
+        {#if costWizardVenue}
+          <span style="font-size: 12px; color: var(--text-3);">当前 {filteredRecords.length} 条</span>
+        {/if}
+      </div>
+    {/if}
+
+    <!-- 票价分组 -->
+    <div style="margin-top: 12px; border: 1px solid var(--border); border-radius: 6px;">
+      <button
+        class="cost-group-header"
+        onclick={() => toggleCostGroup('price')}
+        disabled={costWizardProcessing}
+      >
+        <span>票价</span>
+        <span style="display: flex; align-items: center; gap: 8px;">
+          <span class="badge">{priceMissingRecords.length} 条</span>
+          <span class="chevron" class:open={costWizardExpanded === 'price'}>▶</span>
+        </span>
+      </button>
+      {#if costWizardExpanded === 'price'}
+        <div class="cost-group-body">
+          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <button class="btn sm primary" disabled={costWizardProcessing || priceMissingRecords.length === 0}
+              onclick={() => batchMarkCostField('price', 0)}>
+              全部免费
+            </button>
+            <button class="btn sm" disabled={costWizardProcessing || priceMissingRecords.length === 0}
+              onclick={() => batchMarkCostField('price', null)}>
+              全部未填写
+            </button>
           </div>
+          {#if priceMissingRecords.length === 0}
+            <div class="tiny muted" style="padding: 8px 0;">✓ 票价已全部确认</div>
+          {:else}
+            <div class="cost-record-list">
+              {#each priceMissingRecords.slice(0, 50) as rec}
+                <div class="cost-record-item">
+                  <span class="cost-record-date">{new Date(rec.date * 1000).toLocaleDateString()}</span>
+                  <span class="cost-record-name">{rec.name}</span>
+                  {#if rec.address && !costWizardVenue}
+                    <span class="cost-record-venue">{rec.address}</span>
+                  {/if}
+                </div>
+              {/each}
+              {#if priceMissingRecords.length > 50}
+                <div class="tiny muted" style="padding: 4px 0;">…还有 {priceMissingRecords.length - 50} 条</div>
+              {/if}
+            </div>
+          {/if}
         </div>
-      {/each}
+      {/if}
     </div>
-    <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
-      <button class="btn sm" disabled={costWizardProcessing} onclick={() => {
-        const ids = zeroCostRecords.map(r => r.id);
-        markCostField(ids, 'price', 0);
-      }}>票价全部免费</button>
-      <button class="btn sm" disabled={costWizardProcessing} onclick={() => {
-        const ids = zeroCostRecords.map(r => r.id);
-        markCostField(ids, 'price', null);
-      }}>票价全部未填写</button>
+
+    <!-- 实付分组 -->
+    <div style="margin-top: 8px; border: 1px solid var(--border); border-radius: 6px;">
+      <button
+        class="cost-group-header"
+        onclick={() => toggleCostGroup('pay_price')}
+        disabled={costWizardProcessing}
+      >
+        <span>实付</span>
+        <span style="display: flex; align-items: center; gap: 8px;">
+          <span class="badge">{payPriceMissingRecords.length} 条</span>
+          <span class="chevron" class:open={costWizardExpanded === 'pay_price'}>▶</span>
+        </span>
+      </button>
+      {#if costWizardExpanded === 'pay_price'}
+        <div class="cost-group-body">
+          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <button class="btn sm primary" disabled={costWizardProcessing || payPriceMissingRecords.length === 0}
+              onclick={() => batchMarkCostField('pay_price', 0)}>
+              全部免费
+            </button>
+            <button class="btn sm" disabled={costWizardProcessing || payPriceMissingRecords.length === 0}
+              onclick={() => batchMarkCostField('pay_price', null)}>
+              全部未填写
+            </button>
+          </div>
+          {#if payPriceMissingRecords.length === 0}
+            <div class="tiny muted" style="padding: 8px 0;">✓ 实付已全部确认</div>
+          {:else}
+            <div class="cost-record-list">
+              {#each payPriceMissingRecords.slice(0, 50) as rec}
+                <div class="cost-record-item">
+                  <span class="cost-record-date">{new Date(rec.date * 1000).toLocaleDateString()}</span>
+                  <span class="cost-record-name">{rec.name}</span>
+                  {#if rec.address && !costWizardVenue}
+                    <span class="cost-record-venue">{rec.address}</span>
+                  {/if}
+                </div>
+              {/each}
+              {#if payPriceMissingRecords.length > 50}
+                <div class="tiny muted" style="padding: 4px 0;">…还有 {payPriceMissingRecords.length - 50} 条</div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      {/if}
     </div>
+
+    <!-- 其他花费分组 -->
+    <div style="margin-top: 8px; border: 1px solid var(--border); border-radius: 6px;">
+      <button
+        class="cost-group-header"
+        onclick={() => toggleCostGroup('other_cost')}
+        disabled={costWizardProcessing}
+      >
+        <span>其他花费</span>
+        <span style="display: flex; align-items: center; gap: 8px;">
+          <span class="badge">{otherCostMissingRecords.length} 条</span>
+          <span class="chevron" class:open={costWizardExpanded === 'other_cost'}>▶</span>
+        </span>
+      </button>
+      {#if costWizardExpanded === 'other_cost'}
+        <div class="cost-group-body">
+          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <button class="btn sm primary" disabled={costWizardProcessing || otherCostMissingRecords.length === 0}
+              onclick={() => batchMarkCostField('other_cost', 0)}>
+              全部无开销
+            </button>
+            <button class="btn sm" disabled={costWizardProcessing || otherCostMissingRecords.length === 0}
+              onclick={() => batchMarkCostField('other_cost', null)}>
+              全部未填写
+            </button>
+          </div>
+          {#if otherCostMissingRecords.length === 0}
+            <div class="tiny muted" style="padding: 8px 0;">✓ 其他花费已全部确认</div>
+          {:else}
+            <div class="cost-record-list">
+              {#each otherCostMissingRecords.slice(0, 50) as rec}
+                <div class="cost-record-item">
+                  <span class="cost-record-date">{new Date(rec.date * 1000).toLocaleDateString()}</span>
+                  <span class="cost-record-name">{rec.name}</span>
+                  {#if rec.address && !costWizardVenue}
+                    <span class="cost-record-venue">{rec.address}</span>
+                  {/if}
+                </div>
+              {/each}
+              {#if otherCostMissingRecords.length > 50}
+                <div class="tiny muted" style="padding: 4px 0;">…还有 {otherCostMissingRecords.length - 50} 条</div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+
   {/if}
-  <button class="btn sm" style="margin-top: 8px;" onclick={loadZeroCostRecords}>刷新列表</button>
+  <button class="btn sm" style="margin-top: 8px;" onclick={loadCostWizardRecords}>刷新列表</button>
 </div>
 {/snippet}
 
@@ -1173,4 +1335,78 @@
   .backup-size { color: var(--text-3); font-size: 12px; flex: none; }
   .backup-time { color: var(--text-3); font-size: 12px; flex: none; }
   .backup-ops { display: flex; gap: 6px; flex: none; }
+
+  /* ---------- 费用补全向导（分组模式）---------- */
+  .cost-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: none;
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-2);
+    transition: background var(--t-fast) var(--ease);
+  }
+  .cost-group-header:hover { background: var(--surface-3); }
+  .cost-group-header:disabled { opacity: 0.6; cursor: not-allowed; }
+  .cost-group-body {
+    padding: 10px 12px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--accent-softer);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .chevron {
+    display: inline-block;
+    font-size: 10px;
+    transition: transform var(--t-fast) var(--ease);
+    color: var(--text-3);
+  }
+  .chevron.open { transform: rotate(90deg); }
+  .cost-record-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface-2);
+  }
+  .cost-record-item {
+    display: flex;
+    gap: 8px;
+    padding: 6px 10px;
+    font-size: 12.5px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cost-record-item:last-child { border-bottom: none; }
+  .cost-record-date { color: var(--text-3); flex: none; }
+  .cost-record-name { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .cost-record-venue {
+    color: var(--text-3);
+    font-size: 11.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 150px;
+    flex: none;
+  }
+  .cost-venue-select {
+    flex: 1;
+    min-width: 180px;
+    max-width: 320px;
+    font-size: 12.5px;
+    padding: 4px 8px;
+    height: 28px;
+  }
 </style>
