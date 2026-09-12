@@ -770,15 +770,29 @@
   .tags { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .section .tiny { margin: 14px 0 0; }
 
-  /* 折子按剧目聚合成簇：剧名（书名号）为簇头，折子为独立标签 */
-  .zhezi-clusters { display: flex; flex-direction: column; gap: 16px; }
-  .zhezi-cluster { display: flex; flex-direction: column; gap: 8px; }
+  /* 折子按剧目聚合成簇：以卡片网格排列，充分利用横向空间，避免单列过长 */
+  .zhezi-clusters {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    align-items: start;
+  }
+  .zhezi-cluster {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+  }
   .cluster-drama {
     font-family: var(--font-serif);
-    font-size: 15.5px;
+    font-size: 14.5px;
     font-weight: 600;
     color: var(--accent);
     text-decoration: none;
+    line-height: 1.35;
     width: fit-content;
     transition: color var(--t-fast) var(--ease);
   }
@@ -787,12 +801,12 @@
   .ztag {
     display: inline-flex;
     align-items: center;
-    background: var(--surface-2);
+    background: var(--surface-1);
     border: 1px solid var(--border);
     color: var(--text-2);
     border-radius: var(--radius-sm);
-    padding: 4px 11px;
-    font-size: 13px;
+    padding: 4px 10px;
+    font-size: 12.5px;
     text-decoration: none;
     transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
   }
@@ -804,7 +818,7 @@
   .cluster-full {
     font-size: 12px;
     color: var(--text-3);
-    background: var(--surface-2);
+    background: var(--surface-1);
     border: 1px dashed var(--border);
     border-radius: var(--radius-sm);
     padding: 2px 9px;
