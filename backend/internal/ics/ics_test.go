@@ -283,6 +283,7 @@ func TestEventCalendar(t *testing.T) {
 // Western-hemisphere timezones must produce a negative TZOFFSET (RFC 5545),
 // not the invalid "+-0500" emitted before the sign fix.
 func TestGenerateCalendarNegativeOffset(t *testing.T) {
+
 	loc, err := time.LoadLocation("America/New_York")
 	if err != nil {
 		t.Skip("tzdata unavailable")
@@ -315,5 +316,51 @@ func TestGenerateCalendarEscapesCategoriesAndCR(t *testing.T) {
 	}
 	if !strings.Contains(out, "CATEGORIES:昆\\n曲\\,折子\\n戏\r\n") {
 		t.Errorf("CATEGORIES should escape CR/LF/comma (CRLF folds to one \\n):\n%s", out)
+	}
+}
+
+// VTODO VALARM TRIGGER honors the reminder policy. hours_before yields a
+// relative trigger before DUE, so a 14:00 show with a 3h lead fires at 11:00
+// (not the middle of the night).
+func TestTodoCalendarReminderHoursBefore(t *testing.T) {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	rec := models.Record{
+		ID:   "rec-rem",
+		Name: "提醒测试",
+		Date: time.Date(2026, 9, 11, 14, 0, 0, 0, loc).Unix(),
+	}
+	out := TodoCalendar(rec, loc, nil, &ReminderConfig{Mode: ReminderModeHoursBefore, BeforeHours: 3})
+	if !strings.Contains(unfold(out), "TRIGGER:-PT3H\r\n") {
+		t.Errorf("hours_before mode should emit relative TRIGGER:-PT3H:\n%s", out)
+	}
+	if strings.Contains(out, "TRIGGER;VALUE=DATE-TIME") {
+		t.Errorf("hours_before mode must not emit an absolute trigger:\n%s", out)
+	}
+}
+
+// same_day yields an absolute UTC date-time on the day of the show. A 14:00
+// show reminded at 10:00 Asia/Shanghai (UTC+8) is 02:00 UTC.
+func TestTodoCalendarReminderSameDay(t *testing.T) {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	rec := models.Record{
+		ID:   "rec-rem2",
+		Name: "提醒测试",
+		Date: time.Date(2026, 9, 11, 14, 0, 0, 0, loc).Unix(),
+	}
+	out := TodoCalendar(rec, loc, nil, &ReminderConfig{Mode: ReminderModeSameDay, DailyHour: 10, DailyMinute: 0})
+	want := "TRIGGER;VALUE=DATE-TIME:20260911T020000Z\r\n"
+	if !strings.Contains(unfold(out), want) {
+		t.Errorf("same_day mode should emit absolute UTC trigger %q, got:\n%s", want, out)
+	}
+}
+
+// A nil ReminderConfig falls back to the default (12h before) so callers that
+// have not adopted the new parameter keep the original behavior.
+func TestTodoCalendarReminderDefaultNil(t *testing.T) {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	rec := models.Record{ID: "rec-rem3", Name: "提醒测试", Date: time.Date(2026, 9, 11, 19, 30, 0, 0, loc).Unix()}
+	out := TodoCalendar(rec, loc, nil, nil)
+	if !strings.Contains(unfold(out), "TRIGGER:-PT12H\r\n") {
+		t.Errorf("nil reminder config should default to -PT12H:\n%s", out)
 	}
 }

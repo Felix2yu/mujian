@@ -23,7 +23,7 @@ func newTestBackend(t *testing.T) *Backend {
 	t.Cleanup(func() { database.Close() })
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	database.SetLocation(loc)
-	return New(database)
+	return New(database, nil)
 }
 
 func testRecord(id, name string, at time.Time) models.Record {

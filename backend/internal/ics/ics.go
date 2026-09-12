@@ -17,6 +17,49 @@ var nonPrependCategories = map[string]bool{
 
 var alreadyBracketedRe = regexp.MustCompile(`^《.*》$`)
 
+// 提醒策略：决定 CalDAV 任务（VTODO）VALARM 的 TRIGGER 取值。
+const (
+	// ReminderModeHoursBefore：演出开始前 N 小时触发（相对 DUE）。
+	ReminderModeHoursBefore = "hours_before"
+	// ReminderModeSameDay：演出当天统一时刻触发（绝对 DATE-TIME，UTC）。
+	ReminderModeSameDay = "same_day"
+)
+
+// ReminderConfig 描述 CalDAV 任务提醒的触发方式；传 nil 等价于
+// DefaultReminderConfig（向后兼容：演出开始前 12 小时）。
+type ReminderConfig struct {
+	Mode        string // ReminderModeHoursBefore | ReminderModeSameDay
+	BeforeHours int    // hours_before 模式：演出开始前几小时（>=0）
+	DailyHour   int    // same_day 模式：当天几点（0-23）
+	DailyMinute int    // same_day 模式：当天几分（0-59）
+}
+
+// DefaultReminderConfig 返回向后兼容的默认策略：演出开始前 12 小时。
+func DefaultReminderConfig() *ReminderConfig {
+	return &ReminderConfig{Mode: ReminderModeHoursBefore, BeforeHours: 12}
+}
+
+// reminderTriggerLine 计算 VTODO VALARM 的 TRIGGER 行。
+func reminderTriggerLine(date int64, loc *time.Location, rem *ReminderConfig) string {
+	if rem == nil {
+		rem = DefaultReminderConfig()
+	}
+	switch rem.Mode {
+	case ReminderModeSameDay:
+		// 演出当天的固定时刻；RFC 5545 规定 VALUE=DATE-TIME 的 TRIGGER
+		// 必须用 UTC 表示。
+		start := time.Unix(date, 0).In(loc)
+		rt := time.Date(start.Year(), start.Month(), start.Day(), rem.DailyHour, rem.DailyMinute, 0, 0, loc)
+		return fmt.Sprintf("TRIGGER;VALUE=DATE-TIME:%s", rt.UTC().Format("20060102T150405Z"))
+	default: // ReminderModeHoursBefore
+		h := rem.BeforeHours
+		if h < 0 {
+			h = 0
+		}
+		return fmt.Sprintf("TRIGGER:-PT%dH", h)
+	}
+}
+
 // formatEventTitle prepends the genre (category) to the show name for ICS
 // SUMMARY display, following the same rules as the web calendar frontend:
 //   - no category or no name → return as-is
@@ -65,12 +108,12 @@ func GenerateCalendar(records []models.Record, loc *time.Location, zheziNames ma
 
 // GenerateTodos renders all records into a RFC 5545 VCALENDAR string whose
 // members are VTODO (tasks) instead of VEVENTs — the CalDAV task projection.
-func GenerateTodos(records []models.Record, loc *time.Location, zheziNames map[string]string) string {
+func GenerateTodos(records []models.Record, loc *time.Location, zheziNames map[string]string, rem *ReminderConfig) string {
 	var b strings.Builder
 	writeHeader(&b, loc)
 
 	for _, rec := range records {
-		writeTodo(&b, rec, loc, zheziNames)
+		writeTodo(&b, rec, loc, zheziNames, rem)
 	}
 
 	b.WriteString("END:VCALENDAR\r\n")
@@ -94,10 +137,10 @@ func EventCalendar(rec models.Record, loc *time.Location, zheziNames map[string]
 // (e.g. Apple Reminders) fires native due notifications. STATUS reflects
 // rec.Watched (已观看/已到场) — ticking the reminder in the client round-trips
 // back as STATUS:COMPLETED and is stored on the record via SetRecordWatched.
-func TodoCalendar(rec models.Record, loc *time.Location, zheziNames map[string]string) string {
+func TodoCalendar(rec models.Record, loc *time.Location, zheziNames map[string]string, rem *ReminderConfig) string {
 	var b strings.Builder
 	writeHeader(&b, loc)
-	writeTodo(&b, rec, loc, zheziNames)
+	writeTodo(&b, rec, loc, zheziNames, rem)
 	b.WriteString("END:VCALENDAR\r\n")
 	return b.String()
 }
@@ -211,7 +254,7 @@ func writeEvent(b *strings.Builder, rec models.Record, loc *time.Location, zhezi
 // so a task client surfaces it as a due reminder; STATUS reflects rec.Watched
 // (已观看/已到场) and a VALARM fires a native notification shortly before the
 // show. LOCATION is included for context (task clients don't drop map pins).
-func writeTodo(b *strings.Builder, rec models.Record, loc *time.Location, zheziNames map[string]string) {
+func writeTodo(b *strings.Builder, rec models.Record, loc *time.Location, zheziNames map[string]string, rem *ReminderConfig) {
 	start := time.Unix(rec.Date, 0).In(loc)
 	startStr := start.Format("20060102T150405")
 
@@ -256,12 +299,12 @@ func writeTodo(b *strings.Builder, rec models.Record, loc *time.Location, zheziN
 	} else {
 		writeLine("STATUS:NEEDS-ACTION")
 	}
-	// VALARM: remind 12 hours before the show. Task clients (Apple Reminders,
-	// Thunderbird, …) fire a native notification from this.
+	// VALARM: 按用户配置触发原生通知（演出开始前 N 小时，或当天统一时刻）。
+	// 任务客户端（Apple Reminders、Thunderbird 等）据此弹出原生提醒。
 	writeLine("BEGIN:VALARM")
 	writeLine("ACTION:DISPLAY")
 	writeLine("DESCRIPTION:演出提醒")
-	writeLine("TRIGGER:-PT12H")
+	writeLine(reminderTriggerLine(rec.Date, loc, rem))
 	writeLine("END:VALARM")
 	writeLine("END:VTODO")
 }

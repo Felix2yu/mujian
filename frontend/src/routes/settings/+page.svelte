@@ -24,7 +24,11 @@
     huozhi_domain: '',
     huozhi_api_key: '',
     huozhi_bill_path: '/bills/{id}',
-    default_start_time: '19:30'
+    default_start_time: '19:30',
+    reminder_mode: 'hours_before',
+    reminder_before_hours: 12,
+    reminder_daily_hour: 10,
+    reminder_daily_minute: 0
   });
   // GET /api/settings 返回的 secret 是掩码值（如 "sk12****"）；保存时若未改动
   // 就不回传该字段，避免把掩码存成真实密钥（后端也会兜底忽略）。
@@ -38,7 +42,7 @@
   const CARD_COLS = (() => {
     // 权重 = 实测卡片高度（含间距，px）；内容变化时按需更新
     const cards = [
-      ['theme', 162], ['storage', 158], ['s3', 823], ['encode', 305], ['calendar', 280],
+      ['theme', 162], ['storage', 158], ['s3', 823], ['encode', 305], ['calendar', 280], ['reminder', 280],
       ['fields', 389], ['status', 178], ['list', 224], ['backup', 988], ['security', 274], ['map', 435],
       ['ai', 360], ['costWizard', 200], ['huozhi', 470]
     ];
@@ -313,6 +317,10 @@
       if (typeof settings.show_other_cost !== 'boolean') settings.show_other_cost = true;
       if (typeof settings.multi_currency !== 'boolean') settings.multi_currency = true;
       if (!settings.default_start_time) settings.default_start_time = '19:30';
+      if (!['hours_before', 'same_day'].includes(settings.reminder_mode)) settings.reminder_mode = 'hours_before';
+      if (typeof settings.reminder_before_hours !== 'number' || settings.reminder_before_hours < 0 || settings.reminder_before_hours > 72) settings.reminder_before_hours = 12;
+      if (typeof settings.reminder_daily_hour !== 'number' || settings.reminder_daily_hour < 0 || settings.reminder_daily_hour > 23) settings.reminder_daily_hour = 10;
+      if (typeof settings.reminder_daily_minute !== 'number' || settings.reminder_daily_minute < 0 || settings.reminder_daily_minute > 59) settings.reminder_daily_minute = 0;
       mapSource = loadPref('mujian:map_source', 'osm');
       mapKey = loadPref('mujian:map_custom_key', '');
       mapCustomUrl = loadPref('mujian:map_custom_url', '');
@@ -352,6 +360,10 @@
         show_other_cost: settings.show_other_cost,
         multi_currency: settings.multi_currency,
         default_start_time: settings.default_start_time || '19:30',
+        reminder_mode: settings.reminder_mode || 'hours_before',
+        reminder_before_hours: Math.max(0, Math.min(72, Number(settings.reminder_before_hours) || 12)),
+        reminder_daily_hour: Math.max(0, Math.min(23, Number(settings.reminder_daily_hour) || 10)),
+        reminder_daily_minute: Math.max(0, Math.min(59, Number(settings.reminder_daily_minute) || 0)),
         backup_interval_hours: backupInterval,
         backup_keep: Math.max(1, Number(backupKeep) || 10),
         backup_format: backupFormat,
@@ -724,6 +736,42 @@
         需 HTTPS；CalDAV 与 ICS 订阅并存会导致事件重复，配好后请退订旧订阅。<br />
         同一账户下还会出现「幕间·提醒」任务清单（提醒事项 App）：每场演出是一条到期提醒，勾选完成即标记「已观看/已到场」并同步回幕间</span>
       </div>
+    </div>
+{/snippet}
+
+{#snippet reminderCard()}
+<div class="card sec">
+      <h3>演出提醒（CalDAV）</h3>
+      <p class="hint" style="margin-bottom: 12px;">
+        控制 iOS / macOS「提醒事项」里「幕间·提醒」任务清单的提醒时机（每条演出是一个到期提醒）。此前固定提前 12 小时，下午场会凌晨响铃；现在可改为当天统一时刻，或自定义提前小时数。保存后下次日历同步生效。
+      </p>
+      <div class="status-row">
+        <label class="status-opt" class:on={settings.reminder_mode === 'hours_before'}>
+          <input type="radio" name="reminder_mode" value="hours_before" checked={settings.reminder_mode === 'hours_before'} onchange={() => (settings.reminder_mode = 'hours_before')} />
+          <span>演出前 N 小时</span>
+        </label>
+        <label class="status-opt" class:on={settings.reminder_mode === 'same_day'}>
+          <input type="radio" name="reminder_mode" value="same_day" checked={settings.reminder_mode === 'same_day'} onchange={() => (settings.reminder_mode = 'same_day')} />
+          <span>当天固定时刻</span>
+        </label>
+      </div>
+
+      {#if settings.reminder_mode === 'hours_before'}
+        <label class="field" style="margin-top: 12px;">
+          <span>提前小时数（0–72）</span>
+          <input class="input" type="number" min="0" max="72" bind:value={settings.reminder_before_hours} style="max-width: 110px;" />
+          <span class="hint">演出开始前这么多个小时提醒。例：下午 2 点的演出设 2 小时，则中午 12 点提醒，而非凌晨。</span>
+        </label>
+      {:else}
+        <label class="field" style="margin-top: 12px;">
+          <span>当天提醒时刻</span>
+          <input class="input" type="time"
+            value={String(settings.reminder_daily_hour).padStart(2, '0') + ':' + String(settings.reminder_daily_minute).padStart(2, '0')}
+            onchange={(e) => { const [h, m] = e.currentTarget.value.split(':').map(Number); settings.reminder_daily_hour = h || 0; settings.reminder_daily_minute = m || 0; }}
+            style="max-width: 130px;" />
+          <span class="hint">无论演出几点开始，统一在这一天这个时刻弹出提醒（按服务端时区）。例：设为 10:00，则每天上午 10 点提醒当天全部演出。</span>
+        </label>
+      {/if}
     </div>
 {/snippet}
 
@@ -1298,6 +1346,7 @@
 			{:else if key === "s3"}{@render s3Card()}
 			{:else if key === "encode"}{@render encodeCard()}
 			{:else if key === "calendar"}{@render calendarCard()}
+			{:else if key === "reminder"}{@render reminderCard()}
 			{:else if key === "fields"}{@render fieldsCard()}
 			{:else if key === "status"}{@render statusCard()}
 			{:else if key === "list"}{@render listCard()}
@@ -1317,6 +1366,7 @@
 			{:else if key === "s3"}{@render s3Card()}
 			{:else if key === "encode"}{@render encodeCard()}
 			{:else if key === "calendar"}{@render calendarCard()}
+			{:else if key === "reminder"}{@render reminderCard()}
 			{:else if key === "fields"}{@render fieldsCard()}
 			{:else if key === "status"}{@render statusCard()}
 			{:else if key === "list"}{@render listCard()}

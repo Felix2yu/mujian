@@ -42,6 +42,13 @@ type Config struct {
 	ShowOtherCost       bool   `json:"show_other_cost"`
 	MultiCurrency       bool   `json:"multi_currency"`
 	DefaultStartTime    string `json:"default_start_time"`
+	// CalDAV 任务提醒（VTODO VALARM）触发策略：
+	//   - ReminderMode = "hours_before"：演出开始前 ReminderBeforeHours 小时触发（默认 12）
+	//   - ReminderMode = "same_day"：演出当天统一在 ReminderDailyHour:ReminderDailyMinute 触发
+	ReminderMode        string `json:"-"`
+	ReminderBeforeHours int    `json:"-"`
+	ReminderDailyHour   int    `json:"-"`
+	ReminderDailyMinute int    `json:"-"`
 	// AI 填写：调用 OpenAI 兼容的 Chat Completions 接口，从粘贴文本提取演出字段。
 	// 密钥仅存于服务端，不回显明文。
 	AIEnabled bool   `json:"-"`
@@ -94,6 +101,10 @@ func Load() *Config {
 		ShowOtherCost:       true,
 		MultiCurrency:       true,
 		DefaultStartTime:    "19:30",
+		ReminderMode:        getEnv("REMINDER_MODE", "hours_before"),
+		ReminderBeforeHours: getEnvInt("REMINDER_BEFORE_HOURS", 12),
+		ReminderDailyHour:   getEnvInt("REMINDER_DAILY_HOUR", 10),
+		ReminderDailyMinute: getEnvInt("REMINDER_DAILY_MINUTE", 0),
 		AIEnabled:           false,
 		AIBaseURL:           "https://api.openai.com/v1",
 		AIAPIKey:            "",
@@ -176,6 +187,42 @@ func (c *Config) Update(s *SettingsUpdate) {
 	if s.MultiCurrency != nil {
 		c.MultiCurrency = *s.MultiCurrency
 	}
+	if s.ReminderMode != nil {
+		switch *s.ReminderMode {
+		case "hours_before", "same_day":
+			c.ReminderMode = *s.ReminderMode
+		}
+	}
+	if s.ReminderBeforeHours != nil {
+		v := *s.ReminderBeforeHours
+		if v < 0 {
+			v = 0
+		}
+		if v > 72 {
+			v = 72
+		}
+		c.ReminderBeforeHours = v
+	}
+	if s.ReminderDailyHour != nil {
+		v := *s.ReminderDailyHour
+		if v < 0 {
+			v = 0
+		}
+		if v > 23 {
+			v = 23
+		}
+		c.ReminderDailyHour = v
+	}
+	if s.ReminderDailyMinute != nil {
+		v := *s.ReminderDailyMinute
+		if v < 0 {
+			v = 0
+		}
+		if v > 59 {
+			v = 59
+		}
+		c.ReminderDailyMinute = v
+	}
 	if s.DefaultStartTime != nil {
 		c.DefaultStartTime = *s.DefaultStartTime
 	}
@@ -257,6 +304,11 @@ type SettingsUpdate struct {
 	ShowOtherCost    *bool   `json:"show_other_cost"`
 	MultiCurrency    *bool   `json:"multi_currency"`
 	DefaultStartTime *string `json:"default_start_time"`
+	// CalDAV 提醒时机：hours_before=演出开始前 N 小时；same_day=当天统一时刻。
+	ReminderMode        *string `json:"reminder_mode,omitempty"`
+	ReminderBeforeHours *int    `json:"reminder_before_hours,omitempty"`
+	ReminderDailyHour   *int    `json:"reminder_daily_hour,omitempty"`
+	ReminderDailyMinute *int    `json:"reminder_daily_minute,omitempty"`
 	// AI 填写配置
 	AIEnabled *bool   `json:"ai_enabled"`
 	AIBaseURL *string `json:"ai_base_url"`
@@ -309,6 +361,10 @@ func (c *Config) GetSettingsResponse() map[string]interface{} {
 		"show_other_cost":       c.ShowOtherCost,
 		"multi_currency":        c.MultiCurrency,
 		"default_start_time":    c.DefaultStartTime,
+		"reminder_mode":         c.ReminderMode,
+		"reminder_before_hours": c.ReminderBeforeHours,
+		"reminder_daily_hour":   c.ReminderDailyHour,
+		"reminder_daily_minute": c.ReminderDailyMinute,
 		"ai_enabled":            c.AIEnabled,
 		"ai_base_url":           c.AIBaseURL,
 		"ai_model":              c.AIModel,
@@ -481,6 +537,27 @@ func (c *Config) GetBackupKeep() int {
 	return c.BackupKeep
 }
 
+// ReminderConfig is a point-in-time snapshot of the CalDAV task reminder
+// (VTODO VALARM) trigger policy, safe to read under concurrent requests.
+type ReminderConfig struct {
+	Mode        string
+	BeforeHours int
+	DailyHour   int
+	DailyMinute int
+}
+
+// GetReminderConfig snapshots the CalDAV reminder policy under the read lock.
+func (c *Config) GetReminderConfig() ReminderConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return ReminderConfig{
+		Mode:        c.ReminderMode,
+		BeforeHours: c.ReminderBeforeHours,
+		DailyHour:   c.ReminderDailyHour,
+		DailyMinute: c.ReminderDailyMinute,
+	}
+}
+
 func (c *Config) SaveToFile(path string) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -499,6 +576,10 @@ func (c *Config) SaveToFile(path string) error {
 		"show_pay_price":        b2s(c.ShowPayPrice),
 		"show_other_cost":       b2s(c.ShowOtherCost),
 		"multi_currency":        b2s(c.MultiCurrency),
+		"reminder_mode":         c.ReminderMode,
+		"reminder_before_hours": strconv.Itoa(c.ReminderBeforeHours),
+		"reminder_daily_hour":   strconv.Itoa(c.ReminderDailyHour),
+		"reminder_daily_minute": strconv.Itoa(c.ReminderDailyMinute),
 		"ai_enabled":            b2s(c.AIEnabled),
 		"ai_base_url":           c.AIBaseURL,
 		"ai_model":              c.AIModel,
@@ -579,6 +660,27 @@ func (c *Config) LoadFromFile(path string) error {
 	}
 	if v, ok := data["multi_currency"]; ok {
 		c.MultiCurrency = v == "true"
+	}
+	if v, ok := data["reminder_mode"]; ok {
+		switch v {
+		case "hours_before", "same_day":
+			c.ReminderMode = v
+		}
+	}
+	if v, ok := data["reminder_before_hours"]; ok {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 72 {
+			c.ReminderBeforeHours = n
+		}
+	}
+	if v, ok := data["reminder_daily_hour"]; ok {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 23 {
+			c.ReminderDailyHour = n
+		}
+	}
+	if v, ok := data["reminder_daily_minute"]; ok {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 59 {
+			c.ReminderDailyMinute = n
+		}
 	}
 	if v, ok := data["ai_enabled"]; ok {
 		c.AIEnabled = v == "true"

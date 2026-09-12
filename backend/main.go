@@ -316,7 +316,7 @@ func main() {
 	// （Apple 对订阅源不渲染地图）做不到的。写操作在 backend 层一律 403。
 	// 能力头中间件在最外层（OPTIONS 直答、DAV 头对 401 也可见），其内是
 	// Basic/Bearer 鉴权，最内是 go-webdav 协议栈。
-	caldavHandler := &emcaldav.Handler{Backend: caldav.New(database), Prefix: "/caldav"}
+	caldavHandler := &emcaldav.Handler{Backend: caldav.New(database, cfg), Prefix: "/caldav"}
 	caldavStack := caldavCapabilityMiddleware(caldavAuthMiddleware(cfg)(caldavHandler))
 	r.Mount("/caldav", caldavStack)
 	r.Handle("/.well-known/caldav", caldavCapabilityMiddleware(caldavAuthMiddleware(cfg)(http.HandlerFunc(caldavWellKnown))))

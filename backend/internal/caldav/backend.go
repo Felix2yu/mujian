@@ -22,6 +22,7 @@ import (
 	emcaldav "github.com/emersion/go-webdav/caldav"
 	"github.com/emersion/go-webdav"
 
+	"mujian/internal/config"
 	"mujian/internal/db"
 	"mujian/internal/ics"
 	"mujian/internal/models"
@@ -53,12 +54,28 @@ const (
 
 // Backend implements emcaldav.Backend on top of the records database.
 type Backend struct {
-	DB *db.DB
+	DB  *db.DB
+	Cfg *config.Config
 }
 
 // New builds a read-only CalDAV backend over the given database.
-func New(database *db.DB) *Backend {
-	return &Backend{DB: database}
+func New(database *db.DB, cfg *config.Config) *Backend {
+	return &Backend{DB: database, Cfg: cfg}
+}
+
+// reminderConfig 从服务端设置构建 ics.ReminderConfig；Cfg 为 nil 时回退到
+// 默认策略（演出开始前 12 小时），保证测试等无配置场景仍可渲染。
+func (b *Backend) reminderConfig() *ics.ReminderConfig {
+	if b.Cfg == nil {
+		return ics.DefaultReminderConfig()
+	}
+	rc := b.Cfg.GetReminderConfig()
+	return &ics.ReminderConfig{
+		Mode:        rc.Mode,
+		BeforeHours: rc.BeforeHours,
+		DailyHour:   rc.DailyHour,
+		DailyMinute: rc.DailyMinute,
+	}
 }
 
 // CurrentUserPrincipal implements webdav.UserPrincipalBackend.
@@ -142,7 +159,7 @@ func (b *Backend) GetCalendarObject(ctx context.Context, p string, req *emcaldav
 		if err != nil {
 			return nil, err
 		}
-		text := ics.GenerateTodos(recs, b.DB.Location(), zheziNames)
+		text := ics.GenerateTodos(recs, b.DB.Location(), zheziNames, b.reminderConfig())
 		co, err := calendarObjectFromICS(TasksPath, text, time.Now())
 		if err != nil {
 			return nil, err
@@ -161,7 +178,7 @@ func (b *Backend) GetCalendarObject(ctx context.Context, p string, req *emcaldav
 	if err != nil {
 		names = nil
 	}
-	co, err := b.toCalendarObject(*rec, names, isTask)
+	co, err := b.toCalendarObject(*rec, names, isTask, b.reminderConfig())
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +192,7 @@ func (b *Backend) ListCalendarObjects(ctx context.Context, path string, req *emc
 	if err != nil {
 		return nil, err
 	}
-	return b.toCalendarObjects(recs, zheziNames, stdpath.Clean(path) == stdpath.Clean(TasksPath))
+	return b.toCalendarObjects(recs, zheziNames, stdpath.Clean(path) == stdpath.Clean(TasksPath), b.reminderConfig())
 }
 
 // QueryCalendarObjects implements emcaldav.Backend. Time-range filters (the
@@ -191,7 +208,7 @@ func (b *Backend) QueryCalendarObjects(ctx context.Context, path string, query *
 			recs = filterByTimeRange(recs, start, end)
 		}
 	}
-	return b.toCalendarObjects(recs, zheziNames, stdpath.Clean(path) == stdpath.Clean(TasksPath))
+	return b.toCalendarObjects(recs, zheziNames, stdpath.Clean(path) == stdpath.Clean(TasksPath), b.reminderConfig())
 }
 
 // PutCalendarObject accepts completion writes for VTODO (task) objects only.
@@ -219,7 +236,7 @@ func (b *Backend) PutCalendarObject(ctx context.Context, path string, calendar *
 	if err != nil {
 		names = nil
 	}
-	co, err := b.toCalendarObject(*rec, names, true)
+	co, err := b.toCalendarObject(*rec, names, true, b.reminderConfig())
 	if err != nil {
 		return nil, err
 	}
@@ -324,10 +341,10 @@ func (b *Backend) loadRecords(ctx context.Context) ([]models.Record, map[string]
 	return recs, zheziNames, nil
 }
 
-func (b *Backend) toCalendarObjects(recs []models.Record, zheziNames map[string]string, isTask bool) ([]emcaldav.CalendarObject, error) {
+func (b *Backend) toCalendarObjects(recs []models.Record, zheziNames map[string]string, isTask bool, rem *ics.ReminderConfig) ([]emcaldav.CalendarObject, error) {
 	out := make([]emcaldav.CalendarObject, 0, len(recs))
 	for _, rec := range recs {
-		co, err := b.toCalendarObject(rec, zheziNames, isTask)
+		co, err := b.toCalendarObject(rec, zheziNames, isTask, rem)
 		if err != nil {
 			return nil, err
 		}
@@ -339,11 +356,11 @@ func (b *Backend) toCalendarObjects(recs []models.Record, zheziNames map[string]
 // toCalendarObject renders one record into a parsed ical.Calendar plus a
 // content-derived ETag (so client-side change detection works on edits).
 // isTask selects the VTODO projection over the default VEVENT one.
-func (b *Backend) toCalendarObject(rec models.Record, zheziNames map[string]string, isTask bool) (emcaldav.CalendarObject, error) {
+func (b *Backend) toCalendarObject(rec models.Record, zheziNames map[string]string, isTask bool, rem *ics.ReminderConfig) (emcaldav.CalendarObject, error) {
 	var text string
 	var objPath string
 	if isTask {
-		text = ics.TodoCalendar(rec, b.DB.Location(), zheziNames)
+		text = ics.TodoCalendar(rec, b.DB.Location(), zheziNames, rem)
 		objPath = TasksPath + rec.ID + ".ics"
 	} else {
 		text = ics.EventCalendar(rec, b.DB.Location(), zheziNames)
