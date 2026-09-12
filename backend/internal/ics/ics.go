@@ -2,6 +2,7 @@ package ics
 
 import (
 	"fmt"
+	"mujian/internal/geo"
 	"mujian/internal/models"
 	"regexp"
 	"strings"
@@ -207,20 +208,24 @@ func writeEvent(b *strings.Builder, rec models.Record, loc *time.Location, zhezi
 		writeLine(fmt.Sprintf("LOCATION:%s", escapeICS(rec.Address)))
 	}
 	// GEO carries the lat/lng separately from the textual LOCATION so calendar
-	// clients can drop a map pin. RFC 5545 format is "LAT;LON".
+	// clients can drop a map pin. RFC 5545 format is "LAT;LON". Records store
+	// the coordinate as pasted from Chinese map apps (GCJ-02); ICS GEO and the
+	// geo: URI are specified as WGS-84, so convert at the output boundary to
+	// avoid the ~300–700 m offset seen when the pin opens in iOS Maps.
 	if rec.Coordinate != nil {
-		writeLine(fmt.Sprintf("GEO:%f;%f", rec.Coordinate.Latitude, rec.Coordinate.Longitude))
+		geoLat, geoLng := geo.GCJ02ToWGS84(rec.Coordinate.Latitude, rec.Coordinate.Longitude)
+		writeLine(fmt.Sprintf("GEO:%f;%f", geoLat, geoLng))
 		// Apple's own export format: a URI-valued structured location whose
 		// value is "geo:lat,lng". X-TITLE labels the pin with the venue name.
 		// (The invented X-APPLE-MAPKIT-* parameters previously used here are
 		// not part of any Apple export and are dropped.)
 		// Note: Apple Calendar ignores these for *subscribed* feeds — maps
 		// only render when the .ics is imported into a local/iCloud calendar.
-		loc1 := fmt.Sprintf("X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-APPLE-RADIUS=100:geo:%.6f,%.6f", rec.Coordinate.Latitude, rec.Coordinate.Longitude)
+		loc1 := fmt.Sprintf("X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-APPLE-RADIUS=100:geo:%.6f,%.6f", geoLat, geoLng)
 		if rec.Address != "" {
 			title := escapeICS(rec.Address)
 			title = strings.ReplaceAll(title, "\"", "\\\"")
-			loc1 = fmt.Sprintf("X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-APPLE-RADIUS=100;X-TITLE=\"%s\":geo:%.6f,%.6f", title, rec.Coordinate.Latitude, rec.Coordinate.Longitude)
+			loc1 = fmt.Sprintf("X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-APPLE-RADIUS=100;X-TITLE=\"%s\":geo:%.6f,%.6f", title, geoLat, geoLng)
 		}
 		writeLine(loc1)
 	}

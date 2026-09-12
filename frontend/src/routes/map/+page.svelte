@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { api, coverUrl } from '$lib/api.js';
+  import { gcj02ToWgs84 } from '$lib/geo.js';
   import 'leaflet/dist/leaflet.css';
   import 'leaflet.markercluster/dist/MarkerCluster.css';
   import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
@@ -21,6 +22,14 @@
     return String(s ?? '').replace(/[&<>"']/g, (c) => (
       { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
     ));
+  }
+
+  // 库里存的场馆坐标是 GCJ-02（国内地图复制出来的值）。高德 / 腾讯瓦片本身
+  // 就是 GCJ-02，原样打点；标准(OSM) / 自定义(默认 OSM 瓦片) 是 WGS-84，
+  // 需要把 GCJ-02 转回 WGS-84 再投影，否则标记会偏约 300–700 m。
+  function projectLatLng(lat, lng) {
+    if (source === 'gaode' || source === 'tencent') return [lat, lng];
+    return gcj02ToWgs84(lat, lng);
   }
 
   let loading = $state(true);
@@ -113,7 +122,7 @@
     const bounds = [];
     for (const r of records) {
       if (r.coordinate && r.coordinate.latitude && r.coordinate.longitude) {
-        bounds.push([r.coordinate.latitude, r.coordinate.longitude]);
+        bounds.push(projectLatLng(r.coordinate.latitude, r.coordinate.longitude));
       }
     }
     if (bounds.length > 0) {
@@ -165,8 +174,7 @@
 
     for (const [, grp] of groups) {
       const first = grp[0];
-      const lat = first.coordinate.latitude;
-      const lng = first.coordinate.longitude;
+      const [lat, lng] = projectLatLng(first.coordinate.latitude, first.coordinate.longitude);
       const count = grp.length;
 
       const icon = L.divIcon({
@@ -238,7 +246,12 @@
     try {
       localStorage.setItem('mujian:map_source', key);
     } catch (e) { /* ignore */ }
-    if (map) applySource(key);
+    if (map) {
+      applySource(key);
+      // 高德/腾讯(GCJ-02) 与 OSM(默认 WGS-84) 底图坐标系不同，切换后需重绘
+      // 标记，否则标记仍停留在旧坐标系的投影位置上。
+      plotMarkers();
+    }
   }
 </script>
 

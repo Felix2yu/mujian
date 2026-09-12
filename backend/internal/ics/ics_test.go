@@ -1,6 +1,8 @@
 package ics
 
 import (
+	"fmt"
+	"mujian/internal/geo"
 	"mujian/internal/models"
 	"strings"
 	"testing"
@@ -94,12 +96,14 @@ func TestGenerateCalendarGeo(t *testing.T) {
 	if !strings.Contains(out, "LOCATION:上海大剧院\r\n") {
 		t.Errorf("LOCATION should carry the venue:\n%s", out)
 	}
-	if !strings.Contains(out, "GEO:31.230400;121.473700\r\n") {
-		t.Errorf("GEO should carry lat;lon:\n%s", out)
+	// Stored coordinate is GCJ-02; the emitted GEO must be converted to WGS-84.
+	wLat, wLng := geo.GCJ02ToWGS84(31.2304, 121.4737)
+	if !strings.Contains(out, fmt.Sprintf("GEO:%.6f;%.6f\r\n", wLat, wLng)) {
+		t.Errorf("GEO should carry converted lat;lon (WGS-84):\n%s", out)
 	}
 	// Apple structured location: URI-valued with a geo: value and X-TITLE
 	// matching the venue (matches Apple Calendar's own export format).
-	wantLoc := "X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-APPLE-RADIUS=100;X-TITLE=\"上海大剧院\":geo:31.230400,121.473700\r\n"
+	wantLoc := fmt.Sprintf("X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-APPLE-RADIUS=100;X-TITLE=\"上海大剧院\":geo:%.6f,%.6f\r\n", wLat, wLng)
 	if !strings.Contains(unfold(out), wantLoc) {
 		t.Errorf("X-APPLE-STRUCTURED-LOCATION should be %q, got:\n%s", wantLoc, out)
 	}
@@ -115,7 +119,8 @@ func TestGenerateCalendarStructuredLocationNoAddress(t *testing.T) {
 		Date:       time.Date(2026, 9, 1, 19, 30, 0, 0, loc).Unix(),
 	}
 	out := GenerateCalendar([]models.Record{rec}, loc, nil)
-	want := "X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-APPLE-RADIUS=100:geo:31.230400,121.473700\r\n"
+	wLat, wLng := geo.GCJ02ToWGS84(31.2304, 121.4737)
+	want := fmt.Sprintf("X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-APPLE-RADIUS=100:geo:%.6f,%.6f\r\n", wLat, wLng)
 	if !strings.Contains(unfold(out), want) {
 		t.Errorf("structured location without address should be %q, got:\n%s", want, out)
 	}
