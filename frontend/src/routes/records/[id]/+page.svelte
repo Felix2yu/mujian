@@ -434,26 +434,15 @@
 
         {#if groupedZhezis.length}
           <h3>剧目与折子</h3>
-          <div class="zhezi-clusters">
-            {#each groupedZhezis as g (g.dramaId || g.dramaName)}
-              <div class="zhezi-cluster">
-                {#if g.dramaId}
-                  <a class="cluster-drama" href={`/dramas/${g.dramaId}`} title={`查看《${g.dramaName}》详情`}>《{g.dramaName}》</a>
-                {:else}
-                  <span class="cluster-drama">《{g.dramaName}》</span>
-                {/if}
-                {#if g.zhezis.length}
-                  <div class="cluster-zhezis">
-                    {#each g.zhezis as z (z.id)}
-                      <a class="ztag" href={`/?zhezi=${encodeURIComponent(z.id)}`} title={`「${z.name}」演出列表`}>{z.name}</a>
-                    {/each}
-                  </div>
-                {:else}
-                  <span class="cluster-full">整本</span>
-                {/if}
-              </div>
-            {/each}
-          </div>
+          {#if groupedZhezis.length === 1}
+            {@render zheziCluster(groupedZhezis[0], 'zhezi-cluster single')}
+          {:else}
+            <div class="zhezi-clusters">
+              {#each groupedZhezis as g (g.dramaId || g.dramaName)}
+                {@render zheziCluster(g, 'zhezi-cluster')}
+              {/each}
+            </div>
+          {/if}
         {:else if rec.play?.length}
           <h3>剧目</h3>
           <div class="tags">
@@ -464,6 +453,25 @@
         {/if}
       </div>
     {/if}
+
+    {#snippet zheziCluster(g, cls)}
+      <div class={cls}>
+        {#if g.dramaId}
+          <a class="cluster-drama" href={`/dramas/${g.dramaId}`} title={`查看《${g.dramaName}》详情`}>《{g.dramaName}》</a>
+        {:else}
+          <span class="cluster-drama">《{g.dramaName}》</span>
+        {/if}
+        {#if g.zhezis.length}
+          <div class="cluster-zhezis">
+            {#each g.zhezis as z (z.id)}
+              <a class="ztag" href={`/?zhezi=${encodeURIComponent(z.id)}`} title={`「${z.name}」演出列表`}>{z.name}</a>
+            {/each}
+          </div>
+        {:else}
+          <span class="cluster-full">整本</span>
+        {/if}
+      </div>
+    {/snippet}
 
     <div class="cards-row">
       <div class="card section">
@@ -785,6 +793,26 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 10px 12px;
+  }
+  /* 单个剧目时舒展横向空间，避免折子被窄卡片挤成多行 */
+  .zhezi-cluster.single {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+  }
+  .zhezi-cluster.single .cluster-drama { flex: 0 0 auto; }
+  .zhezi-cluster.single .cluster-zhezis { flex: 1 1 auto; }
+  @media (max-width: 480px) {
+    .zhezi-cluster.single {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+    }
   }
   .cluster-drama {
     font-family: var(--font-serif);
