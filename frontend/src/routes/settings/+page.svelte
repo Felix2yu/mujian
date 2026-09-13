@@ -42,7 +42,7 @@
   const CARD_COLS = (() => {
     // 权重 = 实测卡片高度（含间距，px）；内容变化时按需更新
     const cards = [
-      ['theme', 162], ['storage', 158], ['s3', 823], ['encode', 305], ['calendar', 280], ['reminder', 280],
+      ['theme', 162], ['storage', 158], ['s3', 823], ['encode', 305], ['ics', 210], ['caldav', 470],
       ['fields', 389], ['status', 178], ['list', 224], ['backup', 988], ['security', 274], ['map', 435],
       ['ai', 360], ['costWizard', 200], ['huozhi', 470]
     ];
@@ -58,6 +58,7 @@
 
   let error = $state('');
   let saved = $state(false);
+  let saving = $state(false);
   let loading = $state(true);
   let currentTheme = $state('auto');
 
@@ -344,6 +345,7 @@
     saved = false;
     error = '';
     saveMapPrefs();
+    saving = true;
     try {
       localStorage.setItem('mujian:auth_token', authToken || '');
     } catch (e) { /* ignore */ }
@@ -401,6 +403,8 @@
       if (fresh) lastBackupAt = fresh.last_backup_at || 0;
     } catch (e) {
       error = e.message;
+    } finally {
+      saving = false;
     }
   }
 
@@ -570,7 +574,7 @@
 <div class="fade-up">
   <div class="page-head">
     <h1>设置</h1>
-    <p class="sub">外观与存储偏好</p>
+    <p class="sub">偏好、同步与外发设置</p>
   </div>
 
   {#if loading}
@@ -685,13 +689,11 @@
     </div>
 {/snippet}
 
-{#snippet calendarCard()}
+{#snippet icsCard()}
 <div class="card sec">
-      <h3>日历</h3>
+      <h3>ICS 订阅</h3>
       <p class="hint" style="margin-bottom: 12px;">
-        两种把演出记录同步进系统日历的方式：<b>ICS 订阅</b>——兼容性最好，Google 日历 / 第三方客户端均可，但 Apple 日历对订阅源一律不渲染地图（平台限制）；<b>CalDAV 账户</b>——iOS / macOS 原生日历推荐方式，事件是本地一等事件，LOCATION 显示可点地图卡片，且随记录自动增量同步。<br />
-        详细对比与反向代理注意事项见项目仓库 docs/calendar.md。<br />
-        地址含令牌，请勿公开分享
+        把演出记录导出为标准 <b>.ics</b> 日历订阅源，兼容性最好：Google 日历、Outlook 及大部分第三方日历客户端都能订阅。限制：Apple 日历对订阅源（subscription）一律不渲染地图卡片（LOCATION 不可点），这是 Apple 平台限制，无法绕过；且为只读，演出改动需等客户端轮询刷新。
       </p>
       <div class="cal-actions">
         <a class="btn" href={api.getICSUrl({ dl: '1' })}>⇩ 导出日历 (.ics)</a>
@@ -713,8 +715,19 @@
             {icsCopied ? '已复制' : '复制'}
           </button>
         </div>
-        <span class="hint">ICS 订阅链接（自动附带 ?token=，日历客户端无法自定义请求头）</span>
-        <div class="cal-subscribe" style="margin-top: 8px;">
+        <span class="hint">订阅链接（自动附带 ?token=，日历客户端无法自定义请求头，故直接拼在 URL 上）。地址含令牌，请勿公开分享。两种方式详细对比见仓库 docs/calendar.md。</span>
+      </div>
+    </div>
+{/snippet}
+
+{#snippet caldavCard()}
+<div class="card sec">
+      <h3>CalDAV 账户</h3>
+      <p class="hint" style="margin-bottom: 12px;">
+        以账户方式把演出同步进 iOS / macOS 原生日历（推荐方式）。一个 CalDAV 账户会同步两类内容：<b>日历事件</b>——演出作为本地一等事件，LOCATION 显示可点地图卡片，随记录自动增量更新；<b>提醒事项任务清单「幕间·提醒」</b>——每场演出是一条到期提醒，在提醒事项 App 勾选完成即标记「已观看 / 已到场」并同步回幕间。所有内容只读，日历侧的增删改会被服务端拒绝。
+      </p>
+      <div class="cal-actions">
+        <div class="cal-subscribe">
           <input class="input" readonly value={caldavUrl} onfocus={(e) => e.currentTarget.select()} />
           <button
             type="button"
@@ -732,18 +745,13 @@
             {caldavCopied ? '已复制' : '复制'}
           </button>
         </div>
-        <span class="hint">CalDAV 账户地址：iOS「设置 → 日历 → 账户 → 其他 → 添加 CalDAV 账户」/ macOS「系统设置 → 互联网账户」，服务器只填域名，用户名随意，密码填上面的访问令牌。<br />
-        需 HTTPS；CalDAV 与 ICS 订阅并存会导致事件重复，配好后请退订旧订阅。<br />
-        同一账户下还会出现「幕间·提醒」任务清单（提醒事项 App）：每场演出是一条到期提醒，勾选完成即标记「已观看/已到场」并同步回幕间</span>
+        <span class="hint">账户地址：iOS「设置 → 日历 → 账户 → 其他 → 添加 CalDAV 账户」/ macOS「系统设置 → 互联网账户」，服务器只填域名，用户名随意，密码填上面的访问令牌。<br />
+        需 HTTPS；与 ICS 订阅并存会导致事件重复，配好后请退订旧订阅。</span>
       </div>
-    </div>
-{/snippet}
 
-{#snippet reminderCard()}
-<div class="card sec">
-      <h3>演出提醒（CalDAV）</h3>
+      <h4 style="margin: 18px 0 8px; font-size: 15px;">演出提醒（提醒事项）</h4>
       <p class="hint" style="margin-bottom: 12px;">
-        控制 iOS / macOS「提醒事项」里「幕间·提醒」任务清单的提醒时机（每条演出是一个到期提醒）。此前固定提前 12 小时，下午场会凌晨响铃；现在可改为当天统一时刻，或自定义提前小时数。保存后下次日历同步生效。
+        控制「幕间·提醒」任务清单中每条演出的提醒时机：可选「演出前 N 小时」或「当天固定时刻」两种方式。保存后下次日历同步生效。
       </p>
       <div class="status-row">
         <label class="status-opt" class:on={settings.reminder_mode === 'hours_before'}>
@@ -923,7 +931,7 @@
       {#if authRequired}
       <p class="hint" style="margin-top: 8px;">服务端已启用鉴权：未填写或填错时，除本页外的所有页面和接口都会提示 401 未授权，填对后立即恢复，无需重启。</p>
       {/if}
-      <p class="hint" style="margin-top: 8px;">日历订阅地址会自动附带 ?token= 参数（日历客户端无法自定义请求头）。</p>
+      <p class="hint" style="margin-top: 8px;">ICS 订阅与 CalDAV 地址会自动附带 ?token= 参数（日历客户端无法自定义请求头，故直接拼在 URL 上）。</p>
     </div>
 {/snippet}
 
@@ -1100,7 +1108,7 @@
 
 {#snippet huozhiCard()}
 <div class="card sec">
-      <h3>「货殖」账单关联</h3>
+      <h3>货殖账单关联</h3>
       <p class="tiny muted" style="margin: 0 0 10px;">
         货殖是自建的个人记账系统。<a href="https://github.com/Felix2yu/huozhi" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: underline; text-underline-offset: 2px;">项目主页 ↗</a><br />
         配置后，演出记录可绑定货殖账单 ID：详情页会展示这些账单的合计金额（悬停看描述 / 账户等明细，点击跳转账单页），并在货殖有数据时优先采用接口金额而非内建费用。<br />
@@ -1345,8 +1353,8 @@
 			{:else if key === "storage"}{@render storageCard()}
 			{:else if key === "s3"}{@render s3Card()}
 			{:else if key === "encode"}{@render encodeCard()}
-			{:else if key === "calendar"}{@render calendarCard()}
-			{:else if key === "reminder"}{@render reminderCard()}
+			{:else if key === "ics"}{@render icsCard()}
+			{:else if key === "caldav"}{@render caldavCard()}
 			{:else if key === "fields"}{@render fieldsCard()}
 			{:else if key === "status"}{@render statusCard()}
 			{:else if key === "list"}{@render listCard()}
@@ -1365,8 +1373,8 @@
 			{:else if key === "storage"}{@render storageCard()}
 			{:else if key === "s3"}{@render s3Card()}
 			{:else if key === "encode"}{@render encodeCard()}
-			{:else if key === "calendar"}{@render calendarCard()}
-			{:else if key === "reminder"}{@render reminderCard()}
+			{:else if key === "ics"}{@render icsCard()}
+			{:else if key === "caldav"}{@render caldavCard()}
 			{:else if key === "fields"}{@render fieldsCard()}
 			{:else if key === "status"}{@render statusCard()}
 			{:else if key === "list"}{@render listCard()}
@@ -1379,7 +1387,13 @@
 			{/if}
     {/each}
   </div>
-</div><button class="btn primary" onclick={save}>保存设置</button>
+</div>
+  <p class="hint" style="margin: 4px 0 14px;">除标注「本地偏好，立即生效」的项外，所有改动需点击「保存设置」才会写入服务端。</p>
+  <div class="save-row">
+    <button class="btn primary" onclick={save} disabled={saving}>{saving ? '保存中…' : '保存设置'}</button>
+    {#if saved}<span class="save-ok">已保存 ✓</span>{/if}
+    {#if error}<span class="save-err">{error}</span>{/if}
+  </div>
   {/if}
 </div>
 
@@ -1589,5 +1603,26 @@
     font-size: 12.5px;
     padding: 4px 8px;
     height: 28px;
+  }
+  .save-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .save-ok {
+    color: #4ade80;
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+  .save-err {
+    color: #f87171;
+    font-size: 13.5px;
+    font-weight: 600;
+    max-width: 520px;
   }
 </style>
