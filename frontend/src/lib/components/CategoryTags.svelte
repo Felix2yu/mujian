@@ -8,7 +8,15 @@
   let overIdx = $state(-1);
   let overBefore = $state(true);
 
-  const suggestions = $derived(categories.map((c) => c.name).filter(Boolean));
+  // 下拉建议按实时演出数量（recordCount）由大到小排序；仅影响建议列表顺序，
+  // 不影响已选 chips（values）的顺序。分类管理页不使用本组件，故不受其排序影响。
+  const suggestions = $derived(
+    categories
+      .slice()
+      .sort((a, b) => (b.recordCount || 0) - (a.recordCount || 0))
+      .map((c) => c.name)
+      .filter(Boolean)
+  );
 
   function commit(raw) {
     const parts = String(raw || '')

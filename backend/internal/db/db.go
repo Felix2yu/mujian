@@ -2445,13 +2445,31 @@ func (db *DB) BatchDeleteRecords(ids []string) (int64, error) {
 
 // ---------- Categories ----------
 
-// ListCategories returns all categories ordered by manual sort order then name.
-// active_ids is no longer stored: it was a redundant copy of
+// ListCategories returns all categories ordered by manual sort order
+// (sort_order ASC) then name. The record_count field is computed on the fly
+// from records.category_names (only non-deleted records) for display purposes,
+// because the categories.record_count column is a stale cache and must NOT be
+// used. active_ids is no longer stored: it was a redundant copy of
 // "records WHERE category_name = ? AND active_status = <watching>" and is now
 // derived on demand (see GetCategory). We keep models.Category.ActiveIDs as an
 // empty slice for backward-compatible JSON.
+//
+// The category management page renders this exact order and its drag-to-reorder
+// feature writes sort_order, so the manual order is authoritative there. The
+// "add performance" form's category suggestion dropdown is sorted by live count
+// on the client (see CategoryTags) and is intentionally NOT coupled to this
+// query's order.
 func (db *DB) ListCategories() ([]models.Category, error) {
-	rows, err := db.conn.Query(`SELECT id, name, record_count, sort_order FROM categories ORDER BY sort_order ASC, name`)
+	rows, err := db.conn.Query(`
+		SELECT c.id, c.name, COALESCE(cnt.n, 0) AS record_count, c.sort_order
+		FROM categories c
+		LEFT JOIN (
+			SELECT je.value AS name, COUNT(*) AS n
+			FROM records r, json_each(r.category_names) je
+			WHERE r.deleted_at = 0 AND je.value != ''
+			GROUP BY je.value
+		) cnt ON cnt.name = c.name
+		ORDER BY c.sort_order ASC, c.name ASC`)
 	if err != nil {
 		return nil, err
 	}
