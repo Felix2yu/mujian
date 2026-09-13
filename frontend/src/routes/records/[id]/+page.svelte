@@ -516,7 +516,7 @@
           </div>
           <div class="fee-card">
             <span class="fee-label">其他花费</span>
-            <span class="fee-amount" class:is-empty={rec.other_cost === null || rec.other_cost === undefined}>{rec.other_cost === null || rec.other_cost === undefined ? '—' : rec.other_cost === 0 ? '无额外开销' : formatCurrency(rec.other_cost, rec.other_cost_currency)}</span>
+            <span class="fee-amount" class:is-empty={rec.other_cost === null || rec.other_cost === undefined} title={rec.other_cost === 0 ? '无额外开销' : undefined}>{rec.other_cost === null || rec.other_cost === undefined ? '—' : rec.other_cost === 0 ? '无' : formatCurrency(rec.other_cost, rec.other_cost_currency)}</span>
           </div>
         </div>
         {#if billCount > 0}
@@ -591,6 +591,13 @@
       </div>
     </div>
 
+    {#if rec.remark}
+      <div class="card section">
+        <h3>备注</h3>
+        <p class="remark">{rec.remark}</p>
+      </div>
+    {/if}
+
     <div class="card section">
       <h3>照片（票根 / 现场照）</h3>
         <div class="photo-actions">
@@ -616,13 +623,6 @@
         {/if}
 
     </div>
-
-    {#if rec.remark}
-      <div class="card section">
-        <h3>备注</h3>
-        <p class="remark">{rec.remark}</p>
-      </div>
-    {/if}
 
     {#if related.length}
       <div class="card section">
@@ -873,33 +873,59 @@
   .money { font-variant-numeric: tabular-nums; }
 
   /* 费用分卡：票价/实付/其他花费各自成卡，合计加粗强调 */
-  .fee-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .fee-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    /* 以「本卡片自身可用宽度」而非视口决定布局：详情页双栏时费用卡会被挤窄 */
+    container-type: inline-size;
+  }
   .fee-card {
     display: flex;
     flex-direction: column;
     gap: 6px;
+    min-width: 0;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 12px 13px;
   }
-  .fee-label { font-size: 12px; color: var(--text-muted); }
+  .fee-label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
   .fee-amount {
     font-size: 18px;
     font-weight: 600;
     color: var(--text);
     font-variant-numeric: tabular-nums;
     line-height: 1.1;
+    white-space: nowrap;          /* 3 列一行时数值永不折行 */
+    overflow: hidden;
+    text-overflow: ellipsis;       /* 极端窄屏兜底：裁切而非溢出 */
   }
   .fee-amount.is-empty { color: var(--text-3); font-weight: 500; }
+
+  /* 窄容器下不再整行堆叠（那样会把费用卡撑到 3 行、整体偏高）。
+     改为：始终保持 3 列，数值 nowrap 永不合行；零值「其他花费」显示「无」
+     （title 保留「无额外开销」完整提示）；并在极窄屏缩字号兜底，避免长金额溢出。
+     注：全库金额最大值仅 ¥960（无 ≥1000 记录），3 列布局在所有真实宽度下均不溢出。 */
+  @container (max-width: 380px) {
+    .fee-card { padding: 10px 11px; }
+    .fee-label { font-size: 11px; }
+    .fee-amount { font-size: 15px; }
+  }
+  /* 极窄屏再降一档：足以容纳真实数据最大值 ¥960.00，消除任何裁切 */
+  @container (max-width: 340px) {
+    .fee-amount { font-size: 13px; }
+  }
   .fee-total {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 12px;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border);
+    margin-top: 14px;
+    padding: 14px 16px;
+    background: var(--surface-2);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 6px 16px rgba(0, 0, 0, 0.06);
   }
   /* ---- 货殖账单合计 ---- */
   .hz-badge {
@@ -989,13 +1015,14 @@
   .hz-pop-acct, .hz-pop-date { font-size: 11.5px; color: var(--text-3); grid-column: 1; }
   .hz-pop-note { font-size: 11px; color: var(--text-3); }
 
-  .fee-total-label { font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .fee-total-label { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: var(--text-2); }
   .fee-total-amount {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 700;
     color: var(--text);
     font-variant-numeric: tabular-nums;
   }
+  .fee-total-amount:not(.hz-link) { color: var(--accent); }
   .fee-channel {
     display: flex;
     gap: 8px;
