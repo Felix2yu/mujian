@@ -18,6 +18,41 @@ var nonPrependCategories = map[string]bool{
 
 var alreadyBracketedRe = regexp.MustCompile(`^《.*》$`)
 
+// StatusCalendar is the set of ActiveStatus values published to the read-only
+// VEVENT calendar (幕间): 正常(0) and 想看(1). 已取消(2)/未赴约(3) are excluded
+// so cancelled / no-show performances never reach the user's calendar app.
+var StatusCalendar = []int{models.StatusNormal, models.StatusWantWatch}
+
+// StatusTasks is the set of ActiveStatus values published as VTODO reminders
+// (幕间·提醒): only 正常(0). Per product rules, a reminder (task) is created
+// only for 正常 performances; 想看/已取消/未赴约 do not generate a reminder.
+var StatusTasks = []int{models.StatusNormal}
+
+// FilterByStatus returns only the records whose ActiveStatus is in allowed.
+// A nil/empty allowed slice returns recs unchanged (no filtering).
+func FilterByStatus(recs []models.Record, allowed []int) []models.Record {
+	if len(allowed) == 0 {
+		return recs
+	}
+	out := make([]models.Record, 0, len(recs))
+	for _, r := range recs {
+		if StatusAllowed(r.ActiveStatus, allowed) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// StatusAllowed reports whether s is a member of allowed.
+func StatusAllowed(s int, allowed []int) bool {
+	for _, a := range allowed {
+		if a == s {
+			return true
+		}
+	}
+	return false
+}
+
 // 提醒策略：决定 CalDAV 任务（VTODO）VALARM 的 TRIGGER 取值。
 const (
 	// ReminderModeHoursBefore：演出开始前 N 小时触发（相对 DUE）。

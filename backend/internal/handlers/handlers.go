@@ -1061,6 +1061,10 @@ func (h *Handler) getICS(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 500, err.Error())
 		return
 	}
+	// Only 正常(0) and 想看(1) performances appear in the calendar feed;
+	// 已取消(2)/未赴约(3) are excluded (product rule: calendar keeps normal
+	// and want-to-watch only).
+	recs = ics.FilterByStatus(recs, ics.StatusCalendar)
 	// Resolve 折子 ids to names in one batch so DESCRIPTION can show 折子.
 	zheziNames, _ := h.db.GetZheziNames(collectZheziIDs(recs))
 	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")

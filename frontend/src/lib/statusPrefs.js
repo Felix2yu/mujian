@@ -1,5 +1,11 @@
 // 演出状态定义与「列表显示哪些状态」的本地偏好。
 // 与后端 active_status 语义一致：0 正常 / 1 想看 / 2 已取消 / 3 未赴约。
+//
+// 同步契约（与 backend/internal/models/models.go 的 Status* 常量三方保持一致）：
+//   1. 数据库列 records.active_status 是取值真相源（0/1/2/3）；
+//   2. 本文件 STATUS_LABELS 是「整数 → 中文」展示映射的唯一来源；
+//   3. 后端 backend/internal/models/models.go 的 Status* 常量是「整数 → Go 标识符」别名。
+// 修改任一处的取值或语义时，必须同步另外两处。
 export const STATUS_LABELS = { 0: '正常', 1: '想看', 2: '已取消', 3: '未赴约' };
 // 展示顺序：正常、已取消、想看、未赴约
 export const ALL_STATUSES = [0, 2, 1, 3];

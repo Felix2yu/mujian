@@ -417,3 +417,67 @@ func TestPutTaskRejections(t *testing.T) {
 		t.Error("DeleteCalendarObject on task object should be rejected")
 	}
 }
+
+// 状态过滤：事件日历只发布 正常(0)/想看(1)，任务提醒只发布 正常(0)；
+// 已取消(2)/未赴约(3) 不进 CalDAV/ICS，且被排除的单个对象直取返回 404。
+func TestStatusFilteringCalendarAndTasks(t *testing.T) {
+	b := newTestBackend(t)
+	ctx := context.Background()
+	at := time.Date(2026, 10, 1, 19, 30, 0, 0, time.UTC)
+
+	cases := []struct {
+		id     string
+		status int
+	}{
+		{"rec-normal", models.StatusNormal},
+		{"rec-want", models.StatusWantWatch},
+		{"rec-cancel", models.StatusCancelled},
+		{"rec-noshow", models.StatusNoShow},
+	}
+	for _, c := range cases {
+		rec := testRecord(c.id, "状态-"+c.id, at)
+		rec.ActiveStatus = c.status
+		if err := b.DB.UpsertRecord(rec); err != nil {
+			t.Fatalf("UpsertRecord(%s): %v", c.id, err)
+		}
+	}
+
+	// 事件集合（VEVENT）：正常 + 想看 = 2 条；已取消/未赴约 不发布。
+	events, err := b.ListCalendarObjects(ctx, CalendarPath, nil)
+	if err != nil {
+		t.Fatalf("ListCalendarObjects(CalendarPath): %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("event objects = %d, want 2 (正常+想看)", len(events))
+	}
+	for _, e := range events {
+		if e.Path != CalendarPath+"rec-normal.ics" && e.Path != CalendarPath+"rec-want.ics" {
+			t.Errorf("unexpected event object in calendar: %s", e.Path)
+		}
+	}
+
+	// 任务集合（VTODO 提醒）：仅 正常 = 1 条；想看 也不生成提醒。
+	tasks, err := b.ListCalendarObjects(ctx, TasksPath, nil)
+	if err != nil {
+		t.Fatalf("ListCalendarObjects(TasksPath): %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("task objects = %d, want 1 (仅正常)", len(tasks))
+	}
+	if tasks[0].Path != TasksPath+"rec-normal.ics" {
+		t.Errorf("task object = %s, want rec-normal.ics", tasks[0].Path)
+	}
+
+	// 被排除的单个对象直取 → 404，使客户端清除本地残留。
+	for _, id := range []string{"rec-cancel", "rec-noshow", "rec-want"} {
+		if _, err := b.GetCalendarObject(ctx, TasksPath+id+".ics", nil); err == nil {
+			t.Errorf("TasksPath/%s should be 404 (status excluded)", id)
+		}
+	}
+	if _, err := b.GetCalendarObject(ctx, CalendarPath+"rec-cancel.ics", nil); err == nil {
+		t.Errorf("CalendarPath/rec-cancel should be 404 (status excluded)")
+	}
+	if _, err := b.GetCalendarObject(ctx, CalendarPath+"rec-noshow.ics", nil); err == nil {
+		t.Errorf("CalendarPath/rec-noshow should be 404 (status excluded)")
+	}
+}

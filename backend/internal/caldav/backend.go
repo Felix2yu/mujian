@@ -144,7 +144,7 @@ func (b *Backend) GetCalendarObject(ctx context.Context, p string, req *emcaldav
 	clean := stdpath.Clean(p)
 	switch clean {
 	case stdpath.Clean(CalendarPath):
-		recs, zheziNames, err := b.loadRecords(ctx)
+		recs, zheziNames, err := b.loadRecords(ctx, ics.StatusCalendar)
 		if err != nil {
 			return nil, err
 		}
@@ -155,7 +155,7 @@ func (b *Backend) GetCalendarObject(ctx context.Context, p string, req *emcaldav
 		}
 		return &co, nil
 	case stdpath.Clean(TasksPath):
-		recs, zheziNames, err := b.loadRecords(ctx)
+		recs, zheziNames, err := b.loadRecords(ctx, ics.StatusTasks)
 		if err != nil {
 			return nil, err
 		}
@@ -174,6 +174,15 @@ func (b *Backend) GetCalendarObject(ctx context.Context, p string, req *emcaldav
 	if err != nil {
 		return nil, webdav.NewHTTPError(503, fmt.Errorf("caldav: database temporarily unavailable: %w", err))
 	}
+	// A record whose status is excluded from the target collection is not part
+	// of it — answer 404 so clients purge any stale local copy.
+	allowed := ics.StatusCalendar
+	if isTask {
+		allowed = ics.StatusTasks
+	}
+	if !ics.StatusAllowed(rec.ActiveStatus, allowed) {
+		return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar object %q not published for status %d", p, rec.ActiveStatus))
+	}
 	names, err := b.DB.GetZheziNames(rec.ZheziIDs)
 	if err != nil {
 		names = nil
@@ -188,18 +197,28 @@ func (b *Backend) GetCalendarObject(ctx context.Context, p string, req *emcaldav
 // ListCalendarObjects implements emcaldav.Backend (full listing). The served
 // component kind (VEVENT vs VTODO) follows the requested collection.
 func (b *Backend) ListCalendarObjects(ctx context.Context, path string, req *emcaldav.CalendarCompRequest) ([]emcaldav.CalendarObject, error) {
-	recs, zheziNames, err := b.loadRecords(ctx)
+	isTask := stdpath.Clean(path) == stdpath.Clean(TasksPath)
+	allowed := ics.StatusCalendar
+	if isTask {
+		allowed = ics.StatusTasks
+	}
+	recs, zheziNames, err := b.loadRecords(ctx, allowed)
 	if err != nil {
 		return nil, err
 	}
-	return b.toCalendarObjects(recs, zheziNames, stdpath.Clean(path) == stdpath.Clean(TasksPath), b.reminderConfig())
+	return b.toCalendarObjects(recs, zheziNames, isTask, b.reminderConfig())
 }
 
 // QueryCalendarObjects implements emcaldav.Backend. Time-range filters (the
 // VEVENT/VTODO comp of the client's comp-filter) are honored; prop-filters are
 // ignored — over-returning objects is protocol-legal, the client drops them.
 func (b *Backend) QueryCalendarObjects(ctx context.Context, path string, query *emcaldav.CalendarQuery) ([]emcaldav.CalendarObject, error) {
-	recs, zheziNames, err := b.loadRecords(ctx)
+	isTask := stdpath.Clean(path) == stdpath.Clean(TasksPath)
+	allowed := ics.StatusCalendar
+	if isTask {
+		allowed = ics.StatusTasks
+	}
+	recs, zheziNames, err := b.loadRecords(ctx, allowed)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +227,7 @@ func (b *Backend) QueryCalendarObjects(ctx context.Context, path string, query *
 			recs = filterByTimeRange(recs, start, end)
 		}
 	}
-	return b.toCalendarObjects(recs, zheziNames, stdpath.Clean(path) == stdpath.Clean(TasksPath), b.reminderConfig())
+	return b.toCalendarObjects(recs, zheziNames, isTask, b.reminderConfig())
 }
 
 // PutCalendarObject accepts completion writes for VTODO (task) objects only.
@@ -329,11 +348,17 @@ func vtodoStatusCompleted(cal *ical.Calendar) bool {
 	return false
 }
 
-func (b *Backend) loadRecords(ctx context.Context) ([]models.Record, map[string]string, error) {
+// loadRecords fetches all non-deleted records and narrows them to the statuses
+// published for the target collection. allowed is the ActiveStatus set for that
+// collection (e.g. ics.StatusCalendar for VEVENTs, ics.StatusTasks for VTODOs);
+// ics.FilterByStatus drops everything else so excluded performances never reach
+// the calendar or reminder list.
+func (b *Backend) loadRecords(ctx context.Context, allowed []int) ([]models.Record, map[string]string, error) {
 	recs, err := b.DB.ListRecordsContext(ctx, db.RecordFilter{NoLimit: true})
 	if err != nil {
 		return nil, nil, webdav.NewHTTPError(503, fmt.Errorf("caldav: database temporarily unavailable: %w", err))
 	}
+	recs = ics.FilterByStatus(recs, allowed)
 	zheziNames, err := b.DB.GetZheziNames(collectZheziIDs(recs))
 	if err != nil {
 		zheziNames = nil // DESCRIPTION simply omits 折子 on resolution failure

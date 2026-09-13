@@ -8,6 +8,22 @@ type Coordinate struct {
 	Longitude float64 `json:"longitude"`
 }
 
+// 演出状态（Record.ActiveStatus 的取值）。本常量块仅为已有的 active_status 整数取值
+// 提供「整数 → Go 标识符」别名，供后端过滤逻辑（ics / caldav）使用；不持有任何文字标签。
+//
+// 同步契约（三者必须保持一致，否则状态语义错位）：
+//   1. 数据库列 records.active_status 是取值真相源（0/1/2/3）；
+//   2. 前端 frontend/src/lib/statusPrefs.js 的 STATUS_LABELS 持有「整数 → 中文」展示映射；
+//   3. 本常量块持有「整数 → Go 标识符」别名，语义须与上面两处完全相同。
+// 修改任一处的取值或语义时，必须同步另外两处。
+//   0=正常 1=想看 2=已取消 3=未赴约
+const (
+	StatusNormal    = 0
+	StatusWantWatch = 1
+	StatusCancelled = 2
+	StatusNoShow    = 3
+)
+
 // Record is the canonical data model. Its JSON tags match recordlive_export/
 // data.json exactly so records can be imported/exported with zero mapping.
 // Arrays (artist_names, guest, play, tagIds) and the nested coordinate are
