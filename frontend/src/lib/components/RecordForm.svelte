@@ -1376,9 +1376,13 @@
   </div>
 
   <!-- ============ 费用与渠道 ============ -->
-  <div class="card section">
+  <div class="card section fee-card">
     <h3>费用与渠道</h3>
-    <div class="row" style="grid-template-columns: 2fr 1fr 1fr 1fr;">
+    <!-- 金额列要同时容纳「数字框 + 币种下拉」（多币种开启时约 55px 被币种框占用）。
+         编辑页在宽屏是双栏、卡片本身可能很窄，若用固定 fr 或按「视口」的媒体查询，
+         4 列会被挤扁（票价只剩一位）。故以本卡片为容器查询上下文，见 .fee-row 样式：
+         宽度足够 4 列一行，不足直接退为 2 列（2×2），不做 3+1 的孤行换行。 -->
+    <div class="row fee-row">
       <div>
         <label>购买渠道</label>
         <div class="combo">
@@ -1792,6 +1796,22 @@
   .hz-bd-amt { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
   .hz-bd-mixed { font-size: 11px; color: var(--text-3); }
 
+  /* 费用与渠道：以卡片为容器查询上下文（宽度按卡片算，而非视口）。
+     - 卡片 ≥600px：4 列一行，渠道 1.1fr、金额各 1fr（金额列需容纳数字框 + 币种框）。
+     - 卡片 <600px：直接退为 2 列（2×2），避免 4 列被挤扁、也避免 3+1 孤行。
+     - 小屏（视口 <640px）由全局 .row 的 1 列 !important 兜底。
+     另：输入框默认 min-width:auto 会取「固有宽度」（文本输入约 198px）把网格轨道
+     撑宽、抢走金额列空间，故给列容器 min-width:0 让它可正常收缩。 */
+  .fee-card { container-type: inline-size; }
+  .fee-row { grid-template-columns: 1.1fr 1fr 1fr 1fr; }
+  .fee-row > div { min-width: 0; }
+  /* .combo 默认 min-width:200px（为剧目/演员等较宽场景而设），在费用行的窄列里
+     会撑破列边界、压住相邻的金额框；此处放开收缩。 */
+  .fee-row .combo { min-width: 0; }
+  @container (max-width: 619px) {
+    .fee-row { grid-template-columns: 1fr 1fr; }
+  }
+
   .money { display: flex; gap: 6px; }
   .money .unit { align-self: center; color: var(--text-3); font-size: 13px; white-space: nowrap; }
   /* 货币框收窄并让文字居中：默认左对齐 + 34px 箭头预留位会让 CNY 右侧
@@ -1800,7 +1820,21 @@
      只剩紧贴箭头的一点间隙。不依赖 select 的文字居中：Chromium 渲染
      <select> 闭合文本既不理 text-align 也不理 text-align-last。 */
   .money .cur { width: auto; max-width: none; min-width: 0; flex: 0 0 auto; }
-  .money select.cur { padding-left: 9px; padding-right: 24px; }
+  /* 币种框再收窄一档：文字（如 CNY）后只留紧贴箭头的最小间隙，把宽度让给数字框，
+     使 4 列布局在更窄的卡片下也能容纳 6 位金额。箭头相应贴右。 */
+  .money select.cur { font-size: 12px; padding-left: 6px; padding-right: 15px; background-position: right 5px center; }
+  /* 金额输入框：收紧左右内边距并降一档字号，为「整数 + 小数」多留约 10px 内容宽，
+     使 4 列布局在 600~660px 卡片下也能完整显示 6 字符金额（如 960.00）。 */
+  .money input.input { padding-left: 10px; padding-right: 10px; font-size: 15px; }
+  /* 去掉金额类输入的原生上下微调控件：票价/实付/其他花费/时长(分钟) 都完全由用户输入，
+     点一下 ±1(分/分钟) 没有意义。隐藏后既消除箭头，又释放箭头原本占据的约 17px 宽度让给数字。 */
+  .money input.input[type='number']::-webkit-outer-spin-button,
+  .money input.input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+  }
+  .money input.input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 
   /* 坐标：场馆的子字段（缩进 + 左侧竖线表示从属） */
   .sub-field {
