@@ -3,6 +3,7 @@
   import { api } from '$lib/api.js';
   import BackupPanel from '$lib/components/BackupPanel.svelte';
   import CostCompletion from '$lib/components/CostCompletion.svelte';
+  import CoverMaintenance from '$lib/components/CoverMaintenance.svelte';
 
   let file = $state(null);
   let result = $state(null);
@@ -104,7 +105,7 @@
 <div class="fade-up">
   <div class="page-head">
     <h1>数据管理</h1>
-    <p class="sub">导入 / 导出、备份与恢复、回收站与费用补全</p>
+    <p class="sub">导入 / 导出、备份与恢复、回收站、费用补全与封面维护</p>
   </div>
 
   <!-- ============ 导入 ============ -->
@@ -231,11 +232,13 @@
   </section>
 </div>
 
-<!-- 费用补全：数据清理工具，操作立即生效（与「保存设置」无关）。
-     挂在 .fade-up 之外 —— 组件内的演出预览浮窗是 position:fixed，而 .fade-up
-     的入场动画（fill-mode: both）会残留 transform，成为 fixed 元素的包含块，
-     使定位基准从视口变成该元素。组件自身已带 fade-up 入场动画与分区标题。 -->
+<!-- 费用补全 / 封面维护：数据清理工具，操作立即生效（与「保存设置」无关）。
+     都挂在 .fade-up 之外 —— 组件内的浮窗（演出预览、封面灯箱）是
+     position:fixed，而 .fade-up 的入场动画（fill-mode: both）会残留
+     transform，成为 fixed 元素的包含块，使定位基准从视口变成该元素。
+     组件自身已带 fade-up 入场动画与分区标题。 -->
 <CostCompletion />
+<CoverMaintenance />
 
 <style>
   /* 分区：与费用补全组件（.cost-section）保持同一套节奏——28px 上间距 +

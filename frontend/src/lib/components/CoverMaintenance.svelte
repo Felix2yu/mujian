@@ -9,6 +9,8 @@
 
   let orphans = $state([]);
   let orphansLoading = $state(false);
+  // 区分「尚未扫描」与「已扫描但没有未引用封面」——两者的空态文案不同
+  let orphansScanned = $state(false);
   let selectedOrphans = $state(new Set());
   let cleaning = $state(false);
   let purging = $state(false);
@@ -46,6 +48,10 @@
     }
   }
 
+  function selectAllHashes() {
+    selectedHashes = new Set(groups.map((g) => g.hash));
+  }
+
   function toggleHash(hash) {
     const s = new Set(selectedHashes);
     s.has(hash) ? s.delete(hash) : s.add(hash);
@@ -76,12 +82,17 @@
     try {
       const res = await api.getCoverOrphans();
       orphans = res.files || [];
+      orphansScanned = true;
       selectedOrphans = new Set(orphans.map((o) => o.file_name));
     } catch (e) {
       error = e.message;
     } finally {
       orphansLoading = false;
     }
+  }
+
+  function selectAllOrphans() {
+    selectedOrphans = new Set(orphans.map((o) => o.file_name));
   }
 
   function toggleOrphan(name) {
@@ -108,12 +119,12 @@
   }
 
   async function runPurge() {
-    if (!confirm('彻底清空回收站？此操作不可恢复。')) return;
+    if (!confirm('彻底清空封面回收站？此操作不可恢复。')) return;
     purging = true;
     error = '';
     try {
       const res = await api.purgeTrash();
-      info = `回收站已清空（${res.purged} 个文件）`;
+      info = `封面回收站已清空（${res.purged} 个文件）`;
     } catch (e) {
       error = e.message;
     } finally {
@@ -146,14 +157,15 @@
     if (e.key === 'Escape') closeLightbox();
   }
 </script>
+
 <svelte:window onkeydown={onWindowKeydown} />
-<svelte:head><title>封面 - 幕间</title></svelte:head>
 
-
-<div class="fade-up">
-  <div class="page-head">
-    <h1>封面管理</h1>
-    <p class="sub">去重合并、清理未引用封面、统一缩略图</p>
+<!-- 分区容器。三张卡片的空态一律做成单行内联文案：扫描出结果后才展开列表，
+     不再事先用 .empty（约 200px）或 120px 骨架屏预留一大块空白。 -->
+<section class="fade-up cover-section" aria-labelledby="cover-section-title">
+  <div class="cover-section-head">
+    <h2 id="cover-section-title">封面维护</h2>
+    <p class="tiny muted">去重合并、清理未引用封面、统一缩略图。</p>
   </div>
 
   {#if error}<div class="banner error">⚠ {error}</div>{/if}
@@ -163,12 +175,16 @@
     <div class="sec-head">
       <h3>① 重复封面合并</h3>
       <div class="sec-actions">
-        {#if groups.length}<button class="btn ghost sm" onclick={() => (selectedHashes = new Set(groups.map((g) => g.hash)))}>全选</button>{/if}
-        <button class="btn sm" onclick={scanDuplicates} disabled={groupsLoading}>{groupsLoading ? '扫描中…' : (groups.length || dupScanned ? '重新扫描' : '扫描重复封面')}</button>
+        {#if groups.length}<button class="btn ghost sm" onclick={selectAllHashes}>全选</button>{/if}
+        <button class="btn sm" onclick={scanDuplicates} disabled={groupsLoading}>
+          {groupsLoading ? '扫描中…' : (groups.length || dupScanned ? '重新扫描' : '扫描重复封面')}
+        </button>
       </div>
     </div>
 
-    {#if groups.length}
+    {#if groupsLoading}
+      <p class="tiny scanning">正在扫描重复封面…</p>
+    {:else if groups.length}
       <p class="tiny">检测到 {groups.length} 组重复封面（内容相同、仅存多份），合并后仅保留一份。</p>
       <div class="glist">
         {#each groups as g}
@@ -190,19 +206,10 @@
           {merging ? '合并中…' : `合并选中（${selectedHashes.size} 组）`}
         </button>
       </div>
-    {:else if groupsLoading}
-      <div class="skeleton" style="height: 120px;"></div>
+    {:else if dupScanned}
+      <p class="tiny ok-line">✓ 未找到重复封面——没有内容相同却存为多份的文件。</p>
     {:else}
-      <div class="empty">
-        <div class="ico">🖼</div>
-        {#if dupScanned}
-          <div class="t">未找到重复封面</div>
-          <div class="h">当前没有内容相同且存为多个文件的封面</div>
-        {:else}
-          <div class="t">尚未扫描</div>
-          <div class="h">点击「扫描重复封面」检测内容相同的封面</div>
-        {/if}
-      </div>
+      <p class="tiny muted">内容相同却存了多份的封面会在这里列出，可勾选合并、只保留一份。</p>
     {/if}
   </div>
 
@@ -210,13 +217,17 @@
     <div class="sec-head">
       <h3>② 未引用封面清理</h3>
       <div class="sec-actions">
-        {#if orphans.length}<button class="btn ghost sm" onclick={() => (selectedOrphans = new Set(orphans.map((o) => o.file_name)))}>全选</button>{/if}
-        <button class="btn sm" onclick={scanOrphans} disabled={orphansLoading}>{orphansLoading ? '扫描中…' : (orphans.length ? '重新扫描' : '扫描未引用封面')}</button>
-        <button class="btn danger sm" onclick={runPurge} disabled={purging}>清空回收站</button>
+        {#if orphans.length}<button class="btn ghost sm" onclick={selectAllOrphans}>全选</button>{/if}
+        <button class="btn sm" onclick={scanOrphans} disabled={orphansLoading}>
+          {orphansLoading ? '扫描中…' : (orphans.length || orphansScanned ? '重新扫描' : '扫描未引用封面')}
+        </button>
+        <button class="btn danger sm" onclick={runPurge} disabled={purging}>清空封面回收站</button>
       </div>
     </div>
 
-    {#if orphans.length}
+    {#if orphansLoading}
+      <p class="tiny scanning">正在扫描未引用封面…</p>
+    {:else if orphans.length}
       <p class="tiny">发现 {orphans.length} 张未被任何演出引用的封面，共 {fmtSize(orphans.reduce((a, o) => a + o.size, 0))}。清理前会移入回收站，可恢复。</p>
       <div class="olist">
         {#each orphans as o}
@@ -235,14 +246,10 @@
           {cleaning ? '清理中…' : `移入回收站（${selectedOrphans.size} 张）`}
         </button>
       </div>
-    {:else if orphansLoading}
-      <div class="skeleton" style="height: 120px;"></div>
+    {:else if orphansScanned}
+      <p class="tiny ok-line">✓ 没有未引用的封面——所有封面文件仍被演出引用。</p>
     {:else}
-      <div class="empty">
-        <div class="ico">🗑</div>
-        <div class="t">尚未扫描</div>
-        <div class="h">点击「扫描未引用封面」找出不再被引用的文件</div>
-      </div>
+      <p class="tiny muted">不再被任何演出引用的封面文件会在这里列出；清理时先移入回收站，可恢复。</p>
     {/if}
   </div>
 
@@ -256,8 +263,10 @@
     {/if}
     <p class="tiny">为所有有封面的演出按当前编码格式重新生成缩略图（宽 ≤400px），并清理旧格式缩略图文件。</p>
   </div>
-</div>
+</section>
 
+<!-- 灯箱必须渲染在 .fade-up 之外：fadeUp 动画 fill-mode:both 会残留
+     transform，使 .fade-up 成为 fixed 元素的包含块，定位基准随之错位。 -->
 {#if lightbox && lightboxSrc}
   <button type="button" class="lightbox" onclick={closeLightbox} aria-label="关闭大图">
     <img src={lightboxSrc} alt="" />
@@ -265,12 +274,36 @@
 {/if}
 
 <style>
-  .sec { padding: 18px 20px; margin-bottom: 14px; }
-  .sec-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-  .sec-head h3 { margin: 0; font-size: 15.5px; }
-  .sec-actions { display: flex; gap: 8px; align-items: center; }
+  /* 分区节奏与 .cost-section / .data-sec 一致（28px 上间距 + 18px 内间距
+     + 1px 分隔线），使数据页五个分区视觉层级统一。 */
+  .cover-section {
+    margin-top: 28px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+  .cover-section-head { margin-bottom: 14px; }
+  .cover-section-head h2 {
+    margin: 0 0 4px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .cover-section-head p { margin: 0; }
 
-  .glist { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  /* .sec 是页面级样式，不跨组件生效，故组件内自带卡片内边距。 */
+  .sec { padding: 18px 20px; }
+  .sec + .sec { margin-top: 14px; }
+  /* flex-wrap：窄屏下按钮组换行，而不是把标题挤成两行 */
+  .sec-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 10px; }
+  .sec-head h3 { margin: 0; font-size: 15.5px; }
+  .sec-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  /* 空态一律单行，避免事先预留大块空白 */
+  .scanning { margin: 6px 0 0; color: var(--text-3); }
+  .ok-line { margin: 6px 0 0; color: var(--success); }
+  .sec > p.tiny { margin: 8px 0; }
+
+  .glist { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 12px; }
   .grow {
     display: flex;
     align-items: center;
@@ -287,7 +320,7 @@
   .grecs { font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ghash { color: var(--text-3); }
 
-  .olist { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .olist { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 12px; }
   .orow {
     display: flex;
     align-items: center;
