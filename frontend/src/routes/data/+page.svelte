@@ -105,14 +105,16 @@
 <div class="fade-up">
   <div class="page-head">
     <h1>数据管理</h1>
-    <p class="sub">导入 / 导出、备份与恢复、回收站、费用补全与封面维护</p>
+    <p class="sub">导入 / 导出、自动备份、回收站、费用补全与封面维护</p>
   </div>
 
-  <!-- ============ 导入 ============ -->
+  <!-- ============ 导入 / 导出 ============ -->
+  <!-- 导入与导出是同一套文件格式（data.json / 含 covers 的 zip）的两个方向，
+       放在同一分区，用户不必在两个分区之间来回找。 -->
   <section class="data-sec">
     <div class="data-sec-head">
-      <h2>导入</h2>
-      <p class="tiny muted">从「记录现场」备份包或单独的 data.json 还原数据，按 id 覆盖更新。</p>
+      <h2>导入 / 导出</h2>
+      <p class="tiny muted">从「记录现场」备份包或单独的 data.json 还原数据（按 id 覆盖更新）；也可把当前数据导出为文件带走。</p>
     </div>
 
     <div
@@ -158,30 +160,26 @@
       </div>
     {/if}
 
-    <div class="card sec">
-      <h3>支持的文件</h3>
-      <ul class="tips">
-        <li><b>记录现场备份（推荐）</b>：上传 <code>JI_LU_XIAN_CHANG.android.zip</code>，包内包含数据文件 <code>JI_LU_XIAN_CHANG.android</code> 与封面目录 <code>covers/</code>，一键还原数据与封面关联</li>
-        <li><b>纯数据</b>：单独的 <code>data.json</code>（不含封面）</li>
-        <li><b>数据 + 封面</b>：含 <code>data.json</code> 与 <code>covers/</code> 的压缩包</li>
-      </ul>
-    </div>
+    <!-- 两张说明卡并排：内容互不依赖且都不长，宽屏并排可省下约 170px 竖向空间，
+         窄于 ~660px 自动回退单列。 -->
+    <div class="refs-grid">
+      <div class="card sec">
+        <h3>支持的文件</h3>
+        <ul class="tips">
+          <li><b>记录现场备份（推荐）</b>：上传 <code>JI_LU_XIAN_CHANG.android.zip</code>，包内包含数据文件 <code>JI_LU_XIAN_CHANG.android</code> 与封面目录 <code>covers/</code>，一键还原数据与封面关联</li>
+          <li><b>纯数据</b>：单独的 <code>data.json</code>（不含封面）</li>
+          <li><b>数据 + 封面</b>：含 <code>data.json</code> 与 <code>covers/</code> 的压缩包</li>
+        </ul>
+      </div>
 
-    <div class="card sec">
-      <h3>关于去重</h3>
-      <ul class="tips">
-        <li><b>演出记录</b>：按 <code>id</code> 覆盖更新。导入自己导出的备份是幂等的——重复导入不会新增重复记录；但来自「记录现场」等外部源、且每条不含 <code>id</code> 的文件，重复导入会产生重复。</li>
-        <li><b>封面</b>：按图片内容哈希自动去重，字节完全相同的封面只保存一份，不重复占用空间。</li>
-        <li><b>注意</b>：导入是按 <code>id</code> 更新，会覆盖同 <code>id</code> 的已有数据；导入本质是“恢复”而非“追加”。</li>
-      </ul>
-    </div>
-  </section>
-
-  <!-- ============ 备份与恢复 ============ -->
-  <section class="data-sec">
-    <div class="data-sec-head">
-      <h2>备份与恢复</h2>
-      <p class="tiny muted">随时手动导出一份，或让服务端按间隔自动留存快照（快照可直接在下方恢复）。</p>
+      <div class="card sec">
+        <h3>关于去重</h3>
+        <ul class="tips">
+          <li><b>演出记录</b>：按 <code>id</code> 覆盖更新。导入自己导出的备份是幂等的——重复导入不会新增重复记录；但来自「记录现场」等外部源、且每条不含 <code>id</code> 的文件，重复导入会产生重复。</li>
+          <li><b>封面</b>：按图片内容哈希自动去重，字节完全相同的封面只保存一份，不重复占用空间。</li>
+          <li><b>注意</b>：导入是按 <code>id</code> 更新，会覆盖同 <code>id</code> 的已有数据；导入本质是“恢复”而非“追加”。</li>
+        </ul>
+      </div>
     </div>
 
     <div class="card sec">
@@ -191,6 +189,16 @@
         <a class="btn" href={api.getExportUrl('zip')}>⇩ 导出 ZIP（数据 + 封面）</a>
         <a class="btn" href={api.getExportUrl()}>⇩ 导出 JSON</a>
       </div>
+    </div>
+  </section>
+
+  <!-- ============ 自动备份 ============ -->
+  <!-- 与服务端快照相关的一切：格式 / 间隔 / 保留份数 / S3 推送 / 立即备份 / 快照列表。
+       手动「导出」已归到上方「导入 / 导出」，本节只留自动留存，职责单一。 -->
+  <section class="data-sec">
+    <div class="data-sec-head">
+      <h2>自动备份</h2>
+      <p class="tiny muted">让服务端按间隔自动把快照留存到 backups/ 目录（可选用 db / json / zip 格式），快照可直接在下方恢复。</p>
     </div>
 
     <BackupPanel />
@@ -302,6 +310,18 @@
   .sec { padding: 18px 20px; margin-top: 16px; }
   .sec h3 { margin: 0 0 10px; font-size: 15.5px; }
   .tips { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--text-2); }
+
+  /* 说明卡并排（支持的文件 / 关于去重）。min() 兜底：容器窄于 320px 时轨道下限
+     降为容器宽度，避免 auto-fit 的硬下限把窄屏顶破；窄于 ~660px 自动回退单列。 */
+  .refs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+    align-items: start;
+    gap: 16px;
+    margin-top: 16px;
+  }
+  /* 网格自己管间距，避免与 .sec 的 margin-top 叠加（不塌陷，会变成双倍）。 */
+  .refs-grid .sec { margin-top: 0; }
   code { background: var(--surface-3); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
   .flink { color: var(--accent); font-weight: 600; margin-left: 6px; }
 

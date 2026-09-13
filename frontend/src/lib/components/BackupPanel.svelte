@@ -244,8 +244,11 @@
 
 <style>
   /* 组件自带页面级样式：父页面的 <style> 是 scoped 的，不会作用到子组件内部，
-     `.sec` / `.field` / `.hint` 这类必须在这里重新声明。 */
-  .sec { padding: 18px 20px; }
+     `.sec` / `.field` / `.hint` 这类必须在这里重新声明。
+     ⚠️ 必须连 margin-top 一起声明——页面上的 `.sec` 是
+     `padding: 18px 20px; margin-top: 16px`，这里只写 padding 的话，
+     本卡与上一张卡之间就是 0 间距（曾出现两张卡贴成 1px 的问题）。 */
+  .sec { padding: 18px 20px; margin-top: 16px; }
   .sec h3 { margin: 0; font-size: 15.5px; }
   .card-head {
     display: flex;

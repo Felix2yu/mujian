@@ -292,7 +292,8 @@
 
   /* .sec 是页面级样式，不跨组件生效，故组件内自带卡片内边距。 */
   .sec { padding: 18px 20px; }
-  .sec + .sec { margin-top: 14px; }
+  /* 卡片间距与数据页的 16px 统一（此处原为 14px，与页面其它分区不一致）。 */
+  .sec + .sec { margin-top: 16px; }
   /* flex-wrap：窄屏下按钮组换行，而不是把标题挤成两行 */
   .sec-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 10px; }
   .sec-head h3 { margin: 0; font-size: 15.5px; }
