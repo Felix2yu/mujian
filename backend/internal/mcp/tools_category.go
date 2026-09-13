@@ -110,13 +110,15 @@ func (s *Server) handleDeleteCategory(ctx context.Context, req *mcp.CallToolRequ
 		return errResult("未找到分类「%s」", in.ID)
 	}
 	if dryRun(in.DryRun) {
+		n, _ := s.db.CountRecordsByCategory(existing.Name)
 		return jsonResult(map[string]any{
-			"dry_run":     true,
-			"category_id": existing.ID,
-			"name":        existing.Name,
+			"dry_run":          true,
+			"category_id":      existing.ID,
+			"name":             existing.Name,
+			"records_affected": n,
 		})
 	}
-	if err := s.db.DeleteCategory(in.ID); err != nil {
+	if _, err := s.db.DeleteCategory(in.ID); err != nil {
 		return errResult("删除分类失败：%v", err)
 	}
 	return jsonResult(map[string]any{"deleted": in.ID})

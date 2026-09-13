@@ -18,7 +18,7 @@
     { href: '/map', label: '地图' },
     { href: '/analytics', label: '分析' },
     { href: '/covers', label: '封面' },
-    { href: '/categories', label: '分类' },
+    { href: '/categories', label: '剧种' },
     { href: '/import', label: '数据' },
     { href: '/settings', label: '设置' }
   ];

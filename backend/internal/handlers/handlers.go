@@ -656,11 +656,12 @@ func (h *Handler) updateCategory(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) deleteCategory(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if err := h.db.DeleteCategory(id); err != nil {
+	n, err := h.db.DeleteCategory(id)
+	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
-	jsonResp(w, 200, map[string]string{"message": "deleted"})
+	jsonResp(w, 200, map[string]any{"message": "deleted", "recordsAffected": n})
 }
 
 // ---------- Dramas & Zhezis ----------

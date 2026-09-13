@@ -2526,9 +2526,69 @@ func (db *DB) ReorderCategories(orderedIDs []string) error {
 	return nil
 }
 
-func (db *DB) DeleteCategory(id string) error {
-	_, err := db.conn.Exec("DELETE FROM categories WHERE id = ?", id)
-	return err
+// DeleteCategory removes a category and cascades the removal to every
+// non-deleted record that references it: the name is stripped from
+// records.category_names (a JSON array) and the redundant scalar
+// records.category_name (kept in sync as the array's first element) is
+// recomputed. Records themselves are NOT deleted — only the category tag is
+// removed. It returns the number of records whose category list was modified.
+func (db *DB) DeleteCategory(id string) (int, error) {
+	// Resolve the category name: it is needed to match referencing records.
+	var name string
+	if err := db.conn.QueryRow("SELECT name FROM categories WHERE id = ?", id).Scan(&name); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, err
+	}
+
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("begin delete category: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Cascade: strip the name from every live record's category_names and
+	// resync category_name to the (new) first element.
+	res, err := tx.Exec(`
+		UPDATE records
+		SET category_names = (
+			SELECT json_group_array(je.value)
+			FROM json_each(records.category_names) je
+			WHERE je.value != ?
+		),
+		category_name = COALESCE(
+			(SELECT je.value FROM json_each(records.category_names) je WHERE je.value != ? ORDER BY je.key ASC LIMIT 1),
+			''
+		)
+		WHERE deleted_at = 0
+		  AND EXISTS (SELECT 1 FROM json_each(records.category_names) je2 WHERE je2.value = ?)`,
+		name, name, name)
+	if err != nil {
+		return 0, fmt.Errorf("cascade category from records: %w", err)
+	}
+	affected, _ := res.RowsAffected()
+
+	if _, err := tx.Exec("DELETE FROM categories WHERE id = ?", id); err != nil {
+		return 0, fmt.Errorf("delete category row: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit delete category: %w", err)
+	}
+	return int(affected), nil
+}
+
+// CountRecordsByCategory returns the number of non-deleted records whose
+// category_names JSON array contains name. It is used to preview the blast
+// radius of deleting a category (MCP dry-run).
+func (db *DB) CountRecordsByCategory(name string) (int, error) {
+	var n int
+	err := db.conn.QueryRow(
+		`SELECT COUNT(*) FROM records r WHERE deleted_at = 0 AND EXISTS (SELECT 1 FROM json_each(r.category_names) je WHERE je.value = ?)`,
+		name,
+	).Scan(&n)
+	return n, err
 }
 
 // ---------- Dramas & Zhezis ----------

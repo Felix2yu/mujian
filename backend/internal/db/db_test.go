@@ -372,11 +372,101 @@ func TestCategories(t *testing.T) {
 	if cats[0].Name != "越剧" {
 		t.Errorf("update category failed: %+v", cats[0])
 	}
-	if err := db.DeleteCategory(cats[0].ID); err != nil {
+	if _, err := db.DeleteCategory(cats[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	if cats, _ := db.ListCategories(); len(cats) != 0 {
 		t.Errorf("category not deleted: %v", cats)
+	}
+}
+
+func TestDeleteCategoryCascadesToRecords(t *testing.T) {
+	db := newTestDB(t)
+
+	yang := models.Category{Name: "扬剧"}
+	kun := models.Category{Name: "昆曲"}
+	if err := db.UpsertCategory(&yang); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.UpsertCategory(&kun); err != nil {
+		t.Fatal(err)
+	}
+
+	// r1: 扬剧 是主剧种（数组首位），昆曲 是另一个。
+	// r2: 扬剧 在非首位。
+	// r3: 已软删除，不应被触碰。
+	for _, ins := range []struct {
+		id, name, cname, cnames string
+		deleted                 int
+	}{
+		{"r1", "测试演出", "扬剧", `["扬剧","昆曲"]`, 0},
+		{"r2", "另一场", "昆曲", `["昆曲","扬剧"]`, 0},
+		{"r3", "已删除演出", "扬剧", `["扬剧"]`, 1},
+	} {
+		if _, err := db.conn.Exec(
+			`INSERT INTO records (id, name, category_name, category_names, deleted_at) VALUES (?, ?, ?, ?, ?)`,
+			ins.id, ins.name, ins.cname, ins.cnames, ins.deleted,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	n, err := db.DeleteCategory(yang.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Errorf("expected 2 records affected, got %d", n)
+	}
+
+	// r1: 扬剧 已移除，主剧种回退为 昆曲。
+	var cn1, cname1 string
+	if err := db.conn.QueryRow("SELECT category_names, category_name FROM records WHERE id='r1'").Scan(&cn1, &cname1); err != nil {
+		t.Fatal(err)
+	}
+	if cn1 != `["昆曲"]` {
+		t.Errorf("r1 category_names = %q, want [\"昆曲\"]", cn1)
+	}
+	if cname1 != "昆曲" {
+		t.Errorf("r1 category_name = %q, want 昆曲", cname1)
+	}
+
+	// r2: 扬剧 已移除（非首位），主剧种 昆曲 保持。
+	var cn2, cname2 string
+	if err := db.conn.QueryRow("SELECT category_names, category_name FROM records WHERE id='r2'").Scan(&cn2, &cname2); err != nil {
+		t.Fatal(err)
+	}
+	if cn2 != `["昆曲"]` {
+		t.Errorf("r2 category_names = %q, want [\"昆曲\"]", cn2)
+	}
+	if cname2 != "昆曲" {
+		t.Errorf("r2 category_name = %q, want 昆曲", cname2)
+	}
+
+	// r3: 软删除记录不受影响。
+	var cn3 string
+	if err := db.conn.QueryRow("SELECT category_names FROM records WHERE id='r3'").Scan(&cn3); err != nil {
+		t.Fatal(err)
+	}
+	if cn3 != `["扬剧"]` {
+		t.Errorf("r3 (soft-deleted) category_names = %q, want [\"扬剧\"] (untouched)", cn3)
+	}
+
+	// 剧种行已删除。
+	var cnt int
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM categories WHERE id=?", yang.ID).Scan(&cnt); err != nil {
+		t.Fatal(err)
+	}
+	if cnt != 0 {
+		t.Errorf("category row should be deleted")
+	}
+
+	// 另一剧种 昆曲 行仍存活。
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM categories WHERE id=?", kun.ID).Scan(&cnt); err != nil {
+		t.Fatal(err)
+	}
+	if cnt != 1 {
+		t.Errorf("sibling category should survive")
 	}
 }
 
