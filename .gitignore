@@ -11,7 +11,7 @@ backend/dist/
 backend/coverage.out
 
 # Data
-data/
+/data/
 backend/data/
 
 # IDE

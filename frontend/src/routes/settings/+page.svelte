@@ -37,23 +37,34 @@
   let loadedAIApiKey = $state('');
   // 货殖 API Key 同理：掩码值表示未改动。
   let loadedHuozhiApiKey = $state('');
-  // 设置卡片的两列归属：按预估高度最短列优先分配，列高大致均衡。
-  // 新增/调整卡片时同步这里的权重即可。
+  // 设置卡片的两列归属：在保持每列内部阅读顺序的前提下，把卡片尽量均分到两列。
+  // 权重 = 卡片实测渲染高度 + 列间距（px）。
+  //
+  // 这里用「最优划分」而非原先的「最短列优先」贪心：贪心是顺序相关的，本页卡片
+  // 高度差很大（144 ~ 829px），贪心会留下 15~25% 的列高差，最优划分可以基本抹平
+  // （实测：13 张卡片可做到两列分别 2653 / 2653）。新增或改动卡片后，用浏览器量
+  // 一遍真实高度（见技能 mujian-frontend-visual-check）再更新下面的表即可。
   const CARD_COLS = (() => {
-    // 权重 = 实测卡片高度（含间距，px）；内容变化时按需更新
     const cards = [
-      ['theme', 162], ['storage', 158], ['s3', 823], ['encode', 305], ['ics', 210], ['caldav', 470],
-      ['fields', 389], ['status', 178], ['list', 224], ['backup', 988], ['security', 274], ['map', 435],
-      ['ai', 360], ['huozhi', 470]
+      ['theme', 162], ['storage', 158], ['s3', 843], ['encode', 305], ['ics', 316], ['caldav', 594],
+      ['fields', 410], ['status', 178], ['list', 224], ['security', 324], ['map', 435],
+      ['ai', 532], ['huozhi', 825]
     ];
-    const cols = [[], []];
-    const hs = [0, 0];
-    for (const [k, w] of cards) {
-      const c = hs[0] <= hs[1] ? 0 : 1;
-      cols[c].push(k);
-      hs[c] += w;
+    // dp: (col0 高度 - col1 高度) -> [col0 的卡片, col1 的卡片]
+    let dp = new Map([[0, [[], []]]]);
+    for (const [key, w] of cards) {
+      const next = new Map();
+      for (const [diff, [c0, c1]] of dp) {
+        if (!next.has(diff + w)) next.set(diff + w, [[...c0, key], c1]);
+        if (!next.has(diff - w)) next.set(diff - w, [c0, [...c1, key]]);
+      }
+      dp = next;
     }
-    return cols;
+    let best = null;
+    for (const [diff, cols] of dp) {
+      if (best === null || Math.abs(diff) < Math.abs(best[0])) best = [diff, cols];
+    }
+    return best[1];
   })();
 
   let error = $state('');
@@ -76,244 +87,6 @@
   let migrateResult = $state(null);
   let migrateError = $state('');
   let migrateProgress = $state({ processed: 0, total: 0 });
-
-  // ===== 费用补全 =====
-  //
-  // 语义（与后端 internal/db/cost_review.go 一致）：
-  //   · 字段值 > 0                  → 已填写，永不进入待确认清单，也永不被改写；
-  //   · 值 NULL（未填写）或 0       → 进入待确认清单；
-  //   · 用户对某字段做出确认后，服务端记一条 cost_reviews，该条目随即离开清单。
-  //
-  // 关键点：历史版本把「未填写」默认存成了 0，所以清单里的 0 元无法与真实
-  // 免费区分。本模块不猜测，而是把区分动作交给用户逐项确认 —— 确认记录可撤销，
-  // 补全操作只写当前为 NULL/0 的字段，因此不可能误改有效金额。
-  const COST_FIELDS = [
-    { key: 'price', label: '票价', desc: '票面价格', zeroLabel: '免费', zeroAction: '标记为免费' },
-    { key: 'pay_price', label: '实付', desc: '实际支付金额', zeroLabel: '无实付', zeroAction: '标记为无实付' },
-    { key: 'other_cost', label: '其他花费', desc: '交通、餐饮等额外支出', zeroLabel: '无支出', zeroAction: '标记为无支出' }
-  ];
-
-  let costLoading = $state(false);
-  let costError = $state('');
-  let costNotice = $state('');
-  let costBusy = $state(false);
-  let costRecords = $state([]);   // 仍待确认的记录（服务端已排除已标记项）
-  let costSummary = $state(null); // 全量概览计数
-  let costFieldFilter = $state('all'); // 'all' | 字段 key
-  let costValueFilter = $state('pending'); // 'pending' | 'empty' | 'zero'
-  let costVenue = $state('');
-  let costQuery = $state('');
-  let costExpanded = $state({ price: true, pay_price: true, other_cost: true });
-  let costSel = $state({ price: [], pay_price: [], other_cost: [] });
-  let costRowAmount = $state({}); // `${field}:${id}` -> 行内输入金额
-
-  function costRowKey(field, id) { return `${field}:${id}`; }
-
-  // 费用补全列表里的日期：只到天，避免时区把 19:30 的演出显示成第二天。
-  function fmtCostDate(ts) {
-    if (!ts) return '—';
-    const d = new Date(ts * 1000);
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  }
-
-  // 场馆候选（按待确认条数降序）
-  let costVenueOptions = $derived.by(() => {
-    const map = new Map();
-    for (const r of costRecords) {
-      if (r.address) map.set(r.address, (map.get(r.address) || 0) + 1);
-    }
-    return [...map.entries()].sort((a, b) => b[1] - a[1]).map(([address, count]) => ({ address, count }));
-  });
-
-  // 场馆 / 关键词筛选
-  let costFiltered = $derived.by(() => {
-    const q = costQuery.trim().toLowerCase();
-    return costRecords.filter((r) => {
-      if (costVenue && r.address !== costVenue) return false;
-      if (q) {
-        const hay = `${r.name || ''} ${r.address || ''} ${r.city || ''}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-  });
-
-  // 把记录「按字段展开」成行：一行 = 一条记录的一个待确认字段。
-  // kind 用于区分两类待确认：empty = 列为 NULL（确定未填写）；
-  // zero = 值为 0（可能是真实免费，也可能是历史默认的脏数据）。
-  let costRows = $derived.by(() => {
-    const out = {};
-    for (const f of COST_FIELDS) out[f.key] = [];
-    for (const r of costFiltered) {
-      const pending = r.pending_fields || [];
-      for (const f of COST_FIELDS) {
-        if (!pending.includes(f.key)) continue;
-        const raw = r[f.key];
-        const kind = raw === null || raw === undefined ? 'empty' : 'zero';
-        if (costValueFilter !== 'pending' && costValueFilter !== kind) continue;
-        out[f.key].push({ rec: r, kind });
-      }
-    }
-    return out;
-  });
-
-  let costVisibleFields = $derived(
-    costFieldFilter === 'all' ? COST_FIELDS : COST_FIELDS.filter((f) => f.key === costFieldFilter)
-  );
-
-  let costVisibleCount = $derived(
-    COST_FIELDS.reduce((n, f) => n + (costRows[f.key]?.length || 0), 0)
-  );
-
-  let costPendingCounts = $derived(costSummary?.pending || {});
-  let costReviewedCounts = $derived(costSummary?.reviewed || {});
-  let costReviewedTotal = $derived(costSummary?.reviewed_total || 0);
-
-  // 生效目标：优先取勾选项，否则作用于当前筛选出的全部行。始终以「当前可见」
-  // 取交集，避免筛选切换后残留的选择被误伤。
-  function costTargets(field) {
-    const visible = costRows[field].map((row) => row.rec.id);
-    const sel = (costSel[field] || []).filter((id) => visible.includes(id));
-    return sel.length > 0 ? sel : visible;
-  }
-
-  function costToggleSel(field, id) {
-    const cur = costSel[field] || [];
-    costSel = { ...costSel, [field]: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] };
-  }
-
-  function costSelectAll(field) {
-    const visible = costRows[field].map((row) => row.rec.id);
-    const cur = (costSel[field] || []).filter((id) => visible.includes(id));
-    costSel = { ...costSel, [field]: cur.length === visible.length ? [] : visible };
-  }
-
-  async function loadCosts() {
-    costLoading = true;
-    costError = '';
-    try {
-      const res = await api.costPending();
-      costRecords = res.records || [];
-      costSummary = res.summary || null;
-      // 丢掉已不在清单中的选择（例如刚被标记掉的记录）
-      const alive = new Set(costRecords.map((r) => r.id));
-      costSel = Object.fromEntries(
-        COST_FIELDS.map((f) => [f.key, (costSel[f.key] || []).filter((id) => alive.has(id))])
-      );
-    } catch (e) {
-      costError = '加载失败：' + e.message;
-    } finally {
-      costLoading = false;
-    }
-  }
-
-  // 提交一次确认操作并刷新清单。所有入口都汇总到这里，保证「操作 → 重新拉取」
-  // 的单一真相：清单永远来自服务端，前端不做乐观推断，避免本地状态与服务端
-  // 的「已标记」判定漂移。
-  async function costSubmit(payload, notice) {
-    costBusy = true;
-    costError = '';
-    costNotice = '';
-    try {
-      await api.costReview(payload);
-      costNotice = notice;
-      costSel = { price: [], pay_price: [], other_cost: [] };
-      await loadCosts();
-    } catch (e) {
-      costError = '操作失败：' + e.message;
-    } finally {
-      costBusy = false;
-    }
-  }
-
-  // 分组批量：标记为 0 元（免费 / 无实付 / 无支出）
-  function costMarkZero(field) {
-    const ids = costTargets(field);
-    if (ids.length === 0) return;
-    const f = COST_FIELDS.find((x) => x.key === field);
-    costSubmit({ ids, field, action: 'zero' }, `已将 ${ids.length} 条记录的${f.label}标记为${f.zeroLabel}`);
-  }
-
-  // 分组批量：跳过（暂不处理，列值不变，仅移出清单）
-  function costMarkSkip(field) {
-    const ids = costTargets(field);
-    if (ids.length === 0) return;
-    const f = COST_FIELDS.find((x) => x.key === field);
-    costSubmit({ ids, field, action: 'skip' }, `已跳过 ${ids.length} 条${f.label}（列值保持不变）`);
-  }
-
-  // 分组批量：填入统一金额
-  function costSetAmount(field) {
-    const raw = String(costRowAmount[costRowKey(field, '__batch__')] ?? '').trim();
-    const amount = Number(raw);
-    if (raw === '' || !Number.isFinite(amount) || amount < 0) {
-      costError = '请先填写一个不小于 0 的金额';
-      return;
-    }
-    const ids = costTargets(field);
-    if (ids.length === 0) return;
-    const f = COST_FIELDS.find((x) => x.key === field);
-    costSubmit({ ids, field, action: 'amount', amount }, `已为 ${ids.length} 条${f.label}填入 ${amount} 元`);
-  }
-
-  // 单行：填入该行输入的金额
-  function costSetRowAmount(row) {
-    const field = row.field;
-    const k = costRowKey(field, row.rec.id);
-    const raw = String(costRowAmount[k] ?? '').trim();
-    const amount = Number(raw);
-    if (raw === '' || !Number.isFinite(amount) || amount < 0) {
-      costError = '请填写一个不小于 0 的金额';
-      return;
-    }
-    costSubmit({ ids: [row.rec.id], field, action: 'amount', amount }, `已填入 ${amount} 元`);
-  }
-
-  // 单行：标记为 0 元
-  function costRowZero(row) {
-    const f = COST_FIELDS.find((x) => x.key === row.field);
-    costSubmit({ ids: [row.rec.id], field: row.field, action: 'zero' },
-      `已标记为${f.zeroLabel}`);
-  }
-
-  // 单行：跳过
-  function costRowSkip(row) {
-    costSubmit({ ids: [row.rec.id], field: row.field, action: 'skip' }, '已跳过该条（列值保持不变）');
-  }
-
-  // 撤销：单个字段全部标记
-  async function costUndoField(field) {
-    const f = COST_FIELDS.find((x) => x.key === field);
-    costBusy = true;
-    costError = '';
-    costNotice = '';
-    try {
-      const res = await api.costUnreview({ all: true, field });
-      costNotice = `已撤销 ${res.restored} 条${f.label}标记，它们重新回到待确认清单`;
-      await loadCosts();
-    } catch (e) {
-      costError = '撤销失败：' + e.message;
-    } finally {
-      costBusy = false;
-    }
-  }
-
-  // 撤销：全部字段的所有标记
-  async function costUndoAll() {
-    costBusy = true;
-    costError = '';
-    costNotice = '';
-    try {
-      const res = await api.costUnreview({ all: true });
-      costNotice = `已撤销全部 ${res.restored} 条标记`;
-      await loadCosts();
-    } catch (e) {
-      costError = '撤销失败：' + e.message;
-    } finally {
-      costBusy = false;
-    }
-  }
 
   // S3 连接自检：用当前（合并掩码后的）配置做一次真实读写探测，验证连通性 /
   // 凭据 / 桶存在 / path-style 寻址；不落库。
@@ -374,68 +147,6 @@
   let authToken = $state('');
   let authRequired = $state(false);
 
-  // 自动备份
-  const BACKUP_INTERVALS = [
-    { v: 0, label: '关闭' },
-    { v: 24, label: '每天' },
-    { v: 72, label: '每 3 天' },
-    { v: 168, label: '每周' },
-    { v: 336, label: '每 2 周' },
-    { v: 720, label: '每月' },
-    { v: 2160, label: '每季度' }
-  ];
-  const BACKUP_FORMATS = [
-    { v: 'db', label: '数据库快照（.db）', hint: '单个 SQLite 库文件，停机后直接换回文件即可恢复' },
-    { v: 'json', label: '纯数据（data.json）', hint: '体积小，可从「数据」页导入恢复，不含封面' },
-    { v: 'zip', label: '数据 + 封面（.zip）', hint: 'data.json 加全部封面文件，可从「数据」页导入完整恢复' }
-  ];
-  let backupFormat = $state('db');
-  let backupRemote = $state(false);
-  const s3Ready = $derived(!!(settings.s3_bucket?.trim() && settings.s3_access_key?.trim()));
-  let backupInterval = $state(0);
-  // 存量值不在预设档位时（如旧配置的 6 小时）动态补一个选项，避免下拉显示空白
-  let intervalOptions = $derived(
-    BACKUP_INTERVALS.some((i) => i.v === backupInterval)
-      ? BACKUP_INTERVALS
-      : [...BACKUP_INTERVALS, { v: backupInterval, label: `每 ${backupInterval} 小时` }]
-  );
-  let backupKeep = $state(10);
-  let lastBackupAt = $state(0);
-  let backupRunning = $state(false);
-  let backupMsg = $state('');
-  let backups = $state([]);
-  let restoringFile = $state('');
-
-  function fmtSize(n) {
-    if (n >= 1 << 20) return (n / (1 << 20)).toFixed(1) + ' MB';
-    if (n >= 1 << 10) return (n / (1 << 10)).toFixed(0) + ' KB';
-    return n + ' B';
-  }
-  async function refreshBackups() {
-    try {
-      const res = await api.backupList();
-      backups = res.backups || [];
-    } catch (e) { /* 列表加载失败不打断页面 */ }
-  }
-  async function backupRestore(file) {
-    if (!confirm(`用 ${file} 恢复数据？现有同 ID 记录会被覆盖。`)) return;
-    restoringFile = file;
-    try {
-      await api.backupRestoreFrom(file);
-      backupMsg = '已从 ' + file + ' 恢复';
-      setTimeout(() => (backupMsg = ''), 6000);
-    } catch (e) {
-      backupMsg = '恢复失败：' + e.message;
-    } finally {
-      restoringFile = '';
-    }
-  }
-  async function backupRemove(file) {
-    if (!confirm(`删除备份 ${file}？此操作不可恢复。`)) return;
-    await api.backupDelete(file).catch((e) => (backupMsg = '删除失败：' + e.message));
-    refreshBackups();
-  }
-
   function loadPref(key, fallback) {
     try {
       return localStorage.getItem(key) || fallback;
@@ -492,13 +203,6 @@
       mapCustomUrl = loadPref('mujian:map_custom_url', '');
       authToken = loadPref('mujian:auth_token', '');
       authRequired = settings.auth_required === true;
-      backupInterval = typeof settings.backup_interval_hours === 'number' ? settings.backup_interval_hours : 0;
-      backupKeep = typeof settings.backup_keep === 'number' ? settings.backup_keep : 10;
-      backupFormat = ['db', 'json', 'zip'].includes(settings.backup_format) ? settings.backup_format : 'db';
-      backupRemote = settings.backup_remote === true;
-      lastBackupAt = typeof settings.last_backup_at === 'number' ? settings.last_backup_at : 0;
-      refreshBackups();
-      loadCosts();
     } catch (e) {
       error = e.message;
     } finally {
@@ -531,10 +235,6 @@
         reminder_before_hours: Math.max(0, Math.min(72, Number(settings.reminder_before_hours) || 12)),
         reminder_daily_hour: Math.max(0, Math.min(23, Number(settings.reminder_daily_hour) || 10)),
         reminder_daily_minute: Math.max(0, Math.min(59, Number(settings.reminder_daily_minute) || 0)),
-        backup_interval_hours: backupInterval,
-        backup_keep: Math.max(1, Number(backupKeep) || 10),
-        backup_format: backupFormat,
-        backup_remote: backupRemote
       };
       // S3 凭据独立于存储方式：本地存储模式下也可配置（供备份推送等使用），
       // 始终提交。掩码值（含 ****）说明用户没有改密钥，不回传；后端同样会忽略。
@@ -564,36 +264,11 @@
       resetStorageInfo();
       saved = true;
       setTimeout(() => (saved = false), 2400);
-      const fresh = await api.getSettings().catch(() => null);
-      if (fresh) lastBackupAt = fresh.last_backup_at || 0;
     } catch (e) {
       error = e.message;
     } finally {
       saving = false;
     }
-  }
-
-  async function runBackupNow() {
-    backupRunning = true;
-    backupMsg = '';
-    try {
-      const res = await api.backupRun();
-      backupMsg = `已生成备份 ${res.file}`;
-      lastBackupAt = Math.floor(Date.now() / 1000);
-      refreshBackups();
-    } catch (e) {
-      backupMsg = '备份失败：' + e.message;
-    } finally {
-      backupRunning = false;
-      setTimeout(() => (backupMsg = ''), 6000);
-    }
-  }
-
-  function fmtBackupTime(ts) {
-    if (!ts) return '从未备份';
-    const d = new Date(ts * 1000);
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
   function setTheme(v) {
@@ -731,168 +406,11 @@
     statusFilter = loadStatusFilter();
     jumpNowPref = !!loadJsonPref('mujian:home_jump_now', false);
     load();
+
+    return () => unsub();
   });
 </script>
 <svelte:head><title>设置 - 幕间</title></svelte:head>
-
-{#snippet costWizardCard()}
-<div class="card sec cost-wizard">
-  <h3>费用补全</h3>
-  <p class="tiny muted cost-intro">
-    集中处理「未填写」与「0 元」的费用字段。历史版本把「未填写」默认存成了 0，因此清单里的
-    0 元既可能是真实的免费 / 无支出，也可能是遗留的脏数据 —— 请逐项确认。确认后的条目不会再
-    出现在这里（可随时撤销），列值大于 0 的记录则完全不受本模块影响。
-  </p>
-
-  {#if costError}<div class="banner error">⚠ {costError}</div>{/if}
-  {#if costNotice}<div class="banner success">✓ {costNotice}</div>{/if}
-
-  <!-- 概览：服务端全量计数，不受本地筛选与列表截断影响 -->
-  <div class="cost-overview">
-    <div class="cost-stat">
-      <span class="k">待确认记录</span>
-      <span class="v">{costSummary?.pending_records ?? '—'}</span>
-    </div>
-    {#each COST_FIELDS as f (f.key)}
-      <div class="cost-stat">
-        <span class="k">{f.label}待确认</span>
-        <span class="v accent">{costPendingCounts[f.key] ?? 0}</span>
-      </div>
-    {/each}
-    <div class="cost-stat">
-      <span class="k">已标记</span>
-      <span class="v">{costReviewedTotal}</span>
-    </div>
-    <button class="btn sm ghost cost-refresh" onclick={loadCosts} disabled={costLoading || costBusy}>
-      {costLoading ? '加载中…' : '刷新'}
-    </button>
-  </div>
-
-  <!-- 筛选：「未填写」(NULL) 与「值为 0」(疑似历史脏数据) 分开看，是查漏补缺的关键 -->
-  <div class="cost-filters">
-    <div class="cost-seg" role="group" aria-label="字段筛选">
-      <button class="cost-seg-btn" class:on={costFieldFilter === 'all'} onclick={() => (costFieldFilter = 'all')}>全部字段</button>
-      {#each COST_FIELDS as f (f.key)}
-        <button class="cost-seg-btn" class:on={costFieldFilter === f.key} onclick={() => (costFieldFilter = f.key)}>{f.label}</button>
-      {/each}
-    </div>
-    <div class="cost-seg" role="group" aria-label="取值筛选" title="区分「确实是 0 元」与「历史默认写成了 0」">
-      <button class="cost-seg-btn" class:on={costValueFilter === 'pending'} onclick={() => (costValueFilter = 'pending')}>全部</button>
-      <button class="cost-seg-btn" class:on={costValueFilter === 'empty'} onclick={() => (costValueFilter = 'empty')} title="列为 NULL，确定未填写">未填写</button>
-      <button class="cost-seg-btn" class:on={costValueFilter === 'zero'} onclick={() => (costValueFilter = 'zero')} title="值为 0：可能是真实免费，也可能是历史遗留的脏数据">值为 0</button>
-    </div>
-    <select class="input cost-venue-select" bind:value={costVenue} disabled={costBusy} aria-label="场馆筛选">
-      <option value="">全部场馆</option>
-      {#each costVenueOptions as v (v.address)}
-        <option value={v.address}>{v.address}（{v.count}）</option>
-      {/each}
-    </select>
-    <input class="input cost-search" type="search" placeholder="搜索剧目 / 场馆 / 城市" bind:value={costQuery} disabled={costBusy} />
-    <span class="tiny muted cost-visible-count">当前筛选 {costVisibleCount} 条</span>
-  </div>
-
-  {#if costLoading && !costSummary}
-    <div class="banner info" style="margin-top: 12px;">加载中…</div>
-  {:else if (costSummary?.pending_records ?? 0) === 0}
-    <div class="banner success" style="margin-top: 12px;">✓ 所有费用字段均已补全</div>
-  {/if}
-
-  {#each costVisibleFields as f (f.key)}
-    {@const rows = costRows[f.key] ?? []}
-    {@const sel = (costSel[f.key] || []).filter((id) => rows.some((r) => r.rec.id === id))}
-    {@const targets = sel.length > 0 ? sel : rows.map((r) => r.rec.id)}
-    <div class="cost-group">
-      <div class="cost-group-head">
-        <button
-          class="cost-group-toggle"
-          onclick={() => (costExpanded = { ...costExpanded, [f.key]: !costExpanded[f.key] })}
-          disabled={costBusy}
-        >
-          <span class="chevron" class:open={costExpanded[f.key]}>▶</span>
-          <span class="cost-group-title">{f.label}</span>
-          <span class="tiny muted">{f.desc}</span>
-        </button>
-        <span class="badge">{costPendingCounts[f.key] ?? 0} 待确认</span>
-      </div>
-
-      {#if costExpanded[f.key]}
-        <div class="cost-group-body">
-          <div class="cost-bulk">
-            <label class="cost-selectall">
-              <input
-                type="checkbox"
-                checked={rows.length > 0 && sel.length === rows.length}
-                onchange={() => costSelectAll(f.key)}
-                disabled={costBusy || rows.length === 0}
-              />
-              <span>{sel.length > 0 ? `已选 ${sel.length} 条` : `共 ${rows.length} 条`}</span>
-            </label>
-            <button class="btn sm primary" disabled={costBusy || targets.length === 0} onclick={() => costMarkZero(f.key)}>
-              {f.zeroAction}（{targets.length}）
-            </button>
-            <button class="btn sm" disabled={costBusy || targets.length === 0} onclick={() => costMarkSkip(f.key)}>
-              跳过（{targets.length}）
-            </button>
-            <span class="cost-amount-group">
-              <input
-                class="input cost-mini-input"
-                type="number" min="0" step="0.01" placeholder="金额"
-                bind:value={costRowAmount[costRowKey(f.key, '__batch__')]}
-                disabled={costBusy}
-              />
-              <button class="btn sm" disabled={costBusy || targets.length === 0} onclick={() => costSetAmount(f.key)}>填入</button>
-            </span>
-            {#if (costReviewedCounts[f.key] ?? 0) > 0}
-              <button class="btn sm ghost" disabled={costBusy} onclick={() => costUndoField(f.key)}>
-                撤销已标记 {costReviewedCounts[f.key]}
-              </button>
-            {/if}
-          </div>
-
-          {#if rows.length === 0}
-            <div class="tiny muted" style="padding: 6px 0;">当前筛选条件下该字段无待确认条目</div>
-          {:else}
-            <div class="cost-rows">
-              {#each rows as row (row.rec.id)}
-                <div class="cost-row">
-                  <input
-                    type="checkbox"
-                    checked={sel.includes(row.rec.id)}
-                    onchange={() => costToggleSel(f.key, row.rec.id)}
-                    disabled={costBusy}
-                  />
-                  <span class="cost-row-date">{fmtCostDate(row.rec.date)}</span>
-                  <span class="cost-row-name" title={row.rec.name}>{row.rec.name}</span>
-                  {#if row.rec.address}
-                    <span class="cost-row-venue" title={row.rec.address}>{row.rec.address}</span>
-                  {/if}
-                  <span
-                    class="cost-kind"
-                    class:zero={row.kind === 'zero'}
-                    title={row.kind === 'empty' ? '未填写（列为空）' : '值为 0：需确认是真实免费还是历史脏数据'}
-                  >{row.kind === 'empty' ? '未填写' : '0 元'}</span>
-                  <span class="cost-row-ops">
-                    <input
-                      class="input cost-mini-input"
-                      type="number" min="0" step="0.01" placeholder="金额"
-                      bind:value={costRowAmount[costRowKey(f.key, row.rec.id)]}
-                      disabled={costBusy}
-                    />
-                    <button class="btn sm" disabled={costBusy} onclick={() => costSetRowAmount({ ...row, field: f.key })}>填入</button>
-                    <button class="btn sm" disabled={costBusy} onclick={() => costRowZero({ ...row, field: f.key })}>{f.zeroLabel}</button>
-                    <button class="btn sm ghost" disabled={costBusy} onclick={() => costRowSkip({ ...row, field: f.key })}>跳过</button>
-                  </span>
-                </div>
-              {/each}
-            </div>
-          {/if}
-        </div>
-      {/if}
-    </div>
-  {/each}
-</div>
-{/snippet}
-
 
 <div class="fade-up">
   <div class="page-head">
@@ -1160,84 +678,6 @@
     </div>
 {/snippet}
 
-{#snippet backupCard()}
-<div class="card sec">
-      <h3>自动备份</h3>
-      <div class="s3-grid">
-        <label class="field">
-          <span>备份格式</span>
-          <select class="input" bind:value={backupFormat} style="max-width: 260px;">
-            {#each BACKUP_FORMATS as f (f.v)}
-              <option value={f.v}>{f.label}</option>
-            {/each}
-          </select>
-          <span class="hint">{BACKUP_FORMATS.find((f) => f.v === backupFormat)?.hint}</span>
-        </label>
-        <label class="field">
-          <span>备份间隔</span>
-          <select class="input" bind:value={backupInterval} style="max-width: 200px;">
-            {#each intervalOptions as it (it.v)}
-              <option value={it.v}>{it.label}</option>
-            {/each}
-          </select>
-          <span class="hint">按间隔自动把所选格式的备份写入服务端 backups/ 目录</span>
-        </label>
-        <label class="field">
-          <span>保留份数</span>
-          <input class="input" type="number" min="1" max="100" bind:value={backupKeep} style="max-width: 120px;" />
-          <span class="hint">超出后自动删除最旧的快照</span>
-        </label>
-        <label class="field">
-          <span>上次备份</span>
-          <input class="input" readonly value={fmtBackupTime(lastBackupAt)} />
-        </label>
-        <label class="field">
-          <span>备份后上传到 S3</span>
-          <input type="checkbox" bind:checked={backupRemote} disabled={!s3Ready} style="align-self: center;" />
-          <span class="hint">
-            {#if s3Ready}
-              每次备份成功后把该文件推送到上方「S3 对象存储」卡片的桶内 backups/ 目录（本机备份仍保留）
-            {:else}
-              需要先在「S3 对象存储」卡片填写完整的 Bucket 与 Access Key
-            {/if}
-          </span>
-        </label>
-      </div>
-      <div class="convert-actions" style="margin-top: 10px;">
-        <button class="btn" disabled={backupRunning} onclick={runBackupNow}>
-          {backupRunning ? '备份中…' : '立即备份'}
-        </button>
-        {#if backupMsg}<span class="hint" style="align-self: center;">{backupMsg}</span>{/if}
-      </div>
-
-      {#if backups.length}
-        <div class="backup-list">
-          {#each backups as b (b.file)}
-            <div class="backup-row">
-              <span class="backup-name" title={b.file}>{b.file}</span>
-              <span class="backup-size">{fmtSize(b.size)}</span>
-              <span class="backup-time">{fmtBackupTime(b.modified)}</span>
-              <span class="backup-ops">
-                <a class="btn sm" href={api.backupDownloadUrl(b.file)} download>下载</a>
-                {#if b.file.endsWith('.json') || b.file.endsWith('.zip')}
-                  <button type="button" class="btn sm" disabled={restoringFile === b.file} onclick={() => backupRestore(b.file)}>
-                    {restoringFile === b.file ? '恢复中…' : '恢复'}
-                  </button>
-                {:else}
-                  <button type="button" class="btn sm" disabled title=".db 快照需停机后替换数据库文件恢复">恢复</button>
-                {/if}
-                <button type="button" class="btn sm danger" onclick={() => backupRemove(b.file)}>删除</button>
-              </span>
-            </div>
-          {/each}
-        </div>
-      {:else}
-        <p class="hint" style="margin-top: 10px;">还没有备份文件：点「立即备份」生成第一份，或开启自动备份。</p>
-      {/if}
-      <p class="hint" style="margin-top: 8px;">修改间隔或保留份数后需点击页面底部的「保存」才会生效；重启服务不会重置备份节奏（按最近一份快照的时间续算）。</p>
-    </div>
-{/snippet}
-
 {#snippet securityCard()}
 <div class="card sec">
       <h3>访问安全</h3>
@@ -1307,7 +747,7 @@
 {#snippet s3Card()}
 <div class="card sec">
       <h3>S3 对象存储</h3>
-      <p class="tiny muted" style="margin: 0 0 10px;">封面存储与自动备份的 S3 推送共用这组凭据；无论当前存储方式如何都可在此配置。</p>
+      <p class="tiny muted" style="margin: 0 0 10px;">封面存储与「数据」页自动备份的 S3 推送共用这组凭据；无论当前存储方式如何都可在此配置。</p>
       <div class="s3-grid">
         <label class="field">
           <span>S3 Endpoint</span>
@@ -1502,7 +942,6 @@
 			{:else if key === "fields"}{@render fieldsCard()}
 			{:else if key === "status"}{@render statusCard()}
 			{:else if key === "list"}{@render listCard()}
-			{:else if key === "backup"}{@render backupCard()}
 			{:else if key === "security"}{@render securityCard()}
 			{:else if key === "map"}{@render mapCard()}
 			{:else if key === "ai"}{@render aiCard()}
@@ -1521,7 +960,6 @@
 			{:else if key === "fields"}{@render fieldsCard()}
 			{:else if key === "status"}{@render statusCard()}
 			{:else if key === "list"}{@render listCard()}
-			{:else if key === "backup"}{@render backupCard()}
 			{:else if key === "security"}{@render securityCard()}
 			{:else if key === "map"}{@render mapCard()}
 			{:else if key === "ai"}{@render aiCard()}
@@ -1537,12 +975,8 @@
     {#if error}<span class="save-err">{error}</span>{/if}
   </div>
 
-  <!-- 费用补全：数据清理工具，操作立即生效（与「保存设置」无关），故独立于
-       上方两列网格，占满整行以便承载较宽的行内编辑区。 -->
-  {@render costWizardCard()}
   {/if}
 </div>
-
 <style>
   /* 宽屏两列独立容器（按权重最短列优先分配，见 CARD_COLS），卡片保持
      自身高度；窄屏自动堆叠为单列。 */
@@ -1665,221 +1099,6 @@
     border-top: 1px solid var(--border);
   }
 
-  /* ---------- 自动备份列表 ---------- */
-  .backup-list { margin-top: 12px; border: 1px solid var(--border); border-radius: var(--radius, 10px); overflow: hidden; }
-  .backup-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-  }
-  .backup-row:last-child { border-bottom: none; }
-  .backup-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-  .backup-size { color: var(--text-3); font-size: 12px; flex: none; }
-  .backup-time { color: var(--text-3); font-size: 12px; flex: none; }
-  .backup-ops { display: flex; gap: 6px; flex: none; }
-
-  .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: var(--accent-softer);
-    color: var(--accent);
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 1.4;
-  }
-  .chevron {
-    display: inline-block;
-    font-size: 10px;
-    transition: transform var(--t-fast) var(--ease);
-    color: var(--text-3);
-  }
-  .chevron.open { transform: rotate(90deg); }
-
-  /* ---------- 费用补全 ---------- */
-  .cost-wizard { margin-top: 14px; }
-  .cost-intro { margin: 0 0 12px; line-height: 1.65; }
-  .cost-overview {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px 20px;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface-2);
-  }
-  .cost-stat { display: flex; flex-direction: column; gap: 2px; min-width: 66px; }
-  .cost-stat .k { font-size: 11.5px; color: var(--text-3); white-space: nowrap; }
-  .cost-stat .v {
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--text-2);
-    line-height: 1.2;
-    font-variant-numeric: tabular-nums;
-  }
-  .cost-stat .v.accent { color: var(--accent); }
-  .cost-refresh { margin-left: auto; }
-
-  .cost-filters {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 12px;
-    margin-top: 12px;
-  }
-  .cost-seg {
-    display: inline-flex;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .cost-seg-btn {
-    padding: 5px 11px;
-    font-size: 12.5px;
-    background: var(--surface);
-    color: var(--text-3);
-    border: none;
-    border-right: 1px solid var(--border);
-    cursor: pointer;
-    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
-  }
-  .cost-seg-btn:last-child { border-right: none; }
-  .cost-seg-btn:hover { color: var(--accent); }
-  .cost-seg-btn.on { background: var(--accent-softer); color: var(--accent); font-weight: 600; }
-  .cost-venue-select {
-    flex: 0 1 220px;
-    min-width: 150px;
-    height: 30px;
-    font-size: 12.5px;
-    padding: 0 8px;
-  }
-  .cost-search {
-    flex: 1 1 180px;
-    min-width: 140px;
-    height: 30px;
-    font-size: 12.5px;
-    padding: 0 10px;
-  }
-  .cost-visible-count { white-space: nowrap; }
-
-  .cost-group {
-    margin-top: 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .cost-group-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    background: var(--surface-2);
-  }
-  .cost-group-toggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 1;
-    min-width: 0;
-    padding: 0;
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 13.5px;
-    font-weight: 600;
-    color: var(--text-2);
-    text-align: left;
-  }
-  .cost-group-toggle:disabled { cursor: default; opacity: 0.7; }
-  .cost-group-title { flex: none; }
-  .cost-group-body { padding: 10px 12px 12px; border-top: 1px solid var(--border); }
-
-  .cost-bulk {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-  }
-  .cost-selectall {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12.5px;
-    color: var(--text-3);
-    cursor: pointer;
-    user-select: none;
-  }
-  .cost-selectall input { accent-color: var(--accent); cursor: pointer; }
-  .cost-amount-group { display: inline-flex; align-items: center; gap: 6px; }
-
-  .cost-rows {
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    max-height: 360px;
-    overflow-y: auto;
-  }
-  .cost-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    padding: 6px 10px;
-    font-size: 12.5px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-  }
-  .cost-row:last-child { border-bottom: none; }
-  .cost-row input[type='checkbox'] { accent-color: var(--accent); cursor: pointer; flex: none; }
-  .cost-row-date { color: var(--text-3); flex: none; font-variant-numeric: tabular-nums; }
-  .cost-row-name {
-    color: var(--text-2);
-    flex: 1 1 140px;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .cost-row-venue {
-    color: var(--text-3);
-    font-size: 11.5px;
-    flex: 0 1 140px;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  /* 区分两类待确认：未填写（NULL，确定缺失）与值为 0（疑似历史脏数据） */
-  .cost-kind {
-    flex: none;
-    padding: 1px 7px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 600;
-    background: var(--accent-softer);
-    color: var(--accent);
-    white-space: nowrap;
-  }
-  .cost-kind.zero { background: var(--danger-soft); color: var(--danger); }
-  /* 行内操作区可换行：窄屏（≤380px）时若固定不折行，会把整行顶出容器。 */
-  .cost-row-ops {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    flex: 0 1 auto;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    margin-left: auto;
-  }
-  .cost-mini-input { width: 82px; height: 28px; font-size: 12.5px; padding: 0 8px; }
-  @media (max-width: 420px) {
-    /* 极窄屏下让操作区独占一行，避免与剧目/场馆挤在同一行。 */
-    .cost-row-ops { flex-basis: 100%; margin-left: 0; justify-content: flex-start; }
-  }
   .save-row {
     display: flex;
     align-items: center;
