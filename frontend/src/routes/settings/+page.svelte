@@ -1561,7 +1561,9 @@
   }
   .sec { padding: 18px 20px; margin-bottom: 0; }
   @media (max-width: 859px) {
-    .settings-grid { flex-direction: column; }
+    /* 列堆叠后交叉轴变为横向：须 stretch 让各列填满容器宽度，
+       否则 flex-start 会让列收缩到内容宽度、被内部宽内容顶破页面 */
+    .settings-grid { flex-direction: column; align-items: stretch; }
   }
   .sec h3 { margin: 0 0 12px; font-size: 15.5px; }
 
@@ -1593,7 +1595,9 @@
   .hint-row { margin-top: 8px; font-size: 12.5px; color: var(--text-3); }
   .s3-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    /* 用 min() 兜底：容器窄于 240px 时轨道下限降为容器宽度，
+       避免 auto-fit 的硬性 240px 下限在窄屏把页面撑破 */
+    grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
     gap: 12px 16px;
     margin-top: 14px;
   }

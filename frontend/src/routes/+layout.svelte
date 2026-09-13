@@ -413,10 +413,21 @@
 
   .nav {
     flex: 1;
+    /* 允许收缩到内容宽度以下，避免 10 个导航项的硬最小宽度撑破页面 */
+    min-width: 0;
     display: flex;
-    justify-content: flex-end;
     gap: 2px;
+    /* 空间不足时横向滚动而非溢出；滚动条隐藏，保持顶栏干净 */
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    /* 为 hover 药丸背景与焦点环留出竖向余量（顶栏 58px 有富余） */
+    padding-block: 6px;
   }
+  .nav::-webkit-scrollbar { display: none; }
+  /* 有富余空间时整组靠右；一旦溢出，auto 归零 → 首项可完整滚动到 */
+  .nav > .nav-link:first-child { margin-left: auto; }
   .nav-link {
     display: inline-flex;
     align-items: center;
@@ -597,6 +608,13 @@
     color: var(--accent);
     border-color: var(--accent);
     background: var(--accent-soft);
+  }
+
+  /* 中窄视口（641–700px）：导航仍内联显示但空间吃紧，
+     收紧内边距/字号使 10 项能完整放下；上方 overflow-x 仅作兜底 */
+  @media (max-width: 700px) {
+    .nav { gap: 1px; }
+    .nav-link { padding: 6px 10px; font-size: 13.5px; }
   }
 
   @media (max-width: 640px) {
