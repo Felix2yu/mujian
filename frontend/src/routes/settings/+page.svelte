@@ -44,7 +44,7 @@
     const cards = [
       ['theme', 162], ['storage', 158], ['s3', 823], ['encode', 305], ['ics', 210], ['caldav', 470],
       ['fields', 389], ['status', 178], ['list', 224], ['backup', 988], ['security', 274], ['map', 435],
-      ['ai', 360], ['costWizard', 200], ['huozhi', 470]
+      ['ai', 360], ['huozhi', 470]
     ];
     const cols = [[], []];
     const hs = [0, 0];
@@ -77,77 +77,242 @@
   let migrateError = $state('');
   let migrateProgress = $state({ processed: 0, total: 0 });
 
-  // 费用补全向导（分组模式 + 场馆筛选）
-  let allRecords = $state([]);
-  let costWizardLoading = $state(false);
-  let costWizardError = $state('');
-  let costWizardProcessing = $state(false);
-  let costWizardExpanded = $state(null); // 当前展开的分组: 'price' | 'pay_price' | 'other_cost' | null
-  let costWizardVenue = $state(''); // 选中的场馆（空 = 全部）
+  // ===== 费用补全 =====
+  //
+  // 语义（与后端 internal/db/cost_review.go 一致）：
+  //   · 字段值 > 0                  → 已填写，永不进入待确认清单，也永不被改写；
+  //   · 值 NULL（未填写）或 0       → 进入待确认清单；
+  //   · 用户对某字段做出确认后，服务端记一条 cost_reviews，该条目随即离开清单。
+  //
+  // 关键点：历史版本把「未填写」默认存成了 0，所以清单里的 0 元无法与真实
+  // 免费区分。本模块不猜测，而是把区分动作交给用户逐项确认 —— 确认记录可撤销，
+  // 补全操作只写当前为 NULL/0 的字段，因此不可能误改有效金额。
+  const COST_FIELDS = [
+    { key: 'price', label: '票价', desc: '票面价格', zeroLabel: '免费', zeroAction: '标记为免费' },
+    { key: 'pay_price', label: '实付', desc: '实际支付金额', zeroLabel: '无实付', zeroAction: '标记为无实付' },
+    { key: 'other_cost', label: '其他花费', desc: '交通、餐饮等额外支出', zeroLabel: '无支出', zeroAction: '标记为无支出' }
+  ];
 
-  // 提取场馆列表（按记录数降序）
-  let venueOptions = $derived.by(() => {
+  let costLoading = $state(false);
+  let costError = $state('');
+  let costNotice = $state('');
+  let costBusy = $state(false);
+  let costRecords = $state([]);   // 仍待确认的记录（服务端已排除已标记项）
+  let costSummary = $state(null); // 全量概览计数
+  let costFieldFilter = $state('all'); // 'all' | 字段 key
+  let costValueFilter = $state('pending'); // 'pending' | 'empty' | 'zero'
+  let costVenue = $state('');
+  let costQuery = $state('');
+  let costExpanded = $state({ price: true, pay_price: true, other_cost: true });
+  let costSel = $state({ price: [], pay_price: [], other_cost: [] });
+  let costRowAmount = $state({}); // `${field}:${id}` -> 行内输入金额
+
+  function costRowKey(field, id) { return `${field}:${id}`; }
+
+  // 费用补全列表里的日期：只到天，避免时区把 19:30 的演出显示成第二天。
+  function fmtCostDate(ts) {
+    if (!ts) return '—';
+    const d = new Date(ts * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  // 场馆候选（按待确认条数降序）
+  let costVenueOptions = $derived.by(() => {
     const map = new Map();
-    for (const r of allRecords) {
-      if (r.address) {
-        map.set(r.address, (map.get(r.address) || 0) + 1);
-      }
+    for (const r of costRecords) {
+      if (r.address) map.set(r.address, (map.get(r.address) || 0) + 1);
     }
-    return [...map.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([addr, cnt]) => ({ address: addr, count: cnt }));
+    return [...map.entries()].sort((a, b) => b[1] - a[1]).map(([address, count]) => ({ address, count }));
   });
 
-  // 按场馆筛选后的记录
-  let filteredRecords = $derived(
-    costWizardVenue
-      ? allRecords.filter(r => r.address === costWizardVenue)
-      : allRecords
+  // 场馆 / 关键词筛选
+  let costFiltered = $derived.by(() => {
+    const q = costQuery.trim().toLowerCase();
+    return costRecords.filter((r) => {
+      if (costVenue && r.address !== costVenue) return false;
+      if (q) {
+        const hay = `${r.name || ''} ${r.address || ''} ${r.city || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  });
+
+  // 把记录「按字段展开」成行：一行 = 一条记录的一个待确认字段。
+  // kind 用于区分两类待确认：empty = 列为 NULL（确定未填写）；
+  // zero = 值为 0（可能是真实免费，也可能是历史默认的脏数据）。
+  let costRows = $derived.by(() => {
+    const out = {};
+    for (const f of COST_FIELDS) out[f.key] = [];
+    for (const r of costFiltered) {
+      const pending = r.pending_fields || [];
+      for (const f of COST_FIELDS) {
+        if (!pending.includes(f.key)) continue;
+        const raw = r[f.key];
+        const kind = raw === null || raw === undefined ? 'empty' : 'zero';
+        if (costValueFilter !== 'pending' && costValueFilter !== kind) continue;
+        out[f.key].push({ rec: r, kind });
+      }
+    }
+    return out;
+  });
+
+  let costVisibleFields = $derived(
+    costFieldFilter === 'all' ? COST_FIELDS : COST_FIELDS.filter((f) => f.key === costFieldFilter)
   );
 
-  // 按字段分组：哪些记录的该字段为 NULL/0
-  let priceMissingRecords = $derived(filteredRecords.filter(r => r.price === null || r.price === 0));
-  let payPriceMissingRecords = $derived(filteredRecords.filter(r => r.pay_price === null || r.pay_price === 0));
-  let otherCostMissingRecords = $derived(filteredRecords.filter(r => r.other_cost === null || r.other_cost === 0));
+  let costVisibleCount = $derived(
+    COST_FIELDS.reduce((n, f) => n + (costRows[f.key]?.length || 0), 0)
+  );
 
-  async function loadCostWizardRecords() {
-    costWizardLoading = true;
-    costWizardError = '';
+  let costPendingCounts = $derived(costSummary?.pending || {});
+  let costReviewedCounts = $derived(costSummary?.reviewed || {});
+  let costReviewedTotal = $derived(costSummary?.reviewed_total || 0);
+
+  // 生效目标：优先取勾选项，否则作用于当前筛选出的全部行。始终以「当前可见」
+  // 取交集，避免筛选切换后残留的选择被误伤。
+  function costTargets(field) {
+    const visible = costRows[field].map((row) => row.rec.id);
+    const sel = (costSel[field] || []).filter((id) => visible.includes(id));
+    return sel.length > 0 ? sel : visible;
+  }
+
+  function costToggleSel(field, id) {
+    const cur = costSel[field] || [];
+    costSel = { ...costSel, [field]: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] };
+  }
+
+  function costSelectAll(field) {
+    const visible = costRows[field].map((row) => row.rec.id);
+    const cur = (costSel[field] || []).filter((id) => visible.includes(id));
+    costSel = { ...costSel, [field]: cur.length === visible.length ? [] : visible };
+  }
+
+  async function loadCosts() {
+    costLoading = true;
+    costError = '';
     try {
-      const res = await api.listRecords({ missing: 'price,pay_price,other_cost', limit: '1000' });
-      allRecords = res.records || [];
+      const res = await api.costPending();
+      costRecords = res.records || [];
+      costSummary = res.summary || null;
+      // 丢掉已不在清单中的选择（例如刚被标记掉的记录）
+      const alive = new Set(costRecords.map((r) => r.id));
+      costSel = Object.fromEntries(
+        COST_FIELDS.map((f) => [f.key, (costSel[f.key] || []).filter((id) => alive.has(id))])
+      );
     } catch (e) {
-      costWizardError = '加载失败：' + e.message;
+      costError = '加载失败：' + e.message;
     } finally {
-      costWizardLoading = false;
+      costLoading = false;
     }
   }
 
-  async function batchMarkCostField(field, value) {
-    const ids = filteredRecords
-      .filter(r => r[field] === null || r[field] === 0)
-      .map(r => r.id);
+  // 提交一次确认操作并刷新清单。所有入口都汇总到这里，保证「操作 → 重新拉取」
+  // 的单一真相：清单永远来自服务端，前端不做乐观推断，避免本地状态与服务端
+  // 的「已标记」判定漂移。
+  async function costSubmit(payload, notice) {
+    costBusy = true;
+    costError = '';
+    costNotice = '';
+    try {
+      await api.costReview(payload);
+      costNotice = notice;
+      costSel = { price: [], pay_price: [], other_cost: [] };
+      await loadCosts();
+    } catch (e) {
+      costError = '操作失败：' + e.message;
+    } finally {
+      costBusy = false;
+    }
+  }
+
+  // 分组批量：标记为 0 元（免费 / 无实付 / 无支出）
+  function costMarkZero(field) {
+    const ids = costTargets(field);
     if (ids.length === 0) return;
+    const f = COST_FIELDS.find((x) => x.key === field);
+    costSubmit({ ids, field, action: 'zero' }, `已将 ${ids.length} 条记录的${f.label}标记为${f.zeroLabel}`);
+  }
 
-    costWizardProcessing = true;
+  // 分组批量：跳过（暂不处理，列值不变，仅移出清单）
+  function costMarkSkip(field) {
+    const ids = costTargets(field);
+    if (ids.length === 0) return;
+    const f = COST_FIELDS.find((x) => x.key === field);
+    costSubmit({ ids, field, action: 'skip' }, `已跳过 ${ids.length} 条${f.label}（列值保持不变）`);
+  }
+
+  // 分组批量：填入统一金额
+  function costSetAmount(field) {
+    const raw = String(costRowAmount[costRowKey(field, '__batch__')] ?? '').trim();
+    const amount = Number(raw);
+    if (raw === '' || !Number.isFinite(amount) || amount < 0) {
+      costError = '请先填写一个不小于 0 的金额';
+      return;
+    }
+    const ids = costTargets(field);
+    if (ids.length === 0) return;
+    const f = COST_FIELDS.find((x) => x.key === field);
+    costSubmit({ ids, field, action: 'amount', amount }, `已为 ${ids.length} 条${f.label}填入 ${amount} 元`);
+  }
+
+  // 单行：填入该行输入的金额
+  function costSetRowAmount(row) {
+    const field = row.field;
+    const k = costRowKey(field, row.rec.id);
+    const raw = String(costRowAmount[k] ?? '').trim();
+    const amount = Number(raw);
+    if (raw === '' || !Number.isFinite(amount) || amount < 0) {
+      costError = '请填写一个不小于 0 的金额';
+      return;
+    }
+    costSubmit({ ids: [row.rec.id], field, action: 'amount', amount }, `已填入 ${amount} 元`);
+  }
+
+  // 单行：标记为 0 元
+  function costRowZero(row) {
+    const f = COST_FIELDS.find((x) => x.key === row.field);
+    costSubmit({ ids: [row.rec.id], field: row.field, action: 'zero' },
+      `已标记为${f.zeroLabel}`);
+  }
+
+  // 单行：跳过
+  function costRowSkip(row) {
+    costSubmit({ ids: [row.rec.id], field: row.field, action: 'skip' }, '已跳过该条（列值保持不变）');
+  }
+
+  // 撤销：单个字段全部标记
+  async function costUndoField(field) {
+    const f = COST_FIELDS.find((x) => x.key === field);
+    costBusy = true;
+    costError = '';
+    costNotice = '';
     try {
-      await api.batchUpdate(ids, { [field]: value });
-      // 立即更新本地状态，不重新加载
-      allRecords = allRecords.map(r => {
-        if (ids.includes(r.id)) {
-          return { ...r, [field]: value };
-        }
-        return r;
-      });
+      const res = await api.costUnreview({ all: true, field });
+      costNotice = `已撤销 ${res.restored} 条${f.label}标记，它们重新回到待确认清单`;
+      await loadCosts();
     } catch (e) {
-      costWizardError = '操作失败：' + e.message;
+      costError = '撤销失败：' + e.message;
     } finally {
-      costWizardProcessing = false;
+      costBusy = false;
     }
   }
 
-  function toggleCostGroup(field) {
-    costWizardExpanded = costWizardExpanded === field ? null : field;
+  // 撤销：全部字段的所有标记
+  async function costUndoAll() {
+    costBusy = true;
+    costError = '';
+    costNotice = '';
+    try {
+      const res = await api.costUnreview({ all: true });
+      costNotice = `已撤销全部 ${res.restored} 条标记`;
+      await loadCosts();
+    } catch (e) {
+      costError = '撤销失败：' + e.message;
+    } finally {
+      costBusy = false;
+    }
   }
 
   // S3 连接自检：用当前（合并掩码后的）配置做一次真实读写探测，验证连通性 /
@@ -333,7 +498,7 @@
       backupRemote = settings.backup_remote === true;
       lastBackupAt = typeof settings.last_backup_at === 'number' ? settings.last_backup_at : 0;
       refreshBackups();
-      loadCostWizardRecords();
+      loadCosts();
     } catch (e) {
       error = e.message;
     } finally {
@@ -569,6 +734,164 @@
   });
 </script>
 <svelte:head><title>设置 - 幕间</title></svelte:head>
+
+{#snippet costWizardCard()}
+<div class="card sec cost-wizard">
+  <h3>费用补全</h3>
+  <p class="tiny muted cost-intro">
+    集中处理「未填写」与「0 元」的费用字段。历史版本把「未填写」默认存成了 0，因此清单里的
+    0 元既可能是真实的免费 / 无支出，也可能是遗留的脏数据 —— 请逐项确认。确认后的条目不会再
+    出现在这里（可随时撤销），列值大于 0 的记录则完全不受本模块影响。
+  </p>
+
+  {#if costError}<div class="banner error">⚠ {costError}</div>{/if}
+  {#if costNotice}<div class="banner success">✓ {costNotice}</div>{/if}
+
+  <!-- 概览：服务端全量计数，不受本地筛选与列表截断影响 -->
+  <div class="cost-overview">
+    <div class="cost-stat">
+      <span class="k">待确认记录</span>
+      <span class="v">{costSummary?.pending_records ?? '—'}</span>
+    </div>
+    {#each COST_FIELDS as f (f.key)}
+      <div class="cost-stat">
+        <span class="k">{f.label}待确认</span>
+        <span class="v accent">{costPendingCounts[f.key] ?? 0}</span>
+      </div>
+    {/each}
+    <div class="cost-stat">
+      <span class="k">已标记</span>
+      <span class="v">{costReviewedTotal}</span>
+    </div>
+    <button class="btn sm ghost cost-refresh" onclick={loadCosts} disabled={costLoading || costBusy}>
+      {costLoading ? '加载中…' : '刷新'}
+    </button>
+  </div>
+
+  <!-- 筛选：「未填写」(NULL) 与「值为 0」(疑似历史脏数据) 分开看，是查漏补缺的关键 -->
+  <div class="cost-filters">
+    <div class="cost-seg" role="group" aria-label="字段筛选">
+      <button class="cost-seg-btn" class:on={costFieldFilter === 'all'} onclick={() => (costFieldFilter = 'all')}>全部字段</button>
+      {#each COST_FIELDS as f (f.key)}
+        <button class="cost-seg-btn" class:on={costFieldFilter === f.key} onclick={() => (costFieldFilter = f.key)}>{f.label}</button>
+      {/each}
+    </div>
+    <div class="cost-seg" role="group" aria-label="取值筛选" title="区分「确实是 0 元」与「历史默认写成了 0」">
+      <button class="cost-seg-btn" class:on={costValueFilter === 'pending'} onclick={() => (costValueFilter = 'pending')}>全部</button>
+      <button class="cost-seg-btn" class:on={costValueFilter === 'empty'} onclick={() => (costValueFilter = 'empty')} title="列为 NULL，确定未填写">未填写</button>
+      <button class="cost-seg-btn" class:on={costValueFilter === 'zero'} onclick={() => (costValueFilter = 'zero')} title="值为 0：可能是真实免费，也可能是历史遗留的脏数据">值为 0</button>
+    </div>
+    <select class="input cost-venue-select" bind:value={costVenue} disabled={costBusy} aria-label="场馆筛选">
+      <option value="">全部场馆</option>
+      {#each costVenueOptions as v (v.address)}
+        <option value={v.address}>{v.address}（{v.count}）</option>
+      {/each}
+    </select>
+    <input class="input cost-search" type="search" placeholder="搜索剧目 / 场馆 / 城市" bind:value={costQuery} disabled={costBusy} />
+    <span class="tiny muted cost-visible-count">当前筛选 {costVisibleCount} 条</span>
+  </div>
+
+  {#if costLoading && !costSummary}
+    <div class="banner info" style="margin-top: 12px;">加载中…</div>
+  {:else if (costSummary?.pending_records ?? 0) === 0}
+    <div class="banner success" style="margin-top: 12px;">✓ 所有费用字段均已补全</div>
+  {/if}
+
+  {#each costVisibleFields as f (f.key)}
+    {@const rows = costRows[f.key] ?? []}
+    {@const sel = (costSel[f.key] || []).filter((id) => rows.some((r) => r.rec.id === id))}
+    {@const targets = sel.length > 0 ? sel : rows.map((r) => r.rec.id)}
+    <div class="cost-group">
+      <div class="cost-group-head">
+        <button
+          class="cost-group-toggle"
+          onclick={() => (costExpanded = { ...costExpanded, [f.key]: !costExpanded[f.key] })}
+          disabled={costBusy}
+        >
+          <span class="chevron" class:open={costExpanded[f.key]}>▶</span>
+          <span class="cost-group-title">{f.label}</span>
+          <span class="tiny muted">{f.desc}</span>
+        </button>
+        <span class="badge">{costPendingCounts[f.key] ?? 0} 待确认</span>
+      </div>
+
+      {#if costExpanded[f.key]}
+        <div class="cost-group-body">
+          <div class="cost-bulk">
+            <label class="cost-selectall">
+              <input
+                type="checkbox"
+                checked={rows.length > 0 && sel.length === rows.length}
+                onchange={() => costSelectAll(f.key)}
+                disabled={costBusy || rows.length === 0}
+              />
+              <span>{sel.length > 0 ? `已选 ${sel.length} 条` : `共 ${rows.length} 条`}</span>
+            </label>
+            <button class="btn sm primary" disabled={costBusy || targets.length === 0} onclick={() => costMarkZero(f.key)}>
+              {f.zeroAction}（{targets.length}）
+            </button>
+            <button class="btn sm" disabled={costBusy || targets.length === 0} onclick={() => costMarkSkip(f.key)}>
+              跳过（{targets.length}）
+            </button>
+            <span class="cost-amount-group">
+              <input
+                class="input cost-mini-input"
+                type="number" min="0" step="0.01" placeholder="金额"
+                bind:value={costRowAmount[costRowKey(f.key, '__batch__')]}
+                disabled={costBusy}
+              />
+              <button class="btn sm" disabled={costBusy || targets.length === 0} onclick={() => costSetAmount(f.key)}>填入</button>
+            </span>
+            {#if (costReviewedCounts[f.key] ?? 0) > 0}
+              <button class="btn sm ghost" disabled={costBusy} onclick={() => costUndoField(f.key)}>
+                撤销已标记 {costReviewedCounts[f.key]}
+              </button>
+            {/if}
+          </div>
+
+          {#if rows.length === 0}
+            <div class="tiny muted" style="padding: 6px 0;">当前筛选条件下该字段无待确认条目</div>
+          {:else}
+            <div class="cost-rows">
+              {#each rows as row (row.rec.id)}
+                <div class="cost-row">
+                  <input
+                    type="checkbox"
+                    checked={sel.includes(row.rec.id)}
+                    onchange={() => costToggleSel(f.key, row.rec.id)}
+                    disabled={costBusy}
+                  />
+                  <span class="cost-row-date">{fmtCostDate(row.rec.date)}</span>
+                  <span class="cost-row-name" title={row.rec.name}>{row.rec.name}</span>
+                  {#if row.rec.address}
+                    <span class="cost-row-venue" title={row.rec.address}>{row.rec.address}</span>
+                  {/if}
+                  <span
+                    class="cost-kind"
+                    class:zero={row.kind === 'zero'}
+                    title={row.kind === 'empty' ? '未填写（列为空）' : '值为 0：需确认是真实免费还是历史脏数据'}
+                  >{row.kind === 'empty' ? '未填写' : '0 元'}</span>
+                  <span class="cost-row-ops">
+                    <input
+                      class="input cost-mini-input"
+                      type="number" min="0" step="0.01" placeholder="金额"
+                      bind:value={costRowAmount[costRowKey(f.key, row.rec.id)]}
+                      disabled={costBusy}
+                    />
+                    <button class="btn sm" disabled={costBusy} onclick={() => costSetRowAmount({ ...row, field: f.key })}>填入</button>
+                    <button class="btn sm" disabled={costBusy} onclick={() => costRowZero({ ...row, field: f.key })}>{f.zeroLabel}</button>
+                    <button class="btn sm ghost" disabled={costBusy} onclick={() => costRowSkip({ ...row, field: f.key })}>跳过</button>
+                  </span>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/each}
+</div>
+{/snippet}
 
 
 <div class="fade-up">
@@ -1167,185 +1490,6 @@
     </div>
 {/snippet}
 
-{#snippet costWizardCard()}
-<div class="card sec">
-  <h3>费用补全</h3>
-  <p class="tiny muted" style="margin: 0 0 10px;">将费用为 0 或未填写的记录标记为「免费」或「未填写」，以便区分。点击分组可展开查看具体记录。</p>
-  {#if costWizardLoading}
-    <div class="banner info">加载中…</div>
-  {:else if costWizardError}
-    <div class="banner error">⚠ {costWizardError}</div>
-  {:else if allRecords.length === 0}
-    <div class="banner success">✓ 所有费用字段已补全</div>
-  {:else}
-    <div class="banner info">共 {allRecords.length} 条记录需要确认</div>
-
-    <!-- 场馆筛选 -->
-    {#if venueOptions.length > 0}
-      <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-        <label style="font-size: 12.5px; color: var(--text-3); white-space: nowrap;">按场馆筛选:</label>
-        <select
-          class="input cost-venue-select"
-          bind:value={costWizardVenue}
-          disabled={costWizardProcessing}
-        >
-          <option value="">全部场馆 ({allRecords.length} 条)</option>
-          {#each venueOptions as v}
-            <option value={v.address}>{v.address} ({v.count} 条)</option>
-          {/each}
-        </select>
-        {#if costWizardVenue}
-          <span style="font-size: 12px; color: var(--text-3);">当前 {filteredRecords.length} 条</span>
-        {/if}
-      </div>
-    {/if}
-
-    <!-- 票价分组 -->
-    <div style="margin-top: 12px; border: 1px solid var(--border); border-radius: 6px;">
-      <button
-        class="cost-group-header"
-        onclick={() => toggleCostGroup('price')}
-        disabled={costWizardProcessing}
-      >
-        <span>票价</span>
-        <span style="display: flex; align-items: center; gap: 8px;">
-          <span class="badge">{priceMissingRecords.length} 条</span>
-          <span class="chevron" class:open={costWizardExpanded === 'price'}>▶</span>
-        </span>
-      </button>
-      {#if costWizardExpanded === 'price'}
-        <div class="cost-group-body">
-          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-            <button class="btn sm primary" disabled={costWizardProcessing || priceMissingRecords.length === 0}
-              onclick={() => batchMarkCostField('price', 0)}>
-              全部免费
-            </button>
-            <button class="btn sm" disabled={costWizardProcessing || priceMissingRecords.length === 0}
-              onclick={() => batchMarkCostField('price', null)}>
-              全部未填写
-            </button>
-          </div>
-          {#if priceMissingRecords.length === 0}
-            <div class="tiny muted" style="padding: 8px 0;">✓ 票价已全部确认</div>
-          {:else}
-            <div class="cost-record-list">
-              {#each priceMissingRecords.slice(0, 50) as rec}
-                <div class="cost-record-item">
-                  <span class="cost-record-date">{new Date(rec.date * 1000).toLocaleDateString()}</span>
-                  <span class="cost-record-name">{rec.name}</span>
-                  {#if rec.address && !costWizardVenue}
-                    <span class="cost-record-venue">{rec.address}</span>
-                  {/if}
-                </div>
-              {/each}
-              {#if priceMissingRecords.length > 50}
-                <div class="tiny muted" style="padding: 4px 0;">…还有 {priceMissingRecords.length - 50} 条</div>
-              {/if}
-            </div>
-          {/if}
-        </div>
-      {/if}
-    </div>
-
-    <!-- 实付分组 -->
-    <div style="margin-top: 8px; border: 1px solid var(--border); border-radius: 6px;">
-      <button
-        class="cost-group-header"
-        onclick={() => toggleCostGroup('pay_price')}
-        disabled={costWizardProcessing}
-      >
-        <span>实付</span>
-        <span style="display: flex; align-items: center; gap: 8px;">
-          <span class="badge">{payPriceMissingRecords.length} 条</span>
-          <span class="chevron" class:open={costWizardExpanded === 'pay_price'}>▶</span>
-        </span>
-      </button>
-      {#if costWizardExpanded === 'pay_price'}
-        <div class="cost-group-body">
-          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-            <button class="btn sm primary" disabled={costWizardProcessing || payPriceMissingRecords.length === 0}
-              onclick={() => batchMarkCostField('pay_price', 0)}>
-              全部免费
-            </button>
-            <button class="btn sm" disabled={costWizardProcessing || payPriceMissingRecords.length === 0}
-              onclick={() => batchMarkCostField('pay_price', null)}>
-              全部未填写
-            </button>
-          </div>
-          {#if payPriceMissingRecords.length === 0}
-            <div class="tiny muted" style="padding: 8px 0;">✓ 实付已全部确认</div>
-          {:else}
-            <div class="cost-record-list">
-              {#each payPriceMissingRecords.slice(0, 50) as rec}
-                <div class="cost-record-item">
-                  <span class="cost-record-date">{new Date(rec.date * 1000).toLocaleDateString()}</span>
-                  <span class="cost-record-name">{rec.name}</span>
-                  {#if rec.address && !costWizardVenue}
-                    <span class="cost-record-venue">{rec.address}</span>
-                  {/if}
-                </div>
-              {/each}
-              {#if payPriceMissingRecords.length > 50}
-                <div class="tiny muted" style="padding: 4px 0;">…还有 {payPriceMissingRecords.length - 50} 条</div>
-              {/if}
-            </div>
-          {/if}
-        </div>
-      {/if}
-    </div>
-
-    <!-- 其他花费分组 -->
-    <div style="margin-top: 8px; border: 1px solid var(--border); border-radius: 6px;">
-      <button
-        class="cost-group-header"
-        onclick={() => toggleCostGroup('other_cost')}
-        disabled={costWizardProcessing}
-      >
-        <span>其他花费</span>
-        <span style="display: flex; align-items: center; gap: 8px;">
-          <span class="badge">{otherCostMissingRecords.length} 条</span>
-          <span class="chevron" class:open={costWizardExpanded === 'other_cost'}>▶</span>
-        </span>
-      </button>
-      {#if costWizardExpanded === 'other_cost'}
-        <div class="cost-group-body">
-          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-            <button class="btn sm primary" disabled={costWizardProcessing || otherCostMissingRecords.length === 0}
-              onclick={() => batchMarkCostField('other_cost', 0)}>
-              全部无开销
-            </button>
-            <button class="btn sm" disabled={costWizardProcessing || otherCostMissingRecords.length === 0}
-              onclick={() => batchMarkCostField('other_cost', null)}>
-              全部未填写
-            </button>
-          </div>
-          {#if otherCostMissingRecords.length === 0}
-            <div class="tiny muted" style="padding: 8px 0;">✓ 其他花费已全部确认</div>
-          {:else}
-            <div class="cost-record-list">
-              {#each otherCostMissingRecords.slice(0, 50) as rec}
-                <div class="cost-record-item">
-                  <span class="cost-record-date">{new Date(rec.date * 1000).toLocaleDateString()}</span>
-                  <span class="cost-record-name">{rec.name}</span>
-                  {#if rec.address && !costWizardVenue}
-                    <span class="cost-record-venue">{rec.address}</span>
-                  {/if}
-                </div>
-              {/each}
-              {#if otherCostMissingRecords.length > 50}
-                <div class="tiny muted" style="padding: 4px 0;">…还有 {otherCostMissingRecords.length - 50} 条</div>
-              {/if}
-            </div>
-          {/if}
-        </div>
-      {/if}
-    </div>
-
-  {/if}
-  <button class="btn sm" style="margin-top: 8px;" onclick={loadCostWizardRecords}>刷新列表</button>
-</div>
-{/snippet}
-
   <!-- 两列按卡片高度权重最短列优先分配（CARD_COLS），保证列高大致均衡 -->
   <div class="col">
     {#each CARD_COLS[0] as key (key)}
@@ -1362,7 +1506,6 @@
 			{:else if key === "security"}{@render securityCard()}
 			{:else if key === "map"}{@render mapCard()}
 			{:else if key === "ai"}{@render aiCard()}
-			{:else if key === "costWizard"}{@render costWizardCard()}
 			{:else if key === "huozhi"}{@render huozhiCard()}
 			{/if}
     {/each}
@@ -1382,7 +1525,6 @@
 			{:else if key === "security"}{@render securityCard()}
 			{:else if key === "map"}{@render mapCard()}
 			{:else if key === "ai"}{@render aiCard()}
-			{:else if key === "costWizard"}{@render costWizardCard()}
 			{:else if key === "huozhi"}{@render huozhiCard()}
 			{/if}
     {/each}
@@ -1394,6 +1536,10 @@
     {#if saved}<span class="save-ok">已保存 ✓</span>{/if}
     {#if error}<span class="save-err">{error}</span>{/if}
   </div>
+
+  <!-- 费用补全：数据清理工具，操作立即生效（与「保存设置」无关），故独立于
+       上方两列网格，占满整行以便承载较宽的行内编辑区。 -->
+  {@render costWizardCard()}
   {/if}
 </div>
 
@@ -1531,28 +1677,6 @@
   .backup-time { color: var(--text-3); font-size: 12px; flex: none; }
   .backup-ops { display: flex; gap: 6px; flex: none; }
 
-  /* ---------- 费用补全向导（分组模式）---------- */
-  .cost-group-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    padding: 10px 12px;
-    background: var(--surface-2);
-    border: none;
-    cursor: pointer;
-    font-size: 13.5px;
-    font-weight: 500;
-    color: var(--text-2);
-    transition: background var(--t-fast) var(--ease);
-  }
-  .cost-group-header:hover { background: var(--surface-3); }
-  .cost-group-header:disabled { opacity: 0.6; cursor: not-allowed; }
-  .cost-group-body {
-    padding: 10px 12px 12px;
-    border-top: 1px solid var(--border);
-    background: var(--surface);
-  }
   .badge {
     display: inline-block;
     padding: 2px 8px;
@@ -1570,39 +1694,187 @@
     color: var(--text-3);
   }
   .chevron.open { transform: rotate(90deg); }
-  .cost-record-list {
-    max-height: 200px;
-    overflow-y: auto;
+
+  /* ---------- 费用补全 ---------- */
+  .cost-wizard { margin-top: 14px; }
+  .cost-intro { margin: 0 0 12px; line-height: 1.65; }
+  .cost-overview {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 20px;
+    padding: 10px 12px;
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: 8px;
     background: var(--surface-2);
   }
-  .cost-record-item {
+  .cost-stat { display: flex; flex-direction: column; gap: 2px; min-width: 66px; }
+  .cost-stat .k { font-size: 11.5px; color: var(--text-3); white-space: nowrap; }
+  .cost-stat .v {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-2);
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  .cost-stat .v.accent { color: var(--accent); }
+  .cost-refresh { margin-left: auto; }
+
+  .cost-filters {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-top: 12px;
+  }
+  .cost-seg {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .cost-seg-btn {
+    padding: 5px 11px;
+    font-size: 12.5px;
+    background: var(--surface);
+    color: var(--text-3);
+    border: none;
+    border-right: 1px solid var(--border);
+    cursor: pointer;
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  }
+  .cost-seg-btn:last-child { border-right: none; }
+  .cost-seg-btn:hover { color: var(--accent); }
+  .cost-seg-btn.on { background: var(--accent-softer); color: var(--accent); font-weight: 600; }
+  .cost-venue-select {
+    flex: 0 1 220px;
+    min-width: 150px;
+    height: 30px;
+    font-size: 12.5px;
+    padding: 0 8px;
+  }
+  .cost-search {
+    flex: 1 1 180px;
+    min-width: 140px;
+    height: 30px;
+    font-size: 12.5px;
+    padding: 0 10px;
+  }
+  .cost-visible-count { white-space: nowrap; }
+
+  .cost-group {
+    margin-top: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .cost-group-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--surface-2);
+  }
+  .cost-group-toggle {
+    display: flex;
+    align-items: center;
     gap: 8px;
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-2);
+    text-align: left;
+  }
+  .cost-group-toggle:disabled { cursor: default; opacity: 0.7; }
+  .cost-group-title { flex: none; }
+  .cost-group-body { padding: 10px 12px 12px; border-top: 1px solid var(--border); }
+
+  .cost-bulk {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .cost-selectall {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--text-3);
+    cursor: pointer;
+    user-select: none;
+  }
+  .cost-selectall input { accent-color: var(--accent); cursor: pointer; }
+  .cost-amount-group { display: inline-flex; align-items: center; gap: 6px; }
+
+  .cost-rows {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    max-height: 360px;
+    overflow-y: auto;
+  }
+  .cost-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
     padding: 6px 10px;
     font-size: 12.5px;
     border-bottom: 1px solid var(--border);
+    background: var(--surface);
   }
-  .cost-record-item:last-child { border-bottom: none; }
-  .cost-record-date { color: var(--text-3); flex: none; }
-  .cost-record-name { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-  .cost-record-venue {
-    color: var(--text-3);
-    font-size: 11.5px;
+  .cost-row:last-child { border-bottom: none; }
+  .cost-row input[type='checkbox'] { accent-color: var(--accent); cursor: pointer; flex: none; }
+  .cost-row-date { color: var(--text-3); flex: none; font-variant-numeric: tabular-nums; }
+  .cost-row-name {
+    color: var(--text-2);
+    flex: 1 1 140px;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 150px;
-    flex: none;
   }
-  .cost-venue-select {
-    flex: 1;
-    min-width: 180px;
-    max-width: 320px;
-    font-size: 12.5px;
-    padding: 4px 8px;
-    height: 28px;
+  .cost-row-venue {
+    color: var(--text-3);
+    font-size: 11.5px;
+    flex: 0 1 140px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* 区分两类待确认：未填写（NULL，确定缺失）与值为 0（疑似历史脏数据） */
+  .cost-kind {
+    flex: none;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--accent-softer);
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .cost-kind.zero { background: var(--danger-soft); color: var(--danger); }
+  /* 行内操作区可换行：窄屏（≤380px）时若固定不折行，会把整行顶出容器。 */
+  .cost-row-ops {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    margin-left: auto;
+  }
+  .cost-mini-input { width: 82px; height: 28px; font-size: 12.5px; padding: 0 8px; }
+  @media (max-width: 420px) {
+    /* 极窄屏下让操作区独占一行，避免与剧目/场馆挤在同一行。 */
+    .cost-row-ops { flex-basis: 100%; margin-left: 0; justify-content: flex-start; }
   }
   .save-row {
     display: flex;

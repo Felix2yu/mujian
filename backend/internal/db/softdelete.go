@@ -94,7 +94,8 @@ func (db *DB) ListDeletedRecords(limit, offset int) ([]DeletedRecord, error) {
 
 // PurgeRecord hard-deletes a trashed record and its relation rows.
 func (db *DB) PurgeRecord(id string) error {
-	for _, tbl := range []string{"record_artists", "record_dramas", "record_zhezis", "record_photos"} {
+	// cost_reviews 无外键约束，随记录一并清理，避免残留孤立标记。
+	for _, tbl := range []string{"record_artists", "record_dramas", "record_zhezis", "record_photos", "cost_reviews"} {
 		if _, err := db.conn.Exec("DELETE FROM "+tbl+" WHERE record_id = ?", id); err != nil {
 			return err
 		}

@@ -83,6 +83,11 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/records/{id}/photos", h.listRecordPhotos)
 	r.Post("/records/{id}/photos", h.addRecordPhoto)
 
+	// 费用补全：集中查漏补缺历史遗留的「未填写 / 0 元」费用字段
+	r.Get("/costs/pending", h.getCostPending)
+	r.Post("/costs/review", h.postCostReview)
+	r.Post("/costs/unreview", h.postCostUnreview)
+
 	// 货殖（huozhi）账单关联：解析本场演出绑定的账单
 	r.Get("/records/{id}/bills", h.recordBills)
 	// 表单填写时按 ID 预览账单

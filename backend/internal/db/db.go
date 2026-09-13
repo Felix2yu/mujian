@@ -287,6 +287,17 @@ func (db *DB) migrate() error {
 	)`,
 		`CREATE INDEX IF NOT EXISTS idx_record_artists_artist ON record_artists(artist_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_record_artists_record ON record_artists(record_id)`,
+		// 费用补全：记录用户对「未填写 / 0 元」费用字段的确认结果。见
+		// internal/db/cost_review.go 的说明 —— 这张表是区分「真实 0 元」与
+		// 「历史遗留的 0 元脏数据」的唯一依据。
+		`CREATE TABLE IF NOT EXISTS cost_reviews (
+			record_id TEXT NOT NULL,
+			field TEXT NOT NULL,
+			state TEXT NOT NULL,
+			updated_at INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (record_id, field)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_cost_reviews_field ON cost_reviews(field)`,
 	}
 
 	for _, q := range queries {
@@ -1524,6 +1535,11 @@ func (db *DB) UpsertRecord(r models.Record) error {
 	); err != nil {
 		return err
 	}
+	// 费用补全：字段已填成真实金额时，清掉该字段上陈旧的「0 元确认」标记
+	// （见 cost_review.go）；仍为 NULL/0 的字段保留标记。
+	if err := clearCostReviewsForFilled(db.conn, r.ID, r); err != nil {
+		return err
+	}
 	// Keep the drama/zhezi/artist relation tables in sync with the upserted record.
 	if err := db.setRecordDramas(db.conn, r.ID, r.DramaIDs); err != nil {
 		return err
@@ -1572,6 +1588,10 @@ func (db *DB) UpsertRecordTx(tx *sql.Tx, r models.Record) error {
 		r.Price, r.PriceCurrency, r.PayPrice, r.PayPriceCurrency, r.OtherCost, r.OtherCostCurrency, r.TotalCost,
 		r.Watched, marshalInt64s(r.HuozhiBillIDs),
 	); err != nil {
+		return err
+	}
+	// 同 UpsertRecord：已填成真实金额的费用字段不再需要「0 元确认」标记。
+	if err := clearCostReviewsForFilled(tx, r.ID, r); err != nil {
 		return err
 	}
 	// Keep the drama/zhezi/artist relation tables in sync within the same transaction.

@@ -561,3 +561,65 @@ type BatchUpdateParams struct {
 	ArtistNames       *BatchArrayOp
 	ArtistIDs         *BatchArrayOp // 直接操作 record_artists（演员 ID 只存关联表）
 }
+
+// ---------- 费用补全（cost review）----------
+//
+// 历史包袱：records 的 price / pay_price / other_cost 最初声明为
+// `REAL NOT NULL DEFAULT 0`，于是「从未填写」与「确实是 0 元（免费 / 无支出）」
+// 在库里都写成 0，事后无法仅凭列值区分。后续迁移虽已把三列改为可空
+// （NULL = 未填写，0 = 0 元），但存量数据的那些 0 无法自动判定归属，
+// 只能由用户逐项确认 —— 这正是「费用补全」模块存在的理由。
+//
+// cost_reviews 表是「已被用户确认过」的唯一真相源，三者共同决定一条
+// 记录某个费用字段的状态：
+//
+//	列值 > 0                                  → 已填写，永不进入待确认列表
+//	列值为 NULL 或 0，且无 cost_reviews 行     → 待确认（本模块的目标集合）
+//	列值为 NULL 或 0，且有 cost_reviews 行     → 已标记，不再出现在本模块
+//
+// 由此，「真实 0 元」与「历史遗留的 0 元脏数据」的区分不靠猜测，而靠一条
+// 可撤销、可追溯的确认记录；补全操作只写有确认记录的行，绝不动 > 0 的有效值。
+const (
+	CostFieldPrice     = "price"
+	CostFieldPayPrice  = "pay_price"
+	CostFieldOtherCost = "other_cost"
+)
+
+// 确认结果状态（cost_reviews.state 的取值）：
+//
+//	CostStateZero 该字段确认为 0 元（真实免费 / 无支出）；列值同时落为 0，
+//	              使下游统计把它当作真实 0 而非未知。
+//	CostStateSkip 确认暂不处理 / 无法确定；列值保持不变，仅移出待确认列表。
+const (
+	CostStateZero = "zero"
+	CostStateSkip = "skip"
+)
+
+// CostPendingRecord 是费用补全列表中的一行。三个费用字段用裸指针（不带
+// omitempty）以便前端明确区分 null（未填写）与 0（疑似历史默认值）。
+type CostPendingRecord struct {
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Date      int64    `json:"date"`
+	City      string   `json:"city"`
+	Address   string   `json:"address"`
+	Price     *float64 `json:"price"`
+	PayPrice  *float64 `json:"pay_price"`
+	OtherCost *float64 `json:"other_cost"`
+	TotalCost float64  `json:"total_cost"`
+	// PendingFields 列出该记录仍待确认的字段（可能多个）。
+	PendingFields []string `json:"pending_fields"`
+}
+
+// CostSummary 是费用补全模块的概览计数。全部为服务端全量统计，与列表
+// 返回条数无关（列表可能被 limit 截断）。
+type CostSummary struct {
+	TotalRecords int `json:"total_records"`
+	// Pending 为逐字段待确认数量（field -> count）。
+	Pending map[string]int `json:"pending"`
+	// PendingRecords 为「至少有一个字段待确认」的记录数。
+	PendingRecords int `json:"pending_records"`
+	// Reviewed 为逐字段已标记数量（field -> count）。
+	Reviewed      map[string]int `json:"reviewed"`
+	ReviewedTotal int            `json:"reviewed_total"`
+}

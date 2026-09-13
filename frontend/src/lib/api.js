@@ -148,6 +148,24 @@ export const api = {
   batchDelete: (ids) => request('/api/records/batch/delete', { method: 'POST', body: JSON.stringify({ ids }) }),
   alignVenues: () => request('/api/records/align-venues', { method: 'POST' }),
 
+  // 费用补全：列出仍待确认（未填写 / 值为 0）的费用条目 + 全量概览计数。
+  // 「已标记」的条目由服务端排除，不会再出现在其中。
+  costPending: (limit) => {
+    const q = new URLSearchParams();
+    if (limit) q.set('limit', String(limit));
+    const qs = q.toString();
+    return request(`/api/costs/pending${qs ? `?${qs}` : ''}`);
+  },
+  // 批量确认。payload 两种写法：
+  //   { ids: [...], field, action: 'zero'|'skip'|'amount', amount? }
+  //   { items: [{ id, field, action, amount? }] }
+  // dry_run: true 只回报将影响的规模，不落库。
+  costReview: (payload) => request('/api/costs/review', { method: 'POST', body: JSON.stringify(payload) }),
+  // 撤销确认，使条目回到待确认清单。
+  //   { ids: [...], field? }   撤销指定记录（field 省略 = 三个字段全撤）
+  //   { all: true, field? }    撤销该字段（或全部）的所有标记
+  costUnreview: (payload) => request('/api/costs/unreview', { method: 'POST', body: JSON.stringify(payload) }),
+
   importRecords: async (file) => {
     const form = new FormData();
     form.append('file', file);
