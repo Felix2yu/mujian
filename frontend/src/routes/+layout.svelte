@@ -10,16 +10,19 @@
 
   let { children } = $props();
 
+  // 导航按语义分组：同组条目相邻显示，组间插入分隔线（顶栏竖线 / 侧栏横线）。
+  // 分组名只用于代码可读性与边界判定，不渲染到界面上。
+  // 顺序 = 内容 → 档案 → 视图 → 系统；剧种（分类维度）与剧目、演员同属「档案」。
   const nav = [
-    { href: '/', label: '记录' },
-    { href: '/calendar', label: '日历' },
-    { href: '/dramas', label: '剧目' },
-    { href: '/artists', label: '演员' },
-    { href: '/map', label: '地图' },
-    { href: '/analytics', label: '分析' },
-    { href: '/categories', label: '剧种' },
-    { href: '/data', label: '数据' },
-    { href: '/settings', label: '设置' }
+    { href: '/', label: '记录', group: '内容' },
+    { href: '/calendar', label: '日历', group: '内容' },
+    { href: '/dramas', label: '剧目', group: '档案' },
+    { href: '/artists', label: '演员', group: '档案' },
+    { href: '/categories', label: '剧种', group: '档案' },
+    { href: '/map', label: '地图', group: '视图' },
+    { href: '/analytics', label: '分析', group: '视图' },
+    { href: '/data', label: '数据', group: '系统' },
+    { href: '/settings', label: '设置', group: '系统' }
   ];
 
   // 移动端侧栏不列「日历」：日历改为悬浮快捷入口，避免与侧栏菜单重复。
@@ -259,7 +262,10 @@
         <span class="brand-name">幕间</span>
       </a>
       <nav class="nav">
-        {#each nav as item}
+        {#each nav as item, i (item.href)}
+          {#if i > 0 && item.group !== nav[i - 1].group}
+            <span class="nav-sep" aria-hidden="true"></span>
+          {/if}
           <a href={item.href} class="nav-link" class:active={isActive(item.href)}>
             {item.label}
           </a>
@@ -313,7 +319,10 @@
         </button>
       </div>
       <nav class="drawer-nav">
-        {#each drawerNav as item (item.href)}
+        {#each drawerNav as item, i (item.href)}
+          {#if i > 0 && item.group !== drawerNav[i - 1].group}
+            <span class="drawer-sep" aria-hidden="true"></span>
+          {/if}
           <a href={item.href} class="drawer-link" class:active={isActive(item.href)}>
             {item.label}
             {#if isActive(item.href)}<span class="dot" aria-hidden="true"></span>{/if}
@@ -444,6 +453,16 @@
     background: var(--accent-soft);
     font-weight: 600;
   }
+  /* 组间分隔线：纯视觉分组，不参与伸缩；align-self 使其与药丸垂直居中对齐 */
+  .nav-sep {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 1px;
+    height: 16px;
+    margin: 0 5px;
+    background: var(--border);
+    border-radius: 1px;
+  }
 
   /* 汉堡按钮：仅移动端 */
   .menu-btn {
@@ -550,6 +569,13 @@
     border-radius: 50%;
     background: var(--accent);
   }
+  /* 侧栏的组间分隔线（横向） */
+  .drawer-sep {
+    height: 1px;
+    margin: 8px 14px;
+    background: var(--border);
+    border-radius: 1px;
+  }
   .drawer-foot { padding: 10px 18px 0; text-align: center; }
 
   .content {
@@ -610,10 +636,12 @@
   }
 
   /* 中窄视口（641–700px）：导航仍内联显示但空间吃紧，
-     收紧内边距/字号使 10 项能完整放下；上方 overflow-x 仅作兜底 */
+     收紧内边距/字号使 10 项能完整放下；上方 overflow-x 仅作兜底。
+     分隔线左右外边距同步收紧，抵消 3 条分隔线带来的额外宽度。 */
   @media (max-width: 700px) {
     .nav { gap: 1px; }
     .nav-link { padding: 6px 10px; font-size: 13.5px; }
+    .nav-sep { margin: 0 2px; }
   }
 
   @media (max-width: 640px) {

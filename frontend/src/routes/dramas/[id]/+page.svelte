@@ -196,7 +196,7 @@
               {#if drama.aliases && drama.aliases.length}
                 <span class="aliases">别名：{drama.aliases.join(' / ')}</span>
               {/if}
-              {#each drama.categoryNames || [] as cn}<span class="pill" title="由关联演出自动统计">{cn}</span>{/each}
+              {#each drama.categoryNames || [] as cn}<a class="pill" href={`/dramas?cat=${encodeURIComponent(cn)}`} title="查看该剧种下的剧目">{cn}</a>{/each}
               <span class="muted">{drama.zheziCount} 折 · {drama.recordCount} 场演出</span>
             </div>
             {#if drama.remark}<p class="remark">{drama.remark}</p>{/if}
@@ -303,6 +303,9 @@
   h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.25; }
   .sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .pill { background: var(--accent-soft); color: var(--accent); padding: 2px 10px; border-radius: 999px; font-size: 12.5px; }
+  /* 剧种标签可点：跳到「剧目」页并按该剧种筛选 */
+  a.pill { transition: background var(--t-fast) var(--ease); }
+  a.pill:hover { text-decoration: underline; }
   .muted { color: var(--text-muted); font-size: 13px; }
   .small { font-size: 12.5px; }
   .remark { margin: 10px 0 0; color: var(--text-2); white-space: pre-wrap; line-height: 1.6; }

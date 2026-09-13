@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { page } from '$app/stores';
   import { api } from '$lib/api.js';
   import CategoryTags from '$lib/components/CategoryTags.svelte';
 
@@ -14,6 +15,17 @@
   let filterQuery = $state('');
   let filterCat = $state('');
   let sortBy = $state('records');
+  let urlReady = $state(false);
+
+  // 支持从剧种页带参跳入（/dramas?cat=昆曲）。初始化完成后把剧种筛选写回地址栏，
+  // 以便分享链接与浏览器前进/后退保留状态；urlReady 之前的写入会被跳过。
+  $effect(() => {
+    if (!urlReady) return;
+    const qs = filterCat ? `?cat=${encodeURIComponent(filterCat)}` : '';
+    const url = `/dramas${qs}`;
+    const cur = location.pathname + location.search;
+    if (url !== cur) history.replaceState(history.state, '', url);
+  });
 
   const allCats = $derived.by(() => {
     const set = new Set();
@@ -113,7 +125,12 @@
     overIdx = -1;
   }
 
-  onMount(load);
+  onMount(() => {
+    // 剧种页的剧种名会跳到 /dramas?cat=<剧种>，这里读回筛选状态
+    filterCat = new URLSearchParams($page.url.search).get('cat') || '';
+    urlReady = true;
+    load();
+  });
 </script>
 <svelte:head><title>剧目 - 幕间</title></svelte:head>
 
@@ -151,6 +168,11 @@
       <select class="input" bind:value={filterCat}>
         <option value="">全部剧种</option>
         {#each allCats as c}<option value={c}>{c}</option>{/each}
+        <!-- 从剧种页带参进入、但该剧种下暂无剧目时（allCats 由剧目自动聚合而来），
+             补一个占位选项，避免 select 因无匹配项而显示空白 -->
+        {#if filterCat && !allCats.includes(filterCat)}
+          <option value={filterCat}>{filterCat}（无匹配剧目）</option>
+        {/if}
       </select>
       <select class="input" bind:value={sortBy} title="选择「手动排序」后可拖动卡片调整顺序">
         <option value="records">按演出数</option>

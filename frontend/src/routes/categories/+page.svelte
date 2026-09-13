@@ -111,7 +111,7 @@
 <div class="fade-up">
   <div class="page-head">
     <h1>剧种</h1>
-    <p class="sub">管理演出剧种，点击剧种名可查看该剧种下的演出；拖动卡片可调整显示顺序</p>
+    <p class="sub">管理演出剧种；点击剧种名可查看该剧种下的剧目，点击右侧条数可查看演出记录。拖动卡片可调整显示顺序</p>
   </div>
 
   <div class="card add-bar">
@@ -146,8 +146,8 @@
           ondrop={() => onDrop(i)}
           ondragend={() => resetDrag()}
         >
-          <a class="cat-name" href={`/?category=${encodeURIComponent(c.name)}`}>{c.name}</a>
-          <span class="cnt">{c.recordCount ?? 0} 条</span>
+          <a class="cat-name" href={`/dramas?cat=${encodeURIComponent(c.name)}`} title="查看该剧种下的剧目">{c.name}</a>
+          <a class="cnt" href={`/?category=${encodeURIComponent(c.name)}`} title="查看该剧种下的演出记录">{c.recordCount ?? 0} 条</a>
           <button class="del" title="删除剧种" onclick={() => askRemove(c)}>✕</button>
         </div>
       {/each}
@@ -196,6 +196,9 @@
   }
   .cat-name:hover { color: var(--accent); }
   .cnt { font-size: 12px; color: var(--text-muted); flex: 0 0 auto; }
+  /* 条数可点：跳转到该剧种下的演出记录 */
+  a.cnt { transition: color var(--t-fast) var(--ease); }
+  a.cnt:hover { color: var(--accent); text-decoration: underline; }
   .del {
     border: none;
     background: none;
