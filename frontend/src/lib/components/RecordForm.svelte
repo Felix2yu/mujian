@@ -301,9 +301,30 @@
     form.zhezi_ids = form.zhezi_ids.filter((z) => !dramaZhezis.has(z));
   }
 
+  // 新建剧目时的近似候选：归一化同名，或一方包含另一方（如「牡丹亭」/「牡丹亭（青春版）」）。
+  // 录入端挡一道，比事后靠合并回收便宜得多。
+  const newDramaCandidates = $derived.by(() => {
+    const q = normName(newDrama.name);
+    if (q.length < 2) return [];
+    return dramaTree
+      .filter((d) => {
+        const n = normName(d.name);
+        return n === q || n.includes(q) || q.includes(n);
+      })
+      .slice(0, 5);
+  });
+
   async function createNewDrama() {
     const name = newDrama.name.trim();
     if (!name || creatingDrama) return;
+    // 已有归一化同名剧目：直接关联既有档案，不再新建重复条目。
+    const q = normName(name);
+    const hit = dramaTree.find((d) => normName(d.name) === q);
+    if (hit) {
+      if (!form.drama_ids.includes(hit.id)) form.drama_ids = [...form.drama_ids, hit.id];
+      newDrama = { name: '' };
+      return;
+    }
     creatingDrama = true;
     error = '';
     try {
@@ -375,11 +396,30 @@
   const addableArtists = $derived(
     artistList.filter((a) => !form.artist_ids.includes(a.id))
   );
-  const filteredArtists = $derived(
-    artistQuery.trim() && !artistComposing
-      ? addableArtists.filter((a) => (a.name || '').toLowerCase().includes(artistQuery.trim().toLowerCase()))
-      : addableArtists
-  );
+  // 按归一化名称在全部档案里找既有演员（含已选中的），用于「写法不同但是同一个人」的
+  // 自动关联，避免为「张三」「张 三」各建一份档案。
+  function findArtistByName(name) {
+    const q = normName(name);
+    if (!q) return undefined;
+    return artistList.find((a) => normName(a.name) === q);
+  }
+  const filteredArtists = $derived.by(() => {
+    const raw = artistQuery.trim();
+    if (!raw || artistComposing) return addableArtists;
+    const low = raw.toLowerCase();
+    const q = normName(raw);
+    return addableArtists.filter(
+      (a) => (a.name || '').toLowerCase().includes(low) || normName(a.name) === q
+    );
+  });
+  // 输入的名字存在「写法相近」的既有档案：提示用户会关联而不是新建。
+  const artistDupHint = $derived.by(() => {
+    const raw = artistQuery.trim();
+    if (!raw || artistComposing) return null;
+    const hit = findArtistByName(raw);
+    if (!hit || hit.name === raw) return null;
+    return hit;
+  });
 
   function addArtist(aid) {
     if (!aid || form.artist_ids.includes(aid)) return;
@@ -399,9 +439,9 @@
     const names = (artistQuery || '').split(/[,，]/).map((x) => x.trim()).filter(Boolean);
     if (!names.length) { artistQuery = ''; return; }
     for (const n of names) {
-      const hit = addableArtists.find((a) => a.name === n);
+      const hit = findArtistByName(n);
       if (hit) {
-        form.artist_ids = [...form.artist_ids, hit.id];
+        if (!form.artist_ids.includes(hit.id)) form.artist_ids = [...form.artist_ids, hit.id];
       } else if (
         !freeNames.includes(n) &&
         !chosenArtists.some((a) => a.name === n)
@@ -431,10 +471,11 @@
     if (/[,，]/.test(artistQuery)) commitArtistInput();
   }
 
-  // 失焦时：输入内容与演员档案精确同名才自动提交；新名字留在输入框，需回车显式确认
+  // 失焦时：输入内容能匹配到既有演员档案（含归一化同名）就自动提交；
+  // 新名字留在输入框，需回车显式确认
   function onArtistBlur() {
     const n = artistQuery.trim();
-    if (n && artistList.some((a) => a.name === n)) commitArtistInput();
+    if (n && findArtistByName(n)) commitArtistInput();
     setTimeout(() => (showArtistList = false), 120);
   }
 
@@ -643,6 +684,16 @@
 
   function splitList(s) {
     return (s || '').split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+  }
+
+  // 名称归一化，用于录入端查重：去掉所有空白（含全角空格）、全角字符转半角、转小写。
+  // 「张 三」/「张三」、「ＡＢＣ」/「abc」这类纯写法差异应当指向同一个实体，
+  // 否则每写错一次就多一个只出现 1 次的档案（现有 940 个演员里 57% 正是如此）。
+  function normName(s) {
+    return String(s || '')
+      .replace(/[\s\u3000]+/g, '')
+      .replace(/[\uFF01-\uFF5E]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+      .toLowerCase();
   }
 
   // 货殖账单 ID：文本 → 数字数组（去重、丢弃非法值）
@@ -1476,7 +1527,7 @@
   <!-- ============ 阵容 ============ -->
   <div class="card section">
     <h3>阵容</h3>
-    <label>演员 <span class="hint">回车生成胶囊；逗号分隔可一次添加多个；与档案同名自动关联</span></label>
+    <label>演员 <span class="hint">回车生成胶囊；逗号分隔可一次添加多个；与既有档案同名（含空格/全半角差异）自动关联；<b>未匹配的名字在保存时会自动创建演员档案</b>，若只是临时写法请在上方下拉里改选既有档案</span></label>
     <div class="combo">
       <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
         {#each artistItems as item, i (item.key)}
@@ -1517,7 +1568,12 @@
           {#each filteredArtists as a (a.id)}
             <button type="button" class="combo-item" onmousedown={(e) => e.preventDefault()} onclick={() => addArtist(a.id)}>{a.name}</button>
           {/each}
-          {#if artistQuery.trim() && !artistList.some((a) => a.name === artistQuery.trim())}
+          {#if artistDupHint}
+            <div class="combo-note">
+              已有写法相近的演员「{artistDupHint.name}」（{artistDupHint.recordCount || 0} 场），将关联该档案而不新建
+            </div>
+          {/if}
+          {#if artistQuery.trim() && !findArtistByName(artistQuery)}
             <button type="button" class="combo-item create" disabled={creatingArtist} onmousedown={(e) => e.preventDefault()} onclick={() => createNewArtist(artistQuery)}>
               {creatingArtist ? '创建中…' : `＋ 新建演员档案「${artistQuery.trim()}」`}
             </button>
@@ -1674,6 +1730,16 @@
             <input class="input" spellcheck="false" placeholder="剧目，如：牡丹亭" bind:value={newDrama.name} onkeydown={(e) => e.key === 'Enter' && createNewDrama()} />
             <button type="button" class="btn sm" onclick={createNewDrama} disabled={creatingDrama || !newDrama.name.trim()}>{creatingDrama ? '创建中…' : '创建并关联'}</button>
           </div>
+          {#if newDramaCandidates.length}
+            <div class="dup-list">
+              <div class="dup-title">已有相近剧目，先确认是否要新建：</div>
+              {#each newDramaCandidates as d (d.id)}
+                <button type="button" class="dup-item" onclick={() => { addDrama(d.id); newDrama = { name: '' }; }}>
+                  {d.name}{#if d.recordCount != null}<span class="dup-cnt">{d.recordCount} 场</span>{/if}
+                </button>
+              {/each}
+            </div>
+          {/if}
         </div>
       </details>
     </div>
@@ -2094,6 +2160,13 @@
   .combo-item:hover { background: var(--accent-soft); color: var(--accent); }
   .combo-item.create { color: var(--accent); font-weight: 500; }
   .combo-empty { padding: 10px 12px; color: var(--text-3); font-size: 13px; }
+  /* 录入端查重提示：写法相近但不完全相等的既有实体 */
+  .combo-note { padding: 9px 12px; color: var(--text-2); font-size: 12.5px; background: var(--surface-2); border-top: 1px solid var(--border); }
+  .dup-list { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+  .dup-title { font-size: 12.5px; color: var(--text-muted); }
+  .dup-item { border: 1px solid var(--border); background: var(--surface); color: var(--text-2); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .dup-item:hover { border-color: var(--accent); color: var(--accent); }
+  .dup-cnt { color: var(--text-3); font-size: 11.5px; }
   /* 收起时收缩到「＋ 新建剧目」文字宽度（此前固定占 1/3 宽，文字右侧
      全是空白边框）；展开后独占整行，新建表单有足够空间。 */
   .ply-new {

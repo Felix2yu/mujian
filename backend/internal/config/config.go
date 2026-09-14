@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"mujian/internal/huozhi"
+	"mujian/internal/models"
 )
 
 type Config struct {
@@ -41,6 +42,11 @@ type Config struct {
 	ShowPayPrice        bool   `json:"show_pay_price"`
 	ShowOtherCost       bool   `json:"show_other_cost"`
 	MultiCurrency       bool   `json:"multi_currency"`
+	// CostEnabledFields 是逗号分隔的费用补全参与字段列表（如 "price"
+	// 或 "price,pay_price,other_cost"）。它只控制「费用补全」待确认清单
+	// 纳入哪些字段，不影响这些列本身的存在与展示。M7：默认仅 "price"，
+	// 避免 pay_price/other_cost 全库为 0 时一次性涌入数百条无效待办。
+	CostEnabledFields string `json:"cost_enabled_fields"`
 	DefaultStartTime    string `json:"default_start_time"`
 	// CalDAV 任务提醒（VTODO VALARM）触发策略：
 	//   - ReminderMode = "hours_before"：演出开始前 ReminderBeforeHours 小时触发（默认 12）
@@ -100,6 +106,7 @@ func Load() *Config {
 		ShowPayPrice:        true,
 		ShowOtherCost:       true,
 		MultiCurrency:       true,
+		CostEnabledFields:   "price",
 		DefaultStartTime:    "19:30",
 		ReminderMode:        getEnv("REMINDER_MODE", "hours_before"),
 		ReminderBeforeHours: getEnvInt("REMINDER_BEFORE_HOURS", 12),
@@ -186,6 +193,9 @@ func (c *Config) Update(s *SettingsUpdate) {
 	}
 	if s.MultiCurrency != nil {
 		c.MultiCurrency = *s.MultiCurrency
+	}
+	if s.CostEnabledFields != nil {
+		c.CostEnabledFields = normalizeCostFields(*s.CostEnabledFields)
 	}
 	if s.ReminderMode != nil {
 		switch *s.ReminderMode {
@@ -303,6 +313,8 @@ type SettingsUpdate struct {
 	ShowPayPrice     *bool   `json:"show_pay_price"`
 	ShowOtherCost    *bool   `json:"show_other_cost"`
 	MultiCurrency    *bool   `json:"multi_currency"`
+	// 费用补全参与字段（逗号分隔）：仅这些字段进入待确认清单。
+	CostEnabledFields *string `json:"cost_enabled_fields,omitempty"`
 	DefaultStartTime *string `json:"default_start_time"`
 	// CalDAV 提醒时机：hours_before=演出开始前 N 小时；same_day=当天统一时刻。
 	ReminderMode        *string `json:"reminder_mode,omitempty"`
@@ -360,6 +372,7 @@ func (c *Config) GetSettingsResponse() map[string]interface{} {
 		"show_pay_price":        c.ShowPayPrice,
 		"show_other_cost":       c.ShowOtherCost,
 		"multi_currency":        c.MultiCurrency,
+		"cost_enabled_fields":   c.CostEnabledFields,
 		"default_start_time":    c.DefaultStartTime,
 		"reminder_mode":         c.ReminderMode,
 		"reminder_before_hours": c.ReminderBeforeHours,
@@ -451,6 +464,69 @@ func (c *Config) GetS3Settings() S3Settings {
 // It is an alias for huozhi.Settings so handlers can hand it straight to the
 // client without a field-by-field conversion.
 type HuozhiSettings = huozhi.Settings
+
+// knownCostFields 是费用补全管理的全部字段（白名单）。normalizeCostFields
+// 与 GetCostEnabledFields 都只认这些键，外部传入的任意字符串都不会被纳入。
+var knownCostFields = map[string]bool{
+	models.CostFieldPrice:     true,
+	models.CostFieldPayPrice:  true,
+	models.CostFieldOtherCost: true,
+}
+
+// normalizeCostFields 把逗号分隔的字段串清洗成「去空白、去重、仅保留已知字段、
+// 按规范顺序排列」的字符串。空串或清洗后为空都返回空串 —— 语义上表示「不纳入
+// 任何字段」，由 GetCostEnabledFields 在运行时补默认 "price"。
+func normalizeCostFields(s string) string {
+	seen := make(map[string]bool, 3)
+	out := make([]string, 0, 3)
+	for _, part := range strings.Split(s, ",") {
+		f := strings.TrimSpace(part)
+		if f == "" || !knownCostFields[f] || seen[f] {
+			continue
+		}
+		seen[f] = true
+		out = append(out, f)
+	}
+	// 按规范顺序输出，保证序列化稳定、便于测试断言。
+	ordered := make([]string, 0, len(out))
+	for _, f := range costFieldOrder {
+		if seen[f] {
+			ordered = append(ordered, f)
+		}
+	}
+	return strings.Join(ordered, ",")
+}
+
+// costFieldOrder 是费用补全字段的规范展示顺序。
+var costFieldOrder = []string{
+	models.CostFieldPrice,
+	models.CostFieldPayPrice,
+	models.CostFieldOtherCost,
+}
+
+// GetCostEnabledFields 返回当前参与费用补全的字段列表（运行时视角，已加锁）。
+// 空配置（未设置或清洗后为空）回退为默认只含 "price"，避免上线即被数百条
+// 无效 0 元待办淹没（M7）。
+func (c *Config) GetCostEnabledFields() []string {
+	c.mu.RLock()
+	s := c.CostEnabledFields
+	c.mu.RUnlock()
+	if s == "" {
+		return []string{models.CostFieldPrice}
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		f := strings.TrimSpace(p)
+		if knownCostFields[f] {
+			out = append(out, f)
+		}
+	}
+	if len(out) == 0 {
+		return []string{models.CostFieldPrice}
+	}
+	return out
+}
 
 // GetHuozhiSettings snapshots the 货殖 configuration under the read lock.
 func (c *Config) GetHuozhiSettings() HuozhiSettings {
@@ -576,6 +652,7 @@ func (c *Config) SaveToFile(path string) error {
 		"show_pay_price":        b2s(c.ShowPayPrice),
 		"show_other_cost":       b2s(c.ShowOtherCost),
 		"multi_currency":        b2s(c.MultiCurrency),
+		"cost_enabled_fields":   c.CostEnabledFields,
 		"reminder_mode":         c.ReminderMode,
 		"reminder_before_hours": strconv.Itoa(c.ReminderBeforeHours),
 		"reminder_daily_hour":   strconv.Itoa(c.ReminderDailyHour),
@@ -660,6 +737,9 @@ func (c *Config) LoadFromFile(path string) error {
 	}
 	if v, ok := data["multi_currency"]; ok {
 		c.MultiCurrency = v == "true"
+	}
+	if v, ok := data["cost_enabled_fields"]; ok {
+		c.CostEnabledFields = normalizeCostFields(v)
 	}
 	if v, ok := data["reminder_mode"]; ok {
 		switch v {

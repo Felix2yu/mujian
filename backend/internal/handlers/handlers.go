@@ -110,10 +110,12 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/dramas", h.listDramas)
 	r.Get("/dramas/tree", h.listDramaTree)
 	r.Post("/dramas", h.createDrama)
+	r.Post("/dramas/reorder", h.reorderDramas)
+	// 合并重复剧目（source 并入 target）。dry_run 默认预览，与 MCP 侧口径一致。
+	r.Post("/dramas/merge", h.mergeDramas)
 	r.Get("/dramas/{id}", h.getDramaDetail)
 	r.Put("/dramas/{id}", h.updateDrama)
 	r.Delete("/dramas/{id}", h.deleteDrama)
-	r.Post("/dramas/reorder", h.reorderDramas)
 	r.Post("/dramas/{id}/zhezis", h.createZhezi)
 	r.Post("/dramas/{id}/zhezis/reorder", h.reorderZhezis)
 	r.Put("/zhezis/{id}", h.updateZhezi)
@@ -121,11 +123,18 @@ func (h *Handler) Routes() chi.Router {
 
 	r.Get("/artists", h.listArtists)
 	r.Post("/artists", h.createArtist)
+	r.Post("/artists/reorder", h.reorderArtists)
+	// 合并重复演员（source 并入 target）。
+	r.Post("/artists/merge", h.mergeArtists)
 	r.Get("/artists/{id}", h.getArtistDetail)
 	r.Put("/artists/{id}", h.updateArtist)
 	r.Delete("/artists/{id}", h.deleteArtist)
-	r.Post("/artists/reorder", h.reorderArtists)
 	r.Get("/artists/tree", h.listArtistTree)
+
+	// 场馆层：以 records.address 为唯一真源的去重实体，支持同址合并。
+	r.Get("/venues", h.listVenues)
+	r.Post("/venues/merge", h.mergeVenues)
+	r.Post("/venues/rescan", h.rescanVenues)
 
 	r.Get("/stats", h.getStats)
 	r.Get("/dashboard", h.getDashboard)
@@ -250,6 +259,7 @@ func (h *Handler) listRecords(w http.ResponseWriter, r *http.Request) {
 	f.Missing = q.Get("missing")
 	f.Channel = q.Get("channel")
 	f.Company = q.Get("company")
+	f.Address = q.Get("address")
 	if v := q.Get("rating_min"); v != "" {
 		f.RatingMin, _ = strconv.Atoi(v)
 	}
@@ -471,6 +481,15 @@ func (h *Handler) restoreRecord(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/records/{id}/purge — 彻底删除（不可恢复）。
 func (h *Handler) purgeRecord(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if wantsDryRun(r) {
+		ok, err := h.db.RecordExists(id)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]any{"dry_run": true, "matched": boolToInt(ok)})
+		return
+	}
 	if err := h.db.PurgeRecord(id); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -478,8 +497,24 @@ func (h *Handler) purgeRecord(w http.ResponseWriter, r *http.Request) {
 	jsonResp(w, 200, map[string]string{"message": "purged"})
 }
 
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 // POST /api/records/trash/purge — 清空回收站。
 func (h *Handler) purgeRecordsTrash(w http.ResponseWriter, r *http.Request) {
+	if wantsDryRun(r) {
+		n, err := h.db.CountDeletedRecords()
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]any{"dry_run": true, "matched": n})
+		return
+	}
 	recs, err := h.db.ListDeletedRecords(0, 0)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
@@ -538,6 +573,11 @@ func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 		Play        *models.BatchArrayOp `json:"play,omitempty"`
 		Guest       *models.BatchArrayOp `json:"guest,omitempty"`
 		ArtistNames *models.BatchArrayOp `json:"artist_names,omitempty"`
+
+		// 只预览不落库（与 MCP 侧 batch_update_records 的 dry_run 同义）。
+		// 默认 false：这两个端点在加入 dry_run 之前就是「直接执行」，保持向后兼容，
+		// 由前端先带 true 预览影响面、再带 false 真正提交。
+		DryRun *bool `json:"dry_run,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "invalid request body")
@@ -545,6 +585,15 @@ func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.IDs) == 0 {
 		jsonErr(w, 400, "no ids provided")
+		return
+	}
+	if req.DryRun != nil && *req.DryRun {
+		n, err := h.db.CountRecordsByIDs(req.IDs)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]any{"dry_run": true, "matched": n})
 		return
 	}
 	updated, err := h.db.BatchUpdateRecords(models.BatchUpdateParams{
@@ -585,6 +634,8 @@ func (h *Handler) batchUpdate(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) batchDelete(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		IDs []string `json:"ids"`
+		// 默认 false（向后兼容），前端先带 true 预览再带 false 提交。
+		DryRun *bool `json:"dry_run,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "invalid request body")
@@ -592,6 +643,15 @@ func (h *Handler) batchDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.IDs) == 0 {
 		jsonErr(w, 400, "no ids provided")
+		return
+	}
+	if req.DryRun != nil && *req.DryRun {
+		n, err := h.db.CountRecordsByIDs(req.IDs)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]any{"dry_run": true, "matched": n})
 		return
 	}
 	deleted, err := h.db.BatchDeleteRecords(req.IDs)
@@ -613,20 +673,26 @@ func (h *Handler) listCategories(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) createCategory(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ID          string   `json:"id"`
-		Name        string   `json:"name"`
-		ActiveIDs   []string `json:"activeIds"`
-		RecordCount int      `json:"recordCount"`
+		ID        string   `json:"id"`
+		Name      string   `json:"name"`
+		ActiveIDs []string `json:"activeIds"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "invalid request body")
 		return
 	}
-	if req.Name == "" {
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
 		jsonErr(w, 400, "name is required")
 		return
 	}
-	cat := models.Category{ID: req.ID, Name: req.Name, ActiveIDs: req.ActiveIDs, RecordCount: req.RecordCount}
+	// 剧种表没有唯一约束，此前客户端传什么就建什么。按归一化名称挡一道重复，
+	// 否则「昆剧」「昆 剧」「昆剧 」会成为三个互不相干的剧种。
+	if dup, err := h.db.FindCategoryByName(name); err == nil && dup != "" {
+		jsonErr(w, 409, "同名剧种已存在："+dup)
+		return
+	}
+	cat := models.Category{ID: req.ID, Name: name, ActiveIDs: req.ActiveIDs}
 	if cat.ActiveIDs == nil {
 		cat.ActiveIDs = []string{}
 	}
@@ -640,15 +706,24 @@ func (h *Handler) createCategory(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) updateCategory(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req struct {
-		Name        string   `json:"name"`
-		ActiveIDs   []string `json:"activeIds"`
-		RecordCount int      `json:"recordCount"`
+		Name      string   `json:"name"`
+		ActiveIDs []string `json:"activeIds"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "invalid request body")
 		return
 	}
-	cat := models.Category{ID: id, Name: req.Name, ActiveIDs: req.ActiveIDs, RecordCount: req.RecordCount}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		jsonErr(w, 400, "name is required")
+		return
+	}
+	// 改名同样要避免与既有剧种（按归一化名称）撞车，但要排除自己。
+	if dupID, err := h.db.FindCategoryByName(name); err == nil && dupID != "" && dupID != id {
+		jsonErr(w, 409, "已有同名剧种，请改用合并")
+		return
+	}
+	cat := models.Category{ID: id, Name: name, ActiveIDs: req.ActiveIDs}
 	if cat.ActiveIDs == nil {
 		cat.ActiveIDs = []string{}
 	}
@@ -661,6 +736,16 @@ func (h *Handler) updateCategory(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) deleteCategory(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	// 删除会级联改写所有记录的 category_names；?dry_run=1 先看影响面。
+	if wantsDryRun(r) {
+		n, err := h.db.PreviewDeleteCategory(id)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]any{"dry_run": true, "recordsAffected": n})
+		return
+	}
 	n, err := h.db.DeleteCategory(id)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
@@ -752,6 +837,16 @@ func (h *Handler) updateDrama(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) deleteDrama(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	// 删除会连带折子与 record_dramas 关联；?dry_run=1 先看影响面。
+	if wantsDryRun(r) {
+		n, err := h.db.PreviewDeleteDrama(id)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]any{"dry_run": true, "recordsAffected": n})
+		return
+	}
 	if err := h.db.DeleteDrama(id); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -799,6 +894,15 @@ func (h *Handler) updateZhezi(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) deleteZhezi(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if wantsDryRun(r) {
+		n, err := h.db.PreviewDeleteZhezi(id)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]any{"dry_run": true, "recordsAffected": n})
+		return
+	}
 	if err := h.db.DeleteZhezi(id); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -931,11 +1035,156 @@ func (h *Handler) updateArtist(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) deleteArtist(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if wantsDryRun(r) {
+		n, err := h.db.PreviewDeleteArtist(id)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]any{"dry_run": true, "recordsAffected": n})
+		return
+	}
 	if err := h.db.DeleteArtist(id); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
 	jsonResp(w, 200, map[string]string{"message": "deleted"})
+}
+
+// mergeRequest is the shared body for POST /artists/merge and /dramas/merge.
+type mergeRequest struct {
+	SourceID string `json:"source_id"`
+	TargetID string `json:"target_id"`
+	// DryRun defaults to true: omitting it previews instead of merging, matching
+	// the MCP tools' default. Pass false explicitly to actually merge.
+	DryRun *bool `json:"dry_run"`
+}
+
+// dryRunDefaultTrue resolves an optional dry_run body field whose default is
+// "preview only" (used by the merge endpoints, matching the MCP tools).
+func dryRunDefaultTrue(v *bool) bool {
+	return v == nil || *v
+}
+
+// wantsDryRun reports whether a request asked for a preview only. Accepted as
+// ?dry_run=1 on any verb so DELETE endpoints (which have no body) can preview too.
+func wantsDryRun(r *http.Request) bool {
+	v := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("dry_run")))
+	return v == "1" || v == "true" || v == "yes"
+}
+
+// POST /api/artists/merge — 合并重复演员档案（source 并入 target，source 被删除）。
+// dry_run 默认 true，只返回影响面预览。
+func (h *Handler) mergeArtists(w http.ResponseWriter, r *http.Request) {
+	var req mergeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	dry := dryRunDefaultTrue(req.DryRun)
+	if dry {
+		p, err := h.db.PreviewMergeArtists(req.SourceID, req.TargetID)
+		if err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]any{"dry_run": true, "preview": p})
+		return
+	}
+	res, err := h.db.MergeArtists(req.SourceID, req.TargetID)
+	if err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]any{"dry_run": false, "result": res})
+}
+
+// POST /api/dramas/merge — 合并重复剧目档案（含折子改挂与同名折子去重）。
+func (h *Handler) mergeDramas(w http.ResponseWriter, r *http.Request) {
+	var req mergeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	dry := dryRunDefaultTrue(req.DryRun)
+	if dry {
+		p, err := h.db.PreviewMergeDramas(req.SourceID, req.TargetID)
+		if err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]any{"dry_run": true, "preview": p})
+		return
+	}
+	res, err := h.db.MergeDramas(req.SourceID, req.TargetID)
+	if err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]any{"dry_run": false, "result": res})
+}
+
+// GET /api/venues — 返回带实时记录数与疑似重复分组的场馆列表。
+func (h *Handler) listVenues(w http.ResponseWriter, r *http.Request) {
+	venues, err := h.db.ListVenues()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, venues)
+}
+
+// mergeVenuesRequest supports folding multiple source venues into one target.
+type mergeVenuesRequest struct {
+	TargetID string   `json:"target_id"`
+	SourceIDs []string `json:"source_ids"`
+	DryRun   *bool    `json:"dry_run"`
+}
+
+// POST /api/venues/merge — 合并同址场馆（sources 并入 target，改写对应记录
+// 的 address 为规范名，合并别名，删除 source 行）。dry_run 默认 true（预览）。
+func (h *Handler) mergeVenues(w http.ResponseWriter, r *http.Request) {
+	var req mergeVenuesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid request body")
+		return
+	}
+	if req.TargetID == "" || len(req.SourceIDs) == 0 {
+		jsonErr(w, 400, "需要提供 target_id 与至少一个 source_ids")
+		return
+	}
+	dry := dryRunDefaultTrue(req.DryRun)
+	if dry {
+		p, err := h.db.PreviewMergeVenues(req.TargetID, req.SourceIDs)
+		if err != nil {
+			jsonErr(w, 400, err.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]any{"dry_run": true, "preview": p})
+		return
+	}
+	rewritten, err := h.db.MergeVenues(req.TargetID, req.SourceIDs)
+	if err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	// 合并后刷新场馆层（清理被改写的零记录行、纳入新地址）。
+	if _, _, rerr := h.db.RescanVenues(); rerr != nil {
+		jsonErr(w, 500, rerr.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]any{"dry_run": false, "records_rewritten": rewritten})
+}
+
+// POST /api/venues/rescan — 重新同步场馆层与当前记录（新增未代表的地址，
+// 删除无记录的僵尸场馆）。合并后建议调用以刷新分组。
+func (h *Handler) rescanVenues(w http.ResponseWriter, r *http.Request) {
+	added, removed, err := h.db.RescanVenues()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]any{"added": added, "removed": removed})
 }
 
 // POST /artists/reorder {"ids":[...]} — manual ordering of artists (first = top).
@@ -1168,11 +1417,14 @@ func (h *Handler) deleteBackup(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) restoreFromBackup(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		File string `json:"file"`
+		// 只预览不落库（默认 false）；也可用 ?dry_run=1。
+		DryRun *bool `json:"dry_run"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "invalid request body")
 		return
 	}
+	dry := wantsDryRun(r) || (req.DryRun != nil && *req.DryRun)
 	if err := backup.ValidateName(req.File); err != nil {
 		jsonErr(w, 400, err.Error())
 		return
@@ -1201,12 +1453,21 @@ func (h *Handler) restoreFromBackup(w http.ResponseWriter, r *http.Request) {
 				jsonErr(w, 400, "invalid zip archive: "+err.Error())
 				return
 			}
-			h.importZipArchive(w, zr)
+			h.importZipArchive(w, zr, dry)
 			return
 		}
 		var export models.ExportData
 		if err := json.Unmarshal(data, &export); err != nil {
 			jsonErr(w, 400, "invalid export file: "+err.Error())
+			return
+		}
+		if dry {
+			result, err := h.db.PreviewImport(&export)
+			if err != nil {
+				jsonErr(w, 500, err.Error())
+				return
+			}
+			jsonResp(w, 200, importResponse(result, 0, 0))
 			return
 		}
 		result, err := h.db.ImportData(&export)
@@ -1460,6 +1721,15 @@ func (h *Handler) backupRestore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.withImportLock(w, func() {
+		if wantsDryRun(r) {
+			result, err := h.db.PreviewImport(&data)
+			if err != nil {
+				jsonErr(w, 500, err.Error())
+				return
+			}
+			jsonResp(w, 200, importResponse(result, 0, 0))
+			return
+		}
 		result, err := h.db.ImportData(&data)
 		if err != nil {
 			jsonErr(w, 500, err.Error())

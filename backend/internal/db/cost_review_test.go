@@ -24,7 +24,7 @@ func seedCostRecord(t *testing.T, d *DB, name string, date int64, price, pay, ot
 // pendingByID 把待确认清单转成 id -> 待确认字段集合。
 func pendingByID(t *testing.T, d *DB) map[string]map[string]bool {
 	t.Helper()
-	rows, err := d.ListCostPending(context.Background(), 0)
+	rows, err := d.ListCostPending(context.Background(), 0, costFields())
 	if err != nil {
 		t.Fatalf("ListCostPending: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestCostPendingClassification(t *testing.T) {
 		}
 	}
 
-	summary, err := d.CostSummary()
+	summary, err := d.CostSummary(costFields())
 	if err != nil {
 		t.Fatalf("CostSummary: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestCostReviewZeroSkipAmountAndUnreview(t *testing.T) {
 	if _, err := d.UnreviewCost([]string{rec.ID}, ""); err != nil {
 		t.Fatalf("UnreviewCost all: %v", err)
 	}
-	if s, err := d.CostSummary(); err != nil {
+	if s, err := d.CostSummary(costFields()); err != nil {
 		t.Fatalf("CostSummary: %v", err)
 	} else if s.ReviewedTotal != 0 {
 		t.Fatalf("撤销后 reviewed total = %d, want 0", s.ReviewedTotal)
@@ -216,7 +216,7 @@ func TestSetCostAmountZeroMeansFree(t *testing.T) {
 	if pendingByID(t, d)[rec.ID][models.CostFieldPrice] {
 		t.Fatalf("amount=0 视为已确认，应移出待确认清单")
 	}
-	s, err := d.CostSummary()
+	s, err := d.CostSummary(costFields())
 	if err != nil {
 		t.Fatalf("CostSummary: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestCostReviewClearedWhenFieldIsFilled(t *testing.T) {
 	if _, err := d.MarkCostZero([]string{rec.ID}, models.CostFieldPrice); err != nil {
 		t.Fatalf("MarkCostZero: %v", err)
 	}
-	if s, _ := d.CostSummary(); s.Reviewed[models.CostFieldPrice] != 1 {
+	if s, _ := d.CostSummary(costFields()); s.Reviewed[models.CostFieldPrice] != 1 {
 		t.Fatalf("标记后 reviewed price 应为 1，实际 %d", s.Reviewed[models.CostFieldPrice])
 	}
 
@@ -246,7 +246,7 @@ func TestCostReviewClearedWhenFieldIsFilled(t *testing.T) {
 		t.Fatalf("UpdateRecord: %v", err)
 	}
 
-	s, err := d.CostSummary()
+	s, err := d.CostSummary(costFields())
 	if err != nil {
 		t.Fatalf("CostSummary: %v", err)
 	}
@@ -288,7 +288,7 @@ func TestCostReviewUnreviewAllByField(t *testing.T) {
 	if _, err := d.UnreviewCostAll(""); err != nil {
 		t.Fatalf("UnreviewCostAll(all): %v", err)
 	}
-	if s, _ := d.CostSummary(); s.ReviewedTotal != 0 {
+	if s, _ := d.CostSummary(costFields()); s.ReviewedTotal != 0 {
 		t.Fatalf("撤销全部后 reviewed total = %d, want 0", s.ReviewedTotal)
 	}
 }

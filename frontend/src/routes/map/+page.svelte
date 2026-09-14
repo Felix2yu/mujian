@@ -263,7 +263,7 @@
     <p class="sub">按演出地点聚合展示，点击标记查看该地点的演出</p>
   </div>
 
-  <div class="map-toolbar">
+  <div class="map-toolbar" class:hidden={!loading && records.length === 0}>
     <span class="src-label">底图</span>
     <div class="seg">
       {#each Object.entries(SOURCES) as [key, s]}
@@ -280,6 +280,19 @@
 
   {#if loading}
     <div class="skeleton" style="height: 60vh; border-radius: var(--radius-lg);"></div>
+  {:else if records.length === 0}
+    <!-- 0 个坐标点时 Leaflet 不初始化，此前只剩一个空白容器（无提示、无引导） -->
+    <div class="empty card">
+      <div class="ico" aria-hidden="true">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 21s7-5.1 7-11a7 7 0 1 0-14 0c0 5.9 7 11 7 11z" />
+          <circle cx="12" cy="10" r="2.6" />
+        </svg>
+      </div>
+      <div class="t">还没有可定位的演出</div>
+      <div class="h">填了地址的演出会在保存时自动解析坐标，之后就会出现在这张地图上。</div>
+      <a class="btn sm" href="/?missing=coordinate">查看缺少坐标的演出</a>
+    </div>
   {:else}
     <div class="map-shell" style="position:relative; height: calc(100vh - 260px); min-height: 420px;">
       <div bind:this={mapEl} id="map" style="position:absolute; inset:0; z-index:0;"></div>
@@ -290,6 +303,7 @@
 <style>
   .page-head h1 { margin-bottom: 2px; }
   .map-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .map-toolbar.hidden { display: none; }
   .src-label { font-size: 13px; color: var(--text-muted); }
   .seg { display: inline-flex; background: var(--surface-3); border-radius: 999px; padding: 3px; gap: 2px; }
   .seg-btn {

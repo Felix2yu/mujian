@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mujian/internal/db"
 	"mujian/internal/models"
 	"mujian/internal/storage"
 	"net/http"
@@ -47,11 +48,13 @@ func (h *Handler) importRecords(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	name := strings.ToLower(header.Filename)
+	// ?dry_run=1 只解析与校验，回报 新增/覆盖/跳过 与拒收明细，不落库。
+	dry := wantsDryRun(r)
 	switch {
 	case strings.HasSuffix(name, ".json"):
-		h.withImportLock(w, func() { h.importJSON(w, file) })
+		h.withImportLock(w, func() { h.importJSON(w, file, dry) })
 	case strings.HasSuffix(name, ".zip"):
-		h.withImportLock(w, func() { h.importZIP(w, file) })
+		h.withImportLock(w, func() { h.importZIP(w, file, dry) })
 	default:
 		jsonErr(w, 400, "仅支持 .json 文件或「记录现场」导出的 .zip 压缩包（JI_LU_XIAN_CHANG.android.zip）")
 	}
@@ -69,8 +72,29 @@ func (h *Handler) withImportLock(w http.ResponseWriter, fn func()) {
 	fn()
 }
 
+// importResponse builds the JSON payload shared by real imports and previews.
+func importResponse(result *db.ImportResult, coversImported, coversMissing int) map[string]interface{} {
+	msg := "import completed"
+	if result.DryRun {
+		msg = "import preview"
+	}
+	return map[string]interface{}{
+		"message":         msg,
+		"dry_run":         result.DryRun,
+		"records":         result.Records,
+		"categories":      result.Categories,
+		"new_records":     result.NewRecords,
+		"updated_records": result.UpdatedRecords,
+		"skipped":         result.Skipped,
+		"issues":          result.Issues,
+		"warnings":        result.Warnings,
+		"covers_imported": coversImported,
+		"covers_missing":  coversMissing,
+	}
+}
+
 // importJSON: plain data.json, no covers included.
-func (h *Handler) importJSON(w http.ResponseWriter, file io.Reader) {
+func (h *Handler) importJSON(w http.ResponseWriter, file io.Reader, dryRun bool) {
 	raw, err := io.ReadAll(file)
 	if err != nil {
 		jsonErr(w, 400, "failed to read file: "+err.Error())
@@ -86,24 +110,28 @@ func (h *Handler) importJSON(w http.ResponseWriter, file io.Reader) {
 		return
 	}
 
+	if dryRun {
+		result, err := h.db.PreviewImport(data)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonResp(w, 200, importResponse(result, 0, 0))
+		return
+	}
+
 	result, err := h.db.ImportData(data)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
-	jsonResp(w, 200, map[string]interface{}{
-		"message":         "import completed",
-		"records":         result.Records,
-		"categories":      result.Categories,
-		"covers_imported": 0,
-		"covers_missing":  0,
-	})
+	jsonResp(w, 200, importResponse(result, 0, 0))
 }
 
 // importZIP: the 记录现场 export archive. Locates the data file
 // (JI_LU_XIAN_CHANG.android, raw-deflate/zlib JSON; or data.json), imports the
 // records, and decodes/copies cover files into <UploadDir>/covers/.
-func (h *Handler) importZIP(w http.ResponseWriter, file io.Reader) {
+func (h *Handler) importZIP(w http.ResponseWriter, file io.Reader, dryRun bool) {
 	raw, err := io.ReadAll(file)
 	if err != nil {
 		jsonErr(w, 400, "failed to read archive: "+err.Error())
@@ -114,13 +142,13 @@ func (h *Handler) importZIP(w http.ResponseWriter, file io.Reader) {
 		jsonErr(w, 400, "invalid zip archive: "+err.Error())
 		return
 	}
-	h.importZipArchive(w, zr)
+	h.importZipArchive(w, zr, dryRun)
 }
 
 // importZipArchive detects the data file inside zr (记录现场 or converted
 // layout), imports it and materializes covers. Shared by the upload import
 // endpoint and restore-from-backup.
-func (h *Handler) importZipArchive(w http.ResponseWriter, zr *zip.Reader) {
+func (h *Handler) importZipArchive(w http.ResponseWriter, zr *zip.Reader, dryRun bool) {
 	var data models.ExportData
 	switch entry := findZipBySuffix(zr, "ji_lu_xian_chang.android"); {
 	case entry != nil:
@@ -147,6 +175,20 @@ func (h *Handler) importZipArchive(w http.ResponseWriter, zr *zip.Reader) {
 	// upsert; storage is content-addressed (auto-dedupe by hash). Only the
 	// cheap decode+store runs here; re-encoding and thumbnails continue in
 	// the background after the response.
+	if dryRun {
+		// 预览不写文件、不落库：只统计压缩包内的封面数量。
+		result, err := h.db.PreviewImport(&data)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		// found = 压缩包中能匹配到的封面数（预览语义：将导入这么多张），
+		// 不能沿用真实导入的 0，否则预览永远显示「封面 0 张」。
+		found, missing := h.countZipCovers(zr, data.Records)
+		jsonResp(w, 200, importResponse(result, found, missing))
+		return
+	}
+
 	keys, missing := h.extractCovers(zr, data.Records)
 
 	result, err := h.db.ImportData(&data)
@@ -161,14 +203,7 @@ func (h *Handler) importZipArchive(w http.ResponseWriter, zr *zip.Reader) {
 	}
 	h.processCoversInBackground(keys, format)
 
-	jsonResp(w, 200, map[string]interface{}{
-		"message":         "import completed",
-		"records":         result.Records,
-		"categories":      result.Categories,
-		"covers_imported": len(keys),
-		"covers_missing":  missing,
-		"background":      true,
-	})
+	jsonResp(w, 200, importResponse(result, len(keys), missing))
 }
 
 // ---------- locating & parsing the data file ----------
@@ -326,6 +361,43 @@ func stripExt(name string) string {
 	return name
 }
 
+// lookupCoverEntry finds the zip entry holding a record's cover image, matching
+// on the full base name first and then on the extension-stripped base. Returns
+// nil when the archive does not carry that cover.
+func lookupCoverEntry(idx *zipIndex, rec *models.Record) *zip.File {
+	if rec.CoverFile != "" {
+		base := filepath.Base(rec.CoverFile)
+		if e := idx.byName[strings.ToLower(base)]; e != nil {
+			return e
+		}
+		return idx.byBase[strings.ToLower(stripExt(base))]
+	}
+	key := strings.ToLower(rec.Cover)
+	if e := idx.byBase[key]; e != nil {
+		return e
+	}
+	return idx.byName[key]
+}
+
+// countZipCovers reports how many covers a 记录现场 archive would contribute and
+// how many referenced covers are absent, without decoding or writing anything.
+// Used by the ?dry_run=1 import preview.
+func (h *Handler) countZipCovers(zr *zip.Reader, records []models.Record) (found, missing int) {
+	idx := buildZipIndex(zr)
+	for i := range records {
+		rec := &records[i]
+		if rec.CoverFile == "" && rec.Cover == "" {
+			continue
+		}
+		if lookupCoverEntry(idx, rec) == nil {
+			missing++
+			continue
+		}
+		found++
+	}
+	return found, missing
+}
+
 // extractCovers materializes each record's cover from the zip (decoding
 // base64 when needed), stores it content-addressed via storage (auto-dedupe
 // by hash), derives coverFile, and registers cover metadata. It deliberately
@@ -344,20 +416,7 @@ func (h *Handler) extractCovers(zr *zip.Reader, records []models.Record) ([]stri
 			continue
 		}
 
-		var entry *zip.File
-		if rec.CoverFile != "" {
-			base := filepath.Base(rec.CoverFile)
-			entry = idx.byName[strings.ToLower(base)]
-			if entry == nil {
-				entry = idx.byBase[strings.ToLower(stripExt(base))]
-			}
-		} else {
-			key := strings.ToLower(rec.Cover)
-			entry = idx.byBase[key]
-			if entry == nil {
-				entry = idx.byName[key]
-			}
-		}
+		entry := lookupCoverEntry(idx, rec)
 		if entry == nil {
 			missing++
 			continue

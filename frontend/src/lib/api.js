@@ -166,10 +166,12 @@ export const api = {
   //   { all: true, field? }    撤销该字段（或全部）的所有标记
   costUnreview: (payload) => request('/api/costs/unreview', { method: 'POST', body: JSON.stringify(payload) }),
 
-  importRecords: async (file) => {
+  // 导入/恢复：dryRun 时不落库，只返回 { new_records, updated_records, skipped, issues, warnings }
+  importRecords: async (file, { dryRun = false } = {}) => {
     const form = new FormData();
     form.append('file', file);
-    const res = await fetch(`${API_BASE}/api/records/import`, {
+    const qs = dryRun ? '?dry_run=1' : '';
+    const res = await fetch(`${API_BASE}/api/records/import${qs}`, {
       method: 'POST',
       credentials: 'same-origin',
       headers: authHeaders(),
@@ -195,6 +197,9 @@ export const api = {
   updateDrama: (id, data) => request(`/api/dramas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteDrama: (id) => request(`/api/dramas/${id}`, { method: 'DELETE' }),
   reorderDramas: (ids) => request('/api/dramas/reorder', { method: 'POST', body: JSON.stringify({ ids }) }),
+  // 合并重复剧目：dryRun 时只返回影响面预览（source/target 场次、需改挂/去重的条数）。
+  mergeDramas: (sourceID, targetID, { dryRun = true } = {}) =>
+    request('/api/dramas/merge', { method: 'POST', body: JSON.stringify({ source_id: sourceID, target_id: targetID, dry_run: dryRun }) }),
   createZhezi: (dramaId, data) => request(`/api/dramas/${dramaId}/zhezis`, { method: 'POST', body: JSON.stringify(data) }),
   updateZhezi: (id, data) => request(`/api/zhezis/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteZhezi: (id) => request(`/api/zhezis/${id}`, { method: 'DELETE' }),
@@ -206,6 +211,21 @@ export const api = {
   updateArtist: (id, data) => request(`/api/artists/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteArtist: (id) => request(`/api/artists/${id}`, { method: 'DELETE' }),
   reorderArtists: (ids) => request('/api/artists/reorder', { method: 'POST', body: JSON.stringify({ ids }) }),
+  // 合并重复演员：dryRun 时只返回影响面预览。
+  mergeArtists: (sourceID, targetID, { dryRun = true } = {}) =>
+    request('/api/artists/merge', { method: 'POST', body: JSON.stringify({ source_id: sourceID, target_id: targetID, dry_run: dryRun }) }),
+
+  // 场馆层：以 records.address 为唯一真源的去重实体。
+  listVenues: () => request('/api/venues'),
+  // 同址合并：把 sourceIDs 对应的场馆并入 targetID，改写对应记录 address。
+  // dryRun 时只返回影响面预览（records_repoint / aliases_added）。
+  mergeVenues: (targetID, sourceIDs, { dryRun = true } = {}) =>
+    request('/api/venues/merge', { method: 'POST', body: JSON.stringify({ target_id: targetID, source_ids: sourceIDs, dry_run: dryRun }) }),
+  // 重新同步场馆层与当前记录（新增未代表的地址、删除零记录行）。
+  rescanVenues: () => request('/api/venues/rescan', { method: 'POST' }),
+  // 破坏性删除的影响面预览（?dry_run=1）：返回受影响数量，不执行删除。
+  // kind ∈ category | drama | artist | zhezi
+  previewDelete: (kind, id) => request(`/api/${kind}s/${id}?dry_run=1`, { method: 'DELETE' }),
 
   getStats: () => request('/api/stats'),
   getDashboard: () => request('/api/dashboard'),

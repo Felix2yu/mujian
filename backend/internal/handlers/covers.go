@@ -195,6 +195,8 @@ func (h *Handler) cleanupCovers(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Files []string `json:"files"`
 		All   bool     `json:"all"`
+		// 只预览不移动（默认 false，保持向后兼容）。
+		DryRun bool `json:"dry_run"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, 400, "invalid request body")
@@ -219,11 +221,20 @@ func (h *Handler) cleanupCovers(w http.ResponseWriter, r *http.Request) {
 			continue // never trash a referenced file
 		}
 		size, _ := h.db.CoverSize(k)
+		if req.DryRun {
+			moved++
+			freed += size
+			continue
+		}
 		if err := h.storage.MoveCoverToTrash(k); err == nil {
 			moved++
 			freed += size
 			h.db.DeleteCoverMeta(k)
 		}
+	}
+	if req.DryRun {
+		jsonResp(w, 200, map[string]interface{}{"dry_run": true, "moved": moved, "freed_bytes": freed})
+		return
 	}
 	jsonResp(w, 200, map[string]interface{}{"moved": moved, "freed_bytes": freed})
 }
@@ -232,6 +243,15 @@ func (h *Handler) cleanupCovers(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) purgeTrash(w http.ResponseWriter, r *http.Request) {
 	coverMu.Lock()
 	defer coverMu.Unlock()
+	if wantsDryRun(r) {
+		keys, err := h.storage.ListTrashKeys()
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonResp(w, 200, map[string]any{"dry_run": true, "matched": len(keys)})
+		return
+	}
 	n, err := h.storage.PurgeTrash()
 	if err != nil {
 		jsonErr(w, 500, err.Error())

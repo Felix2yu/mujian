@@ -3,6 +3,7 @@
   import { fade, fly } from 'svelte/transition';
   import { page } from '$app/stores';
   import { api } from '$lib/api.js';
+  import { askConfirm } from '$lib/confirm.js';
   import { loadStatusFilter, ALL_STATUSES } from '$lib/statusPrefs.js';
   import { loadPref, savePref } from '$lib/prefs.js';
   import RecordCard from '$lib/components/RecordCard.svelte';
@@ -24,7 +25,7 @@
   let filters = $state({
     q: '', category: '', city: '', year: '', month: '',
     drama: '', zhezi: '', artist: '',
-    channel: '', company: '',
+    channel: '', company: '', address: '',
     start: '', end: '',
     rating_min: '', price_min: '', price_max: '',
     status: '', exact: false,
@@ -64,16 +65,18 @@
   let artistList = $state([]);
   let channels = $state([]);
   let companies = $state([]);
+  let addresses = $state([]);
   let filterDataLoaded = false;
   async function loadFilterData() {
     if (filterDataLoaded) return;
     filterDataLoaded = true;
     try {
-      const [tree, arts, chans, comps] = await Promise.all([
+      const [tree, arts, chans, comps, addrs] = await Promise.all([
         api.getDramaTree(),
         api.listArtists(),
         api.getAutocomplete('channel'),
-        api.getAutocomplete('company')
+        api.getAutocomplete('company'),
+        api.getAutocomplete('address')
       ]);
       const d = [], z = [];
       for (const dr of tree || []) {
@@ -85,6 +88,7 @@
       artistList = (arts || []).map((a) => ({ id: a.id, name: a.name }));
       channels = chans || [];
       companies = comps || [];
+      addresses = addrs || [];
     } catch (e) { /* 候选缺失时不阻塞筛选面板 */ }
   }
   const dramaLabel = (id) => (dramaList.find((x) => x.id === id) || {}).name || '剧目';
@@ -169,7 +173,16 @@
 
   async function batchDelete() {
     if (selectedIds.size === 0) return;
-    if (!confirm(`确定删除 ${selectedIds.size} 条记录？此操作不可恢复。`)) return;
+    const n = selectedIds.size;
+    const ok = await askConfirm({
+      title: '批量删除记录',
+      message: `将永久删除选中的 ${n} 条演出记录，且不可恢复。`,
+      confirmLabel: `删除 ${n} 条`,
+      danger: true,
+      impact: n,
+      impactLabel: '条记录'
+    });
+    if (!ok) return;
     try {
       await api.batchDelete([...selectedIds]);
       selectedIds.clear();
@@ -222,6 +235,7 @@
       filters.artist ? { k: 'artist', label: `演员：${artistLabel(filters.artist)}` } : null,
       filters.channel ? { k: 'channel', label: `渠道：${filters.channel}` } : null,
       filters.company ? { k: 'company', label: `剧团：${filters.company}` } : null,
+      filters.address ? { k: 'address', label: `场馆：${filters.address}` } : null,
       filters.start ? { k: 'start', label: `起：${filters.start}` } : null,
       filters.end ? { k: 'end', label: `止：${filters.end}` } : null,
       filters.rating_min ? { k: 'rating_min', label: `评分≥${filters.rating_min}` } : null,
@@ -248,7 +262,7 @@
 
   function buildFilterQuery() {
     const params = new URLSearchParams();
-    const keys = ['q', 'category', 'city', 'year', 'month', 'drama', 'zhezi', 'artist', 'channel', 'company', 'start', 'end', 'rating_min', 'price_min', 'price_max', 'status'];
+    const keys = ['q', 'category', 'city', 'year', 'month', 'drama', 'zhezi', 'artist', 'channel', 'company', 'address', 'start', 'end', 'rating_min', 'price_min', 'price_max', 'status'];
     for (const k of keys) if (filters[k]) params.set(k, filters[k]);
     if (filters.exact) params.set('exact', '1');
     if (filters.missing.length) params.set('missing', filters.missing.join(','));
@@ -262,6 +276,7 @@
     const _ = [
       filters.q, filters.category, filters.city, filters.year, filters.month,
       filters.drama, filters.zhezi, filters.artist, filters.channel, filters.company,
+      filters.address,
       filters.start, filters.end, filters.rating_min, filters.price_min, filters.price_max,
       filters.status, filters.exact, filters.missing.join(',')
     ];
@@ -274,7 +289,7 @@
   // 合并筛选参数 + 分页参数
   function buildQuery(off = 0, limit = PAGE_SIZE) {
     const q = {};
-    const keys = ['q', 'category', 'city', 'year', 'month', 'drama', 'zhezi', 'artist', 'channel', 'company', 'start', 'end', 'rating_min', 'price_min', 'price_max', 'status'];
+    const keys = ['q', 'category', 'city', 'year', 'month', 'drama', 'zhezi', 'artist', 'channel', 'company', 'address', 'start', 'end', 'rating_min', 'price_min', 'price_max', 'status'];
     for (const k of keys) if (filters[k]) q[k] = filters[k];
     if (filters.exact) q.exact = '1';
     if (filters.missing.length) q.missing = filters.missing.join(',');
@@ -313,8 +328,14 @@
     filters = { ...filters, ...JSON.parse(JSON.stringify(v.filters)), missing: [...(v.filters.missing || [])] };
     load();
   }
-  function removeView(v) {
-    if (!confirm(`删除视图「${v.name}」？`)) return;
+  async function removeView(v) {
+    const ok = await askConfirm({
+      title: '删除视图',
+      message: `删除保存的视图「${v.name}」？此操作不影响任何演出记录。`,
+      confirmLabel: '删除视图',
+      danger: false
+    });
+    if (!ok) return;
     savedViews = savedViews.filter((x) => x !== v);
     persistViews();
   }
@@ -442,7 +463,7 @@
     filters = {
       q: '', category: '', city: '', year: '', month: '',
       drama: '', zhezi: '', artist: '',
-      channel: '', company: '',
+      channel: '', company: '', address: '',
       start: '', end: '',
       rating_min: '', price_min: '', price_max: '',
       status: '', exact: false,
@@ -487,6 +508,7 @@
       artist: sp.get('artist') || '',
       channel: sp.get('channel') || '',
       company: sp.get('company') || '',
+      address: sp.get('address') || '',
       start: sp.get('start') || '',
       end: sp.get('end') || '',
       rating_min: sp.get('rating_min') || '',
@@ -605,11 +627,18 @@
             <div class="skel-card"><div class="skeleton skel-cover"></div><div class="skeleton skel-line"></div><div class="skeleton skel-line short"></div></div>
           {/each}
         </div>
+      {:else if error}
+        <div class="empty card">
+          <div class="ico"><OperaIcon size={44} /></div>
+          <div class="t">加载失败</div>
+          <div class="h">{error}</div>
+          <button class="btn sm" onclick={() => load()}>重试</button>
+        </div>
       {:else if records.length === 0}
         <div class="empty card">
           <div class="ico"><OperaIcon size={44} /></div>
           <div class="t">{activeChips.length ? '没有符合条件的记录' : '还没有记录'}</div>
-          <div class="h">{activeChips.length ? '试试调整筛选条件，或清除全部筛选' : '前往「导入」上传 recordlive_export 的 data.json，或点击右上角新建第一条记录'}</div>
+          <div class="h">{activeChips.length ? '试试调整筛选条件，或清除全部筛选' : '前往「数据」页导入 recordlive_export 的 data.json，或点击右上角新建第一条记录'}</div>
           {#if activeChips.length}<button class="btn sm" onclick={resetFilters}>清除筛选</button>{/if}
         </div>
       {:else}
@@ -752,6 +781,11 @@
           <span class="filter-label">剧团</span>
           <input class="input" list="flt-company" placeholder="剧团" bind:value={filters.company} onchange={load} />
           <datalist id="flt-company">{#each companies as c}<option value={c}>{c}</option>{/each}</datalist>
+        </label>
+        <label class="filter-field">
+          <span class="filter-label">场馆</span>
+          <input class="input" list="flt-address" placeholder="场馆 / 剧院" bind:value={filters.address} onchange={load} />
+          <datalist id="flt-address">{#each addresses as a}<option value={a}>{a}</option>{/each}</datalist>
         </label>
       </div>
     </div>

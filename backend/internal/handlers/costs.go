@@ -32,19 +32,21 @@ func (h *Handler) getCostPending(w http.ResponseWriter, r *http.Request) {
 			limit = n
 		}
 	}
-	records, err := h.db.ListCostPending(r.Context(), limit)
+	enabled := h.cfg.GetCostEnabledFields()
+	records, err := h.db.ListCostPending(r.Context(), limit, enabled)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
-	summary, err := h.db.CostSummary()
+	summary, err := h.db.CostSummary(enabled)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
 	jsonResp(w, 200, map[string]interface{}{
-		"records": records,
-		"summary": summary,
+		"records":       records,
+		"summary":       summary,
+		"enabled_fields": enabled,
 	})
 }
 
@@ -182,7 +184,7 @@ func (h *Handler) postCostReview(w http.ResponseWriter, r *http.Request) {
 		affected += n
 	}
 
-	summary, err := h.db.CostSummary()
+	summary, err := h.db.CostSummary(h.cfg.GetCostEnabledFields())
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -233,7 +235,7 @@ func (h *Handler) postCostUnreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	summary, err := h.db.CostSummary()
+	summary, err := h.db.CostSummary(h.cfg.GetCostEnabledFields())
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return

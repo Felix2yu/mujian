@@ -3,6 +3,7 @@ package handlers
 import (
 	"testing"
 
+	"mujian/internal/config"
 	"mujian/internal/models"
 )
 
@@ -17,7 +18,12 @@ func costFieldPtr(v float64) *float64 { return &v }
 // TestCostsEndpoints 覆盖费用补全三个端点的端到端行为：筛选、批量标记、
 // 设置金额、dry_run 预览、撤销，以及非法入参的拒绝。
 func TestCostsEndpoints(t *testing.T) {
-	ts, _, database, _ := newTestServer(t, nil)
+	// 费用补全测试覆盖全部三个字段的待确认/标记语义，故临时把参与字段开到全量
+	// （默认仅 "price"）。其余行为不受影响。
+	allCost := "price,pay_price,other_cost"
+	ts, _, database, _ := newTestServer(t, func(c *config.Config) {
+		c.Update(&config.SettingsUpdate{CostEnabledFields: &allCost})
+	})
 
 	empty, err := database.CreateRecord(models.RecordRequest{Name: "全空", Date: 1_750_000_000})
 	if err != nil {
@@ -141,14 +147,17 @@ func TestCostsEndpoints(t *testing.T) {
 
 // TestCostsUnreviewAllByField 覆盖「撤销该字段全部标记」。
 func TestCostsUnreviewAllByField(t *testing.T) {
-	ts, _, database, _ := newTestServer(t, nil)
+	allCost := "price,pay_price,other_cost"
+	ts, _, database, _ := newTestServer(t, func(c *config.Config) {
+		c.Update(&config.SettingsUpdate{CostEnabledFields: &allCost})
+	})
 
 	for i := 0; i < 3; i++ {
 		if _, err := database.CreateRecord(models.RecordRequest{Name: "r", Date: int64(1_750_000_000 + i)}); err != nil {
 			t.Fatalf("seed: %v", err)
 		}
 	}
-	rows, err := database.ListCostPending(t.Context(), 0)
+	rows, err := database.ListCostPending(t.Context(), 0, []string{models.CostFieldPrice, models.CostFieldPayPrice, models.CostFieldOtherCost})
 	if err != nil {
 		t.Fatalf("ListCostPending: %v", err)
 	}

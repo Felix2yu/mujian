@@ -7,6 +7,136 @@ import (
 	"strings"
 )
 
+// MergePreview is the read-only counterpart of a merge: it reports the same
+// counts MergeArtists / MergeDramas would produce, without writing anything.
+// The web UI shows it before asking for confirmation.
+type MergePreview struct {
+	Kind           string     `json:"kind"` // artist | drama | venue
+	Source         MergeSide  `json:"source"`
+	Target         MergeSide  `json:"target"`
+	Sources        []MergeSide `json:"sources,omitempty"` // 多源合并时逐源明细
+	RecordsRepoint int        `json:"records_repoint"`
+	RecordsDedupe  int        `json:"records_dedupe"`
+	ZhezisMoved    int        `json:"zhezis_moved"`
+	ZhezisDeduped  int        `json:"zhezis_deduped"`
+	AliasesAdded   []string   `json:"aliases_added"`
+}
+
+// MergeSide summarises one side of a prospective merge.
+type MergeSide struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Aliases     []string `json:"aliases"`
+	RecordCount int      `json:"record_count"`
+	ZheziCount  int      `json:"zhezi_count"`
+}
+
+// mergeAliasDelta lists the names that would be folded into target's alias list.
+func mergeAliasDelta(targetName string, targetAliases []string, sourceName string, sourceAliases []string) []string {
+	seen := map[string]bool{strings.TrimSpace(targetName): true}
+	for _, a := range targetAliases {
+		seen[strings.TrimSpace(a)] = true
+	}
+	out := []string{}
+	for _, cand := range append([]string{sourceName}, sourceAliases...) {
+		cand = strings.TrimSpace(cand)
+		if cand == "" || seen[cand] {
+			continue
+		}
+		seen[cand] = true
+		out = append(out, cand)
+	}
+	return out
+}
+
+// PreviewMergeArtists reports what MergeArtists(source, target) would do.
+func (db *DB) PreviewMergeArtists(sourceID, targetID string) (*MergePreview, error) {
+	if sourceID == "" || targetID == "" {
+		return nil, fmt.Errorf("需要提供 source 与 target")
+	}
+	if sourceID == targetID {
+		return nil, fmt.Errorf("source 与 target 是同一个演员，无需合并")
+	}
+	source, err := db.GetArtist(sourceID)
+	if err != nil {
+		return nil, fmt.Errorf("source 演员不存在: %w", err)
+	}
+	target, err := db.GetArtist(targetID)
+	if err != nil {
+		return nil, fmt.Errorf("target 演员不存在: %w", err)
+	}
+	p := &MergePreview{
+		Kind: "artist",
+		Source: MergeSide{
+			ID: source.ID, Name: source.Name, Aliases: source.Aliases, RecordCount: source.RecordCount,
+		},
+		Target: MergeSide{
+			ID: target.ID, Name: target.Name, Aliases: target.Aliases, RecordCount: target.RecordCount,
+		},
+		AliasesAdded: mergeAliasDelta(target.Name, target.Aliases, source.Name, source.Aliases),
+	}
+	var total, shared int
+	if err := db.conn.QueryRow(`
+		SELECT
+			(SELECT COUNT(*) FROM record_artists WHERE artist_id = ?),
+			(SELECT COUNT(*) FROM record_artists a
+			   JOIN record_artists b ON b.record_id = a.record_id AND b.artist_id = ?
+			  WHERE a.artist_id = ?)`,
+		sourceID, targetID, sourceID).Scan(&total, &shared); err != nil {
+		return nil, err
+	}
+	p.RecordsDedupe = shared
+	p.RecordsRepoint = total - shared
+	return p, nil
+}
+
+// PreviewMergeDramas reports what MergeDramas(source, target) would do.
+func (db *DB) PreviewMergeDramas(sourceID, targetID string) (*MergePreview, error) {
+	if sourceID == "" || targetID == "" {
+		return nil, fmt.Errorf("需要提供 source 与 target")
+	}
+	if sourceID == targetID {
+		return nil, fmt.Errorf("source 与 target 是同一个剧目，无需合并")
+	}
+	source, err := db.GetDrama(sourceID)
+	if err != nil {
+		return nil, fmt.Errorf("source 剧目不存在: %w", err)
+	}
+	target, err := db.GetDrama(targetID)
+	if err != nil {
+		return nil, fmt.Errorf("target 剧目不存在: %w", err)
+	}
+	p := &MergePreview{
+		Kind: "drama",
+		Source: MergeSide{
+			ID: source.ID, Name: source.Name, Aliases: source.Aliases, RecordCount: source.RecordCount, ZheziCount: source.ZheziCount,
+		},
+		Target: MergeSide{
+			ID: target.ID, Name: target.Name, Aliases: target.Aliases, RecordCount: target.RecordCount, ZheziCount: target.ZheziCount,
+		},
+		AliasesAdded: mergeAliasDelta(target.Name, target.Aliases, source.Name, source.Aliases),
+	}
+	var total, shared, srcZhezis, dupZhezis int
+	if err := db.conn.QueryRow(`
+		SELECT
+			(SELECT COUNT(*) FROM record_dramas WHERE drama_id = ?),
+			(SELECT COUNT(*) FROM record_dramas a
+			   JOIN record_dramas b ON b.record_id = a.record_id AND b.drama_id = ?
+			  WHERE a.drama_id = ?),
+			(SELECT COUNT(*) FROM zhezis WHERE drama_id = ?),
+			(SELECT COUNT(*) FROM zhezis s
+			   JOIN zhezis t ON t.drama_id = ? AND t.name = s.name
+			  WHERE s.drama_id = ?)`,
+		sourceID, targetID, sourceID, sourceID, targetID, sourceID).Scan(&total, &shared, &srcZhezis, &dupZhezis); err != nil {
+		return nil, err
+	}
+	p.RecordsDedupe = shared
+	p.RecordsRepoint = total - shared
+	p.ZhezisDeduped = dupZhezis
+	p.ZhezisMoved = srcZhezis - dupZhezis
+	return p, nil
+}
+
 // MergeArtistsResult reports what MergeArtists did.
 type MergeArtistsResult struct {
 	SourceID         string   `json:"source_id"`
@@ -234,6 +364,12 @@ func (db *DB) MergeDramas(sourceID, targetID string) (*MergeDramasResult, error)
 
 	if _, err := tx.Exec("UPDATE dramas SET aliases = ?, remark = ? WHERE id = ?",
 		marshalJSON(aliases), remark, targetID); err != nil {
+		return nil, err
+	}
+	// 墓碑：records.play 里仍留着 source 的旧名，而 dramaIDByName 只按 name 精确
+	// 匹配（不认 aliases），不做这一步的话下次启动回填会新建一个同名剧目，
+	// 合并结果被悄悄回滚。
+	if err := retireDramaNamesExec(tx, append([]string{source.Name}, source.Aliases...)...); err != nil {
 		return nil, err
 	}
 	if _, err := tx.Exec("DELETE FROM dramas WHERE id = ?", sourceID); err != nil {

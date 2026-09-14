@@ -68,6 +68,9 @@
   })();
 
   let error = $state('');
+  // GET /api/settings 失败时不允许渲染表单：空白表单的默认值会被用户误存回去，
+  // 覆盖掉服务端真实配置（曾经只能靠底部一行提示分辨）。
+  let loadError = $state('');
   let saved = $state(false);
   let saving = $state(false);
   let loading = $state(true);
@@ -166,6 +169,7 @@
   async function load() {
     loading = true;
     error = '';
+    loadError = '';
     try {
       settings = await api.getSettings();
       if (!settings.storage_type) settings.storage_type = 'local';
@@ -204,6 +208,7 @@
       authToken = loadPref('mujian:auth_token', '');
       authRequired = settings.auth_required === true;
     } catch (e) {
+      loadError = e.message || '加载设置失败';
       error = e.message;
     } finally {
       loading = false;
@@ -230,6 +235,7 @@
         show_pay_price: settings.show_pay_price,
         show_other_cost: settings.show_other_cost,
         multi_currency: settings.multi_currency,
+        cost_enabled_fields: settings.cost_enabled_fields || 'price',
         default_start_time: settings.default_start_time || '19:30',
         reminder_mode: settings.reminder_mode || 'hours_before',
         reminder_before_hours: Math.max(0, Math.min(72, Number(settings.reminder_before_hours) || 12)),
@@ -274,6 +280,24 @@
   function setTheme(v) {
     currentTheme = v;
     theme.set(v);
+  }
+
+  // 费用补全参与字段：从后端返回的逗号串解析成 Set；空串按后端语义回退为 price。
+  function costFieldsSet() {
+    const raw = (settings.cost_enabled_fields || 'price')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return new Set(raw.length ? raw : ['price']);
+  }
+  function costFieldOn(f) {
+    return costFieldsSet().has(f);
+  }
+  function toggleCostField(f) {
+    const set = costFieldsSet();
+    if (set.has(f)) set.delete(f);
+    else set.add(f);
+    settings.cost_enabled_fields = Array.from(set).join(',');
   }
 
   async function runBatchConvert(format) {
@@ -420,6 +444,15 @@
 
   {#if loading}
     <div class="skeleton" style="height: 220px;"></div>
+  {:else if loadError}
+    <div class="card sec">
+      <h3>设置读取失败</h3>
+      <div class="banner error">⚠ {loadError}</div>
+      <p class="hint" style="margin: 10px 0 14px;">
+        未能读取服务端配置。为避免把空白默认值覆盖到服务端，表单已隐藏——请检查服务是否可访问后重试。
+      </p>
+      <button class="btn primary" onclick={() => load()}>重试</button>
+    </div>
   {:else}
     <div class="settings-grid">
 {#snippet themeCard()}
@@ -644,6 +677,22 @@
         <span>启用多币种（金额可单独选择币种）</span>
         <input type="checkbox" bind:checked={settings.multi_currency} />
       </label>
+      <div class="sub-sec">
+        <span class="sub-title">费用补全参与字段</span>
+        <span class="hint">仅勾选的字段会进入「数据 → 费用补全」待确认清单。默认仅「票价」——实付/其他花费全库多为 0，纳入会产生大量无效待办。需要补全时再勾选。</span>
+        <label class="switch-row">
+          <span>票价</span>
+          <input type="checkbox" checked={costFieldOn('price')} onchange={() => toggleCostField('price')} />
+        </label>
+        <label class="switch-row">
+          <span>实付金额</span>
+          <input type="checkbox" checked={costFieldOn('pay_price')} onchange={() => toggleCostField('pay_price')} />
+        </label>
+        <label class="switch-row">
+          <span>其他花费</span>
+          <input type="checkbox" checked={costFieldOn('other_cost')} onchange={() => toggleCostField('other_cost')} />
+        </label>
+      </div>
       <div class="time-row">
         <span>默认演出开始时间</span>
         <input class="input" type="time" bind:value={settings.default_start_time} style="max-width: 120px;" />
@@ -1071,6 +1120,9 @@
   }
   .switch-row:first-of-type { border-top: none; }
   .switch-row input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+  .sub-sec { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
+  .sub-title { display: block; font-size: 13.5px; font-weight: 600; color: var(--text-1); margin-bottom: 4px; }
+  .sub-sec .hint { margin-bottom: 6px; }
   .status-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .status-opt {
     display: inline-flex;

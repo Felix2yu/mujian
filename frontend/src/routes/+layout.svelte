@@ -6,6 +6,7 @@
   import { onMount } from 'svelte';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
+  import ConfirmModal from '$lib/components/ConfirmModal.svelte';
   import '$lib/app.css';
 
   let { children } = $props();
@@ -378,6 +379,8 @@
     <img src={globalLightboxSrc} alt="" />
   </button>
 {/if}
+
+<ConfirmModal />
 
 <style>
   .app { min-height: 100vh; display: flex; flex-direction: column; }

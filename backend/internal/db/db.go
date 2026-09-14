@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"mujian/internal/models"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	_ "modernc.org/sqlite"
 )
@@ -93,6 +95,11 @@ func New(dbPath string) (*DB, error) {
 	// 幂等，可安全地在每次启动时运行。
 	if err := db.BackfillDramasFromRecords(); err != nil {
 		return nil, fmt.Errorf("backfill dramas: %w", err)
+	}
+	// 场馆层：仅当 venues 为空时从 records.address 一次性补齐规范场馆。
+	// 幂等，可安全地在每次启动时运行。
+	if err := db.BackfillVenuesFromRecords(); err != nil {
+		return nil, fmt.Errorf("backfill venues: %w", err)
 	}
 
 	return db, nil
@@ -200,8 +207,7 @@ func (db *DB) migrate() error {
 		`CREATE TABLE IF NOT EXISTS categories (
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
-			active_ids TEXT NOT NULL DEFAULT '[]',
-			record_count INTEGER NOT NULL DEFAULT 0
+			active_ids TEXT NOT NULL DEFAULT '[]'
 		)`,
 		`CREATE TABLE IF NOT EXISTS meta (
 			key TEXT PRIMARY KEY,
@@ -306,6 +312,11 @@ func (db *DB) migrate() error {
 		}
 	}
 
+	// 场馆层：以 records.address 为唯一真源的去重实体表。
+	if err := db.createVenuesTable(); err != nil {
+		return fmt.Errorf("create venues table: %w", err)
+	}
+
 	// Add the drama/zhezi link columns to existing records tables that were
 	// created before this schema addition.
 	if err := db.addColumn("records", "drama_ids", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
@@ -396,6 +407,13 @@ func (db *DB) migrate() error {
 	// active_ids on categories is now derived from records; drop the redundant
 	// column. Existing data is reconstructable from records.active_status.
 	if err := db.dropColumnIfExists("categories", "active_ids"); err != nil {
+		return err
+	}
+
+	// record_count on categories was a cache column that nothing read (counts are
+	// computed from records on the fly) yet the HTTP layer wrote back whatever the
+	// client sent — a stale, client-writable second source of truth. Drop it.
+	if err := db.dropColumnIfExists("categories", "record_count"); err != nil {
 		return err
 	}
 
@@ -870,6 +888,7 @@ type RecordFilter struct {
 	// 扩展筛选维度（前端筛选面板新增的字段）
 	Channel      string  // 渠道精确匹配
 	Company      string  // 剧团精确匹配
+	Address      string  // 场馆（records.address）精确匹配；分析页「场馆 Top」下钻入口
 	RatingMin    int     // 评分下限（含）
 	PriceMin     float64 // 票价下限（含）
 	PriceMax     float64 // 票价上限（含）；仅当 >0 时生效
@@ -1064,6 +1083,10 @@ func (db *DB) ListRecordsContext(ctx context.Context, f RecordFilter) ([]models.
 		where = append(where, "company = ?")
 		args = append(args, f.Company)
 	}
+	if f.Address != "" {
+		where = append(where, "address = ?")
+		args = append(args, f.Address)
+	}
 	if f.RatingMin > 0 {
 		where = append(where, "rating >= ?")
 		args = append(args, f.RatingMin)
@@ -1202,6 +1225,10 @@ func (db *DB) CountRecordsContext(ctx context.Context, f RecordFilter) (int, err
 	if f.Company != "" {
 		where = append(where, "company = ?")
 		args = append(args, f.Company)
+	}
+	if f.Address != "" {
+		where = append(where, "address = ?")
+		args = append(args, f.Address)
 	}
 	if f.RatingMin > 0 {
 		where = append(where, "rating >= ?")
@@ -2463,16 +2490,55 @@ func (db *DB) BatchDeleteRecords(ids []string) (int64, error) {
 	return db.SoftDeleteRecords(ids)
 }
 
+// NormalizeEntityName collapses pure-notation differences — case, full-width
+// forms and all whitespace (including the ideographic space) — so duplicate
+// checks treat "张 三" / "张三" and "ＡＢＣ" / "abc" as the same entity.
+// Mirrors normName() in frontend/src/lib/components/RecordForm.svelte.
+func NormalizeEntityName(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if unicode.IsSpace(r) {
+			continue
+		}
+		if r >= '\uFF01' && r <= '\uFF5E' {
+			r -= 0xFEE0
+		}
+		b.WriteRune(unicode.ToLower(r))
+	}
+	return b.String()
+}
+
+// FindCategoryByName returns the id of an existing 剧种 whose name matches under
+// NormalizeEntityName, or "" when none does. Used to reject duplicate creates and
+// renames — categories have no UNIQUE constraint.
+func (db *DB) FindCategoryByName(name string) (string, error) {
+	want := NormalizeEntityName(name)
+	if want == "" {
+		return "", nil
+	}
+	cats, err := db.ListCategories()
+	if err != nil {
+		return "", err
+	}
+	for _, c := range cats {
+		if NormalizeEntityName(c.Name) == want {
+			return c.ID, nil
+		}
+	}
+	return "", nil
+}
+
 // ---------- Categories ----------
 
 // ListCategories returns all categories ordered by manual sort order
 // (sort_order ASC) then name. The record_count field is computed on the fly
-// from records.category_names (only non-deleted records) for display purposes,
-// because the categories.record_count column is a stale cache and must NOT be
-// used. active_ids is no longer stored: it was a redundant copy of
-// "records WHERE category_name = ? AND active_status = <watching>" and is now
-// derived on demand (see GetCategory). We keep models.Category.ActiveIDs as an
-// empty slice for backward-compatible JSON.
+// from records.category_names (only non-deleted records) for display purposes —
+// the categories table no longer stores a count at all. active_ids is likewise
+// not stored: it was a redundant copy of "records WHERE category_name = ? AND
+// active_status = <watching>" and is now derived on demand (see GetCategory).
+// We keep models.Category.ActiveIDs as an empty slice for backward-compatible
+// JSON.
 //
 // The category management page renders this exact order and its drag-to-reorder
 // feature writes sort_order, so the manual order is authoritative there. The
@@ -2510,8 +2576,9 @@ func (db *DB) ListCategories() ([]models.Category, error) {
 }
 
 // upsertCategoryExec inserts/updates a category against the given executor.
-// active_ids is no longer persisted (derived from records); we ignore the
-// incoming ActiveIDs field.
+// active_ids and record_count are no longer persisted (both are derived from
+// records); the incoming ActiveIDs / RecordCount fields are ignored so a client
+// can no longer write a bogus count into the database.
 func upsertCategoryExec(exec sqlExecutor, c *models.Category) error {
 	if c.ID == "" {
 		c.ID = newID()
@@ -2519,9 +2586,9 @@ func upsertCategoryExec(exec sqlExecutor, c *models.Category) error {
 		exec.QueryRow("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM categories").Scan(&c.SortOrder)
 	}
 	_, err := exec.Exec(`
-		INSERT INTO categories (id, name, record_count, sort_order) VALUES (?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET name=excluded.name, record_count=excluded.record_count
-	`, c.ID, c.Name, c.RecordCount, c.SortOrder)
+		INSERT INTO categories (id, name, sort_order) VALUES (?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET name=excluded.name
+	`, c.ID, c.Name, c.SortOrder)
 	return err
 }
 
@@ -2849,6 +2916,10 @@ func (db *DB) SaveDrama(d models.Drama) (*models.Drama, error) {
 	if err != nil {
 		return nil, fmt.Errorf("save drama: %w", err)
 	}
+	// 用户显式新建/改名成某个曾被墓碑屏蔽的剧名 → 解除墓碑，否则回填会一直跳过它。
+	if err := unretireDramaName(db.conn, strings.TrimSpace(d.Name)); err != nil {
+		return nil, err
+	}
 	return db.GetDrama(d.ID)
 }
 
@@ -2858,6 +2929,23 @@ func (db *DB) DeleteDrama(id string) error {
 		return err
 	}
 	defer tx.Rollback()
+	// 记下剧名作为墓碑：records.play 里仍留着它，否则下次启动回填会把剧目建回来。
+	var doomedName string
+	if err := tx.QueryRow("SELECT name FROM dramas WHERE id = ?", id).Scan(&doomedName); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if doomedName != "" {
+		if err := retireDramaNamesExec(tx, doomedName); err != nil {
+			return err
+		}
+	}
+	// 先摘掉这些折子的演出关联，再删折子本身。此前只在 DeleteZhezi / MergeDramas
+	// 里做了这一步，DeleteDrama 漏了，会留下指向已删折子的 record_zhezis 孤儿行，
+	// 并被 backfillZheziIDs 回填进 Record.ZheziIDs 返回给前端。
+	if _, err := tx.Exec(
+		"DELETE FROM record_zhezis WHERE zhezi_id IN (SELECT id FROM zhezis WHERE drama_id = ?)", id); err != nil {
+		return err
+	}
 	if _, err := tx.Exec("DELETE FROM zhezis WHERE drama_id = ?", id); err != nil {
 		return err
 	}
@@ -3143,12 +3231,97 @@ func (db *DB) recordDramaIDs(id string) ([]string, error) {
 	return unmarshalStrings(s), nil
 }
 
+// retiredDramaNamesKey holds 剧名 the user has deliberately retired — by deleting
+// the drama, or by merging it into another one. records.play keeps the old name
+// after either operation, so BackfillDramasFromRecords would re-create the drama
+// on the next startup without this tombstone (observed: merged dramas reappearing).
+const retiredDramaNamesKey = "retired_drama_names"
+
+// RetiredDramaNames returns the tombstoned 剧名 set.
+func (db *DB) RetiredDramaNames() ([]string, error) {
+	var raw string
+	err := db.conn.QueryRow("SELECT value FROM meta WHERE key = ?", retiredDramaNamesKey).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return unmarshalStrings(raw), nil
+}
+
+func retiredDramaNamesExec(exec sqlExecutor) (map[string]bool, error) {
+	var raw string
+	err := exec.QueryRow("SELECT value FROM meta WHERE key = ?", retiredDramaNamesKey).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return map[string]bool{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, n := range unmarshalStrings(raw) {
+		out[n] = true
+	}
+	return out, nil
+}
+
+// retireDramaNames adds names to the tombstone set (idempotent).
+func retireDramaNamesExec(exec sqlExecutor, names ...string) error {
+	if len(names) == 0 {
+		return nil
+	}
+	cur, err := retiredDramaNamesExec(exec)
+	if err != nil {
+		return err
+	}
+	for _, n := range names {
+		n = strings.TrimSpace(n)
+		if n != "" {
+			cur[n] = true
+		}
+	}
+	return writeRetiredDramaNames(exec, cur)
+}
+
+// unretireDramaName drops a name from the tombstone set — used when the user
+// explicitly re-creates a drama under that name, so it stops being suppressed.
+func unretireDramaName(exec sqlExecutor, name string) error {
+	cur, err := retiredDramaNamesExec(exec)
+	if err != nil {
+		return err
+	}
+	if !cur[name] {
+		return nil
+	}
+	delete(cur, name)
+	return writeRetiredDramaNames(exec, cur)
+}
+
+func writeRetiredDramaNames(exec sqlExecutor, set map[string]bool) error {
+	names := make([]string, 0, len(set))
+	for n := range set {
+		names = append(names, n)
+	}
+	slices.Sort(names)
+	raw, err := json.Marshal(names)
+	if err != nil {
+		return err
+	}
+	_, err = exec.Exec(
+		`INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+		retiredDramaNamesKey, string(raw))
+	return err
+}
+
 // BackfillDramasFromRecords derives 剧目 archives from the 剧名 (play) already
 // held in records — the two are equivalent — and links each record to the
 // matching drama. Idempotent: only creates dramas for names not yet present
 // and never drops existing links, so it is safe to run on every startup.
 func (db *DB) BackfillDramasFromRecords() error {
-	rows, err := db.conn.Query("SELECT id, play FROM records")
+	// Soft-deleted records must not seed new dramas: a record sitting in the
+	// recycle bin would otherwise resurrect its drama from the trash.
+	rows, err := db.conn.Query("SELECT id, play FROM records WHERE deleted_at = 0")
 	if err != nil {
 		return fmt.Errorf("backfill: query records: %w", err)
 	}
@@ -3180,14 +3353,26 @@ func (db *DB) BackfillDramasFromRecords() error {
 	}
 
 	// Ensure a drama exists for every distinct 剧名 (name -> id).
+	retired, err := retiredDramaNamesExec(db.conn)
+	if err != nil {
+		return err
+	}
 	dramaIDByPlay := map[string]string{}
 	for name := range seen {
 		if id := db.dramaIDByName(name); id != "" {
 			dramaIDByPlay[name] = id
 			continue
 		}
+		// 用户已删除 / 已合并掉的剧名：records.play 里仍留着旧名，
+		// 若在此重建就会让剧目"复活"，故按墓碑跳过。
+		if retired[name] {
+			continue
+		}
 		id := newID()
-		if _, err := db.conn.Exec("INSERT INTO dramas (id, name) VALUES (?, ?)", id, name); err != nil {
+		// sort_order 取 MAX+1，避免自动派生的剧目以默认 0 抢在手动排序之前。
+		if _, err := db.conn.Exec(
+			"INSERT INTO dramas (id, name, sort_order) VALUES (?, ?, (SELECT COALESCE(MAX(sort_order),0)+1 FROM dramas))",
+			id, name); err != nil {
 			return err
 		}
 		dramaIDByPlay[name] = id

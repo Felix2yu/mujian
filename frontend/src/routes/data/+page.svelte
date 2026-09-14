@@ -1,14 +1,19 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
+  import { askConfirm } from '$lib/confirm.js';
   import BackupPanel from '$lib/components/BackupPanel.svelte';
   import CostCompletion from '$lib/components/CostCompletion.svelte';
   import CoverMaintenance from '$lib/components/CoverMaintenance.svelte';
+  import VenuePanel from '$lib/components/VenuePanel.svelte';
 
   let file = $state(null);
   let result = $state(null);
+  // 导入预览（?dry_run=1 的返回）：只解析校验、不落库。
+  let preview = $state(null);
   let error = $state('');
   let busy = $state(false);
+  let previewBusy = $state(false);
   let dragover = $state(false);
 
   // 回收站（软删除 30 天）
@@ -40,7 +45,15 @@
     }
   }
   async function purgeTrashed(id) {
-    if (!confirm('彻底删除这条演出？此操作不可恢复。')) return;
+    const ok = await askConfirm({
+      title: '彻底删除记录',
+      message: '这条演出将从回收站永久删除，不可恢复。',
+      confirmLabel: '彻底删除',
+      danger: true,
+      impact: 1,
+      impactLabel: '条记录'
+    });
+    if (!ok) return;
     trashBusy = id;
     try {
       await api.purgeRecord(id);
@@ -52,7 +65,15 @@
     }
   }
   async function emptyTrash() {
-    if (!confirm(`清空回收站（${trashTotal} 条）？此操作不可恢复。`)) return;
+    const ok = await askConfirm({
+      title: '清空回收站',
+      message: `将永久删除回收站中的全部 ${trashTotal} 条记录，不可恢复。`,
+      confirmLabel: `清空 ${trashTotal} 条`,
+      danger: true,
+      impact: trashTotal,
+      impactLabel: '条记录'
+    });
+    if (!ok) return;
     trashBusy = 'all';
     try {
       await api.purgeRecordsTrash();
@@ -64,10 +85,15 @@
     }
   }
 
+  function resetImportState() {
+    result = null;
+    preview = null;
+    error = '';
+  }
+
   function onFile(e) {
     file = e.target.files?.[0] || null;
-    result = null;
-    error = '';
+    resetImportState();
   }
 
   function onDrop(e) {
@@ -76,12 +102,31 @@
     const f = e.dataTransfer?.files?.[0];
     if (f) {
       file = f;
-      result = null;
-      error = '';
+      resetImportState();
     }
   }
 
-  async function runImport() {
+  // 第一步：试运行。只解析 + 校验，回报新增/覆盖/跳过与拒收明细，不改动数据库。
+  async function runPreview() {
+    if (!file) {
+      error = '请选择文件（.json 或 .zip 压缩包）';
+      return;
+    }
+    previewBusy = true;
+    error = '';
+    result = null;
+    try {
+      preview = await api.importRecords(file, { dryRun: true });
+    } catch (e) {
+      error = e.message;
+      preview = null;
+    } finally {
+      previewBusy = false;
+    }
+  }
+
+  // 第二步：确认后真正写入。
+  async function confirmImport() {
     if (!file) {
       error = '请选择文件（.json 或 .zip 压缩包）';
       return;
@@ -90,6 +135,7 @@
     error = '';
     try {
       result = await api.importRecords(file);
+      preview = null;
     } catch (e) {
       error = e.message;
     } finally {
@@ -142,15 +188,49 @@
     </div>
 
     <div class="btn-row">
-      <button class="btn primary lg" onclick={runImport} disabled={busy || !file}>
-        {busy ? '导入中…' : '开始导入'}
+      <button class="btn primary lg" onclick={runPreview} disabled={busy || previewBusy || !file}>
+        {previewBusy ? '检查中…' : '预览导入'}
       </button>
-      {#if file && !busy}<button class="btn" onclick={() => (file = null)}>清除</button>{/if}
+      {#if file && !busy && !previewBusy}
+        <button class="btn" onclick={() => { file = null; resetImportState(); }}>清除</button>
+      {/if}
     </div>
 
+    {#if previewBusy}<p class="tiny warn-hint">正在解析并试运行校验（不写入数据库）；大备份（含封面）可能需要数分钟。</p>{/if}
     {#if busy}<p class="tiny warn-hint">导入进行中，请勿刷新或关闭页面、不要重复点击；大备份（含封面）可能需要数分钟。</p>{/if}
 
     {#if error}<div class="banner error">⚠ {error}</div>{/if}
+
+    {#if preview}
+      <div class="card sec preview">
+        <h3>导入预览 <span class="tiny muted">试运行 · 尚未写入</span></h3>
+        <div class="pstats">
+          <span class="pstat"><b>{preview.new_records ?? 0}</b> 新增</span>
+          <span class="pstat"><b>{preview.updated_records ?? 0}</b> 覆盖</span>
+          <span class="pstat" class:warn={preview.skipped > 0}><b>{preview.skipped ?? 0}</b> 跳过</span>
+          <span class="pstat"><b>{preview.records ?? 0}</b> 记录</span>
+          <span class="pstat"><b>{preview.categories ?? 0}</b> 分类</span>
+          {#if preview.covers_imported}<span class="pstat"><b>{preview.covers_imported}</b> 封面</span>{/if}
+          {#if preview.covers_missing}<span class="pstat warn"><b>{preview.covers_missing}</b> 封面缺失</span>{/if}
+        </div>
+        {#if preview.warnings?.length}
+          <ul class="plist">
+            {#each preview.warnings as w}<li>提示：{w.reason}（{w.count} 条）</li>{/each}
+          </ul>
+        {/if}
+        {#if preview.issues?.length}
+          <ul class="plist">
+            {#each preview.issues as it}<li>跳过第 {it.index + 1} 条{#if it.id}（id {it.id}）{/if}：{it.reason}</li>{/each}
+          </ul>
+        {/if}
+        <div class="btn-row">
+          <button class="btn primary" onclick={confirmImport} disabled={busy}>
+            {busy ? '导入中…' : `确认导入（${preview.records ?? 0} 条）`}
+          </button>
+          <button class="btn" onclick={() => (preview = null)} disabled={busy}>取消</button>
+        </div>
+      </div>
+    {/if}
     {#if result}
       <div class="banner success">
         ✓ 导入完成：记录 {result.records} 条，分类 {result.categories} 个
@@ -247,6 +327,7 @@
      组件自身已带 fade-up 入场动画与分区标题。 -->
 <CostCompletion />
 <CoverMaintenance />
+<VenuePanel />
 
 <style>
   /* 分区：与费用补全组件（.cost-section）保持同一套节奏——28px 上间距 +
@@ -310,6 +391,36 @@
   .sec { padding: 18px 20px; margin-top: 16px; }
   .sec h3 { margin: 0 0 10px; font-size: 15.5px; }
   .tips { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--text-2); }
+
+  /* 导入预览：试运行统计条 + 提示/拒收明细 */
+  .preview { margin-top: 16px; }
+  .preview h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+  .pstats { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0; }
+  .pstat {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--surface-3);
+    font-size: 13px;
+    color: var(--text-2);
+  }
+  .pstat b { font-size: 14px; color: var(--text); }
+  .pstat.warn { background: rgba(180, 83, 9, 0.12); color: var(--warn, #b45309); }
+  .pstat.warn b { color: inherit; }
+  /* 明细可滚动：一次导入最多回报 50 条拒收，不撑爆页面 */
+  .plist {
+    margin: 10px 0 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--text-2);
+    max-height: 220px;
+    overflow-y: auto;
+  }
 
   /* 说明卡并排（支持的文件 / 关于去重）。min() 兜底：容器窄于 320px 时轨道下限
      降为容器宽度，避免 auto-fit 的硬下限把窄屏顶破；窄于 ~660px 自动回退单列。 */

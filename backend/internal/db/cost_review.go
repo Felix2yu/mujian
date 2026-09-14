@@ -61,39 +61,48 @@ func costStringArgs(ids []string) []interface{} {
 // 再加 other_cost；NULL 视为 0）。
 const totalCostExpr = `(CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END) + COALESCE(other_cost, 0)`
 
-// ListCostPending 返回所有「至少有一个费用字段待确认」的在库记录，并为每条
-// 记录标出具体哪些字段仍待确认。
+// ListCostPending 返回所有「在 enabled 字段中至少有一个待确认」的在库记录，
+// 并为每条记录标出具体哪些字段仍待确认。enabled 为空表示不纳入任何字段，
+// 直接返回空列表（调用方应传入 GetCostEnabledFields 的结果）。
 //
 // limit 保护性地兜底（<=0 或 >5000 时取 5000）；概览计数请用 CostSummary，
 // 它不受该上限影响。
-func (db *DB) ListCostPending(ctx context.Context, limit int) ([]models.CostPendingRecord, error) {
+func (db *DB) ListCostPending(ctx context.Context, limit int, enabled []string) ([]models.CostPendingRecord, error) {
 	if limit <= 0 || limit > 5000 {
 		limit = 5000
 	}
-	// 四个子查询看似重复，但 LIST 与 WHERE 的语义不同：WHERE 是「任一字段
-	// 待确认」，三个 CASE 是「逐个字段是否待确认」。SQLite 会把这类
-	// NOT EXISTS 相关子查询按 (record_id, field) 主键索引求解，代价可接受。
-	const q = `
-SELECT r.id, r.name, r.date, r.city, r.address,
-       r.price, r.pay_price, r.other_cost, r.total_cost,
-       CASE WHEN (r.price IS NULL OR r.price = 0) AND NOT EXISTS (
-              SELECT 1 FROM cost_reviews c WHERE c.record_id = r.id AND c.field = 'price') THEN 1 ELSE 0 END,
-       CASE WHEN (r.pay_price IS NULL OR r.pay_price = 0) AND NOT EXISTS (
-              SELECT 1 FROM cost_reviews c WHERE c.record_id = r.id AND c.field = 'pay_price') THEN 1 ELSE 0 END,
-       CASE WHEN (r.other_cost IS NULL OR r.other_cost = 0) AND NOT EXISTS (
-              SELECT 1 FROM cost_reviews c WHERE c.record_id = r.id AND c.field = 'other_cost') THEN 1 ELSE 0 END
+	// 仅纳入白名单字段，避免把任意字符串拼进 SQL（costFieldColumn 已做二次校验）。
+	fields := make([]string, 0, len(enabled))
+	for _, f := range enabled {
+		if _, ok := costFieldColumn(f); ok {
+			fields = append(fields, f)
+		}
+	}
+	if len(fields) == 0 {
+		return []models.CostPendingRecord{}, nil
+	}
+
+	// LIST 与 WHERE 语义不同：WHERE 是「任一字段待确认」，CASE 是「逐个字段
+	// 是否待确认」。按 enabled 动态生成这两组片段，字段名经白名单校验后安全。
+	baseCols := []string{
+		"r.id", "r.name", "r.date", "r.city", "r.address",
+		"r.price", "r.pay_price", "r.other_cost", "r.total_cost",
+	}
+	caseExprs := make([]string, 0, len(fields))
+	whereParts := make([]string, 0, len(fields))
+	for _, f := range fields {
+		col, _ := costFieldColumn(f)
+		caseExprs = append(caseExprs,
+			fmt.Sprintf("CASE WHEN (r.%s IS NULL OR r.%s = 0) AND NOT EXISTS (SELECT 1 FROM cost_reviews c WHERE c.record_id = r.id AND c.field = '%s') THEN 1 ELSE 0 END", col, col, f))
+		whereParts = append(whereParts,
+			fmt.Sprintf("((r.%s IS NULL OR r.%s = 0) AND NOT EXISTS (SELECT 1 FROM cost_reviews c WHERE c.record_id = r.id AND c.field = '%s'))", col, col, f))
+	}
+	q := fmt.Sprintf(`
+SELECT %s, %s
 FROM records r
-WHERE r.deleted_at = 0
-  AND (
-    ((r.price IS NULL OR r.price = 0) AND NOT EXISTS (
-       SELECT 1 FROM cost_reviews c WHERE c.record_id = r.id AND c.field = 'price'))
-    OR ((r.pay_price IS NULL OR r.pay_price = 0) AND NOT EXISTS (
-       SELECT 1 FROM cost_reviews c WHERE c.record_id = r.id AND c.field = 'pay_price'))
-    OR ((r.other_cost IS NULL OR r.other_cost = 0) AND NOT EXISTS (
-       SELECT 1 FROM cost_reviews c WHERE c.record_id = r.id AND c.field = 'other_cost'))
-  )
+WHERE r.deleted_at = 0 AND (%s)
 ORDER BY r.date DESC, r.id DESC
-LIMIT ?`
+LIMIT ?`, strings.Join(baseCols, ", "), strings.Join(caseExprs, ", "), strings.Join(whereParts, " OR "))
 
 	rows, err := db.conn.QueryContext(ctx, q, limit)
 	if err != nil {
@@ -104,29 +113,28 @@ LIMIT ?`
 	out := make([]models.CostPendingRecord, 0, 64)
 	for rows.Next() {
 		var (
-			rec                       models.CostPendingRecord
-			price, pay, other         sql.NullFloat64
-			pendPrice, pendPay, pendO int
+			rec               models.CostPendingRecord
+			price, pay, other sql.NullFloat64
+			pend              = make([]int, len(fields))
 		)
-		if err := rows.Scan(
+		scanArgs := []interface{}{
 			&rec.ID, &rec.Name, &rec.Date, &rec.City, &rec.Address,
 			&price, &pay, &other, &rec.TotalCost,
-			&pendPrice, &pendPay, &pendO,
-		); err != nil {
+		}
+		for i := range fields {
+			scanArgs = append(scanArgs, &pend[i])
+		}
+		if err := rows.Scan(scanArgs...); err != nil {
 			return nil, fmt.Errorf("scan cost pending: %w", err)
 		}
 		rec.Price = nullFloatPtr(price)
 		rec.PayPrice = nullFloatPtr(pay)
 		rec.OtherCost = nullFloatPtr(other)
-		rec.PendingFields = make([]string, 0, 3)
-		if pendPrice == 1 {
-			rec.PendingFields = append(rec.PendingFields, models.CostFieldPrice)
-		}
-		if pendPay == 1 {
-			rec.PendingFields = append(rec.PendingFields, models.CostFieldPayPrice)
-		}
-		if pendO == 1 {
-			rec.PendingFields = append(rec.PendingFields, models.CostFieldOtherCost)
+		rec.PendingFields = make([]string, 0, len(fields))
+		for i, f := range fields {
+			if pend[i] == 1 {
+				rec.PendingFields = append(rec.PendingFields, f)
+			}
 		}
 		out = append(out, rec)
 	}
@@ -147,7 +155,8 @@ func nullFloatPtr(v sql.NullFloat64) *float64 {
 }
 
 // CostSummary 返回费用补全模块的概览计数（全量，不受列表 limit 影响）。
-func (db *DB) CostSummary() (*models.CostSummary, error) {
+// enabled 为空表示不纳入任何字段：概览的待确认/已标记都为 0，待确认记录数也为 0。
+func (db *DB) CostSummary(enabled []string) (*models.CostSummary, error) {
 	s := &models.CostSummary{
 		Pending:  make(map[string]int, 3),
 		Reviewed: make(map[string]int, 3),
@@ -157,7 +166,15 @@ func (db *DB) CostSummary() (*models.CostSummary, error) {
 		return nil, fmt.Errorf("count records: %w", err)
 	}
 
-	for _, field := range costFields() {
+	// 仅统计白名单字段，字段名经 costFieldColumn 二次校验后安全拼入 SQL。
+	fields := make([]string, 0, len(enabled))
+	for _, f := range enabled {
+		if _, ok := costFieldColumn(f); ok {
+			fields = append(fields, f)
+		}
+	}
+
+	for _, field := range fields {
 		col, _ := costFieldColumn(field)
 
 		var pending int
@@ -180,15 +197,19 @@ func (db *DB) CostSummary() (*models.CostSummary, error) {
 		s.ReviewedTotal += reviewed
 	}
 
-	const pendingRecordsQ = `
+	if len(fields) == 0 {
+		s.PendingRecords = 0
+		return s, nil
+	}
+	whereParts := make([]string, 0, len(fields))
+	for _, f := range fields {
+		col, _ := costFieldColumn(f)
+		whereParts = append(whereParts,
+			fmt.Sprintf("((r.%s IS NULL OR r.%s = 0) AND NOT EXISTS (SELECT 1 FROM cost_reviews c WHERE c.record_id = r.id AND c.field = '%s'))", col, col, f))
+	}
+	pendingRecordsQ := fmt.Sprintf(`
 SELECT COUNT(*) FROM records r
-WHERE r.deleted_at = 0 AND (
-     ((r.price IS NULL OR r.price = 0) AND NOT EXISTS (
-        SELECT 1 FROM cost_reviews c WHERE c.record_id = r.id AND c.field = 'price'))
-  OR ((r.pay_price IS NULL OR r.pay_price = 0) AND NOT EXISTS (
-        SELECT 1 FROM cost_reviews c WHERE c.record_id = r.id AND c.field = 'pay_price'))
-  OR ((r.other_cost IS NULL OR r.other_cost = 0) AND NOT EXISTS (
-        SELECT 1 FROM cost_reviews c WHERE c.record_id = r.id AND c.field = 'other_cost')))`
+WHERE r.deleted_at = 0 AND (%s)`, strings.Join(whereParts, " OR "))
 	if err := db.conn.QueryRow(pendingRecordsQ).Scan(&s.PendingRecords); err != nil {
 		return nil, fmt.Errorf("count pending records: %w", err)
 	}

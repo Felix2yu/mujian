@@ -92,6 +92,8 @@
   let venueHref = (it) => `/?address=${encodeURIComponent(it.name)}`;
   let artistHref = (it) => `/artists/${it.id}`;
   let dramaHref = (it) => `/dramas/${it.id}`;
+  // 折子没有独立详情页，退回到「首页按折子筛选」这一入口（此前未传 hrefFn，是死末端）
+  let zheziHref = (it) => `/?zhezi=${encodeURIComponent(it.id)}`;
 
   // ---- new dimensions derived ----
   // 合并票价 / 其他花费 到统一分桶（后端已保证桶序一致，前端再按固定顺序对齐并补零）
@@ -341,7 +343,7 @@
           {#if data.top_zhezis.length === 0}
             <p class="tiny">暂无折子记录</p>
           {:else}
-            <RankList items={data.top_zhezis} unit="场" />
+            <RankList items={data.top_zhezis} hrefFn={zheziHref} unit="场" />
           {/if}
         </div>
       </div>

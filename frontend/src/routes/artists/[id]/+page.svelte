@@ -4,6 +4,8 @@
   import BackLink from '$lib/components/BackLink.svelte';
   import RecordCard from '$lib/components/RecordCard.svelte';
   import OperaIcon from '$lib/components/OperaIcon.svelte';
+  import MergePanel from '$lib/components/MergePanel.svelte';
+  import { askConfirm } from '$lib/confirm.js';
 
   let id = $derived($page.params.id);
   let artist = $state(null);
@@ -13,7 +15,7 @@
 
   // inline editing
   let editing = $state(false);
-  let form = $state({ name: '', aliases: '', remark: '', coverFile: '', coverThumb: '' });
+  let form = $state({ name: '', aliases: '', bio: '', remark: '', coverFile: '', coverThumb: '' });
   let uploading = $state(false);
   let fileInput = $state(null);
   let saving = $state(false);
@@ -31,7 +33,8 @@
       form = {
         name: a.name,
         aliases: (a.aliases || []).join(', '),
-        remark: [a.bio, a.remark].filter(Boolean).join('\n'),
+        bio: a.bio || '',
+        remark: a.remark || '',
         coverFile: a.coverFile || '',
         coverThumb: a.coverThumb || ''
       };
@@ -46,7 +49,8 @@
     form = {
       name: artist.name,
       aliases: (artist.aliases || []).join(', '),
-      remark: [artist.bio, artist.remark].filter(Boolean).join('\n'),
+      bio: artist.bio || '',
+      remark: artist.remark || '',
       coverFile: artist.coverFile || '',
       coverThumb: artist.coverThumb || ''
     };
@@ -61,8 +65,8 @@
       artist = await api.updateArtist(id, {
         name: form.name.trim(),
         aliases: splitList(form.aliases),
+        bio: form.bio.trim(),
         remark: form.remark.trim(),
-        bio: '',
         coverFile: form.coverFile.trim(),
         coverThumb: form.coverThumb.trim()
       });
@@ -75,7 +79,20 @@
   }
 
   async function remove() {
-    if (!confirm(`删除演员「${artist.name}」？关联的演出记录不受影响。`)) return;
+    let linked = 0;
+    try {
+      const p = await api.previewDelete('artist', id);
+      linked = p?.recordsAffected ?? 0;
+    } catch (e) { /* 预览失败不影响删除本身 */ }
+    const ok = await askConfirm({
+      title: '删除演员',
+      message: `删除「${artist.name}」后，其名下所有演出记录的演员关联将被移除，演出记录本身不会被删除。`,
+      confirmLabel: '删除演员',
+      danger: true,
+      impact: linked,
+      impactLabel: '条演出将失去该演员关联'
+    });
+    if (!ok) return;
     deleting = true;
     try {
       await api.deleteArtist(id);
@@ -135,7 +152,8 @@
             <div class="edit-fields">
               <input class="input" placeholder="演员姓名" bind:value={form.name} />
               <input class="input" placeholder="别名（逗号分隔）" bind:value={form.aliases} />
-              <textarea class="input" rows="3" placeholder="简介 / 备注" bind:value={form.remark}></textarea>
+              <textarea class="input" rows="3" placeholder="简介（艺术简介 / 生平）" bind:value={form.bio}></textarea>
+              <textarea class="input" rows="2" placeholder="备注" bind:value={form.remark}></textarea>
               <div>
                 <button class="btn sm" onclick={triggerUpload} disabled={uploading}>{uploading ? '上传中…' : '⇪ 头像'}</button>
                 <input type="file" accept="image/*" onchange={handleUpload} disabled={uploading} hidden bind:this={fileInput} />
@@ -163,7 +181,8 @@
                 {/if}
                 <span class="muted">{artist.recordCount} 场演出</span>
               </div>
-              {#if artist.bio || artist.remark}<p class="remark">{artist.bio || ''}{artist.bio && artist.remark ? '\n' : ''}{artist.remark || ''}</p>{/if}
+              {#if artist.bio}<p class="remark">{artist.bio}</p>{/if}
+              {#if artist.remark}<p class="remark note">{artist.remark}</p>{/if}
             </div>
           </div>
           <div class="head-actions">
@@ -171,6 +190,7 @@
             <button class="btn danger sm" onclick={remove} disabled={deleting}>{deleting ? '删除中…' : '删除'}</button>
           </div>
         </div>
+        <MergePanel kind="artist" selfId={id} selfName={artist.name} />
       {/if}
     </div>
 
@@ -204,6 +224,7 @@
   .aliases { font-size: 12.5px; color: var(--text-muted); }
   .muted { color: var(--text-muted); font-size: 13px; white-space: nowrap; }
   .remark { margin: 10px 0 0; color: var(--text-2); white-space: pre-wrap; line-height: 1.6; }
+  .remark.note { margin-top: 6px; color: var(--text-muted); font-size: 13.5px; }
   .head-actions { display: flex; gap: 8px; flex: 0 0 auto; }
   .edit-fields { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .edit-fields .input { width: 100%; }

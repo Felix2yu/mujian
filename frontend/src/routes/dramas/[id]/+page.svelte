@@ -4,6 +4,8 @@
   import BackLink from '$lib/components/BackLink.svelte';
   import RecordCard from '$lib/components/RecordCard.svelte';
   import CategoryTags from '$lib/components/CategoryTags.svelte';
+  import MergePanel from '$lib/components/MergePanel.svelte';
+  import { askConfirm } from '$lib/confirm.js';
 
   let id = $derived($page.params.id);
   let drama = $state(null);
@@ -64,7 +66,20 @@
   }
 
   async function removeDrama() {
-    if (!confirm(`删除剧目「${drama.name}」？其下所有折子也会一并删除，演出记录不受影响。`)) return;
+    let linked = 0;
+    try {
+      const p = await api.previewDelete('drama', id);
+      linked = p?.recordsAffected ?? 0;
+    } catch (e) { /* 预览失败不影响删除本身 */ }
+    const ok = await askConfirm({
+      title: '删除剧目',
+      message: `删除「${drama.name}」会一并删除其下所有折子，且不可恢复。\n关联的演出记录不会被删除，但会失去该剧目标签。`,
+      confirmLabel: '删除剧目',
+      danger: true,
+      impact: linked,
+      impactLabel: '条演出将失去该标签'
+    });
+    if (!ok) return;
     deleting = true;
     try {
       await api.deleteDrama(id);
@@ -106,7 +121,20 @@
   }
 
   async function removeZhezi(z) {
-    if (!confirm(`删除折子「${z.name}」？已关联该折子的演出记录不受影响。`)) return;
+    let linked = 0;
+    try {
+      const p = await api.previewDelete('zhezi', z.id);
+      linked = p?.recordsAffected ?? 0;
+    } catch (e) { /* 预览失败不影响删除本身 */ }
+    const ok = await askConfirm({
+      title: '删除折子',
+      message: `删除「${z.name}」后，已关联该折子的演出记录不受影响。`,
+      confirmLabel: '删除折子',
+      danger: true,
+      impact: linked,
+      impactLabel: '条演出将失去该折子关联'
+    });
+    if (!ok) return;
     error = '';
     try {
       await api.deleteZhezi(z.id);
@@ -206,6 +234,7 @@
             <button class="btn danger sm" onclick={removeDrama} disabled={deleting}>{deleting ? '删除中…' : '删除'}</button>
           </div>
         </div>
+        <MergePanel kind="drama" selfId={id} selfName={drama.name} />
       {/if}
     </div>
 
