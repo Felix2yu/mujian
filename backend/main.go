@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"embed"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	mujianmcp "mujian/internal/mcp"
@@ -190,16 +193,83 @@ func caldavAuthMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 // "calendar-access" compliance class (RFC 4791 §5.2.1); go-webdav only emits
 // it from inside the handler, which auth would otherwise shield. OPTIONS is
 // answered directly (it leaks nothing) so first-contact discovery works.
+//
+// go-webdav's caldav.backend returns 501 (Not Implemented) for PROPPATCH,
+// COPY and MOVE. Apple Calendar surfaces 501 as a visible "update failed"
+// exclamation mark or "位置不支持此请求" error. All three are intercepted here
+// and answered appropriately for a read-only backend.
 func caldavCapabilityMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Dav", "1, 3, calendar-access")
 		if r.Method == http.MethodOptions {
-			w.Header().Set("Allow", "OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, REPORT")
+			w.Header().Set("Allow", "OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, PROPPATCH, REPORT")
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		next.ServeHTTP(w, r)
+		switch r.Method {
+		case "PROPPATCH":
+			handlePropPatch(w, r)
+		case "COPY", "MOVE":
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte("read-only CalDAV backend"))
+		default:
+			next.ServeHTTP(w, r)
+		}
 	})
+}
+
+// handlePropPatch parses a PROPPATCH request body, collects the property names,
+// and returns a 207 Multi-Status with 200 OK for each. This is a no-op for our
+// read-only backend: the response tells the client the properties were accepted,
+// but we never persist them — the next sync re-serves canonical data.
+func handlePropPatch(w http.ResponseWriter, r *http.Request) {
+	type propUpdate struct {
+		XMLName xml.Name `xml:"DAV: propertyupdate"`
+		Set     []struct {
+			Prop struct {
+				Any []xml.Name `xml:",any"`
+			} `xml:"prop"`
+		} `xml:"set"`
+		Remove []struct {
+			Prop struct {
+				Any []xml.Name `xml:",any"`
+			} `xml:"prop"`
+		} `xml:"remove"`
+	}
+
+	var body []byte
+	if r.Body != nil {
+		body, _ = io.ReadAll(r.Body)
+	}
+
+	var update propUpdate
+	names := make([]xml.Name, 0)
+	if len(body) > 0 {
+		if err := xml.Unmarshal(body, &update); err == nil {
+			for _, s := range update.Set {
+				names = append(names, s.Prop.Any...)
+			}
+			for _, rm := range update.Remove {
+				names = append(names, rm.Prop.Any...)
+			}
+		}
+	}
+
+	var buf bytes.Buffer
+	buf.WriteString(`<?xml version="1.0" encoding="utf-8"?>`)
+	buf.WriteString(`<D:multistatus xmlns:D="DAV:"><D:response><D:href>`)
+	xml.EscapeText(&buf, []byte(r.URL.Path))
+	buf.WriteString(`</D:href><D:propstat><D:prop>`)
+	for _, n := range names {
+		buf.WriteString(`<D:`)
+		xml.EscapeText(&buf, []byte(n.Local))
+		buf.WriteString(`/>`)
+	}
+	buf.WriteString(`</D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response></D:multistatus>`)
+
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.WriteHeader(http.StatusMultiStatus)
+	w.Write(buf.Bytes())
 }
 
 // caldavWellKnown redirects RFC 6764 discovery requests to the principal URL.
