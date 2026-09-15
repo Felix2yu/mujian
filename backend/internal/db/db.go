@@ -431,6 +431,12 @@ func (db *DB) migrate() error {
 		}
 	}
 
+	// RFC 6578 sync journal for the CalDAV projection: must be created last so
+	// its AFTER triggers exist for all subsequent (and future) write paths.
+	if err := db.createCaldavChangelog(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

@@ -481,3 +481,21 @@ func TestStatusFilteringCalendarAndTasks(t *testing.T) {
 		t.Errorf("CalendarPath/rec-noshow should be 404 (status excluded)")
 	}
 }
+
+// 已删除/从不存在的对象直取必须是 404（客户端据此清除本地残留），不能是
+// 表示服务故障的 503——Apple 对 5xx 会显示同步失败感叹号并反复重试。
+func TestGetMissingObjectIs404(t *testing.T) {
+	b := newTestBackend(t)
+	ctx := context.Background()
+	for _, p := range []string{
+		CalendarPath + "ghost.ics",
+		TasksPath + "ghost.ics",
+	} {
+		_, err := b.GetCalendarObject(ctx, p, nil)
+		// go-webdav's HTTPError type is internal; its Error() starts with
+		// "<code> <status text>".
+		if err == nil || !strings.HasPrefix(err.Error(), "404 Not Found") {
+			t.Errorf("%s: want 404 Not Found error, got %v", p, err)
+		}
+	}
+}

@@ -42,7 +42,8 @@ func init() {
 	// are added: Handle/Mount with the all-methods mask snapshot the map, so
 	// registering early is what lets PROPFIND/REPORT reach the CalDAV handler.
 	for _, m := range []string{
-		"PROPFIND", "PROPPATCH", "MKCOL", "COPY", "MOVE", "LOCK", "UNLOCK", "REPORT",
+		"PROPFIND", "PROPPATCH", "MKCOL", "MKCALENDAR", "COPY", "MOVE",
+		"LOCK", "UNLOCK", "REPORT",
 	} {
 		chi.RegisterMethod(m)
 	}
@@ -187,6 +188,10 @@ func caldavAuthMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 	}
 }
 
+// caldavAllow is advertised in response to OPTIONS / 405 so DAV clients learn
+// the method set without probing (RFC 7231 Allow header).
+const caldavAllow = "OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, PROPPATCH, REPORT"
+
 // caldavCapabilityMiddleware advertises DAV capabilities on every CalDAV
 // response — including the 401 challenges emitted by the auth middleware.
 // Apple's CalendarAgent probes OPTIONS during account setup and requires the
@@ -196,22 +201,34 @@ func caldavAuthMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 //
 // go-webdav's caldav.backend returns 501 (Not Implemented) for PROPPATCH,
 // COPY and MOVE. Apple Calendar surfaces 501 as a visible "update failed"
-// exclamation mark or "位置不支持此请求" error. All three are intercepted here
-// and answered appropriately for a read-only backend.
+// exclamation mark or "位置不支持此请求" error. All write/lock methods are
+// intercepted here and answered appropriately for a read-only backend.
 func caldavCapabilityMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Dav", "1, 3, calendar-access")
+		w.Header().Set("Dav", "1, 3, calendar-access, sync-collection")
 		if r.Method == http.MethodOptions {
-			w.Header().Set("Allow", "OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, PROPPATCH, REPORT")
+			w.Header().Set("Allow", caldavAllow)
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		switch r.Method {
 		case "PROPPATCH":
 			handlePropPatch(w, r)
-		case "COPY", "MOVE":
+		case "COPY", "MOVE", "MKCOL", "MKCALENDAR", "LOCK", "UNLOCK":
+			// Collections are fixed and locking is unsupported: refuse with
+			// 403 (rather than go-webdav's 501 or chi's bare 405) and repeat
+			// the allowed methods so clients settle for read-only access.
+			w.Header().Set("Allow", caldavAllow)
 			w.WriteHeader(http.StatusForbidden)
 			w.Write([]byte("read-only CalDAV backend"))
+		case http.MethodPost:
+			// Only CalDAV scheduling (iTIP) traffic POSTs to these resources;
+			// the backend publishes no schedule-inbox/outbox and accepts no
+			// scheduling. A clean 405 + Allow (instead of go-webdav's bare
+			// 405) lets CalendarAgent retire the operation without a badge.
+			w.Header().Set("Allow", caldavAllow)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			w.Write([]byte("CalDAV scheduling POST is not supported"))
 		default:
 			next.ServeHTTP(w, r)
 		}
@@ -276,6 +293,23 @@ func handlePropPatch(w http.ResponseWriter, r *http.Request) {
 // go-webdav's own well-known handling answers with 308, which some Apple
 // releases do not follow during account setup; 302 is universally supported.
 func caldavWellKnown(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/caldav/user/", http.StatusFound)
+}
+
+// caldavSiteDiscovery makes the host root itself a valid CalDAV discovery
+// endpoint. CalendarAgent periodically re-validates the account against the
+// bare URL the user entered (https://host) and even guessed principal paths
+// (e.g. /principals/); previously only GET was routed there, so PROPFIND /
+// OPTIONS received a bare 405 and Calendar.app showed "位置不支持此请求".
+// OPTIONS answers with the DAV compliance classes; every other WebDAV method
+// is redirected to the principal URL, exactly like /.well-known/caldav.
+func caldavSiteDiscovery(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Dav", "1, 3, calendar-access")
+	if r.Method == http.MethodOptions {
+		w.Header().Set("Allow", caldavAllow)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	http.Redirect(w, r, "/caldav/user/", http.StatusFound)
 }
 
@@ -364,6 +398,13 @@ func main() {
 			} else if n > 0 {
 				slog.Info("purged expired trash", "records", n)
 			}
+			// Trim the CalDAV sync journal to the retained window so stale
+			// tokens (which trigger an automatic client resync) stay bounded.
+			if n, err := database.PruneCaldavChangelogDefault(); err != nil {
+				slog.Warn("prune caldav changelog", "err", err)
+			} else if n > 0 {
+				slog.Info("pruned caldav changelog", "rows", n)
+			}
 		}
 		purge()
 		t := time.NewTicker(24 * time.Hour)
@@ -386,10 +427,28 @@ func main() {
 	// （Apple 对订阅源不渲染地图）做不到的。写操作在 backend 层一律 403。
 	// 能力头中间件在最外层（OPTIONS 直答、DAV 头对 401 也可见），其内是
 	// Basic/Bearer 鉴权，最内是 go-webdav 协议栈。
-	caldavHandler := &emcaldav.Handler{Backend: caldav.New(database, cfg), Prefix: "/caldav"}
-	caldavStack := caldavCapabilityMiddleware(caldavAuthMiddleware(cfg)(caldavHandler))
+	caldavBackend := caldav.New(database, cfg)
+	caldavHandler := &emcaldav.Handler{Backend: caldavBackend, Prefix: "/caldav"}
+	// Stack (outer→inner): capability/OPTIONS → Basic/Bearer auth →
+	// RFC 6578 sync-collection (REPORT + PROPFIND token injection) →
+	// go-webdav protocol handler.
+	caldavStack := caldavCapabilityMiddleware(
+		caldavAuthMiddleware(cfg)(caldav.NewSyncMiddleware(caldavBackend, caldavHandler)),
+	)
 	r.Mount("/caldav", caldavStack)
 	r.Handle("/.well-known/caldav", caldavCapabilityMiddleware(caldavAuthMiddleware(cfg)(http.HandlerFunc(caldavWellKnown))))
+
+	// Site-wide WebDAV discovery fallback: every path not claimed by a more
+	// specific mount (/api, /mcp, /caldav, /uploads) answers DAV discovery and
+	// redirects to the principal. This catches the bare host root plus the
+	// principal paths CalendarAgent guesses during re-validation, instead of
+	// letting chi answer those methods with a bare 405.
+	for _, m := range []string{
+		http.MethodOptions, "PROPFIND", "REPORT", "PROPPATCH",
+		"MKCOL", "MKCALENDAR", "COPY", "MOVE", "LOCK", "UNLOCK",
+	} {
+		r.Method(m, "/*", http.HandlerFunc(caldavSiteDiscovery))
+	}
 
 	// Serve uploaded covers from the uploads dir, but constrain file access to
 	// that subtree using os.Root (Go 1.24) so path traversal outside the dir

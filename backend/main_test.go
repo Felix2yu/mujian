@@ -169,6 +169,9 @@ func TestCaldavCapabilityMiddleware(t *testing.T) {
 	if got := rec.Header().Get("Dav"); !strings.Contains(got, "calendar-access") {
 		t.Errorf("Dav header should advertise calendar-access, got %q", got)
 	}
+	if got := rec.Header().Get("Dav"); !strings.Contains(got, "sync-collection") {
+		t.Errorf("Dav header should advertise sync-collection (RFC 6578), got %q", got)
+	}
 
 	// OPTIONS 直接由中间件应答 204 + Allow 清单。
 	rec = doAuthReq(h, "OPTIONS", "/caldav/user/", nil)
@@ -188,5 +191,76 @@ func TestCaldavWellKnown(t *testing.T) {
 	}
 	if loc := rec.Header().Get("Location"); loc != "/caldav/user/" {
 		t.Errorf("well-known Location: got %q, want /caldav/user/", loc)
+	}
+}
+
+// TestCaldavSiteDiscovery covers the bare-host / guessed-path fallback that
+// CalendarAgent re-probes during account validation. OPTIONS must advertise
+// DAV capabilities (204); any other WebDAV method is redirected to the
+// principal URL instead of getting chi's bare 405 ("位置不支持此请求").
+func TestCaldavSiteDiscovery(t *testing.T) {
+	h := http.HandlerFunc(caldavSiteDiscovery)
+
+	rec := doAuthReq(h, "OPTIONS", "/", nil)
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("OPTIONS /: got %d, want 204", rec.Code)
+	}
+	if got := rec.Header().Get("Dav"); !strings.Contains(got, "calendar-access") {
+		t.Errorf("OPTIONS / Dav header: got %q", got)
+	}
+	if allow := rec.Header().Get("Allow"); !strings.Contains(allow, "PROPFIND") {
+		t.Errorf("OPTIONS / Allow: got %q", allow)
+	}
+
+	// Guessed principal paths and the host root all redirect to the principal.
+	for _, tc := range []struct{ method, target string }{
+		{"PROPFIND", "/"},
+		{"PROPFIND", "/principals/users/"},
+		{"REPORT", "/"},
+		{"PROPFIND", "/.well-known/caldav/"},
+	} {
+		rec := doAuthReq(h, tc.method, tc.target, nil)
+		if rec.Code != http.StatusFound {
+			t.Errorf("%s %s: got %d, want 302", tc.method, tc.target, rec.Code)
+		}
+		if loc := rec.Header().Get("Location"); loc != "/caldav/user/" {
+			t.Errorf("%s %s Location: got %q, want /caldav/user/", tc.method, tc.target, loc)
+		}
+	}
+}
+
+// TestCaldavCapabilityWriteMethods makes sure every write/lock/scheduling
+// method CalendarAgent may send is answered without a 501 on the read-only
+// CalDAV stack (MKCOL/MKCALENDAR/LOCK → 403, scheduling POST → 405 + Allow).
+func TestCaldavCapabilityWriteMethods(t *testing.T) {
+	reached := false
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached = true
+		w.WriteHeader(http.StatusOK)
+	})
+	h := caldavCapabilityMiddleware(inner)
+
+	for _, m := range []string{"MKCOL", "MKCALENDAR", "LOCK", "UNLOCK", "COPY", "MOVE"} {
+		rec := doAuthReq(h, m, "/caldav/user/calendars/mujian/", nil)
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("%s: got %d, want 403", m, rec.Code)
+		}
+		if allow := rec.Header().Get("Allow"); allow == "" {
+			t.Errorf("%s: want Allow header", m)
+		}
+	}
+
+	rec := doAuthReq(h, "POST", "/caldav/user/calendars/mujian/", nil)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("POST: got %d, want 405", rec.Code)
+	}
+	if allow := rec.Header().Get("Allow"); !strings.Contains(allow, "PROPFIND") {
+		t.Errorf("POST Allow header: got %q", allow)
+	}
+
+	// Normal read traffic still reaches the inner go-webdav handler.
+	rec = doAuthReq(h, "REPORT", "/caldav/user/calendars/mujian/", nil)
+	if rec.Code != http.StatusOK || !reached {
+		t.Errorf("REPORT should pass through, code=%d reached=%v", rec.Code, reached)
 	}
 }

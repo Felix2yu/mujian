@@ -11,6 +11,7 @@ package caldav
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -19,8 +20,8 @@ import (
 	"time"
 
 	"github.com/emersion/go-ical"
-	emcaldav "github.com/emersion/go-webdav/caldav"
 	"github.com/emersion/go-webdav"
+	emcaldav "github.com/emersion/go-webdav/caldav"
 
 	"mujian/internal/config"
 	"mujian/internal/db"
@@ -172,6 +173,11 @@ func (b *Backend) GetCalendarObject(ctx context.Context, p string, req *emcaldav
 	}
 	rec, err := b.DB.GetRecord(id)
 	if err != nil {
+		// A stale href (record deleted/purged) is a plain 404 so the client
+		// drops its local copy; genuine database failures stay 503.
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar object %q not found", p))
+		}
 		return nil, webdav.NewHTTPError(503, fmt.Errorf("caldav: database temporarily unavailable: %w", err))
 	}
 	// A record whose status is excluded from the target collection is not part
@@ -249,6 +255,9 @@ func (b *Backend) PutCalendarObject(ctx context.Context, path string, calendar *
 	// authoritative state (and a fresh ETag) rather than what it just sent.
 	rec, err := b.DB.GetRecord(id)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, webdav.NewHTTPError(404, fmt.Errorf("calendar object %q not found", id+".ics"))
+		}
 		return nil, webdav.NewHTTPError(503, fmt.Errorf("caldav: database temporarily unavailable: %w", err))
 	}
 	names, err := b.DB.GetZheziNames(rec.ZheziIDs)
