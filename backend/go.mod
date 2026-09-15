@@ -11,7 +11,7 @@ require (
 	github.com/emersion/go-webdav v0.7.0
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/google/jsonschema-go v0.4.3
-	github.com/modelcontextprotocol/go-sdk v1.7.0
+	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5
 	golang.org/x/image v0.46.0
 	modernc.org/sqlite v1.58.0
