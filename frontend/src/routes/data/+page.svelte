@@ -159,8 +159,8 @@
        放在同一分区，用户不必在两个分区之间来回找。 -->
   <section class="data-sec">
     <div class="data-sec-head">
-      <h2>导入 / 导出</h2>
-      <p class="tiny muted">从「记录现场」备份包或单独的 data.json 还原数据（按 id 覆盖更新）；也可把当前数据导出为文件带走。</p>
+      <h2>导入 / 导出 / 自动备份</h2>
+      <p class="tiny muted">从「记录现场」备份包或单独的 data.json 还原数据（按 id 覆盖更新）；也可把当前数据导出为文件带走；或设置自动备份定时留存。</p>
     </div>
 
     <div
@@ -264,21 +264,11 @@
 
     <div class="card sec">
       <h3>手动导出</h3>
-      <p class="tiny">可导出为单独 JSON，或打包为含封面的 zip（导入时可直接还原）。</p>
+      <p class="tiny">导出全量数据与封面，打包为 zip（导入时可直接还原）；也可单独导出 JSON。</p>
       <div class="btn-row">
-        <a class="btn" href={api.getExportUrl('zip')}>⇩ 导出 ZIP（数据 + 封面）</a>
+        <a class="btn primary" href={api.getExportUrl('zip')}>⇩ 导出 ZIP（数据 + 封面）</a>
         <a class="btn" href={api.getExportUrl()}>⇩ 导出 JSON</a>
       </div>
-    </div>
-  </section>
-
-  <!-- ============ 自动备份 ============ -->
-  <!-- 与服务端快照相关的一切：格式 / 间隔 / 保留份数 / S3 推送 / 立即备份 / 快照列表。
-       手动「导出」已归到上方「导入 / 导出」，本节只留自动留存，职责单一。 -->
-  <section class="data-sec">
-    <div class="data-sec-head">
-      <h2>自动备份</h2>
-      <p class="tiny muted">让服务端按间隔自动把快照留存到 backups/ 目录（可选用 db / json / zip 格式），快照可直接在下方恢复。</p>
     </div>
 
     <BackupPanel />
