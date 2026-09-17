@@ -6,6 +6,9 @@
   import CoverPicker from '$lib/components/CoverPicker.svelte';
   import CategoryTags from '$lib/components/CategoryTags.svelte';
 
+  // 批量分隔符：英文逗号 / 全角逗号 / 顿号；分隔符后的空格经 trim 忽略（非强制）。
+  const SEP = /[,，、]/;
+
   let { record = null, categories = [], initialDate = '', onSubmit, onCancel } = $props();
 
   function emptyForm() {
@@ -16,7 +19,7 @@
       price: '', price_currency: 'CNY',
       pay_price: '', pay_price_currency: 'CNY',
       other_cost: '', other_cost_currency: 'CNY',
-      play: '', guest: '',
+      play: '',
       active_status: 0,
       date_local: '', coverFile: '', coverThumb: '',
       lat: '', lng: '',
@@ -53,7 +56,6 @@
     f.huozhiBillIdsText = (r.huozhi_bill_ids || []).join(', ');
     f.artist_ids = (r.artist_ids || []).slice();
     f.play = (r.play || []).join(', ');
-    f.guest = (r.guest || []).join(', ');
     f.drama_ids = (r.drama_ids || []).slice();
     f.zhezi_ids = (r.zhezi_ids || []).slice();
     f.active_status = r.active_status || 0;
@@ -120,7 +122,7 @@
   let showCoord = $state(false);
 
   // 常用字段自动补全（来自历史记录 /api/autocomplete/{field}）
-  let ac = $state({ city: [], address: [], channel: [], company: [], seat: [], friends: [] });
+  let ac = $state({ city: [], address: [], channel: [], company: [], friends: [] });
 
   // 地址自动定位（高德地理编码）状态
   let geoStatus = $state('idle'); // idle | loading | ok | nokey | notfound | error
@@ -436,7 +438,7 @@
   // 把输入框文本（可含中英文逗号分隔的多个名字）解析为胶囊：
   // 与档案精确同名 → 关联档案；否则 → 自由文本胶囊
   function commitArtistInput() {
-    const names = (artistQuery || '').split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+    const names = (artistQuery || '').split(SEP).map((x) => x.trim()).filter(Boolean);
     if (!names.length) { artistQuery = ''; return; }
     for (const n of names) {
       const hit = findArtistByName(n);
@@ -468,7 +470,7 @@
     if (e.isComposing) return; // 中文输入法组词中不解析
     artistQuery = e.currentTarget.value;
     // 输入（含粘贴）中出现逗号：立即批量解析为胶囊
-    if (/[,，]/.test(artistQuery)) commitArtistInput();
+    if (/[,，、]/.test(artistQuery)) commitArtistInput();
   }
 
   // 失焦时：输入内容能匹配到既有演员档案（含归一化同名）就自动提交；
@@ -482,41 +484,31 @@
   // 剧团：一场演出可能隶属多个演出团体，支持逗号分隔一次添加多个
   let companyQuery = $state('');
   const companyTags = $derived(
-    (form.company || '').split(/[,，]/).map((s) => s.trim()).filter(Boolean)
+    (form.company || '').split(SEP).map((s) => s.trim()).filter(Boolean)
   );
   function addCompany(name) {
     name = (name || '').trim();
     if (!name) return;
-    const cur = (form.company || '').split(/[,，]/).map((s) => s.trim()).filter(Boolean);
+    const cur = (form.company || '').split(SEP).map((s) => s.trim()).filter(Boolean);
     if (!cur.includes(name)) cur.push(name);
     form.company = cur.join(', ');
   }
   function removeCompany(name) {
     const cur = (form.company || '')
-      .split(/[,，]/)
+      .split(SEP)
       .map((s) => s.trim())
       .filter(Boolean)
       .filter((n) => n !== name);
     form.company = cur.join(', ');
   }
   function commitCompanyInput() {
-    const names = (companyQuery || '').split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+    const names = (companyQuery || '').split(SEP).map((x) => x.trim()).filter(Boolean);
     if (!names.length) {
       companyQuery = '';
       return;
     }
     for (const n of names) addCompany(n);
     companyQuery = '';
-  }
-  function onCompanyKeydown(e) {
-    if (e.isComposing || e.keyCode === 229) return; // 中文输入法组词中不响应
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      commitCompanyInput();
-    } else if (e.key === 'Backspace' && !companyQuery) {
-      const cur = (form.company || '').split(/[,，]/).map((s) => s.trim()).filter(Boolean);
-      if (cur.length) form.company = cur.slice(0, -1).join(', ');
-    }
   }
 
   // 剧团胶囊拖拽排序：重排后写回逗号分隔的 company 字段
@@ -547,19 +539,16 @@
   function onCompanyInput(e) {
     if (e.isComposing) return;
     companyQuery = e.currentTarget.value;
-    if (/[,，]/.test(companyQuery)) commitCompanyInput();
-  }
-
-  // 失焦时：输入内容在历史团体中才自动提交；新名称留在输入框，需回车生成胶囊
-  function onCompanyBlur() {
-    const n = companyQuery.trim();
-    if (n && ac.company.includes(n)) commitCompanyInput();
-    setTimeout(() => (showCompanyList = false), 120);
+    if (/[,，、]/.test(companyQuery)) commitCompanyInput();
   }
 
   // 剧团 / 渠道输入建议：子串匹配历史值，点击即补充（替代原生 datalist 的不可控匹配）
   let showCompanyList = $state(false);
   let showChannelList = $state(false);
+  let channelActive = $state(-1);
+  let channelBlurTimer = null;
+  let companyActive = $state(-1);
+  let companyBlurTimer = null;
   const filteredCompanies = $derived.by(() => {
     const q = companyQuery.trim().toLowerCase();
     const base = ac.company.filter((v) => !companyTags.includes(v));
@@ -574,16 +563,80 @@
   function pickCompany(v) {
     addCompany(v);
     companyQuery = '';
+    // 剧团为多值字段：选中后下拉保持打开，便于连续添加（不自动关闭）。
+    showCompanyList = true;
+    companyActive = -1;
+  }
+  function onCompanyBlur() {
+    const n = companyQuery.trim();
+    if (n && ac.company.includes(n)) commitCompanyInput();
+    if (companyBlurTimer) clearTimeout(companyBlurTimer);
+    companyBlurTimer = setTimeout(() => { companyBlurTimer = null; showCompanyList = false; companyActive = -1; }, 120);
+  }
+  function openCompanyList() {
+    if (companyBlurTimer) { clearTimeout(companyBlurTimer); companyBlurTimer = null; }
+    showCompanyList = true;
+    companyActive = -1;
+  }
+  function onCompanyKeydown(e) {
+    if (e.isComposing || e.keyCode === 229) return; // 中文输入法组词中不响应
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation(); // 阻止冒泡到表单层（表单层会拦截 INPUT 的 Enter 防误提交）
+      if (companyActive >= 0 && companyActive < filteredCompanies.length) {
+        pickCompany(filteredCompanies[companyActive]);
+      } else {
+        commitCompanyInput();
+      }
+      return;
+    }
+    if (e.key === 'Backspace' && !companyQuery) {
+      const cur = (form.company || '').split(SEP).map((s) => s.trim()).filter(Boolean);
+      if (cur.length) form.company = cur.slice(0, -1).join(', ');
+      return;
+    }
+    // ↑↓ / Esc 交给 comboNav 做下拉导航
+    comboNav(e, {
+      open: () => showCompanyList,
+      items: () => filteredCompanies,
+      active: () => companyActive,
+      setActive: (v) => (companyActive = v),
+      pick: (v) => pickCompany(v),
+      close: () => (showCompanyList = false)
+    });
   }
   function pickChannel(v) {
     form.channel = v;
     showChannelList = false;
+  }
+  function openChannelList() {
+    if (channelBlurTimer) { clearTimeout(channelBlurTimer); channelBlurTimer = null; }
+    showChannelList = true;
+    channelActive = -1;
+  }
+  function closeChannelListSoon() {
+    if (channelBlurTimer) clearTimeout(channelBlurTimer);
+    channelBlurTimer = setTimeout(() => { channelBlurTimer = null; showChannelList = false; channelActive = -1; }, 120);
+  }
+  function onChannelKeydown(e) {
+    comboNav(e, {
+      open: () => showChannelList,
+      items: () => filteredChannels,
+      active: () => channelActive,
+      setActive: (v) => (channelActive = v),
+      pick: pickChannel,
+      close: () => (showChannelList = false)
+    });
   }
 
   // 城市 / 场馆输入建议：子串匹配历史值，点击即补充
   // （iOS Safari 对原生 datalist 支持差，基本不弹建议，故与渠道一致用自定义下拉）
   let showCityList = $state(false);
   let showAddrList = $state(false);
+  let cityActive = $state(-1);
+  let addrActive = $state(-1);
+  let cityBlurTimer = null;
+  let addrBlurTimer = null;
   const filteredCities = $derived.by(() => {
     const q = form.city.trim().toLowerCase();
     if (!q) return ac.city.slice(0, 30);
@@ -601,6 +654,120 @@
   function pickAddress(v) {
     form.address = v; // 触发既有 effect 自动地理定位
     showAddrList = false;
+  }
+
+  function openCityList() {
+    if (cityBlurTimer) { clearTimeout(cityBlurTimer); cityBlurTimer = null; }
+    showCityList = true;
+    cityActive = -1;
+  }
+  function closeCityListSoon() {
+    if (cityBlurTimer) clearTimeout(cityBlurTimer);
+    cityBlurTimer = setTimeout(() => { cityBlurTimer = null; showCityList = false; cityActive = -1; }, 120);
+  }
+  function onCityKeydown(e) {
+    comboNav(e, {
+      open: () => showCityList,
+      items: () => filteredCities,
+      active: () => cityActive,
+      setActive: (v) => (cityActive = v),
+      pick: pickCity,
+      close: () => (showCityList = false)
+    });
+  }
+  function openAddrList() {
+    if (addrBlurTimer) { clearTimeout(addrBlurTimer); addrBlurTimer = null; }
+    showAddrList = true;
+    addrActive = -1;
+  }
+  function closeAddrListSoon() {
+    if (addrBlurTimer) clearTimeout(addrBlurTimer);
+    addrBlurTimer = setTimeout(() => { addrBlurTimer = null; showAddrList = false; addrActive = -1; }, 120);
+  }
+  function onAddrKeydown(e) {
+    comboNav(e, {
+      open: () => showAddrList,
+      items: () => filteredAddresses,
+      active: () => addrActive,
+      setActive: (v) => (addrActive = v),
+      pick: pickAddress,
+      close: () => (showAddrList = false)
+    });
+  }
+
+  // 同行：与城市/地址一致用自定义下拉（原生 datalist 在 Safari/移动端不弹）；
+  // 支持多值逗号分隔，点击 / 键盘选中的建议追加到现有文本而非整体替换。
+  let showFriendsList = $state(false);
+  let friendsActive = $state(-1);
+  let friendsBlurTimer = null;
+  const filteredFriends = $derived.by(() => {
+    const q = (form.friends || '').trim().toLowerCase();
+    if (!q) return ac.friends.slice(0, 30);
+    return ac.friends.filter((v) => v.toLowerCase().includes(q)).slice(0, 30);
+  });
+  function openFriendsList() {
+    if (friendsBlurTimer) { clearTimeout(friendsBlurTimer); friendsBlurTimer = null; }
+    showFriendsList = true;
+    friendsActive = -1;
+  }
+  function closeFriendsListSoon() {
+    if (friendsBlurTimer) clearTimeout(friendsBlurTimer);
+    friendsBlurTimer = setTimeout(() => { friendsBlurTimer = null; showFriendsList = false; friendsActive = -1; }, 120);
+  }
+  function pickFriends(v) {
+    const cur = (form.friends || '').split(SEP).map((s) => s.trim()).filter(Boolean);
+    if (!cur.includes(v)) cur.push(v);
+    form.friends = cur.join(', ');
+    friendsActive = -1;
+  }
+  function onFriendsKeydown(e) {
+    comboNav(e, {
+      open: () => showFriendsList,
+      items: () => filteredFriends,
+      active: () => friendsActive,
+      setActive: (v) => (friendsActive = v),
+      pick: (v) => pickFriends(v),
+      close: () => (showFriendsList = false)
+    });
+  }
+
+  // 自定义下拉的键盘可达性：↑↓ 移动高亮、Enter 选中、Esc 关闭。
+  // 在输入框的 onkeydown 里调用，并用 e.stopPropagation() 阻止事件冒泡到表单层——
+  // 表单层对 INPUT 的 Enter 一律 preventDefault（防误提交），若不拦截会让 Enter
+  // 无法触发"选中建议"。
+  function comboNav(e, ctx) {
+    if (!ctx.open()) return;
+    const items = ctx.items();
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!items.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+      let i = ctx.active();
+      i = e.key === 'ArrowDown' ? i + 1 : i - 1;
+      if (i < -1) i = -1;
+      if (i > items.length - 1) i = items.length - 1;
+      ctx.setActive(i);
+      scrollComboActive(e.currentTarget, i);
+    } else if (e.key === 'Enter') {
+      const i = ctx.active();
+      if (i >= 0 && i < items.length) {
+        e.preventDefault();
+        e.stopPropagation();
+        ctx.pick(items[i]);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      ctx.close();
+    }
+  }
+  function scrollComboActive(inputEl, idx) {
+    if (idx < 0) return;
+    setTimeout(() => {
+      const list = inputEl?.parentElement?.querySelector('.combo-list');
+      const items = list?.querySelectorAll('.combo-item');
+      if (items && items[idx]) items[idx].scrollIntoView({ block: 'nearest' });
+    }, 0);
   }
 
   async function createNewArtist(name) {
@@ -650,7 +817,8 @@
   });
 
   onMount(async () => {
-    const fields = ['city', 'address', 'channel', 'company', 'seat', 'friends'];
+    // 座位不参与补全（每场座位都不同），故不拉取 /autocomplete/seat
+    const fields = ['city', 'address', 'channel', 'company', 'friends'];
     const results = await Promise.all(fields.map((f) => api.getAutocomplete(f).catch(() => [])));
     const next = {};
     fields.forEach((f, i) => (next[f] = results[i] || []));
@@ -683,7 +851,49 @@
   }
 
   function splitList(s) {
-    return (s || '').split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+    return (s || '').split(SEP).map((x) => x.trim()).filter(Boolean);
+  }
+
+  // 金额校验：空 / 非法 → null（未填写）；负数钳为 0；超过 2 位小数四舍五入到 2 位。
+  function sanitizeMoney(v) {
+    if (v === '' || v == null) return null;
+    let n = Number(v);
+    if (!isFinite(n)) return null;
+    if (n < 0) n = 0;
+    return Math.round(n * 100) / 100;
+  }
+  // 时长（分钟）校验：空 / 非法 → 0；负数钳为 0；小数取整。
+  function sanitizeDuration(v) {
+    if (v === '' || v == null) return 0;
+    let n = Number(v);
+    if (!isFinite(n)) return 0;
+    if (n < 0) n = 0;
+    return Math.round(n);
+  }
+  // 负号在输入流的任何中间态都非法（结果只可能是负数），因此实时抹除是安全的：
+  // bind:value 会在其后读取同一字符串，二者始终一致。
+  // 精度（金额 2 位小数 / 时长整数）则留到 blur 再规范化——输入过程中改写 DOM 会与
+  // bind 争抢（Svelte 先读到旧值写入 form，随后才被改 DOM，导致界面显示 12 却提交 13）。
+  function stripNegSign(e) {
+    const s = e.target.value;
+    if (s && s.trim().startsWith('-')) e.target.value = s.replace(/^\s*-/, '');
+  }
+  // blur 时规范化：此时值是稳定的成品，写回 form 会经双向绑定同步到输入框，口径一致。
+  function normalizeMoney(field) {
+    const v = form[field];
+    if (v === '' || v == null) return;
+    let n = Number(v);
+    if (!isFinite(n)) { form[field] = ''; return; }
+    if (n < 0) n = 0;
+    form[field] = Math.round(n * 100) / 100;
+  }
+  function normalizeDuration() {
+    const v = form.duration;
+    if (v === '' || v == null) return;
+    let n = Number(v);
+    if (!isFinite(n)) { form.duration = 0; return; }
+    if (n < 0) n = 0;
+    form.duration = Math.round(n);
   }
 
   // 名称归一化，用于录入端查重：去掉所有空白（含全角空格）、全角字符转半角、转小写。
@@ -759,7 +969,7 @@
       categoryName: form.categoryNames[0] || '',
       categoryNames: form.categoryNames.slice(),
       rating: Number(form.rating) || 0,
-      duration: Number(form.duration) || 0,
+      duration: sanitizeDuration(form.duration),
       seat: form.seat.trim(),
       friends: form.friends.trim(),
       company: form.company.trim(),
@@ -784,7 +994,6 @@
       play: orderedChosenDramas.map((d) => d.name),
       drama_ids: form.drama_ids,
       zhezi_ids: form.zhezi_ids,
-      guest: splitList(form.guest),
       active_status: Number(form.active_status) || 0,
       coverFile: form.coverFile.trim(),
       coverThumb: form.coverThumb.trim()
@@ -887,8 +1096,6 @@
           }
         }
       }
-      const guests = asArr(data.guest);
-      if (guests.length) form.guest = guests.join(', ');
       if (typeof data.active_status === 'number') {
         form.active_status = Math.max(0, Math.min(3, Math.round(data.active_status)));
       }
@@ -1304,13 +1511,14 @@
             spellcheck="false"
             bind:value={form.city}
             placeholder="如：上海"
-            onfocus={() => (showCityList = true)}
-            onblur={() => setTimeout(() => (showCityList = false), 120)}
+            onfocus={openCityList}
+            onblur={closeCityListSoon}
+            onkeydown={onCityKeydown}
           />
           {#if showCityList && filteredCities.length}
             <div class="combo-list">
-              {#each filteredCities as v (v)}
-                <button type="button" class="combo-item" onmousedown={(e) => e.preventDefault()} onclick={() => pickCity(v)}>{v}</button>
+              {#each filteredCities as v, ci (v)}
+                <button type="button" class="combo-item" class:active={ci === cityActive} onmousedown={(e) => e.preventDefault()} onclick={() => pickCity(v)}>{v}</button>
               {/each}
             </div>
           {/if}
@@ -1321,20 +1529,21 @@
         <div class="addr-row">
           <div class="combo addr-combo">
             <input
-              class="input"
-              spellcheck="false"
-              bind:value={form.address}
-              placeholder="如：上海大剧院"
-              onfocus={() => (showAddrList = true)}
-              onblur={() => setTimeout(() => (showAddrList = false), 120)}
-            />
-            {#if showAddrList && filteredAddresses.length}
-              <div class="combo-list">
-                {#each filteredAddresses as v (v)}
-                  <button type="button" class="combo-item" onmousedown={(e) => e.preventDefault()} onclick={() => pickAddress(v)}>{v}</button>
-                {/each}
-              </div>
-            {/if}
+            class="input"
+            spellcheck="false"
+            bind:value={form.address}
+            placeholder="如：上海大剧院"
+            onfocus={openAddrList}
+            onblur={closeAddrListSoon}
+            onkeydown={onAddrKeydown}
+          />
+          {#if showAddrList && filteredAddresses.length}
+            <div class="combo-list">
+              {#each filteredAddresses as v, ai (v)}
+                <button type="button" class="combo-item" class:active={ai === addrActive} onmousedown={(e) => e.preventDefault()} onclick={() => pickAddress(v)}>{v}</button>
+              {/each}
+            </div>
+          {/if}
           </div>
           <button
             type="button"
@@ -1411,24 +1620,35 @@
       </div>
       <div>
         <label>时长</label>
-        <div class="money"><input class="input" type="number" inputmode="numeric" min="0" step="1" bind:value={form.duration} placeholder="分钟" /><span class="unit">分钟</span></div>
+        <div class="money"><input class="input" type="number" inputmode="numeric" min="0" step="1" bind:value={form.duration} oninput={stripNegSign} onblur={normalizeDuration} placeholder="分钟" /><span class="unit">分钟</span></div>
       </div>
     </div>
     <div class="row two-equal">
       <div>
         <label>座位</label>
-        <input class="input" spellcheck="false" bind:value={form.seat} list="seat-list" placeholder="如：3排15座" />
-        <datalist id="seat-list">
-          {#each ac.seat as v}<option value={v} />{/each}
-        </datalist>
+        <input class="input" spellcheck="false" bind:value={form.seat} placeholder="如：3排15座" />
       </div>
       {#if settings.show_friends}
       <div>
         <label>同行</label>
-        <input class="input" spellcheck="false" bind:value={form.friends} list="friends-list" placeholder="同行人，多个用逗号分隔" />
-        <datalist id="friends-list">
-          {#each ac.friends as v}<option value={v} />{/each}
-        </datalist>
+        <div class="combo">
+          <input
+            class="input"
+            spellcheck="false"
+            bind:value={form.friends}
+            placeholder="同行人，多个用逗号分隔"
+            onfocus={openFriendsList}
+            onblur={closeFriendsListSoon}
+            onkeydown={onFriendsKeydown}
+          />
+          {#if showFriendsList && filteredFriends.length}
+            <div class="combo-list">
+              {#each filteredFriends as v, fi (v)}
+                <button type="button" class="combo-item" class:active={fi === friendsActive} onmousedown={(e) => e.preventDefault()} onclick={() => pickFriends(v)}>{v}</button>
+              {/each}
+            </div>
+          {/if}
+        </div>
       </div>
       {/if}
     </div>
@@ -1450,13 +1670,14 @@
             spellcheck="false"
             bind:value={form.channel}
             placeholder="如：大麦"
-            onfocus={() => (showChannelList = true)}
-            onblur={() => setTimeout(() => (showChannelList = false), 120)}
+            onfocus={openChannelList}
+            onblur={closeChannelListSoon}
+            onkeydown={onChannelKeydown}
           />
           {#if showChannelList && filteredChannels.length}
             <div class="combo-list">
-              {#each filteredChannels as v (v)}
-                <button type="button" class="combo-item" onmousedown={(e) => e.preventDefault()} onclick={() => pickChannel(v)}>{v}</button>
+              {#each filteredChannels as v, chi (v)}
+                <button type="button" class="combo-item" class:active={chi === channelActive} onmousedown={(e) => e.preventDefault()} onclick={() => pickChannel(v)}>{v}</button>
               {/each}
             </div>
           {/if}
@@ -1464,18 +1685,18 @@
       </div>
       <div>
         <label>票价</label>
-        <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.price} />{#if settings.multi_currency}<select class="input cur" bind:value={form.price_currency}>{#each currencyOptions(form.price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
+        <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.price} oninput={stripNegSign} onblur={() => normalizeMoney('price')} />{#if settings.multi_currency}<select class="input cur" bind:value={form.price_currency}>{#each currencyOptions(form.price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
       </div>
       {#if settings.show_pay_price}
         <div>
           <label>实付</label>
-          <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.pay_price} />{#if settings.multi_currency}<select class="input cur" bind:value={form.pay_price_currency}>{#each currencyOptions(form.pay_price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
+          <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.pay_price} oninput={stripNegSign} onblur={() => normalizeMoney('pay_price')} />{#if settings.multi_currency}<select class="input cur" bind:value={form.pay_price_currency}>{#each currencyOptions(form.pay_price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
         </div>
       {/if}
       {#if settings.show_other_cost}
         <div>
           <label>其他花费</label>
-          <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.other_cost} />{#if settings.multi_currency}<select class="input cur" bind:value={form.other_cost_currency}>{#each currencyOptions(form.other_cost_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
+          <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.other_cost} oninput={stripNegSign} onblur={() => normalizeMoney('other_cost')} />{#if settings.multi_currency}<select class="input cur" bind:value={form.other_cost_currency}>{#each currencyOptions(form.other_cost_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
         </div>
       {/if}
     </div>
@@ -1617,7 +1838,7 @@
           spellcheck="false"
           placeholder={companyTags.length ? '' : '如：上海昆剧团'}
           bind:value={companyQuery}
-          onfocus={() => (showCompanyList = true)}
+          onfocus={openCompanyList}
           onblur={onCompanyBlur}
           onkeydown={onCompanyKeydown}
           oninput={onCompanyInput}
@@ -1625,8 +1846,8 @@
       </div>
       {#if showCompanyList && (filteredCompanies.length || companyQuery.trim())}
         <div class="combo-list">
-          {#each filteredCompanies as v (v)}
-            <button type="button" class="combo-item" onmousedown={(e) => e.preventDefault()} onclick={() => pickCompany(v)}>{v}</button>
+          {#each filteredCompanies as v, coi (v)}
+            <button type="button" class="combo-item" class:active={coi === companyActive} onmousedown={(e) => e.preventDefault()} onclick={() => pickCompany(v)}>{v}</button>
           {/each}
           {#if companyQuery.trim() && !filteredCompanies.length}
             <div class="combo-empty">无匹配团体，回车添加新团体</div>

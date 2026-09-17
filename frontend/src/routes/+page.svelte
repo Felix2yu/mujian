@@ -48,7 +48,6 @@
     { value: 'coordinate', label: '坐标' },
     { value: 'remark', label: '备注' },
     { value: 'friends', label: '戏友' },
-    { value: 'guest', label: '嘉宾' },
     { value: 'play', label: '剧目别名' },
     { value: 'seat', label: '座位' }
   ];

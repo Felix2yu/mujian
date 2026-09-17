@@ -21,7 +21,7 @@
     }
   }
 
-  const splitList = (s) => (s || '').split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+  const splitList = (s) => (s || '').split(/[,，、]/).map((x) => x.trim()).filter(Boolean);
 
   async function add() {
     const name = form.name.trim();

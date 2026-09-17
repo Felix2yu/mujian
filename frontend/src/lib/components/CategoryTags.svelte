@@ -1,47 +1,109 @@
 <script>
-  // 多剧种选择：chips 可拖拽排序；回车添加；categories 提供建议列表（datalist）
+  // 多剧种选择：chips 可拖拽排序；回车/逗号添加；categories 提供自定义下拉建议。
+  // 不使用原生 datalist：在 Safari / 移动端基本不弹建议，补全不可靠（与 channel / company
+  // / city 字段一致改自定义下拉）。自定义下拉在所有浏览器 / 设备下都能稳定补全。
   let { values = $bindable([]), categories = [], placeholder = '添加剧种，回车确认' } = $props();
   let input = $state('');
-  const uid = $props.id();
+  let showList = $state(false);
+  let activeIndex = $state(-1);
+  let composing = $state(false); // 中文输入法组词中，避免回车误提交
+  let listEl = $state(null);
 
-  let dragIdx = $state(-1);
-  let overIdx = $state(-1);
-  let overBefore = $state(true);
-
-  // 下拉建议按实时演出数量（recordCount）由大到小排序；仅影响建议列表顺序，
+  // 下拉建议：排除已选，按实时演出数（recordCount）由大到小排序；仅影响建议顺序，
   // 不影响已选 chips（values）的顺序。分类管理页不使用本组件，故不受其排序影响。
-  const suggestions = $derived(
-    categories
-      .slice()
+  const filteredSuggestions = $derived.by(() => {
+    const q = input.trim().toLowerCase();
+    const chosen = new Set(values);
+    let list = categories
+      .filter((c) => !chosen.has(c.name))
       .sort((a, b) => (b.recordCount || 0) - (a.recordCount || 0))
       .map((c) => c.name)
-      .filter(Boolean)
-  );
+      .filter(Boolean);
+    if (q) list = list.filter((n) => n.toLowerCase().includes(q));
+    return list.slice(0, 60);
+  });
 
   function commit(raw) {
     const parts = String(raw || '')
-      .split(/[,，]/)
+      .split(/[,，、]\s*/)
       .map((s) => s.trim())
       .filter(Boolean);
     for (const p of parts) {
       if (!values.includes(p)) values.push(p);
     }
     input = '';
+    activeIndex = -1;
+  }
+
+  // 从下拉点选已有剧种：加入 chips 并清空输入，下拉保持打开以便继续添加
+  function pick(s) {
+    if (!values.includes(s)) values.push(s);
+    input = '';
+    activeIndex = -1;
   }
 
   function onKeydown(e) {
     if (e.key === 'Enter') {
+      if (composing) return; // 输入法组词回车，不提交
       e.preventDefault();
-      commit(input);
+      if (showList && activeIndex >= 0 && activeIndex < filteredSuggestions.length) {
+        pick(filteredSuggestions[activeIndex]);
+      } else {
+        commit(input);
+      }
+    } else if (e.key === 'ArrowDown') {
+      if (!showList || !filteredSuggestions.length) return;
+      e.preventDefault();
+      showList = true;
+      activeIndex = Math.min(activeIndex + 1, filteredSuggestions.length - 1);
+    } else if (e.key === 'ArrowUp') {
+      if (!showList || !filteredSuggestions.length) return;
+      e.preventDefault();
+      if (activeIndex <= 0) activeIndex = -1;
+      else activeIndex -= 1;
+    } else if (e.key === 'Escape') {
+      showList = false;
+      activeIndex = -1;
     } else if (e.key === 'Backspace' && !input && values.length) {
       values.pop();
     }
   }
 
-  // datalist 选择 / 手输已有剧种：失焦时自动提交；新剧种留在输入框，需回车确认
-  function onSelect(e) {
-    const v = String(e.target.value || '').trim();
-    if (v && suggestions.includes(v)) commit(v);
+  // 高亮项滚动进可视区
+  $effect(() => {
+    if (activeIndex < 0 || !listEl) return;
+    const el = listEl.querySelector('.ctags-suggest-item.active');
+    el?.scrollIntoView({ block: 'nearest' });
+  });
+
+  let blurTimer = null;
+
+  function onFocus() {
+    if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; }
+    showList = true;
+    activeIndex = -1;
+  }
+
+  // 失焦时延时关闭；若输入了完整的已有剧种则自动提交（沿用原 onchange 语义）。
+  // 关闭定时器在重新聚焦时取消，避免焦点快速切换（或瞬时 blur）误关下拉。
+  function onBlur() {
+    if (blurTimer) clearTimeout(blurTimer);
+    blurTimer = setTimeout(() => {
+      blurTimer = null;
+      showList = false;
+      const v = input.trim();
+      if (v && categories.some((c) => c.name === v) && !values.includes(v)) {
+        commit(v);
+      }
+    }, 150);
+  }
+
+  function onCompositionStart() {
+    composing = true;
+  }
+  function onCompositionEnd() {
+    composing = false;
+    showList = true;
   }
 
   function onDragOver(e, i) {
@@ -69,6 +131,11 @@
     dragIdx = -1;
     overIdx = -1;
   }
+
+  // chips 拖拽状态
+  let dragIdx = $state(-1);
+  let overIdx = $state(-1);
+  let overBefore = $state(true);
 </script>
 
 <div class="ctags">
@@ -94,18 +161,33 @@
   <input
     class="ctag-input"
     bind:value={input}
+    onfocus={onFocus}
+    onblur={onBlur}
     onkeydown={onKeydown}
-    onchange={onSelect}
-    list={uid}
+    oncompositionstart={onCompositionStart}
+    oncompositionend={onCompositionEnd}
     {placeholder}
+    autocomplete="off"
+    spellcheck="false"
   />
-  <datalist id={uid}>
-    {#each suggestions as s}<option value={s} />{/each}
-  </datalist>
+  {#if showList && filteredSuggestions.length}
+    <div class="ctags-suggest" bind:this={listEl}>
+      {#each filteredSuggestions as s, i (s)}
+        <button
+          type="button"
+          class="ctags-suggest-item"
+          class:active={i === activeIndex}
+          onmousedown={(e) => e.preventDefault()}
+          onclick={() => pick(s)}
+        >{s}</button>
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>
   .ctags {
+    position: relative;
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
@@ -182,5 +264,40 @@
     color: var(--text);
     font-size: 14px;
     padding: 2px 4px;
+  }
+  /* 自定义下拉建议（替代原生 datalist，兼容 Safari / 移动端） */
+  .ctags-suggest {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 40;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 8px);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 4px;
+  }
+  .ctags-suggest-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: none;
+    padding: 9px 12px;
+    border-radius: var(--radius-sm, 6px);
+    font-size: 14px;
+    color: var(--text-2);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ctags-suggest-item:hover,
+  .ctags-suggest-item.active {
+    background: var(--accent-soft);
+    color: var(--accent);
   }
 </style>

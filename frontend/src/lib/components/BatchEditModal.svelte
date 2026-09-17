@@ -33,7 +33,6 @@
     drama_ids: { enabled: false, op: 'append', value: [] },
     zhezi_ids: { enabled: false, op: 'append', value: [] },
     play: { enabled: false, op: 'append', value: [] },
-    guest: { enabled: false, op: 'append', value: [] },
     artist_names: { enabled: false, op: 'append', value: [] }
   });
 
@@ -73,12 +72,6 @@
     const arr = fields.play.value;
     const i = arr.indexOf(name);
     fields.play.value = i >= 0 ? arr.filter((x) => x !== name) : [...arr, name];
-  }
-
-  function toggleGuest(name) {
-    const arr = fields.guest.value;
-    const i = arr.indexOf(name);
-    fields.guest.value = i >= 0 ? arr.filter((x) => x !== name) : [...arr, name];
   }
 
   function toggleArtist(name) {
@@ -134,9 +127,6 @@
       }
       if (fields.play.enabled && fields.play.value.length > 0) {
         payload.play = { op: fields.play.op, value: fields.play.value };
-      }
-      if (fields.guest.enabled && fields.guest.value.length > 0) {
-        payload.guest = { op: fields.guest.op, value: fields.guest.value };
       }
       if (fields.artist_names.enabled && fields.artist_names.value.length > 0) {
         payload.artist_names = { op: fields.artist_names.op, value: fields.artist_names.value };
@@ -391,39 +381,6 @@
             <div class="chip-grid">
               {#each fields.play.value as p}
                 <span class="chip selected">{p} <button onclick={() => togglePlay(p)}>✕</button></span>
-              {/each}
-            </div>
-          {/if}
-        {/if}
-      </div>
-
-      <div class="section">
-        <div class="section-title">
-          <label class="inline-check">
-            <input type="checkbox" checked={fields.guest.enabled} onchange={() => toggleField('guest')} />
-            <span>嘉宾</span>
-          </label>
-          <select class="op-select" bind:value={fields.guest.op} disabled={!fields.guest.enabled}>
-            <option value="append">追加</option>
-            <option value="set">替换为</option>
-            <option value="remove">移除</option>
-          </select>
-        </div>
-        {#if fields.guest.enabled}
-          <input
-            class="input"
-            placeholder="输入嘉宾名，回车添加"
-            onkeydown={(e) => {
-              if (e.key === 'Enter' && e.target.value.trim()) {
-                toggleGuest(e.target.value.trim());
-                e.target.value = '';
-              }
-            }}
-          />
-          {#if fields.guest.value.length}
-            <div class="chip-grid">
-              {#each fields.guest.value as g}
-                <span class="chip selected">{g} <button onclick={() => toggleGuest(g)}>✕</button></span>
               {/each}
             </div>
           {/if}

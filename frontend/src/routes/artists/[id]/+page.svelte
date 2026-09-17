@@ -21,7 +21,7 @@
   let saving = $state(false);
   let deleting = $state(false);
 
-  const splitList = (s) => (s || '').split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+  const splitList = (s) => (s || '').split(/[,，、]/).map((x) => x.trim()).filter(Boolean);
 
   async function load() {
     loading = true;
