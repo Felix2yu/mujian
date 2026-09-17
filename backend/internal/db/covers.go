@@ -253,27 +253,42 @@ func (db *DB) SetRecordThumb(id, thumb string) error {
 
 // ListCoverPicker returns distinct covers with reference counts and a sample
 // record's name/category, filtered by q (name or category), paginated.
+//
+// 两个关键点：ORDER BY 带唯一兜底列（cover_file），保证 ref_count 相同的
+// 大量封面在各页之间有稳定顺序——否则同分组的行顺序不确定，翻页会重复或漏项；
+// size 批量取一次，避免每行一条 SQL 的 N+1。
 func (db *DB) ListCoverPicker(q string, limit, offset int) ([]models.CoverRef, int, error) {
-	like := "%" + q + "%"
-	base := `
-		SELECT r.cover_file,
+	q = strings.TrimSpace(q)
+	like := "%" + escapeLike(q) + "%"
+	// 内层负责分组与聚合，外层负责过滤与排序：不依赖 SQLite 在 HAVING 里
+	// 引用结果列别名的扩展行为。
+	inner := `
+		SELECT r.cover_file AS cover_file,
 		       COUNT(*) AS ref_count,
-		       (SELECT name FROM records r2 WHERE r2.cover_file = r.cover_file ORDER BY r2.date DESC LIMIT 1) AS sample_name,
-		       (SELECT category_name FROM records r2 WHERE r2.cover_file = r.cover_file ORDER BY r2.date DESC LIMIT 1) AS sample_category
+		       (SELECT r2.name FROM records r2
+		          WHERE r2.cover_file = r.cover_file AND r2.deleted_at = 0
+		          ORDER BY r2.date DESC LIMIT 1) AS sample_name,
+		       COALESCE((SELECT r2.category_name FROM records r2
+		          WHERE r2.cover_file = r.cover_file AND r2.deleted_at = 0
+		          ORDER BY r2.date DESC LIMIT 1), '') AS sample_category
 		FROM records r
 		WHERE r.deleted_at = 0 AND r.cover_file != ''
-		GROUP BY r.cover_file
-		HAVING (? = '' OR sample_name LIKE ? OR sample_category LIKE ?)`
+		GROUP BY r.cover_file`
+	filter := ` WHERE (? = '' OR s.sample_name LIKE ? ESCAPE '\' OR s.sample_category LIKE ? ESCAPE '\')`
 
 	var total int
 	if err := db.conn.QueryRow(
-		"SELECT COUNT(*) FROM ("+base+")", q, like, like,
+		"SELECT COUNT(*) FROM ("+inner+") s"+filter, q, like, like,
 	).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := db.conn.Query(
-		base+" ORDER BY ref_count DESC LIMIT ? OFFSET ?", q, like, like, limit, offset,
+		"SELECT s.cover_file, s.ref_count, s.sample_name, s.sample_category FROM ("+inner+") s"+
+			filter+
+			// cover_file 唯一，作为兜底排序键让分页结果确定。
+			" ORDER BY s.ref_count DESC, s.cover_file ASC LIMIT ? OFFSET ?",
+		q, like, like, limit, offset,
 	)
 	if err != nil {
 		return nil, 0, err
@@ -281,6 +296,7 @@ func (db *DB) ListCoverPicker(q string, limit, offset int) ([]models.CoverRef, i
 	defer rows.Close()
 
 	var out []models.CoverRef
+	var names []string
 	for rows.Next() {
 		var c models.CoverRef
 		if err := rows.Scan(&c.FileName, &c.RefCount, &c.SampleName, &c.Category); err != nil {
@@ -290,22 +306,71 @@ func (db *DB) ListCoverPicker(q string, limit, offset int) ([]models.CoverRef, i
 			continue
 		}
 		c.Ext = extOf(c.FileName)
-		c.Size = 0
-		if meta, ok := db.coverSize(c.FileName); ok {
-			c.Size = meta
-		}
 		out = append(out, c)
+		names = append(names, c.FileName)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
 	}
 	if out == nil {
 		out = []models.CoverRef{}
+		return out, total, nil
+	}
+
+	// 一次查完所有 size，替代原先每行一条查询。
+	sizes := db.coverSizes(names)
+	for i := range out {
+		out[i].Size = sizes[out[i].FileName]
 	}
 	return out, total, nil
 }
 
-func (db *DB) coverSize(fileName string) (int64, bool) {
-	var s int64
-	err := db.conn.QueryRow("SELECT size FROM covers WHERE file_name = ?", fileName).Scan(&s)
-	return s, err == nil
+// coverSizes 批量取封面元信息大小；查不到的键直接缺席（Size=0）。
+func (db *DB) coverSizes(fileNames []string) map[string]int64 {
+	out := make(map[string]int64, len(fileNames))
+	if len(fileNames) == 0 {
+		return out
+	}
+	// SQLite 变量上限默认 32766，单次请求最多 200 条，安全。
+	placeholders := strings.Repeat("?,", len(fileNames))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, 0, len(fileNames))
+	for _, n := range fileNames {
+		args = append(args, n)
+	}
+	rows, err := db.conn.Query(
+		"SELECT file_name, size FROM covers WHERE file_name IN ("+placeholders+")", args...)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var n string
+		var s int64
+		if err := rows.Scan(&n, &s); err != nil {
+			continue
+		}
+		out[n] = s
+	}
+	return out
+}
+
+// escapeLike 转义 LIKE 通配符，避免用户输入的 % / _ 被当成通配符
+// （例如搜<｜hy_place▁holder▁no▁813｜>"100%"会退化成匹配全部）。
+func escapeLike(s string) string {
+	if s == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.Grow(len(s) + 4)
+	for _, r := range s {
+		switch r {
+		case '%', '_', '\\':
+			b.WriteRune('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 func extOf(fileName string) string {

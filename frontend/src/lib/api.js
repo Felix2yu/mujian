@@ -309,12 +309,15 @@ export const api = {
     return `${API_BASE}/api/export${qs ? `?${qs}` : ''}`;
   },
 
-  listCovers: (params = {}) => {
+  // signal 可选：调用方（如封面选择器）在发起新请求时可取消上一次，避免
+  // 结果乱序回来覆盖新数据。注意它会替换 request() 内置的 15s 超时，
+  // 因此调用方需要自己保证最终会 abort。
+  listCovers: (params = {}, signal) => {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) {
       if (v !== '' && v != null) qs.set(k, v);
     }
-    return request(`/api/covers?${qs.toString()}`);
+    return request(`/api/covers?${qs.toString()}`, signal ? { signal } : {});
   },
   getCoverDuplicates: () => request('/api/covers/duplicates'),
   mergeCovers: (hashes) => request('/api/covers/merge', { method: 'POST', body: JSON.stringify({ hashes }) }),

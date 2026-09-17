@@ -1166,6 +1166,14 @@
     if (src) { lightboxSrc = src; lightbox = true; }
   }
   function closeLightbox() { lightbox = false; lightboxSrc = ''; }
+
+  // fixed 浮层必须是 body 的直接子节点：本组件挂在 .fade-up 内，而 fadeUp 动画
+  // fill-mode:both 残留的 transform 会让 .fade-up 成为 fixed 的包含块，
+  // 灯箱就会按列宽/容器高度定位而不是视口（尺寸错位、盖不住全屏）。
+  function portal(node) {
+    if (typeof document !== 'undefined') document.body.appendChild(node);
+    return { destroy() { node.remove(); } };
+  }
   function onFormKeydown(e) {
     if (e.key === 'Escape') closeLightbox();
   }
@@ -1787,7 +1795,7 @@
 <CoverPicker open={pickerOpen} onSelect={pickCover} onClose={() => (pickerOpen = false)} />
 
 {#if lightbox && lightboxSrc}
-  <button type="button" class="lightbox" onclick={closeLightbox} aria-label="关闭大图">
+  <button type="button" class="lightbox" onclick={closeLightbox} aria-label="关闭大图" use:portal>
     <img src={lightboxSrc} alt="" />
   </button>
 {/if}
