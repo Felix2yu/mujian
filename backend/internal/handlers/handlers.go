@@ -257,20 +257,33 @@ func (h *Handler) listRecords(w http.ResponseWriter, r *http.Request) {
 	f.ArtistID = q.Get("artist")
 	f.ZheziID = q.Get("zhezi")
 	f.Missing = q.Get("missing")
+	// missing_mode=all → 全部所列字段都为空；默认 any → 任一为空（历史语义）。
+	f.MissingMode = strings.ToLower(q.Get("missing_mode"))
 	f.Channel = q.Get("channel")
 	f.Company = q.Get("company")
 	f.Address = q.Get("address")
 	if v := q.Get("rating_min"); v != "" {
-		f.RatingMin, _ = strconv.Atoi(v)
+		if n, err := strconv.Atoi(v); err == nil {
+			f.RatingMin = n
+			f.HasRatingMin = true
+		}
 	}
 	if v := q.Get("price_min"); v != "" {
 		f.PriceMin, _ = strconv.ParseFloat(v, 64)
 	}
 	if v := q.Get("price_max"); v != "" {
-		f.PriceMax, _ = strconv.ParseFloat(v, 64)
+		if n, err := strconv.ParseFloat(v, 64); err == nil {
+			f.PriceMax = n
+			f.HasPriceMax = true
+		}
 	}
+	// status=0（正常）必须能真正生效：此前用 ActiveStatus > 0 判断，「正常」
+	// 与「未传」无法区分，筛选面板选「正常」等于没筛。
 	if v := q.Get("status"); v != "" {
-		f.ActiveStatus, _ = strconv.Atoi(v)
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			f.ActiveStatus = n
+			f.HasActiveStatus = true
+		}
 	}
 	// active_status=0,2 — multi-select from the client's status preferences.
 	// Applied server-side so `total` only counts statuses the user displays.
@@ -1136,9 +1149,9 @@ func (h *Handler) listVenues(w http.ResponseWriter, r *http.Request) {
 
 // mergeVenuesRequest supports folding multiple source venues into one target.
 type mergeVenuesRequest struct {
-	TargetID string   `json:"target_id"`
+	TargetID  string   `json:"target_id"`
 	SourceIDs []string `json:"source_ids"`
-	DryRun   *bool    `json:"dry_run"`
+	DryRun    *bool    `json:"dry_run"`
 }
 
 // POST /api/venues/merge — 合并同址场馆（sources 并入 target，改写对应记录

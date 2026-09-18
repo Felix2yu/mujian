@@ -1,6 +1,7 @@
 <script>
   import { coverUrl, formatCurrency } from '$lib/api.js';
   import { STATUS_LABELS } from '$lib/statusPrefs.js';
+  import { formatEventTitle } from '$lib/eventTitle.js';
   let { record, selectionMode = false, selected = false } = $props();
   let coverFailed = $state(false);
 
@@ -9,6 +10,9 @@
     record.categoryNames?.length > 1 ? '拼盘' : record.categoryNames?.[0] || record.categoryName || ''
   );
   const statusText = $derived(STATUS_LABELS[record.active_status] ?? record.active_status);
+  // 与日历页共用同一套「剧种 + 剧名」拼法（详见 lib/eventTitle.js），
+  // 避免同一场演出在两个页面叫法不同。
+  const title = $derived(formatEventTitle(record.name, record.categoryName, record.categoryNames));
 
   // 剧团：按容器实际宽度计算最多能放下几个标签（限 2 行），
   // 放不下的以 +N 收尾且 +N 必须落在第二行内，避免卡片被撑高。
@@ -63,7 +67,11 @@
   }
 </script>
 
-<a class="card card-hover rec" href={`/records/${record.id}`}>
+<!-- 卡容器改为 article：此前整卡是 <a>，演员名又是嵌套的 <a>，属非法 HTML
+     （编译器告警 <a> cannot be descendant of <a>），开 SSR 会被解析器重排节点。
+     现在标题是唯一锚点并用 ::after 铺满整卡（stretched link），
+     演员链接抬到伪元素之上。批量模式下不渲染任何链接，交给外层卡片点击切换选中。 -->
+<article class="card card-hover rec" class:select-mode={selectionMode}>
   <div class="cover">
     {#if record.coverThumb && !coverFailed}
       <img src={coverUrl(record.coverThumb)} alt={record.name} loading="lazy" onerror={() => (coverFailed = true)} />
@@ -84,7 +92,13 @@
     {/if}
   </div>
   <div class="info">
-    <div class="title" title={record.name}>{record.name}</div>
+    {#if selectionMode}
+      <div class="title" title={record.name}>{title}</div>
+    {:else}
+      <div class="title" title={record.name}>
+        <a class="title-link" href={`/records/${record.id}`}>{title}</a>
+      </div>
+    {/if}
     <div class="meta">
       {#if record.dateText}<span>{record.dateText.split(' ')[0]}</span>{/if}
       {#if record.city}<span class="dot">·</span><span>{record.city}</span>{/if}
@@ -92,10 +106,10 @@
     <div class="artists">
       {#if record.artist_names && record.artist_names.length}
         {#each record.artist_names.slice(0, 3) as name, i}
-          {#if record.artist_ids?.[i]}
-            <a class="artist-link" href={`/artists/${record.artist_ids[i]}`}>{name}</a>
-          {:else}
+          {#if selectionMode || !record.artist_ids?.[i]}
             <span class="artist-link">{name}</span>
+          {:else}
+            <a class="artist-link" href={`/artists/${record.artist_ids[i]}`}>{name}</a>
           {/if}{i < Math.min(record.artist_names.length, 3) - 1 ? ' / ' : ''}
         {/each}{record.artist_names.length > 3 ? ' 等' : ''}
       {/if}
@@ -113,10 +127,10 @@
       {/if}
     </div>
   </div>
-</a>
+</article>
 
 <style>
-  .rec { display: flex; flex-direction: column; overflow: hidden; }
+  .rec { display: flex; flex-direction: column; overflow: hidden; position: relative; }
   .cover {
     position: relative;
     aspect-ratio: 3 / 4;
@@ -136,6 +150,10 @@
     transition: transform 0.5s var(--ease);
   }
   .rec:hover .cover img { transform: scale(1.05); }
+  /* 批量挑选整卡即选中态：此处抑制海报放大，避免与「点击选中」的手感冲突。
+     规则必须落在组件内（.cover 属组件作用域），写在页面级样式里是死规则。 */
+  .rec.select-mode:hover .cover img { transform: none; }
+  .rec.select-mode { cursor: pointer; }
   .no-cover {
     position: absolute;
     inset: 0;
@@ -235,6 +253,22 @@
     -webkit-box-orient: vertical;
     min-height: 2.7em;
   }
+  .title-link {
+    color: inherit;
+    text-decoration: none;
+  }
+  /* stretched link：把标题锚点的热区铺满整张卡，保持「点任意处进详情」的手感，
+     同时根元素是 article，卡内不再有嵌套 <a>。 */
+  .title-link::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+  .rec:focus-within {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
   .meta { font-size: 12.5px; color: var(--text-muted); display: flex; gap: 5px; align-items: center; min-height: 1.45em; }
   .dot { opacity: 0.5; }
   .artists {
@@ -245,7 +279,8 @@
     white-space: nowrap;
     min-height: 1.45em;
   }
-  .artist-link { color: var(--text-2); text-decoration: none; }
+  /* 抬到 stretched link 之上，否则整卡热区会吃掉演员跳转 */
+  .artist-link { color: var(--text-2); text-decoration: none; position: relative; z-index: 2; }
   .artist-link:hover { color: var(--accent); text-decoration: underline; }
   .troupes { display: flex; flex-wrap: wrap; gap: 4px; min-height: 1.45em; }
   .troupe-tag {

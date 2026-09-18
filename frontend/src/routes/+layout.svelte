@@ -716,6 +716,8 @@
     user-select: none;
     -webkit-user-drag: none;
   }
-  .coverable { cursor: zoom-in; }
-  .coverable img { cursor: zoom-in; }
+  /* .coverable 出现在多个页面/组件里，作用域规则匹配不到（编译器会标 Unused），
+     功能是事件委托提供的，但手势提示必须全局生效。 */
+  :global(.coverable) { cursor: zoom-in; }
+  :global(.coverable img) { cursor: zoom-in; }
 </style>

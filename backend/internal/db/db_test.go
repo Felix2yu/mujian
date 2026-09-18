@@ -2323,19 +2323,37 @@ func TestRecordFilterStatuses(t *testing.T) {
 		t.Fatalf("statuses [0,2]: got %d records / total %d, want 3/3", len(recs), total)
 	}
 
-	// Single-status shorthand still works and yields the same count.
-	f1 := RecordFilter{ActiveStatus: 1}
+	// Single-status shorthand still works and yields the same count. Because
+	// 0 is a legitimate status (正常), presence is flagged explicitly rather
+	// than inferred from the value.
+	f1 := RecordFilter{ActiveStatus: 1, HasActiveStatus: true}
 	total1, _ := d.CountRecordsContext(context.Background(), f1)
 	recs1, _ := d.ListRecordsContext(context.Background(), f1)
 	if total1 != 1 || len(recs1) != 1 {
 		t.Fatalf("single status 1: got %d records / total %d, want 1/1", len(recs1), total1)
 	}
 
-	// Multi-select wins when both are set.
-	fboth := RecordFilter{ActiveStatus: 1, Statuses: []int{0, 2}}
+	// Status=0 (正常) must actually filter — it used to be indistinguishable
+	// from "not provided", making the UI's 正常 option a no-op.
+	fZero := RecordFilter{ActiveStatus: 0, HasActiveStatus: true}
+	totalZero, _ := d.CountRecordsContext(context.Background(), fZero)
+	if totalZero != 2 {
+		t.Fatalf("single status 0: total %d, want 2", totalZero)
+	}
+
+	// Multi-select and single status come from two different UI surfaces and
+	// are AND-ed: status 1 is not in {0,2}, so the result is empty rather
+	// than silently returning one of the two sets.
+	fboth := RecordFilter{ActiveStatus: 1, HasActiveStatus: true, Statuses: []int{0, 2}}
 	totalBoth, _ := d.CountRecordsContext(context.Background(), fboth)
-	if totalBoth != 3 {
-		t.Fatalf("Statuses should take precedence: total %d, want 3", totalBoth)
+	if totalBoth != 0 {
+		t.Fatalf("statuses AND active_status should intersect: total %d, want 0", totalBoth)
+	}
+	// ...and overlap yields the intersection, not the union.
+	fbothIn := RecordFilter{ActiveStatus: 2, HasActiveStatus: true, Statuses: []int{0, 2}}
+	totalIn, _ := d.CountRecordsContext(context.Background(), fbothIn)
+	if totalIn != 1 {
+		t.Fatalf("intersection of status 2 and statuses {0,2}: total %d, want 1", totalIn)
 	}
 }
 

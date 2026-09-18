@@ -885,24 +885,40 @@ type RecordFilter struct {
 	DramaID  string // a record whose drama_ids contains this id
 	ZheziID  string // a record whose zhezi_ids contains this id
 	ArtistID string // a record whose artist_ids contains this id
-	// Missing is a comma-separated list of field tokens; a record matches if
-	// ANY listed field is empty. Drives data-hygiene queries such as "find
-	// records without a category". Supported tokens: category, city, address,
-	// company, channel, rating, price, cover, coordinate, artist, drama, zhezi,
-	// friends, remark, seat, play.
-	Missing string
+	// Missing is a comma-separated list of field tokens. MissingMode selects
+	// how multiple tokens combine:
+	//   - "" / "any": a record matches if ANY listed field is empty (data-hygiene
+	//     sweep: "show me records missing a category or a city"). This is the
+	//     historical behaviour and stays the default for backwards compatibility.
+	//   - "all":      a record matches only if EVERY listed field is empty.
+	// Supported tokens: category, city, address, company, channel, rating,
+	// price, cover, coordinate, artist, drama, zhezi, friends, remark, seat,
+	// play, guest.
+	Missing     string
+	MissingMode string
 	// 扩展筛选维度（前端筛选面板新增的字段）
-	Channel      string  // 渠道精确匹配
-	Company      string  // 剧团精确匹配
-	Address      string  // 场馆（records.address）精确匹配；分析页「场馆 Top」下钻入口
-	RatingMin    int     // 评分下限（含）
-	PriceMin     float64 // 票价下限（含）
-	PriceMax     float64 // 票价上限（含）；仅当 >0 时生效
-	ActiveStatus int     // 演出状态：0=正常 1=想看 2=已取消 3=未赴约；仅当 >0 时生效
+	Channel string // 渠道精确匹配
+	// Company 剧团匹配。records.company 允许按逗号存多个剧团（「上昆,北昆」），
+	// 因此匹配必须按「逗号分隔列表包含」语义，而不是全等；否则任何含多剧团
+	// 的记录都无法被单一剧团筛选命中。
+	Company string
+	Address string // 场馆（records.address）精确匹配；分析页「场馆 Top」下钻入口
+	// RatingMin/PriceMax 这类「下界为 0」的过滤无法用零值区分「未设置」与
+	// 「显式要求 ≥0 / ≤0」，后者语义有效（如「只要免费场」「只要有评分」），
+	// 故由 Has* 标志位显式表达参数是否出现。
+	RatingMin       int // 评分下限（含）；仅当 HasRatingMin 时生效
+	HasRatingMin    bool
+	PriceMin        float64 // 票价下限（含）；仅当 >0 时生效
+	PriceMax        float64 // 票价上限（含）；仅当 HasPriceMax 时生效
+	HasPriceMax     bool
+	ActiveStatus    int // 演出状态：0=正常 1=想看 2=已取消 3=未赴约；仅当 HasActiveStatus 时生效
+	HasActiveStatus bool
 	// Statuses is a multi-select of active_status values (the client's status
-	// preferences). When non-empty it takes precedence over ActiveStatus and
-	// is applied to BOTH listing and counting, so the UI's "已加载 X / 共 Y"
-	// counter agrees with what the user actually sees.
+	// preferences) and is AND-ed with ActiveStatus (the filter panel's single
+	// status) rather than overriding it: the two parameters come from
+	// different UI surfaces and can legitimately both be present. Applied to
+	// BOTH listing and counting, so the UI's "已加载 X / 共 Y" counter agrees
+	// with what the user actually sees.
 	Statuses []int
 	Exact    bool // 关键词精确匹配（按 name 全等，而非模糊 LIKE）
 	Limit    int
@@ -942,10 +958,10 @@ func (db *DB) ListRecords(f RecordFilter) ([]models.Record, error) {
 }
 
 // appendStatusPredicate adds the active_status predicate for the filter.
-// Statuses (multi-select from the client's status preferences) takes
-// precedence over the single-value ActiveStatus param. Shared by
-// ListRecordsContext and CountRecordsContext so the list and its total always
-// agree on which statuses are visible.
+// Statuses (multi-select from the client's status preferences) and
+// ActiveStatus (single value from the filter panel) are AND-ed rather than
+// being mutually exclusive: the UI can legitimately send both, and silently
+// dropping one of them made the result disagree with the visible chips.
 func appendStatusPredicate(f RecordFilter, where *[]string, args *[]interface{}) {
 	if len(f.Statuses) > 0 {
 		ph := make([]string, len(f.Statuses))
@@ -954,11 +970,76 @@ func appendStatusPredicate(f RecordFilter, where *[]string, args *[]interface{})
 			*args = append(*args, f.Statuses[i])
 		}
 		*where = append(*where, "active_status IN ("+strings.Join(ph, ",")+")")
-		return
 	}
-	if f.ActiveStatus > 0 {
+	if f.HasActiveStatus {
 		*where = append(*where, "active_status = ?")
 		*args = append(*args, f.ActiveStatus)
+	}
+}
+
+// appendCompanyPredicate matches company against a comma-separated multi-value
+// column. records.company may hold several troupes ("上昆,北昆"), so equality
+// would miss every multi-value row once the user filters by one troupe.
+// The '%' markers come from the SQL literal, the needle from a bound
+// parameter, so user input containing LIKE metacharacters stays literal.
+func appendCompanyPredicate(f RecordFilter, where *[]string, args *[]interface{}) {
+	if f.Company == "" {
+		return
+	}
+	*where = append(*where, "(',' || COALESCE(company, '') || ',') LIKE ('%,' || ? || ',%')")
+	*args = append(*args, f.Company)
+}
+
+// localTimeModifier returns the SQLite timestamp modifier that converts a unix
+// epoch into db.loc wall clock, e.g. "+08:00". strftime operates in UTC unless
+// told otherwise, and SQLite's own 'localtime' uses the process timezone, which
+// is not necessarily the configured display location.
+func (db *DB) localTimeModifier() string {
+	_, off := time.Now().In(db.loc).Zone()
+	sign := '+'
+	if off < 0 {
+		sign = '-'
+		off = -off
+	}
+	return fmt.Sprintf("%c%02d:%02d", sign, off/3600, (off%3600)/60)
+}
+
+// appendDatePredicate adds year / month / start / end predicates. Previously
+// year and month were only honoured together AND short-circuited start/end
+// (`if Year>0 && Month>0 {...} else if Start|End {...}`), so picking just a
+// month silently returned everything while the UI kept showing a "月份：3"
+// chip. Each of the four now contributes independently and they intersect.
+func (db *DB) appendDatePredicate(f RecordFilter, where *[]string, args *[]interface{}) {
+	// No early return anywhere below: each supplied dimension adds its own
+	// predicate so they intersect instead of one shadowing the next.
+	if f.Year > 0 {
+		if f.Month > 0 {
+			start := time.Date(f.Year, time.Month(f.Month), 1, 0, 0, 0, 0, db.loc)
+			*where = append(*where, "date >= ? AND date < ?")
+			*args = append(*args, start.Unix(), start.AddDate(0, 1, 0).Unix())
+		} else {
+			start := time.Date(f.Year, 1, 1, 0, 0, 0, 0, db.loc)
+			*where = append(*where, "date >= ? AND date < ?")
+			*args = append(*args, start.Unix(), start.AddDate(1, 0, 0).Unix())
+		}
+	} else if f.Month > 0 {
+		// Calendar month across every year ("every March"): compare the
+		// local-time month component of the stored unix timestamp.
+		*where = append(*where, "CAST(strftime('%m', date, 'unixepoch', ?) AS INTEGER) = ?")
+		*args = append(*args, db.localTimeModifier(), f.Month)
+	}
+	if f.Start != "" {
+		if t, ok := parseTimeArg(f.Start, db.loc); ok {
+			*where = append(*where, "date >= ?")
+			*args = append(*args, t.Unix())
+		}
+	}
+	if f.End != "" {
+		if t, ok := parseTimeArg(f.End, db.loc); ok {
+			*where = append(*where, "date < ?")
+			// end is inclusive in the UI ("to this day"), hence +1 day.
+			*args = append(*args, t.AddDate(0, 0, 1).Unix())
+		}
 	}
 }
 
@@ -1057,43 +1138,25 @@ func (db *DB) ListRecordsContext(ctx context.Context, f RecordFilter) ([]models.
 		where = append(where, "ra.artist_id = ?")
 		args = append(args, f.ArtistID)
 	}
-	if f.Year > 0 && f.Month > 0 {
-		// filter by calendar month of the unix `date`
-		start := time.Date(f.Year, time.Month(f.Month), 1, 0, 0, 0, 0, db.loc)
-		end := start.AddDate(0, 1, 0)
-		where = append(where, "date >= ? AND date < ?")
-		args = append(args, start.Unix(), end.Unix())
-	} else if f.Start != "" || f.End != "" {
-		if t, ok := parseTimeArg(f.Start, db.loc); ok {
-			where = append(where, "date >= ?")
-			args = append(args, t.Unix())
-		}
-		if t, ok := parseTimeArg(f.End, db.loc); ok {
-			where = append(where, "date < ?")
-			args = append(args, t.AddDate(0, 0, 1).Unix())
-		}
-	}
+	db.appendDatePredicate(f, &where, &args)
 
 	if f.Missing != "" {
-		if p := buildMissingPredicate(f.Missing); p != "" {
+		if p := buildMissingPredicate(f.Missing, f.MissingMode); p != "" {
 			where = append(where, p)
 		}
 	}
 
-	// 扩展维度：渠道/剧团精确匹配、评分下限、票价区间、状态过滤
+	// 扩展维度：渠道/剧团匹配、评分下限、票价区间、状态过滤
 	if f.Channel != "" {
 		where = append(where, "channel = ?")
 		args = append(args, f.Channel)
 	}
-	if f.Company != "" {
-		where = append(where, "company = ?")
-		args = append(args, f.Company)
-	}
+	appendCompanyPredicate(f, &where, &args)
 	if f.Address != "" {
 		where = append(where, "address = ?")
 		args = append(args, f.Address)
 	}
-	if f.RatingMin > 0 {
+	if f.HasRatingMin {
 		where = append(where, "rating >= ?")
 		args = append(args, f.RatingMin)
 	}
@@ -1101,7 +1164,7 @@ func (db *DB) ListRecordsContext(ctx context.Context, f RecordFilter) ([]models.
 		where = append(where, "price >= ?")
 		args = append(args, f.PriceMin)
 	}
-	if f.PriceMax > 0 {
+	if f.HasPriceMax {
 		where = append(where, "price <= ?")
 		args = append(args, f.PriceMax)
 	}
@@ -1201,42 +1264,25 @@ func (db *DB) CountRecordsContext(ctx context.Context, f RecordFilter) (int, err
 		where = append(where, "ra.artist_id = ?")
 		args = append(args, f.ArtistID)
 	}
-	if f.Year > 0 && f.Month > 0 {
-		start := time.Date(f.Year, time.Month(f.Month), 1, 0, 0, 0, 0, db.loc)
-		end := start.AddDate(0, 1, 0)
-		where = append(where, "date >= ? AND date < ?")
-		args = append(args, start.Unix(), end.Unix())
-	} else if f.Start != "" || f.End != "" {
-		if t, ok := parseTimeArg(f.Start, db.loc); ok {
-			where = append(where, "date >= ?")
-			args = append(args, t.Unix())
-		}
-		if t, ok := parseTimeArg(f.End, db.loc); ok {
-			where = append(where, "date < ?")
-			args = append(args, t.AddDate(0, 0, 1).Unix())
-		}
-	}
+	db.appendDatePredicate(f, &where, &args)
 
 	if f.Missing != "" {
-		if p := buildMissingPredicate(f.Missing); p != "" {
+		if p := buildMissingPredicate(f.Missing, f.MissingMode); p != "" {
 			where = append(where, p)
 		}
 	}
 
-	// 扩展维度：渠道/剧团精确匹配、评分下限、票价区间、状态过滤
+	// 扩展维度：渠道/剧团匹配、评分下限、票价区间、状态过滤
 	if f.Channel != "" {
 		where = append(where, "channel = ?")
 		args = append(args, f.Channel)
 	}
-	if f.Company != "" {
-		where = append(where, "company = ?")
-		args = append(args, f.Company)
-	}
+	appendCompanyPredicate(f, &where, &args)
 	if f.Address != "" {
 		where = append(where, "address = ?")
 		args = append(args, f.Address)
 	}
-	if f.RatingMin > 0 {
+	if f.HasRatingMin {
 		where = append(where, "rating >= ?")
 		args = append(args, f.RatingMin)
 	}
@@ -1244,7 +1290,7 @@ func (db *DB) CountRecordsContext(ctx context.Context, f RecordFilter) (int, err
 		where = append(where, "price >= ?")
 		args = append(args, f.PriceMin)
 	}
-	if f.PriceMax > 0 {
+	if f.HasPriceMax {
 		where = append(where, "price <= ?")
 		args = append(args, f.PriceMax)
 	}
@@ -1292,10 +1338,20 @@ var missingRelPredicates = map[string]string{
 }
 
 // buildMissingPredicate turns a comma-separated Missing token list into a single
-// parenthesized OR predicate (or "" when no known token is present). A record
-// matches the filter when ANY listed field is empty — this is the data-hygiene
-// query ("show me records missing a category", etc.).
-func buildMissingPredicate(missing string) string {
+// parenthesized predicate (or "" when no known token is present).
+//
+// mode selects how multiple tokens combine — this used to be an undocumented
+// OR, which silently made "缺封面 + 缺坐标" return every record missing either:
+//   - missingModeAny ("" / "any"): ANY listed field empty — the data-hygiene
+//     sweep. Kept as the default so existing API clients keep their behaviour.
+//   - missingModeAll ("all"):      EVERY listed field empty — what a row of
+//     checkboxes reads like in the UI.
+const (
+	missingModeAny = "any"
+	missingModeAll = "all"
+)
+
+func buildMissingPredicate(missing string, mode string) string {
 	parts := make([]string, 0, 4)
 	for _, raw := range strings.Split(missing, ",") {
 		tok := strings.TrimSpace(raw)
@@ -1311,7 +1367,11 @@ func buildMissingPredicate(missing string) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	return "(" + strings.Join(parts, " OR ") + ")"
+	join := " OR "
+	if mode == missingModeAll {
+		join = " AND "
+	}
+	return "(" + strings.Join(parts, join) + ")"
 }
 
 func parseTimeArg(s string, loc *time.Location) (time.Time, bool) {

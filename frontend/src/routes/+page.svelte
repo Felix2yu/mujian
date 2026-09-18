@@ -15,6 +15,7 @@
   let cities = $state([]);
   let loading = $state(true);
   let loadingMore = $state(false);
+  let loadMoreError = $state('');
   let error = $state('');
   let total = $state(0);
   const PAGE_SIZE = 30;
@@ -29,7 +30,10 @@
     start: '', end: '',
     rating_min: '', price_min: '', price_max: '',
     status: '', exact: false,
-    missing: []
+    missing: [],
+    // 缺失字段多选的组合方式：any=任一为空（数据治理扫默认）/ all=全部为空。
+    // 后端此前恒为 OR 且 UI 无提示，多选会返回远大于预期的集合。
+    missingMode: 'any'
   });
 
   // 可筛选的「缺失字段」清单。value 必须与后端 buildMissingPredicate 的 token 一致。
@@ -149,10 +153,13 @@
   function toggleSelectMode() {
     selectionMode = !selectionMode;
     if (!selectionMode) {
-      selectedIds.clear();
+      selectedIds = new Set();
     }
   }
 
+  // ⚠️ selectedIds 是 $state(new Set())。Svelte 5 的响应式代理不接管 Set
+  // （proxy.js：prototype 非 object/array 原型时原样返回），所以 .add/delete/clear
+  // 都不会触发重渲染，必须整体重新赋值。写成 = new Set(...) 才算真的改了状态。
   function toggleSelect(id) {
     if (selectedIds.has(id)) {
       selectedIds.delete(id);
@@ -163,10 +170,25 @@
   }
 
   function toggleSelectAll() {
-    if (allSelected) {
-      selectedIds.clear();
-    } else {
+    // 此处曾是 selectedIds.clear()：静默不生效，「取消全选」点了没反应，
+    // 直到下一次点单张卡片才突然只剩 1 条。
+    selectedIds = allSelected ? new Set() : new Set(records.map((r) => r.id));
+  }
+
+  // 全选跨出当前已加载页：先把剩余分页拉完，再一次性选中。
+  let selectAllLoading = $state(false);
+  async function selectAllMatched() {
+    selectAllLoading = true;
+    try {
+      // loadMore 失败返回 false，必须 break，否则 hasMore 恒真会死循环。
+      let guard = 0;
+      while (hasMore) {
+        if (!await loadMore()) break;
+        if (++guard > 200) break; // 上限防御：记录数远大于分页步长时不再无脑翻页
+      }
       selectedIds = new Set(records.map((r) => r.id));
+    } finally {
+      selectAllLoading = false;
     }
   }
 
@@ -264,7 +286,10 @@
     const keys = ['q', 'category', 'city', 'year', 'month', 'drama', 'zhezi', 'artist', 'channel', 'company', 'address', 'start', 'end', 'rating_min', 'price_min', 'price_max', 'status'];
     for (const k of keys) if (filters[k]) params.set(k, filters[k]);
     if (filters.exact) params.set('exact', '1');
-    if (filters.missing.length) params.set('missing', filters.missing.join(','));
+    if (filters.missing.length) {
+      params.set('missing', filters.missing.join(','));
+      if (filters.missingMode === 'all') params.set('missing_mode', 'all');
+    }
     return params.toString();
   }
 
@@ -277,7 +302,7 @@
       filters.drama, filters.zhezi, filters.artist, filters.channel, filters.company,
       filters.address,
       filters.start, filters.end, filters.rating_min, filters.price_min, filters.price_max,
-      filters.status, filters.exact, filters.missing.join(',')
+      filters.status, filters.exact, filters.missing.join(','), filters.missingMode
     ];
     const qs = buildFilterQuery();
     const url = qs ? `/?${qs}` : '/';
@@ -291,7 +316,10 @@
     const keys = ['q', 'category', 'city', 'year', 'month', 'drama', 'zhezi', 'artist', 'channel', 'company', 'address', 'start', 'end', 'rating_min', 'price_min', 'price_max', 'status'];
     for (const k of keys) if (filters[k]) q[k] = filters[k];
     if (filters.exact) q.exact = '1';
-    if (filters.missing.length) q.missing = filters.missing.join(',');
+    if (filters.missing.length) {
+      q.missing = filters.missing.join(',');
+      if (filters.missingMode === 'all') q.missing_mode = 'all';
+    }
     // 状态偏好（设置里勾选要显示的状态）交给服务端过滤：这样 total 只统计
     // 用户真正会看到的记录，列表计数不再与滚动加载后的条数对不上。
     const statusPrefs = loadStatusFilter();
@@ -324,7 +352,13 @@
     savingView = false;
   }
   function applyView(v) {
-    filters = { ...filters, ...JSON.parse(JSON.stringify(v.filters)), missing: [...(v.filters.missing || [])] };
+    filters = {
+      ...filters,
+      ...JSON.parse(JSON.stringify(v.filters)),
+      missing: [...(v.filters.missing || [])],
+      // 旧版快照没有这个键，spread 会把缺省写成 undefined。
+      missingMode: v.filters.missingMode === 'all' ? 'all' : 'any'
+    };
     load();
   }
   async function removeView(v) {
@@ -347,6 +381,7 @@
     const seq = ++listReqSeq;
     loading = true;
     loadingMore = false;
+    loadMoreError = '';
     offset = 0;
     error = '';
     try {
@@ -366,18 +401,23 @@
     }
   }
 
+  // 追加分页失败不能被静默吞掉：哨兵动画停下却没有任何提示时，用户无法区分
+  // 「到底了」还是「请求挂了」。返回 false 表示本次没拿到数据。
   async function loadMore() {
-    if (loading || loadingMore || !hasMore) return;
+    if (loading || loadingMore || !hasMore) return false;
     const seq = ++listReqSeq;
     loadingMore = true;
+    loadMoreError = '';
     try {
       const { records: page } = await api.listRecords(buildQuery(offset + PAGE_SIZE, PAGE_SIZE));
-      if (seq !== listReqSeq) return; // 期间筛选已变，旧页不得 append
+      if (seq !== listReqSeq) return false; // 期间筛选已变，旧页不得 append
       offset += PAGE_SIZE;
       records = [...records, ...page];
       hasMore = offset + PAGE_SIZE < total;
+      return true;
     } catch (e) {
-      // 静默失败，保留已加载的
+      if (seq === listReqSeq) loadMoreError = e.message || '加载失败';
+      return false;
     } finally {
       if (seq === listReqSeq) loadingMore = false;
     }
@@ -466,7 +506,8 @@
       start: '', end: '',
       rating_min: '', price_min: '', price_max: '',
       status: '', exact: false,
-      missing: []
+      missing: [],
+      missingMode: 'any'
     };
     load();
   }
@@ -515,7 +556,8 @@
       price_max: sp.get('price_max') || '',
       status: sp.get('status') || '',
       exact: sp.get('exact') === '1' || sp.get('exact') === 'true',
-      missing: (sp.get('missing') || '').split(',').map((s) => s.trim()).filter(Boolean)
+      missing: (sp.get('missing') || '').split(',').map((s) => s.trim()).filter(Boolean),
+      missingMode: sp.get('missing_mode') === 'all' ? 'all' : 'any'
     };
     if (filters.missing.length) showMissing = true; // 携带缺失筛选进入时自动展开该分组
     // 去重防御：chips 以名称为 each key，历史数据里的重名视图会导致渲染崩溃
@@ -537,6 +579,53 @@
     clearTimeout(searchTimer);
     clearTimeout(flashTimer);
   });
+
+  // 筛选面板声明了 aria-modal，此前却既没有 Esc 关闭、也没有初始焦点与焦点陷阱，
+  // 背景列表还能继续滚动。这里补齐对话框的基本契约。
+  let filterPanelEl = $state(null);
+  let filterToggleEl = $state(null);
+  const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  $effect(() => {
+    if (!showFilter) return;
+    const panel = filterPanelEl;
+    if (!panel) return; // 面板挂载前的一次空转（模板尚未渲染）
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        showFilter = false;
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const nodes = [...panel.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null);
+      if (nodes.length === 0) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || !nodes.includes(active)) {
+          e.preventDefault();
+          last.focus({ preventScroll: true });
+        }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus({ preventScroll: true });
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    // 等 fly 过渡结束再送入焦点，否则会被 transform 动画带着滚动。
+    const t = setTimeout(() => {
+      panel.querySelector(FOCUSABLE)?.focus({ preventScroll: true });
+    }, 220);
+    return () => {
+      document.removeEventListener('keydown', onKey, true);
+      clearTimeout(t);
+      document.body.style.overflow = prevOverflow;
+      filterToggleEl?.focus({ preventScroll: true });
+    };
+  });
 </script>
 <svelte:head><title>演出 - 幕间</title></svelte:head>
 <svelte:window onscroll={onScroll} />
@@ -548,6 +637,8 @@
       <span class="search-ico">⌕</span>
       <input
         class="search"
+        type="search"
+        aria-label="搜索演出"
         placeholder="搜索演出名称、演员、城市、剧团、备注…"
         bind:value={filters.q}
         oninput={onSearchInput}
@@ -564,6 +655,7 @@
           onclick={() => { showFilter = !showFilter; if (showFilter) loadFilterData(); }}
           aria-expanded={showFilter}
           aria-haspopup="dialog"
+          bind:this={filterToggleEl}
         >
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3 5h18M6 12h12M10 19h4" />
@@ -586,7 +678,16 @@
         <input type="checkbox" checked={allSelected} onchange={toggleSelectAll} />
         <span>{allSelected ? '取消全选' : '全选'}</span>
       </label>
-      <span class="batch-count">已选 {selectedIds.size} 条</span>
+      <!-- 「全选」只覆盖已加载到列表里的那些记录，上方「记录 N」是全部匹配数，
+           两个数字不同时必须说清，否则用户以为选中了全部。 -->
+      <span class="batch-count">
+        已选 {selectedIds.size} / 已加载 {records.length} 条{#if hasMore || total > records.length}（共 {total} 条）{/if}
+      </span>
+      {#if total > records.length}
+        <button class="btn ghost sm" onclick={selectAllMatched} disabled={selectAllLoading}>
+          {selectAllLoading ? '加载中…' : `选中全部 ${total} 条`}
+        </button>
+      {/if}
       <div class="batch-actions">
         <button class="btn primary sm" onclick={openBatchEdit} disabled={selectedIds.size === 0}>批量编辑</button>
         <button class="btn danger sm" onclick={batchDelete} disabled={selectedIds.size === 0}>批量删除</button>
@@ -603,7 +704,7 @@
   {/if}
 
   <div class="count-row">
-    <h2>记录 <span class="num">{total}</span>{#if isFiltered && allTotal > 0} / {allTotal}{/if}</h2>
+    <h1>记录 <span class="num">{total}</span>{#if isFiltered && allTotal > 0} / {allTotal}{/if}</h1>
       {#if savedViews.length}
         <span class="views-row">
           {#each savedViews as v (v.name)}
@@ -643,6 +744,10 @@
       {:else}
         <div class="grid stagger">
           {#each records as r (r.id)}
+            <!-- role/tabindex 由 selectionMode 动态给出：静态分析看不到那个
+                 role="button"，会报 noninteractive element with tabindex。
+                 批量模式下卡内不渲染任何链接（见 RecordCard），不存在嵌套交互元素。 -->
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
             <div
               id={'rec-' + r.id}
               class="record-card-wrapper"
@@ -660,9 +765,14 @@
           {/each}
         </div>
         <!-- 无限滚动哨兵 -->
-        {#if hasMore}
-          <div bind:this={sentinelEl} class="sentinel" aria-hidden="true">
-            {#if loadingMore}
+        {#if hasMore || loadMoreError}
+          <div bind:this={sentinelEl} class="sentinel" aria-hidden={loadMoreError ? null : 'true'}>
+            {#if loadMoreError}
+              <div class="sentinel-error">
+                <span>加载失败：{loadMoreError}</span>
+                <button class="btn ghost sm" onclick={() => loadMore()}>重试</button>
+              </div>
+            {:else if loadingMore}
               <div class="sentinel-loader"><span></span><span></span><span></span></div>
             {/if}
           </div>
@@ -672,7 +782,7 @@
 
 {#if showFilter}
   <div class="filter-mask" onclick={() => (showFilter = false)} transition:fade={{ duration: 140 }} aria-hidden="true"></div>
-  <div class="filter-panel card" role="dialog" aria-modal="true" aria-label="筛选选项" transition:fly={{ y: 40, duration: 200 }}>
+  <div class="filter-panel card" role="dialog" aria-modal="true" aria-label="筛选选项" bind:this={filterPanelEl} transition:fly={{ y: 40, duration: 200 }}>
     <div class="filter-panel-head">
       <span class="filter-panel-title">筛选</span>
       <button type="button" class="filter-close" onclick={() => (showFilter = false)} aria-label="关闭筛选">
@@ -715,6 +825,27 @@
         <svg class="chev" class:open={showMissing} viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
       </button>
       {#if showMissing}
+        <div class="missing-mode-row">
+          <div class="seg" role="group" aria-label="缺失字段组合方式">
+            <button
+              type="button"
+              class="seg-btn"
+              class:on={filters.missingMode !== 'all'}
+              aria-pressed={filters.missingMode !== 'all'}
+              onclick={() => { filters = { ...filters, missingMode: 'any' }; if (filters.missing.length) load(); }}
+            >任一为空</button>
+            <button
+              type="button"
+              class="seg-btn"
+              class:on={filters.missingMode === 'all'}
+              aria-pressed={filters.missingMode === 'all'}
+              onclick={() => { filters = { ...filters, missingMode: 'all' }; if (filters.missing.length) load(); }}
+            >全部为空</button>
+          </div>
+          <span class="missing-mode-hint">
+            {filters.missingMode === 'all' ? '仅命中所有勾选字段都为空的记录' : '命中任一勾选字段为空的记录'}
+          </span>
+        </div>
         <div class="missing-grid">
           {#each MISSING_FIELDS as f}
             <label class="missing-opt">
@@ -1012,6 +1143,34 @@
     color: var(--text-3, #9aa0a6);
     margin: -4px 0 10px;
   }
+  .missing-mode-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .missing-mode-hint { font-size: 12px; color: var(--text-3); }
+  /* 任一 / 全部 分段切换 */
+  .seg {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--surface-2);
+    flex-shrink: 0;
+  }
+  .seg-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-2);
+    font-size: 12.5px;
+    padding: 5px 14px;
+    cursor: pointer;
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  }
+  .seg-btn + .seg-btn { border-left: 1px solid var(--border); }
+  .seg-btn.on { background: var(--accent); color: #fff; }
   .missing-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
@@ -1047,6 +1206,8 @@
     display: flex;
     gap: 10px;
     justify-content: flex-end;
+    /* 「保存视图」态行内有 5 个控件（含 180px 输入框），窄屏必须换行否则横向溢出 */
+    flex-wrap: wrap;
     margin-top: 16px;
   }
 
@@ -1112,7 +1273,7 @@
   }
   .chip:hover { background: var(--accent); color: #fff; }
 
-  .count-row h2 { font-size: 20px; margin: 4px 0 0; }
+  .count-row h1 { font-size: 20px; margin: 4px 0 0; }
   .count-row .num { color: var(--accent); font-family: var(--font-sans); font-weight: 700; font-size: 18px; margin-left: 4px; }
 
   .batch-bar {
@@ -1202,8 +1363,8 @@
     outline-offset: 2px;
     border-radius: var(--radius-lg);
   }
-  /* 批量模式下整卡可点选，悬停不再放大海报 */
-  .record-card-wrapper.select-mode:hover .cover img { transform: none; }
+  /* 批量挑选时不再放大海报：规则在 RecordCard 组件内部（.cover 属组件作用域，
+     写在页面级会被引擎判为 Unused 而失效）。 */
   .record-card-wrapper.selected::before {
     content: '';
     position: absolute;
@@ -1258,6 +1419,14 @@
     background: var(--accent);
     opacity: 0.3;
     animation: sentinel-pulse 1.2s ease-in-out infinite;
+  }
+  .sentinel-error {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: var(--danger);
   }
   .sentinel-loader span:nth-child(2) { animation-delay: 0.15s; }
   .sentinel-loader span:nth-child(3) { animation-delay: 0.3s; }

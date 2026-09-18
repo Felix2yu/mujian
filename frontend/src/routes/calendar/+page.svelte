@@ -1,24 +1,46 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { goto } from '$app/navigation';
   import { fade, scale } from 'svelte/transition';
   import { api, coverUrl } from '$lib/api.js';
+  import { formatEventTitle } from '$lib/eventTitle.js';
+  import { loadPref, savePref } from '$lib/prefs.js';
 
-  const now = new Date();
+  // 「今天」必须随时间推进：此前是组件创建时冻结的 Date，页面长期停留跨天后
+  // 今日高亮与「今天」按钮都会停在旧日期。
+  const boot = new Date();
+  let now = $state(boot);
 
   // 从 URL 初始化年月（?y=&m=），便于刷新与分享
   const params = new URLSearchParams(location.search);
   const qy = parseInt(params.get('y'), 10);
   const qm = parseInt(params.get('m'), 10);
 
-  let year = $state(qy > 2000 ? qy : now.getFullYear());
-  let month = $state(qm >= 1 && qm <= 12 ? qm : now.getMonth() + 1);
+  let year = $state(qy > 2000 ? qy : boot.getFullYear());
+  let month = $state(qm >= 1 && qm <= 12 ? qm : boot.getMonth() + 1);
   let events = $state([]);
   let loading = $state(true);
   let error = $state('');
   let modalDay = $state(null);
   let showYearPicker = $state(false);
-  let pickerYear = $state(year);
+  let pickerYear = $state(null);
+
+  // 年份选择器的上下限：shiftYear 原本可以一路点到公元几十万年。有数据的年份
+  // 未知，夹到一个合理区间比不设限更不容易误操作。
+  const MIN_YEAR = 1900;
+  const maxYear = () => now.getFullYear() + 5;
+
+  // 「只看订阅范围」：ICS 订阅（/api/calendar.ics）不导出 已取消(2)/未赴约(3)，
+  // App 日历默认显示全部，两者肉眼看来不一致且无任何说明。这里给出显式开关 +
+  // 页脚计数说明，让用户自己选择要不要对齐。
+  const SUBSCRIBED_STATUSES = [0, 1]; // 正常 / 想看
+  let onlySubscribed = $state(loadPref('mujian:calendar_only_subscribed', false));
+  const isSubscribed = (e) => SUBSCRIBED_STATUSES.includes(e.active_status ?? 0);
+
+  function toggleOnlySubscribed() {
+    onlySubscribed = !onlySubscribed;
+    savePref('mujian:calendar_only_subscribed', onlySubscribed);
+  }
 
   function openYearPicker() {
     pickerYear = year;
@@ -26,21 +48,34 @@
   }
 
   function shiftYear(dy) {
-    pickerYear += dy;
+    // 同上：夹到合法区间，并把禁用状态交给 aria-disabled 表达。
+    pickerYear = Math.min(maxYear(), Math.max(MIN_YEAR, (pickerYear ?? year) + dy));
   }
 
   function selectMonth(m) {
     year = pickerYear;
     month = m;
     showYearPicker = false;
-    load();
+    load(true);
   }
 
   // 请求序号：连续翻月时两个 getCalendar 乱序返回会把旧月份的活动渲染到
   // 当前视图，用序号丢弃过期响应。
   let calReqSeq = 0;
 
-  async function load() {
+  // 主动翻月写入 history，浏览器前进/后退即可在月份之间穿梭；首次进入与
+  // popstate 回填用 replaceState，避免凭空多出历史项。保留 SvelteKit 的
+  // 历史状态（sveltekit:index 等），否则返回按钮会因历史索引被清空而回退到
+  // 主页而非日历。
+  function writeURL(push) {
+    const u = new URL(location.href);
+    u.searchParams.set('y', String(year));
+    u.searchParams.set('m', String(month));
+    if (push) history.pushState(window.history.state ?? {}, '', u);
+    else history.replaceState(window.history.state ?? {}, '', u);
+  }
+
+  async function load(push = false) {
     const seq = ++calReqSeq;
     loading = true;
     error = '';
@@ -48,12 +83,7 @@
       const ev = await api.getCalendar(year, month);
       if (seq !== calReqSeq) return; // 已翻到别的月份，丢弃本次响应
       events = ev;
-      const u = new URL(location.href);
-      u.searchParams.set('y', String(year));
-      u.searchParams.set('m', String(month));
-      // 保留 SvelteKit 的历史状态（sveltekit:index 等），否则返回按钮会因
-      // 历史索引被清空而回退到主页而非日历。
-      history.replaceState(window.history.state ?? {}, '', u);
+      writeURL(push);
     } catch (e) {
       if (seq === calReqSeq) error = e.message;
     } finally {
@@ -68,13 +98,24 @@
     while (m > 12) { m -= 12; y += 1; }
     year = y;
     month = m;
-    load();
+    load(true);
   }
 
   function goToday() {
     year = now.getFullYear();
     month = now.getMonth() + 1;
-    load();
+    load(true);
+  }
+
+  // 浏览器前进/后退：pushState 不触发 popstate，所以这只可能是真正的历史导航。
+  function onPopState() {
+    const p = new URLSearchParams(location.search);
+    const y = parseInt(p.get('y'), 10);
+    const m = parseInt(p.get('m'), 10);
+    if (!y || !m || (y === year && m === month)) return;
+    year = y;
+    month = m;
+    load(false);
   }
 
   const DOW = ['一', '二', '三', '四', '五', '六', '日'];
@@ -90,6 +131,11 @@
     return { cols: 2, rows: 2 }; // 4+ 显示 4 张 + 溢出角标
   }
 
+  // 后端返回的本月全部演出（含 已取消/未赴约）。
+  // visibleEvents 是「只看订阅范围」开关过滤后的结果，UI 计数与按日分组一律用它。
+  const visibleEvents = $derived(onlySubscribed ? events.filter(isSubscribed) : events);
+  const hiddenCount = $derived(events.length - visibleEvents.length);
+
   // 月历网格：周一起始，前后补空，行数固定为 7 的倍数
   const cells = $derived.by(() => {
     const offset = (new Date(year, month - 1, 1).getDay() + 6) % 7;
@@ -103,10 +149,74 @@
     return arr;
   });
 
+  // 按周切分：合法的 role=grid 必须有 row 层（grid → row → gridcell），
+  // 此前 42 个 gridcell 直接挂在 grid 下，读屏无法识别行列。
+  const weeks = $derived.by(() => {
+    const out = [];
+    for (let i = 0; i < cells.length; i += 7) out.push(cells.slice(i, i + 7));
+    return out;
+  });
+
+  // roving tabindex：整张网格只有一个可 Tab 到 的格子，格间用方向键移动，
+  // 否则键盘用户要按 28~42 次 Tab 才能走完一个月。
+  let focusDay = $state(null);
+  let gridEl = $state(null);
+
+  // roving tab 的落点：优先今天，否则本月 1 号。
+  // 依赖只有 year/month —— 其余状态读如果进了 effect 的依赖表会在每次双向更新里反复触发
+  // （Svelte 5 的 effect 依赖是在首个 await 之前同步读到的所有 $state）。
+  function recalcFocus() {
+    if (focusDay !== null && cells.includes(focusDay)) return;
+    if (month === now.getMonth() + 1 && year === now.getFullYear() && cells.includes(now.getDate())) {
+      focusDay = now.getDate();
+      return;
+    }
+    focusDay = cells.find((d) => d !== null) ?? null;
+  }
+
+  $effect(() => {
+    year;
+    month;
+    untrack(recalcFocus);
+  });
+
+  async function focusDayCell(d) {
+    focusDay = d;
+    await tick();
+    gridEl?.querySelector(`[data-day="${d}"]`)?.focus({ preventScroll: false });
+  }
+
+  // 方向键在网格内移动；跨出本月上下边界时连带翻月（标准日期选择器的手感）。
+  async function onGridKey(e) {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'PageUp', 'PageDown'].includes(e.key)) return;
+    const days = cells.filter((d) => d !== null);
+    if (days.length === 0) return;
+    e.preventDefault();
+    if (e.key === 'PageUp') { shift(-1); return; }
+    if (e.key === 'PageDown') { shift(1); return; }
+    if (e.key === 'Home') { goToday(); return; }
+    const cur = focusDay ?? days[0];
+    const idx = days.indexOf(cur);
+    if (idx === -1) { focusDayCell(days[0]); return; }
+    const step = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' ? -7 : 7;
+    const next = idx + step;
+    if (next >= 0 && next < days.length) {
+      focusDayCell(days[next]);
+      return;
+    }
+    // 越界翻月：把「第几天」带到新月份（夹到新月份的最后一天）
+    const monthLen = new Date(year, month, 0).getDate();
+    const targetDay = Math.min(days[idx] + step, monthLen);
+    shift(step < 0 ? -1 : 1);
+    await new Promise((r) => setTimeout(r, 0));
+    const newLen = new Date(year, month, 0).getDate();
+    if (targetDay >= 1 && targetDay <= newLen) await focusDayCell(targetDay);
+  }
+
   // 按日分组（后端已按时间升序返回）
   const byDay = $derived.by(() => {
     const map = {};
-    for (const e of events) {
+    for (const e of visibleEvents) {
       const d = new Date(e.date * 1000).getDate();
       (map[d] ??= []).push(e);
     }
@@ -134,9 +244,6 @@
   function posterSrc(e) {
     return coverUrl(e.coverThumb || e.coverFile || '');
   }
-  function posterFullSrc(e) {
-    return coverUrl(e.coverFile || e.coverThumb || '');
-  }
 
   const STATUS_LABEL = { 1: '想看', 2: '已取消', 3: '未赴约' };
   const STATUS_CLASS = { 1: 'status-wish', 2: 'status-cancel', 3: 'status-miss' };
@@ -161,26 +268,23 @@
     return `cat-${(h % 12)}`;
   }
 
-  // 不会作为"剧种前缀"加在剧名前的分类（汇总/类型而非具体剧种）
-  const NON_PREPEND_CATEGORIES = new Set(['拼盘', '音乐会', '音乐剧']);
+  // 演出显示名（「剧种《剧名》」）的规则下沉到 $lib/eventTitle.js：
+  // 此前只有日历页用这套拼法，列表页显示裸名，同一场演出两个叫法。
 
-  // 根据剧种和剧名决定是否加剧种前缀
-  function formatEventTitle(name, categoryName, categoryNames) {
-    if (!categoryName || !name) return name;
-    // 多剧种（数组长度 > 1），不加剧种
-    if (categoryNames && categoryNames.length > 1) return name;
-    // 剧种属于汇总类（拼盘、音乐会等），不加
-    if (NON_PREPEND_CATEGORIES.has(categoryName)) return name;
-    // 剧名已包含剧种关键词，不加（避免重复）
-    if (name.includes(categoryName)) return name;
-    // 剧名超过14个字，不加
-    if ([...name].length > 14) return name;
-    // 剧名首尾已有书名号则不再包裹
-    const alreadyBracketed = /^《.*》$/.test(name);
-    return alreadyBracketed ? `${categoryName} ${name}` : `${categoryName}《${name}》`;
-  }
-
-  onMount(load);
+  onMount(() => {
+    load();
+    // 「今天」跟随系统时间推进：分钟级轮询 + 页面重新可见时立即校正，
+    // 保证长期停留的后台标签页跨天后高亮不会错。
+    const timer = setInterval(() => (now = new Date()), 60_000);
+    const onVisible = () => { if (!document.hidden) now = new Date(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('popstate', onPopState);
+    };
+  });
 </script>
 
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape') { modalDay = null; showYearPicker = false; } }} />
@@ -220,102 +324,135 @@
       </button>
       <div class="cal-stats">
         {#if !loading}
-          <span class="stat-num">{events.length}</span>
+          <span class="stat-num">{visibleEvents.length}</span>
           <span class="stat-label">场</span>
         {/if}
       </div>
     </header>
 
-    <!-- 星期标题 -->
-    <div class="dow" role="row">
-      {#each DOW as w, i}
-        <div
-          class="dow-cell"
-          class:weekend={i >= 5}
-          role="columnheader"
-          aria-label={`星期${w}`}
-        >{w}</div>
-      {/each}
+    <!-- ICS 订阅只包含 正常/想看，App 日历默认显示全部：默认给出的解释 + 一键对齐开关 -->
+    <div class="cal-notice">
+      <label class="sub-toggle">
+        <input type="checkbox" checked={onlySubscribed} onchange={toggleOnlySubscribed} />
+        <span>只看订阅范围（不含已取消 / 未赴约）</span>
+      </label>
+      {#if hiddenCount > 0}
+        <span class="sub-note">本月另有 {hiddenCount} 场未进入日历订阅</span>
+      {/if}
     </div>
 
     {#if loading}
-      <div class="grid skeleton-grid">
-        {#each Array(35) as _}
-          <div class="cell blank-skel"></div>
+      <!-- 骨架行数必须等于真实行数，否则切月时网格会高度跳动（28/35/42 三种）。
+           星期行同样保留，切月前后高度完全一致。 -->
+      <div class="grid-wrap">
+        <div class="dow" aria-hidden="true">
+          {#each DOW as w, i}
+            <div class="dow-cell" class:weekend={i >= 5}>{w}</div>
+          {/each}
+        </div>
+        {#each weeks as week, wi (wi)}
+          <div class="week">
+            {#each week as _, i (i)}
+              <div class="cell blank-skel"></div>
+            {/each}
+          </div>
         {/each}
       </div>
     {:else}
-      <div class="grid" role="grid">
-        {#each cells as d, i (i)}
-          {#if d === null}
-            <div class="cell empty" aria-hidden="true"></div>
-          {:else}
-            {@const evs = byDay[d] ?? []}
-            {@const hasToday = isToday(d)}
-            {@const isWeekend = (i % 7) >= 5}
-            {@const showCount = Math.min(evs.length, MAX_SHOW)}
-            {@const overflow = evs.length > MAX_SHOW ? evs.length - MAX_SHOW : 0}
-            {@const layout = posterLayout(showCount)}
-            <button
-              type="button"
-              class="cell"
-              class:today={hasToday}
-              class:weekend={isWeekend}
-              class:has-event={evs.length > 0}
-              role="gridcell"
-              aria-label={`${year}年${month}月${d}日${evs.length ? '，' + evs.length + '场演出' : ''}`}
-              onclick={() => onCellClick(d)}
-            >
-              <!-- 背景海报层：填满整个格子 -->
-              {#if evs.length}
-                <div
-                  class="poster-grid"
-                  style="grid-template-columns: repeat({layout.cols}, 1fr); grid-template-rows: repeat({layout.rows}, 1fr);"
-                >
-                  {#each evs.slice(0, MAX_SHOW) as e, idx (e.id)}
-                    <span
-                      class="p-slot"
-                      class:dimmed={e.active_status}
-                      class:span-full={(layout.spans?.[idx] ?? 0) === 1}
-                      title={formatEventTitle(e.name, e.categoryName, e.categoryNames)}
-                    >
-                      {#if posterSrc(e)}
-                        <img src={posterSrc(e)} alt="" loading="lazy" />
-                      {:else}
-                        <span class="p-ph">{e.name?.[0] ?? '?'}</span>
+      <!-- 合法的 grid → row → gridcell 三层结构 + roving tabindex -->
+      <div class="grid-wrap" bind:this={gridEl} role="grid" tabindex="-1" aria-label={`${year}年${month}月`} onkeydown={onGridKey}>
+        <div class="dow" role="row">
+          {#each DOW as w, i}
+            <div class="dow-cell" class:weekend={i >= 5} role="columnheader" aria-label={`星期${w}`}>{w}</div>
+          {/each}
+        </div>
+        {#each weeks as week, wi (wi)}
+          <div class="week" role="row">
+            {#each week as d, i (i)}
+              <div class="cell-slot" role="gridcell">
+                {#if d === null}
+                  <div class="cell empty" aria-hidden="true"></div>
+                {:else}
+                  {@const evs = byDay[d] ?? []}
+                  {@const hasToday = isToday(d)}
+                  {@const isWeekend = i >= 5}
+                  {@const showCount = Math.min(evs.length, MAX_SHOW)}
+                  {@const overflow = evs.length > MAX_SHOW ? evs.length - MAX_SHOW : 0}
+                  {@const layout = posterLayout(showCount)}
+                  <button
+                    type="button"
+                    class="cell"
+                    data-day={d}
+                    tabindex={focusDay === d ? 0 : -1}
+                    class:today={hasToday}
+                    class:weekend={isWeekend}
+                    class:has-event={evs.length > 0}
+                    aria-label={`${year}年${month}月${d}日${evs.length ? '，' + evs.length + '场演出' : ''}`}
+                    onclick={() => onCellClick(d)}
+                    onfocus={() => (focusDay = d)}
+                  >
+                    <!-- 背景海报层：填满整个格子 -->
+                    {#if evs.length}
+                      <div
+                        class="poster-grid"
+                        style="grid-template-columns: repeat({layout.cols}, 1fr); grid-template-rows: repeat({layout.rows}, 1fr);"
+                      >
+                        {#each evs.slice(0, MAX_SHOW) as e, idx (e.id)}
+                          <span
+                            class="p-slot"
+                            class:dimmed={e.active_status === 2 || e.active_status === 3}
+                            class:wish={e.active_status === 1}
+                            class:span-full={(layout.spans?.[idx] ?? 0) === 1}
+                            title={formatEventTitle(e.name, e.categoryName, e.categoryNames)}
+                          >
+                            {#if posterSrc(e)}
+                              <img src={posterSrc(e)} alt="" loading="lazy" />
+                            {:else}
+                              <span class="p-ph">{e.name?.[0] ?? '?'}</span>
+                            {/if}
+                          </span>
+                        {/each}
+                      </div>
+                      {#if overflow}
+                        <span class="more-badge">+{overflow}</span>
                       {/if}
-                    </span>
-                  {/each}
-                </div>
-                {#if overflow}
-                  <span class="more-badge">+{overflow}</span>
-                {/if}
-              {/if}
+                    {/if}
 
-              <!-- 日期徽章：始终覆盖在格子左上角 -->
-              <span class="d-badge" class:today-badge={hasToday} class:weekend-badge={isWeekend && !evs.length}>
-                {d}
-                {#if hasToday && !evs.length}<span class="today-dot"></span>{/if}
-              </span>
-            </button>
-          {/if}
+                    <!-- 日期徽章：始终覆盖在格子左上角 -->
+                    <span class="d-badge" class:today-badge={hasToday} class:weekend-badge={isWeekend && !evs.length}>
+                      {d}
+                      {#if hasToday && !evs.length}<span class="today-dot"></span>{/if}
+                    </span>
+                  </button>
+                {/if}
+              </div>
+            {/each}
+          </div>
         {/each}
       </div>
+      {#if visibleEvents.length === 0}
+        <div class="month-empty">本月没有演出记录</div>
+      {/if}
     {/if}
   </section>
 
-  <p class="hint">点击日期查看当天演出 · 点击空白日期可新增</p>
+  <p class="hint">
+    点击日期查看当天演出 · 点击空白日期可新增 · 方向键在日期间移动，PageUp / PageDown 翻月
+  </p>
 </div>
 
 {#if modalDay !== null}
   {@const evs = byDay[modalDay] ?? []}
-  <div class="mask" role="presentation" onclick={() => (modalDay = null)} transition:fade={{ duration: 180 }}>
+  <!-- 遮罩本身不再是「带 onclick 的非交互 div」：改为内部的 <button> 承接点击，
+       弹窗主体是它的兄弟节点，避免把一堆链接塞进按钮里（button 不能包交互元素）。 -->
+  <div class="mask" transition:fade={{ duration: 180 }}>
+    <button class="mask-bg" type="button" aria-label="关闭" onclick={() => (modalDay = null)}></button>
     <div
       class="modal card"
       role="dialog"
       aria-modal="true"
+      tabindex="-1"
       aria-label={`${month}月${modalDay}日`}
-      onclick={(e) => e.stopPropagation()}
       transition:scale={{ duration: 200, start: 0.94 }}
     >
       <header class="modal-head">
@@ -338,7 +475,10 @@
             <li class="day-item" role="listitem">
               <a class="day-link" href={`/records/${e.id}`}>
                 {#if posterSrc(e)}
-                  <img class="coverable" src={posterSrc(e)} data-full={posterFullSrc(e)} alt="" width="52" height="70" />
+                  <!-- 不带 .coverable：layout 中全局灯箱是捕获阶段监听，会 preventDefault
+                       把「点海报进详情」改写成看大图，且 Esc 会同时关掉灯箱和当日弹窗。
+                       整行已经是详情链接，这里保留纯展示语义。 -->
+                  <img src={posterSrc(e)} alt="" width="52" height="70" loading="lazy" />
                 {:else}
                   <span class="diph">{e.name?.[0] ?? '?'}</span>
                 {/if}
@@ -381,28 +521,36 @@
 {/if}
 
 {#if showYearPicker}
-  <div
-    class="mask"
-    role="presentation"
-    onclick={() => (showYearPicker = false)}
-    transition:fade={{ duration: 180 }}
-  >
+  <div class="mask" transition:fade={{ duration: 180 }}>
+    <button class="mask-bg" type="button" aria-label="关闭" onclick={() => (showYearPicker = false)}></button>
     <div
       class="year-modal card"
       role="dialog"
       aria-modal="true"
+      tabindex="-1"
       aria-label="选择年份与月份"
-      onclick={(e) => e.stopPropagation()}
       transition:scale={{ duration: 200, start: 0.94 }}
     >
       <header class="ym-head">
-        <button class="nav-btn" type="button" onclick={() => shiftYear(-1)} aria-label="上一年">
+        <button
+          class="nav-btn"
+          type="button"
+          onclick={() => shiftYear(-1)}
+          aria-label="上一年"
+          disabled={pickerYear <= MIN_YEAR}
+        >
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
         <span class="ym-title">{pickerYear} 年</span>
-        <button class="nav-btn" type="button" onclick={() => shiftYear(1)} aria-label="下一年">
+        <button
+          class="nav-btn"
+          type="button"
+          onclick={() => shiftYear(1)}
+          aria-label="下一年"
+          disabled={pickerYear >= maxYear()}
+        >
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M9 18l6-6-6-6" />
           </svg>
@@ -464,6 +612,8 @@
     color: var(--accent);
   }
   .nav-btn:active { transform: scale(0.94); }
+  .nav-btn:disabled { opacity: 0.3; cursor: default; }
+  .nav-btn:disabled:hover { background: transparent; color: var(--text-3); }
 
   .today-btn {
     height: 28px;
@@ -564,6 +714,8 @@
     padding: 0;
     border-radius: var(--radius-xl);
     overflow: hidden;
+    position: relative;
+    z-index: 1;
   }
   .ym-head {
     display: flex;
@@ -623,10 +775,13 @@
   }
 
   /* ============ 星期标题 ============ */
+  /* 星期行现在是 role=grid 的直接子行（此前它是 grid 的兄弟节点，
+     columnheader 没有 grid 祖先，读屏无法把表头和日期对应起来）。 */
   .dow {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    padding: 10px 12px 4px;
+    gap: 5px;
+    padding: 4px 0 2px;
   }
   .dow-cell {
     text-align: center;
@@ -639,15 +794,23 @@
   .dow-cell.weekend { color: var(--gold); }
 
   /* ============ 日期网格 ============ */
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
+  /* grid-wrap → week(row) → cell-slot(gridcell) → button(cell) */
+  .grid-wrap {
+    display: flex;
+    flex-direction: column;
     gap: 5px;
     padding: 6px 12px 14px;
   }
+  .week {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+  }
+  .cell-slot { min-width: 0; }
 
   .cell {
     aspect-ratio: 1 / 1;
+    width: 100%;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface);
@@ -711,8 +874,16 @@
   .cell:hover .p-slot img {
     transform: scale(1.04);
   }
+  /* 已取消 / 未赴约 才压暗；「想看」是未来计划，不该与取消同权，只加一圈金色边框 */
   .p-slot.dimmed img {
     filter: grayscale(0.65) opacity(0.55);
+  }
+  .p-slot.wish::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    box-shadow: inset 0 0 0 2px var(--gold);
+    pointer-events: none;
   }
   .p-ph {
     position: absolute;
@@ -835,6 +1006,42 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
   }
 
+  /* ============ 「只看订阅范围」说明条 ============ */
+  .cal-notice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .sub-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--text-2);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .sub-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    accent-color: var(--accent);
+    flex-shrink: 0;
+  }
+  .sub-note { font-size: 12px; color: var(--text-3); }
+
+  .month-empty {
+    padding: 6px 14px 18px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-3);
+  }
+
   /* ============ 提示文字 ============ */
   .hint {
     margin-top: 14px;
@@ -860,6 +1067,17 @@
     padding: 0;
     border-radius: var(--radius-xl);
     overflow: hidden;
+    position: relative;
+    z-index: 1; /* 盖在 .mask-bg 之上 */
+  }
+  /* 点击遮罩关闭：独立的按钮层，弹窗本体是它的兄弟节点 */
+  .mask-bg {
+    position: absolute;
+    inset: 0;
+    border: none;
+    background: transparent;
+    cursor: default;
+    padding: 0;
   }
 
   .modal-head {
@@ -1065,10 +1283,11 @@
     .stat-num { font-size: 16px; }
     .stat-label { font-size: 10px; }
 
-    .dow { padding: 8px 8px 2px; }
+    .dow { padding: 2px 0 0; gap: 3px; }
     .dow-cell { font-size: 11px; letter-spacing: 0.08em; }
 
-    .grid { gap: 3px; padding: 4px 8px 12px; }
+    .grid-wrap { gap: 3px; padding: 4px 8px 12px; }
+    .week { gap: 3px; }
     .cell { border-radius: 8px; }
     .d-badge {
       top: 3px; left: 3px;

@@ -28,18 +28,22 @@ type SearchRecordsInput struct {
 	Limit      int    `json:"limit,omitempty"`
 	Offset     int    `json:"offset,omitempty"`
 	// 扩展筛选维度（与前端筛选面板对齐）
-	Channel      string  `json:"channel,omitempty"`
-	Company      string  `json:"company,omitempty"`
-	RatingMin    int     `json:"rating_min,omitempty"`
-	PriceMin     float64 `json:"price_min,omitempty"`
-	PriceMax     float64 `json:"price_max,omitempty"`
-	ActiveStatus int     `json:"active_status,omitempty"` // 0=正常 1=想看 2=已取消 3=未赴约
-	Statuses     []int   `json:"statuses,omitempty"`      // 多选，优先于 active_status
-	Exact        bool    `json:"exact,omitempty"`         // 关键词按演出名精确匹配
-	// Missing 是逗号分隔的字段列表，匹配任一为空的记录（数据卫生查询）。
-	// 支持: category, city, address, company, channel, rating, price, cover,
-	// coordinate, artist, drama, zhezi, friends, remark, seat, play, guest。
-	Missing string `json:"missing,omitempty"`
+	Channel   string  `json:"channel,omitempty"`
+	Company   string  `json:"company,omitempty"`
+	RatingMin int     `json:"rating_min,omitempty"`
+	PriceMin  float64 `json:"price_min,omitempty"`
+	PriceMax  float64 `json:"price_max,omitempty"`
+	// ActiveStatus 是指针以区分「未传」与「显式指定 0（正常）」：整数 0 作为零值
+	// 无法表达这个区别，而 0 恰好是最常用的筛选目标。
+	ActiveStatus *int  `json:"active_status,omitempty"` // 0=正常 1=想看 2=已取消 3=未赴约
+	Statuses     []int `json:"statuses,omitempty"`      // 多选，与 active_status 取交集
+	Exact        bool  `json:"exact,omitempty"`         // 关键词按演出名精确匹配
+	// Missing 是逗号分隔的字段列表。支持: category, city, address, company,
+	// channel, rating, price, cover, coordinate, artist, drama, zhezi,
+	// friends, remark, seat, play, guest。
+	// MissingMode 决定多字段如何组合：any（默认，任一为空）/ all（全部为空）。
+	Missing     string `json:"missing,omitempty"`
+	MissingMode string `json:"missing_mode,omitempty"`
 	// Compact 为 true 时每条记录只返回核心字段，大幅降低输出体积。
 	Compact bool `json:"compact,omitempty"`
 }
@@ -181,13 +185,19 @@ func (s *Server) handleSearchRecords(ctx context.Context, req *mcp.CallToolReque
 		Channel:      in.Channel,
 		Company:      in.Company,
 		RatingMin:    in.RatingMin,
+		HasRatingMin: in.RatingMin > 0,
 		PriceMin:     in.PriceMin,
 		PriceMax:     in.PriceMax,
-		ActiveStatus: in.ActiveStatus,
+		HasPriceMax:  in.PriceMax > 0,
 		Statuses:     in.Statuses,
 		Exact:        in.Exact,
 		Missing:      in.Missing,
+		MissingMode:  in.MissingMode,
 		Offset:       in.Offset,
+	}
+	if in.ActiveStatus != nil {
+		filter.ActiveStatus = *in.ActiveStatus
+		filter.HasActiveStatus = true
 	}
 
 	if in.ArtistID != "" {
@@ -411,8 +421,8 @@ func (s *Server) handleGetStats(ctx context.Context, req *mcp.CallToolRequest, _
 type SearchByLocationInput struct {
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
-	Radius    float64 `json:"radius"`               // 搜索半径（米）
-	Limit     *int    `json:"limit,omitempty"`       // 默认 50
+	Radius    float64 `json:"radius"`          // 搜索半径（米）
+	Limit     *int    `json:"limit,omitempty"` // 默认 50
 	Category  *string `json:"category,omitempty"`
 	City      *string `json:"city,omitempty"`
 	StartDate *string `json:"start_date,omitempty"` // "2024-01-01"
