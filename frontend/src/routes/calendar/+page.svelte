@@ -1,6 +1,5 @@
 <script>
   import { onMount, tick, untrack } from 'svelte';
-  import { goto } from '$app/navigation';
   import { fade, scale } from 'svelte/transition';
   import { api, coverUrl } from '$lib/api.js';
   import { formatEventTitle } from '$lib/eventTitle.js';
@@ -237,8 +236,10 @@
 
   function openNew(d) {
     modalDay = null;
-    // 用 SPA 导航（而非整页跳转）保留历史栈，使新增页的返回按钮回到日历。
-    goto(`/records/new?date=${dateStr(d)}`);
+    // 本应用 SPA（ssr=false + adapter-static fallback）下，程序化 goto() 导航
+    // 在此环境不可用；改用整页跳转。location.href 会写入新的浏览器历史项，
+    // 新增页的返回按钮仍能回到日历。这与首页「＋ 新建记录」的 <a href> 一致可靠。
+    window.location.href = `/records/new?date=${dateStr(d)}`;
   }
 
   function posterSrc(e) {
