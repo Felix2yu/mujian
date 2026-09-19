@@ -79,6 +79,11 @@
     return f;
   }
 
+  // 字段显隐由「设置」控制（同行人 / 实付 / 其他花费），默认全部显示。
+  // 必须在 form 之前声明：form 初始化经 fromRecord() 读取 settings.default_start_time，
+  // 否则带 initialDate 进入新建页时会触发 TDZ（Cannot access 'settings' before initialization）。
+  let settings = $state({ show_friends: true, show_pay_price: true, show_other_cost: true, multi_currency: true, default_start_time: '19:30' });
+
   let form = $state(fromRecord(record));
   let error = $state('');
   let uploading = $state(false);
@@ -114,9 +119,6 @@
   // 演员：自由文本胶囊（未建档案的姓名）。编辑已有记录时，
   // 初始为 record.artist_names 中未关联到档案的部分（等演员列表载入后计算）。
   let freeNames = $state([]);
-
-  // 字段显隐由「设置」控制（同行人 / 实付 / 其他花费），默认全部显示
-  let settings = $state({ show_friends: true, show_pay_price: true, show_other_cost: true, multi_currency: true, default_start_time: '19:30' });
 
   // 坐标默认折叠在「定位」图标后，点击图标才展开经纬度输入
   let showCoord = $state(false);
