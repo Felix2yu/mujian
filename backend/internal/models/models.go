@@ -233,9 +233,10 @@ type RecordRequest struct {
 	OtherCostCurrency string      `json:"other_cost_currency"`
 	// HuozhiBillIDs 关联「货殖」账单 ID；nil 表示未改动，空数组表示清空。
 	HuozhiBillIDs []int64 `json:"huozhi_bill_ids"`
-	// Watched mirrors Record.Watched (已观看/已到场). See Record.Watched for
-	// the CalDAV VTODO completion semantics.
-	Watched bool `json:"watched"`
+	// Watched mirrors Record.Watched (已观看/已到场)，即 CalDAV VTODO 的完成态。
+	// 语义与 HuozhiBillIDs 一致：nil 表示「未改动，保留原值」；非 nil 表示显式
+	// 设置或清除。普通的字段编辑（如改时长）不应携带该字段，以免误清完成态。
+	Watched *bool `json:"watched"`
 }
 
 type CalendarEvent struct {
@@ -539,6 +540,7 @@ type BatchUpdateParams struct {
 	CategoryNames     *BatchArrayOp // 多剧种 set/append/remove（覆盖 CategoryName）
 	Rating            *int
 	ActiveStatus      *int
+	Watched           *bool  // 已观看/已到场，即 CalDAV VTODO 完成态；nil=不改，true=完成，false=未完成
 	City              *string
 	Address           *string
 	Channel           *string

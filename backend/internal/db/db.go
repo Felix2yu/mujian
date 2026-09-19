@@ -2016,6 +2016,13 @@ func (db *DB) UpdateRecord(id string, r models.RecordRequest) (*models.Record, e
 	}
 	rec := requestToRecord(r)
 	rec.ID = existing.ID
+	// watched（已观看/已到场）即 CalDAV VTODO 的完成态，由外部入口（CalDAV
+	// 客户端勾选）写入；普通字段编辑（如改时长）不应误清。仅当请求显式携带
+	// watched 时才覆盖原值，否则保留 existing.Watched。
+	rec.Watched = existing.Watched
+	if r.Watched != nil {
+		rec.Watched = *r.Watched
+	}
 	rec.Cover = existing.Cover
 	// 封面仅在请求携带非空且不同的 coverFile 时才更新：PUT 可能来自不带
 	// 封面字段的客户端，直接透传空值会把已有关联清空。更换新文件时缩略图
@@ -2161,7 +2168,7 @@ func requestToRecord(r models.RecordRequest) models.Record {
 		Friends: r.Friends, Company: r.Company, Remark: r.Remark, ActiveStatus: r.ActiveStatus,
 		Price: r.Price, PriceCurrency: r.PriceCurrency, PayPrice: r.PayPrice,
 		PayPriceCurrency: r.PayPriceCurrency, OtherCost: r.OtherCost, OtherCostCurrency: r.OtherCostCurrency,
-		Watched: r.Watched, HuozhiBillIDs: hb,
+		Watched: r.Watched != nil && *r.Watched, HuozhiBillIDs: hb,
 	}
 }
 
@@ -2212,6 +2219,10 @@ func (db *DB) BatchUpdateRecords(params models.BatchUpdateParams) (int64, error)
 	if params.ActiveStatus != nil {
 		simpleSets = append(simpleSets, "active_status = ?")
 		simpleArgs = append(simpleArgs, *params.ActiveStatus)
+	}
+	if params.Watched != nil {
+		simpleSets = append(simpleSets, "watched = ?")
+		simpleArgs = append(simpleArgs, *params.Watched)
 	}
 	if params.City != nil {
 		simpleSets = append(simpleSets, "city = ?")

@@ -36,7 +36,9 @@ type BatchUpdateRecordsInput struct {
 	CategoryNames *ArrayOp `json:"category_names,omitempty"`
 	Rating        *int     `json:"rating,omitempty"`
 	ActiveStatus  *int     `json:"active_status,omitempty"`
-	City          *string  `json:"city,omitempty"`
+	// 已观看/已到场，即 CalDAV VTODO 完成态；nil=不改，true=完成，false=未完成
+	Watched *bool `json:"watched,omitempty"`
+	City    *string `json:"city,omitempty"`
 	Address       *string  `json:"address,omitempty"`
 	Channel       *string  `json:"channel,omitempty"`
 	Company       *string  `json:"company,omitempty"`
@@ -228,6 +230,9 @@ func (s *Server) handleBatchUpdateRecords(ctx context.Context, req *mcp.CallTool
 		if in.ActiveStatus != nil {
 			changes = append(changes, fieldChange{"active_status", *in.ActiveStatus})
 		}
+		if in.Watched != nil {
+			changes = append(changes, fieldChange{"watched", *in.Watched})
+		}
 		if in.City != nil {
 			changes = append(changes, fieldChange{"city", *in.City})
 		}
@@ -306,6 +311,7 @@ func (s *Server) handleBatchUpdateRecords(ctx context.Context, req *mcp.CallTool
 		CategoryNames:     (*models.BatchArrayOp)(in.CategoryNames),
 		Rating:            in.Rating,
 		ActiveStatus:      in.ActiveStatus,
+		Watched:           in.Watched,
 		City:              in.City,
 		Address:           in.Address,
 		Channel:           in.Channel,

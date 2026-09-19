@@ -136,6 +136,127 @@ func TestRecordCRUD(t *testing.T) {
 	}
 }
 
+// TestUpdateRecordPreservesWatched 锁住回归：在 CalDAV 客户端勾选完成后
+// （watched=1），普通字段编辑（如改时长）不得误清完成态。仅当请求显式携带
+// watched 时才覆盖原值。
+func TestUpdateRecordPreservesWatched(t *testing.T) {
+	db := newTestDB(t)
+	base := time.Date(2026, 8, 22, 19, 30, 0, 0, time.UTC).Unix()
+	rec := sampleRecord("rec-watch", base)
+	if err := db.UpsertRecord(rec); err != nil {
+		t.Fatalf("UpsertRecord: %v", err)
+	}
+
+	// 模拟 CalDAV 客户端勾选完成。
+	if err := db.SetRecordWatched("rec-watch", true); err != nil {
+		t.Fatalf("SetRecordWatched: %v", err)
+	}
+	got, _ := db.GetRecord("rec-watch")
+	if !got.Watched {
+		t.Fatalf("precondition: watched should be true after SetRecordWatched")
+	}
+
+	// 仅改时长（前端表单的常见路径：payload 不含 watched）。
+	if _, err := db.UpdateRecord("rec-watch", models.RecordRequest{Duration: 150}); err != nil {
+		t.Fatalf("UpdateRecord duration: %v", err)
+	}
+	got, _ = db.GetRecord("rec-watch")
+	if !got.Watched {
+		t.Errorf("UpdateRecord without watched must NOT clear completion; got watched=false")
+	}
+	if got.Duration != 150 {
+		t.Errorf("duration should be updated to 150, got %d", got.Duration)
+	}
+
+	// 显式清除（如 MCP update_record 传 watched:false）。
+	if _, err := db.UpdateRecord("rec-watch", models.RecordRequest{Watched: boolPtr(false)}); err != nil {
+		t.Fatalf("UpdateRecord clear watched: %v", err)
+	}
+	got, _ = db.GetRecord("rec-watch")
+	if got.Watched {
+		t.Errorf("explicit watched=false must clear completion")
+	}
+
+	// 再次勾选，随后显式置位（watched:true）。
+	if err := db.SetRecordWatched("rec-watch", true); err != nil {
+		t.Fatalf("SetRecordWatched again: %v", err)
+	}
+	if _, err := db.UpdateRecord("rec-watch", models.RecordRequest{Watched: boolPtr(true), Rating: 3}); err != nil {
+		t.Fatalf("UpdateRecord set watched: %v", err)
+	}
+	got, _ = db.GetRecord("rec-watch")
+	if !got.Watched {
+		t.Errorf("explicit watched=true must set completion")
+	}
+	if got.Rating != 3 {
+		t.Errorf("rating should be updated to 3, got %d", got.Rating)
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }
+
+// TestBatchUpdateWatched 锁住回归：batch_update_records 支持批量置/清完成态，
+// 且未携带 watched 时不应触碰现有完成态。
+func TestBatchUpdateWatched(t *testing.T) {
+	db := newTestDB(t)
+	base := time.Date(2026, 8, 22, 19, 30, 0, 0, time.UTC).Unix()
+	for _, id := range []string{"bw1", "bw2", "bw3"} {
+		if err := db.UpsertRecord(sampleRecord(id, base)); err != nil {
+			t.Fatalf("UpsertRecord %s: %v", id, err)
+		}
+	}
+
+	// 批量置完成态。
+	n, err := db.BatchUpdateRecords(models.BatchUpdateParams{
+		IDs:     []string{"bw1", "bw2", "bw3"},
+		Watched: boolPtr(true),
+	})
+	if err != nil {
+		t.Fatalf("BatchUpdateRecords watched: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("expected 3 updated, got %d", n)
+	}
+	for _, id := range []string{"bw1", "bw2", "bw3"} {
+		got, _ := db.GetRecord(id)
+		if !got.Watched {
+			t.Errorf("%s should be watched after batch update", id)
+		}
+	}
+
+	// 批量清除：仅指定集合回到未完成，其余不动。
+	if _, err := db.BatchUpdateRecords(models.BatchUpdateParams{
+		IDs:     []string{"bw1", "bw2"},
+		Watched: boolPtr(false),
+	}); err != nil {
+		t.Fatalf("BatchUpdateRecords unwatched: %v", err)
+	}
+	bw1, _ := db.GetRecord("bw1")
+	bw3, _ := db.GetRecord("bw3")
+	if bw1.Watched {
+		t.Errorf("bw1 should be unwatched after batch clear")
+	}
+	if !bw3.Watched {
+		t.Errorf("bw3 should remain watched (not in clear set)")
+	}
+
+	// nil 表示不改：带其他字段更新不应触碰 watched。
+	r5 := 5
+	if _, err := db.BatchUpdateRecords(models.BatchUpdateParams{
+		IDs:    []string{"bw3"},
+		Rating: &r5,
+	}); err != nil {
+		t.Fatalf("BatchUpdateRecords rating only: %v", err)
+	}
+	bw3, _ = db.GetRecord("bw3")
+	if !bw3.Watched {
+		t.Errorf("batch update without watched must NOT clear completion")
+	}
+	if bw3.Rating != 5 {
+		t.Errorf("rating should be 5, got %d", bw3.Rating)
+	}
+}
+
 func TestCreateRecordDramaNames(t *testing.T) {
 	db := newTestDB(t)
 	d, err := db.SaveDrama(models.Drama{Name: "牡丹亭", CategoryName: "昆曲"})

@@ -79,7 +79,10 @@ type UpdateRecordInput struct {
 	OtherCostCurrency *string            `json:"other_cost_currency,omitempty"`
 	// HuozhiBillIDs 关联「货殖」账单 ID；nil 表示不改，空数组表示清空关联。
 	HuozhiBillIDs []int64 `json:"huozhi_bill_ids,omitempty"`
-	DryRun        *bool   `json:"dry_run,omitempty"`
+	// Watched 即「已观看/已到场」，对应 CalDAV VTODO 完成态。nil 表示不改
+	// （保留原值），非 nil 表示显式设置/清除。
+	Watched *bool `json:"watched,omitempty"`
+	DryRun  *bool `json:"dry_run,omitempty"`
 }
 
 type DeleteRecordInput struct {
@@ -298,6 +301,9 @@ func (s *Server) handleUpdateRecord(ctx context.Context, req *mcp.CallToolReques
 	}
 	if in.HuozhiBillIDs != nil {
 		r.HuozhiBillIDs = in.HuozhiBillIDs
+	}
+	if in.Watched != nil {
+		r.Watched = in.Watched
 	}
 
 	if dryRun(in.DryRun) {
