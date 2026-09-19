@@ -2632,7 +2632,7 @@ func (db *DB) ListCategories() ([]models.Category, error) {
 			WHERE r.deleted_at = 0 AND je.value != ''
 			GROUP BY je.value
 		) cnt ON cnt.name = c.name
-		ORDER BY c.sort_order ASC, c.name ASC`)
+		ORDER BY record_count DESC, c.name ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -3043,7 +3043,7 @@ func (db *DB) ListArtists() ([]models.Artist, error) {
 	rows, err := db.conn.Query(`
 		SELECT a.id, a.name, a.aliases, a.remark, a.cover, a.cover_file, a.cover_thumb, a.bio, a.sort_order,
 			(SELECT COUNT(*) FROM record_artists ra JOIN records rc ON rc.id = ra.record_id AND rc.deleted_at = 0 WHERE ra.artist_id = a.id) AS record_count
-		FROM artists a ORDER BY a.sort_order ASC, a.name COLLATE NOCASE`)
+		FROM artists a ORDER BY record_count DESC, a.name COLLATE NOCASE`)
 	if err != nil {
 		return nil, err
 	}

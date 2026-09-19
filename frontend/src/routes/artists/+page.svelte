@@ -48,44 +48,6 @@
     }
   }
 
-  // 拖拽排序
-  let dragIdx = $state(-1);
-  let overIdx = $state(-1);
-  let overBefore = $state(true);
-
-  function onDragStart(i) {
-    dragIdx = i;
-  }
-
-  function onDragOver(e, i) {
-    e.preventDefault();
-    const rect = e.currentTarget.getBoundingClientRect();
-    overIdx = i;
-    overBefore = e.clientY < rect.top + rect.height / 2;
-  }
-
-  function onDrop(targetIdx) {
-    if (dragIdx < 0 || dragIdx === targetIdx) {
-      resetDrag();
-      return;
-    }
-    const next = artists.slice();
-    const [moved] = next.splice(dragIdx, 1);
-    next.splice(targetIdx, 0, moved);
-    resetDrag();
-    error = '';
-    api.reorderArtists(next.map((x) => x.id))
-      .then(() => {
-        artists = next;
-      })
-      .catch((e) => (error = e.message));
-  }
-
-  function resetDrag() {
-    dragIdx = -1;
-    overIdx = -1;
-  }
-
   onMount(load);
 </script>
 <svelte:head><title>演员 - 幕间</title></svelte:head>
@@ -94,7 +56,7 @@
 <div class="fade-up">
   <div class="page-head">
     <h1>演员</h1>
-    <p class="sub">演员档案（实体）。点击进入演员主页查看其参演演出；拖拽卡片调整显示顺序。</p>
+    <p class="sub">演员档案（实体）。点击进入演员主页查看其参演演出；列表按参演场次（演出数）从高到低排列。</p>
   </div>
 
   <div class="card add-bar">
@@ -116,19 +78,8 @@
     </div>
   {:else}
     <div class="grid stagger">
-      {#each artists as a, i (a.id)}
-        <div
-          class="card actor"
-          draggable="true"
-          class:dragging={dragIdx === i}
-          class:drop-before={overIdx === i && dragIdx !== i && overBefore}
-          class:drop-after={overIdx === i && dragIdx !== i && !overBefore}
-          ondragstart={(e) => { onDragStart(i); e.dataTransfer.effectAllowed = 'move'; }}
-          ondragover={(e) => onDragOver(e, i)}
-          ondragleave={() => { if (overIdx === i) overIdx = -1; }}
-          ondrop={() => onDrop(i)}
-          ondragend={() => resetDrag()}
-        >
+      {#each artists as a (a.id)}
+        <div class="card actor">
           <a class="actor-link" href={`/artists/${a.id}`}>
             {#if a.coverFile}
               <img class="avatar coverable" src={coverUrl(a.coverFile)} alt={a.name} />
@@ -158,22 +109,6 @@
     padding: 12px 14px;
     cursor: grab;
   }
-  .actor.dragging { opacity: 0.4; cursor: grabbing; }
-  /* 拖拽插入指示 */
-  .actor.drop-before::before,
-  .actor.drop-after::after {
-    content: '';
-    position: absolute;
-    left: 8px;
-    right: 8px;
-    height: 3px;
-    border-radius: 2px;
-    background: var(--accent);
-    pointer-events: none;
-    z-index: 1;
-  }
-  .actor.drop-before::before { top: -6px; }
-  .actor.drop-after::after { bottom: -6px; }
   .actor-link { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; text-decoration: none; color: inherit; }
   .avatar { width: 48px; aspect-ratio: 1 / 1; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--surface-3); }
   .avatar.placeholder { display: flex; align-items: center; justify-content: center; font-size: 22px; }

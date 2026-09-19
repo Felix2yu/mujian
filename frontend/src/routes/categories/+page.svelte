@@ -60,49 +60,6 @@
     }
   }
 
-  // 拖拽排序状态
-  let dragIdx = $state(-1);
-  let overIdx = $state(-1);
-  let overBefore = $state(true);
-
-  function onDragStart(i) {
-    dragIdx = i;
-  }
-
-  function onDragOver(e, i) {
-    e.preventDefault();
-    const rect = e.currentTarget.getBoundingClientRect();
-    overIdx = i;
-    // Grid flows left-to-right (row-major): split by X, not Y.
-    overBefore = e.clientX < rect.left + rect.width / 2;
-  }
-
-  function onDrop(targetIdx) {
-    if (dragIdx < 0 || dragIdx === targetIdx) {
-      resetDrag();
-      return;
-    }
-    const next = categories.slice();
-    const [moved] = next.splice(dragIdx, 1);
-    // Honor the left/right split: before => insert at target, after => insert
-    // after target. Account for the index shift caused by removal.
-    let insertAt = overBefore ? targetIdx : targetIdx + 1;
-    if (dragIdx < targetIdx) insertAt -= 1;
-    next.splice(insertAt, 0, moved);
-    resetDrag();
-    error = '';
-    api.reorderCategories(next.map((x) => x.id))
-      .then(() => {
-        categories = next;
-      })
-      .catch((e) => (error = e.message));
-  }
-
-  function resetDrag() {
-    dragIdx = -1;
-    overIdx = -1;
-  }
-
   onMount(load);
 </script>
 <svelte:head><title>剧种 - 幕间</title></svelte:head>
@@ -111,7 +68,7 @@
 <div class="fade-up">
   <div class="page-head">
     <h1>剧种</h1>
-    <p class="sub">管理演出剧种；点击剧种名可查看该剧种下的剧目，点击右侧条数可查看演出记录。拖动卡片可调整显示顺序</p>
+    <p class="sub">管理演出剧种；点击剧种名可查看该剧种下的剧目，点击右侧条数可查看演出记录。列表按演出数从高到低排列</p>
   </div>
 
   <div class="card add-bar">
@@ -133,19 +90,8 @@
     </div>
   {:else}
     <div class="grid stagger">
-      {#each categories as c, i (c.id)}
-        <div
-          class="card cat"
-          draggable="true"
-          class:dragging={dragIdx === i}
-          class:drop-before={overIdx === i && dragIdx !== i && overBefore}
-          class:drop-after={overIdx === i && dragIdx !== i && !overBefore}
-          ondragstart={(e) => { onDragStart(i); e.dataTransfer.effectAllowed = 'move'; }}
-          ondragover={(e) => onDragOver(e, i)}
-          ondragleave={() => { if (overIdx === i) overIdx = -1; }}
-          ondrop={() => onDrop(i)}
-          ondragend={() => resetDrag()}
-        >
+      {#each categories as c (c.id)}
+        <div class="card cat">
           <a class="cat-name" href={`/dramas?cat=${encodeURIComponent(c.name)}`} title="查看该剧种下的剧目">{c.name}</a>
           <a class="cnt" href={`/?category=${encodeURIComponent(c.name)}`} title="查看该剧种下的演出记录">{c.recordCount ?? 0} 条</a>
           <button class="del" title="删除剧种" onclick={() => askRemove(c)}>✕</button>
@@ -215,23 +161,7 @@
     flex: 0 0 auto;
   }
   .del:hover { background: var(--danger-soft); color: var(--danger); }
-  .cat { position: relative; cursor: grab; }
-  .cat.dragging { opacity: 0.4; cursor: grabbing; }
-  /* 拖拽插入指示：行优先网格用竖线（左=插前，右=插后） */
-  .cat.drop-before::before,
-  .cat.drop-after::after {
-    content: '';
-    position: absolute;
-    top: 8px;
-    bottom: 8px;
-    width: 3px;
-    border-radius: 2px;
-    background: var(--accent);
-    pointer-events: none;
-    z-index: 1;
-  }
-  .cat.drop-before::before { left: -6px; }
-  .cat.drop-after::after { right: -6px; }
+  .cat { position: relative; }
 
   /* 页内删除确认弹窗（替代被预览浏览器屏蔽的原生 confirm） */
   .modal-mask {

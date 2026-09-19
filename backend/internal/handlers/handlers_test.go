@@ -988,12 +988,14 @@ func TestArtistsEndpoints(t *testing.T) {
 	expectStatus(t, res, 200, "reorder artists")
 	res, _ = doJSON(t, "POST", ts.URL+"/api/artists/reorder", []byte("{"))
 	expectStatus(t, res, 400, "reorder artists invalid body")
+	// Default listing is by record_count DESC: a (张军(改)) has 1 linked
+	// record, other (单雯) has 0, so a must come first.
 	res2, b2 := doJSON(t, "GET", ts.URL+"/api/artists", nil)
 	expectStatus(t, res2, 200, "list artists after reorder")
 	var arts []models.Artist
 	decodeResp(t, b2, &arts)
-	if len(arts) != 2 || arts[0].ID != other.ID {
-		t.Fatalf("reorder did not take effect: %+v", arts)
+	if len(arts) != 2 || arts[0].ID != a.ID {
+		t.Fatalf("default order should be record_count desc: %+v", arts)
 	}
 
 	// Delete cascades the record_artists link, then artist is gone.

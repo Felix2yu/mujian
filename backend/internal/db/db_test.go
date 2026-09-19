@@ -433,7 +433,9 @@ func TestReorderDramasAndCategories(t *testing.T) {
 		t.Errorf("new drama should be last: %+v", list)
 	}
 
-	// Categories: fresh DB keeps creation order, then manual reorder applies.
+	// Categories: with 0 records the default order is record_count DESC (all tie)
+	// then name ASC. Manual reorder persists sort_order but does not change the
+	// default listing.
 	c1 := models.Category{Name: "昆曲"}
 	c2 := models.Category{Name: "越剧"}
 	c3 := models.Category{Name: "京剧"}
@@ -447,15 +449,22 @@ func TestReorderDramasAndCategories(t *testing.T) {
 		t.Fatal(err)
 	}
 	cats, _ := db.ListCategories()
-	if len(cats) != 3 || cats[0].Name != "昆曲" || cats[2].Name != "京剧" {
-		t.Fatalf("fresh category order should be creation order: %+v", cats)
+	if len(cats) != 3 || cats[0].Name != "京剧" || cats[2].Name != "越剧" {
+		t.Fatalf("default category order should be name asc (0 records): %+v", cats)
 	}
 	if err := db.ReorderCategories([]string{c2.ID, c3.ID, c1.ID}); err != nil {
 		t.Fatal(err)
 	}
 	cats, _ = db.ListCategories()
-	if cats[0].Name != "越剧" || cats[1].Name != "京剧" || cats[2].Name != "昆曲" {
-		t.Fatalf("category reorder failed: %+v", cats)
+	if cats[0].Name != "京剧" || cats[1].Name != "昆曲" || cats[2].Name != "越剧" {
+		t.Fatalf("default category order unchanged by reorder (0 records): %+v", cats)
+	}
+	var so1, so2, so3 int
+	_ = db.conn.QueryRow("SELECT sort_order FROM categories WHERE id = ?", c1.ID).Scan(&so1)
+	_ = db.conn.QueryRow("SELECT sort_order FROM categories WHERE id = ?", c2.ID).Scan(&so2)
+	_ = db.conn.QueryRow("SELECT sort_order FROM categories WHERE id = ?", c3.ID).Scan(&so3)
+	if so1 != 2 || so2 != 0 || so3 != 1 {
+		t.Errorf("ReorderCategories should set sort_order [2,0,1]: got %d,%d,%d", so1, so2, so3)
 	}
 	// New category appends at the end.
 	c4 := models.Category{Name: "话剧"}
@@ -1443,14 +1452,26 @@ func TestArtists(t *testing.T) {
 		t.Errorf("record_count should be 1, got %d", saved2.RecordCount)
 	}
 
-	// Second artist + reorder.
+	// Second artist. Default listing is by record_count DESC: saved has 1
+	// linked record, other has 0, so saved must come first.
 	other, _ := db.SaveArtist(models.Artist{Name: "单雯"})
+	list, _ := db.ListArtists()
+	if len(list) != 2 || list[0].ID != saved.ID {
+		t.Errorf("default order should be record_count desc: %+v", list)
+	}
+	// ReorderArtists still persists the manual sort_order column.
 	if err := db.ReorderArtists([]string{other.ID, saved.ID}); err != nil {
 		t.Fatal(err)
 	}
-	list, _ := db.ListArtists()
-	if len(list) != 2 || list[0].ID != other.ID {
-		t.Errorf("reorder wrong: %+v", list)
+	var soOther, soSaved int
+	if err := db.conn.QueryRow("SELECT sort_order FROM artists WHERE id = ?", other.ID).Scan(&soOther); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.conn.QueryRow("SELECT sort_order FROM artists WHERE id = ?", saved.ID).Scan(&soSaved); err != nil {
+		t.Fatal(err)
+	}
+	if soOther != 0 || soSaved != 1 {
+		t.Errorf("ReorderArtists should set sort_order [0,1]: got %d,%d", soOther, soSaved)
 	}
 
 	// Delete cascades the relation row.
