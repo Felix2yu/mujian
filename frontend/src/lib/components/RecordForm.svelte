@@ -1140,8 +1140,8 @@
 
 
   // ---------- 从既往演出复制（仅新建模式显示） ----------
-  // 搜索历史演出 → 勾选要复制的字段 → 应用到当前表单。日期/封面/状态默认
-  // 不勾：新演出通常有自己的时间与海报。应用演员时，未建档的名字进自由胶囊。
+  // 搜索历史演出 → 勾选要复制的字段 → 应用到当前表单。日期/状态默认不勾
+  // （封面默认勾选：同一剧目常复用海报）；新演出通常有自己的时间。应用演员时，未建档的名字进自由胶囊。
   const COPY_FIELD_DEFS = [
     { key: 'name', label: '演出名称' },
     { key: 'categoryNames', label: '剧种分类' },
@@ -1164,8 +1164,9 @@
     { key: 'cover', label: '封面' },
     { key: 'active_status', label: '演出状态' }
   ];
-  // 座位/同行与时间/封面/状态/评分同属「每场大概率不同」的个人信息，默认不勾。
-  const COPY_DEFAULT_OFF = new Set(['date', 'cover', 'active_status', 'rating', 'seat', 'duration', 'friends']);
+  // 座位/同行与时间/状态/评分同属「每场大概率不同」的个人信息，默认不勾。
+  // 封面（海报）常随同一剧目复用，故默认勾选。
+  const COPY_DEFAULT_OFF = new Set(['date', 'active_status', 'rating', 'seat', 'duration', 'friends']);
 
   const COPY_SEARCH_PAGE = 20; // 每页搜索结果数
   let copySearch = $state('');

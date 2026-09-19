@@ -250,9 +250,14 @@
   const statusLabel = (s) => STATUS_LABEL[s] || '';
   const statusClass = (s) => STATUS_CLASS[s] || '';
 
-  // 统一入口：点击任意日期弹出当日弹窗（有演出→选择，无演出→新增确认）
+  // 点击日期：空白日期直接新增演出（与底部「点击空白日期可新增」提示一致）；
+  // 有演出的日期弹出当日弹窗，查看演出并可再点「+ 新增演出」。
   function onCellClick(d) {
-    modalDay = d;
+    if ((byDay[d] ?? []).length === 0) {
+      openNew(d);
+    } else {
+      modalDay = d;
+    }
   }
 
   function timeStr(ts) {
