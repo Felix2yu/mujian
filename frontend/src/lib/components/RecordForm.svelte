@@ -1657,105 +1657,6 @@
     </div>
   </div>
 
-  <!-- ============ 费用与渠道 ============ -->
-  <div class="card section fee-card">
-    <h3>费用与渠道</h3>
-    <!-- 金额列要同时容纳「数字框 + 币种下拉」（多币种开启时约 55px 被币种框占用）。
-         编辑页在宽屏是双栏、卡片本身可能很窄，若用固定 fr 或按「视口」的媒体查询，
-         4 列会被挤扁（票价只剩一位）。故以本卡片为容器查询上下文，见 .fee-row 样式：
-         宽度足够 4 列一行，不足直接退为 2 列（2×2），不做 3+1 的孤行换行。 -->
-    <div class="row fee-row">
-      <div>
-        <label>购买渠道</label>
-        <div class="combo">
-          <input
-            class="input"
-            spellcheck="false"
-            bind:value={form.channel}
-            placeholder="如：大麦"
-            onfocus={openChannelList}
-            onblur={closeChannelListSoon}
-            onkeydown={onChannelKeydown}
-          />
-          {#if showChannelList && filteredChannels.length}
-            <div class="combo-list">
-              {#each filteredChannels as v, chi (v)}
-                <button type="button" class="combo-item" class:active={chi === channelActive} onmousedown={(e) => e.preventDefault()} onclick={() => pickChannel(v)}>{v}</button>
-              {/each}
-            </div>
-          {/if}
-        </div>
-      </div>
-      <div>
-        <label>票价</label>
-        <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.price} oninput={stripNegSign} onblur={() => normalizeMoney('price')} />{#if settings.multi_currency}<select class="input cur" bind:value={form.price_currency}>{#each currencyOptions(form.price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
-      </div>
-      {#if settings.show_pay_price}
-        <div>
-          <label>实付</label>
-          <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.pay_price} oninput={stripNegSign} onblur={() => normalizeMoney('pay_price')} />{#if settings.multi_currency}<select class="input cur" bind:value={form.pay_price_currency}>{#each currencyOptions(form.pay_price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
-        </div>
-      {/if}
-      {#if settings.show_other_cost}
-        <div>
-          <label>其他花费</label>
-          <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.other_cost} oninput={stripNegSign} onblur={() => normalizeMoney('other_cost')} />{#if settings.multi_currency}<select class="input cur" bind:value={form.other_cost_currency}>{#each currencyOptions(form.other_cost_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
-        </div>
-      {/if}
-    </div>
-
-    {#if huozhiEnabled}
-      <div class="huozhi-box">
-        <label>货殖账单 ID <span class="hint">多个用逗号分隔，如 123,124；保存前可点「校验」确认账单存在</span></label>
-        <div class="huozhi-row">
-          <input
-            class="input"
-            type="text"
-            bind:value={form.huozhiBillIdsText}
-            placeholder="123"
-            spellcheck="false"
-            autocomplete="off"
-          />
-          <button type="button" class="btn sm" onclick={verifyHuozhiBills} disabled={huozhiBusy || !form.huozhiBillIdsText.trim()}>
-            {huozhiBusy ? '校验中…' : '校验'}
-          </button>
-        </div>
-        {#if huozhiError}
-          <div class="huozhi-msg err">⚠ {huozhiError}</div>
-        {:else if huozhiPreview}
-          <div class="huozhi-msg ok">
-            ✓ 共 {huozhiPreview.bills.length} 笔，合计 {formatHuozhiMoney(huozhiPreview.total, huozhiPreview.currency)}{#if huozhiPreview.mixed_currency}（币种不一致，已直接相加）{/if}
-          </div>
-          {#if huozhiPreview.breakdown && huozhiPreview.breakdown.length}
-            <div class="huozhi-breakdown">
-              {#each huozhiPreview.breakdown as g (g.role)}
-                <span class="hz-bd-item">
-                  <span class="hz-bd-label">{g.label}</span>
-                  <span class="hz-bd-amt">{formatHuozhiMoney(g.total, g.currency)}</span>
-                  {#if g.mixed}<span class="hz-bd-mixed">混合币种</span>{/if}
-                </span>
-              {/each}
-            </div>
-          {/if}
-          <ul class="huozhi-list">
-            {#each huozhiPreview.bills as b (b.id)}
-              <li>
-                <span class="hz-id">#{b.id}</span>
-                <span class="hz-desc">{b.description || b.remark || '（无描述）'}</span>
-                {#if b.account}<span class="hz-acct">{b.account}</span>{/if}
-                {#if b.tx_date}<span class="hz-date">{b.tx_date.slice(0, 10)}</span>{/if}
-                <span class="hz-amt">{formatHuozhiMoney(b.amount, b.currency)}</span>
-              </li>
-            {/each}
-            {#each Object.entries(huozhiPreview.errors || {}) as [bid, msg] (bid)}
-              <li class="hz-fail">#{bid} 拉取失败：{msg}</li>
-            {/each}
-          </ul>
-        {/if}
-      </div>
-    {/if}
-  </div>
-
   <!-- ============ 阵容 ============ -->
   <div class="card section">
     <h3>阵容</h3>
@@ -1975,6 +1876,105 @@
         </div>
       </details>
     </div>
+  </div>
+
+  <!-- ============ 费用与渠道 ============ -->
+  <div class="card section fee-card">
+    <h3>费用与渠道</h3>
+    <!-- 金额列要同时容纳「数字框 + 币种下拉」（多币种开启时约 55px 被币种框占用）。
+         编辑页在宽屏是双栏、卡片本身可能很窄，若用固定 fr 或按「视口」的媒体查询，
+         4 列会被挤扁（票价只剩一位）。故以本卡片为容器查询上下文，见 .fee-row 样式：
+         宽度足够 4 列一行，不足直接退为 2 列（2×2），不做 3+1 的孤行换行。 -->
+    <div class="row fee-row">
+      <div>
+        <label>购买渠道</label>
+        <div class="combo">
+          <input
+            class="input"
+            spellcheck="false"
+            bind:value={form.channel}
+            placeholder="如：大麦"
+            onfocus={openChannelList}
+            onblur={closeChannelListSoon}
+            onkeydown={onChannelKeydown}
+          />
+          {#if showChannelList && filteredChannels.length}
+            <div class="combo-list">
+              {#each filteredChannels as v, chi (v)}
+                <button type="button" class="combo-item" class:active={chi === channelActive} onmousedown={(e) => e.preventDefault()} onclick={() => pickChannel(v)}>{v}</button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      </div>
+      <div>
+        <label>票价</label>
+        <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.price} oninput={stripNegSign} onblur={() => normalizeMoney('price')} />{#if settings.multi_currency}<select class="input cur" bind:value={form.price_currency}>{#each currencyOptions(form.price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
+      </div>
+      {#if settings.show_pay_price}
+        <div>
+          <label>实付</label>
+          <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.pay_price} oninput={stripNegSign} onblur={() => normalizeMoney('pay_price')} />{#if settings.multi_currency}<select class="input cur" bind:value={form.pay_price_currency}>{#each currencyOptions(form.pay_price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
+        </div>
+      {/if}
+      {#if settings.show_other_cost}
+        <div>
+          <label>其他花费</label>
+          <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.other_cost} oninput={stripNegSign} onblur={() => normalizeMoney('other_cost')} />{#if settings.multi_currency}<select class="input cur" bind:value={form.other_cost_currency}>{#each currencyOptions(form.other_cost_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
+        </div>
+      {/if}
+    </div>
+
+    {#if huozhiEnabled}
+      <div class="huozhi-box">
+        <label>货殖账单 ID <span class="hint">多个用逗号分隔，如 123,124；保存前可点「校验」确认账单存在</span></label>
+        <div class="huozhi-row">
+          <input
+            class="input"
+            type="text"
+            bind:value={form.huozhiBillIdsText}
+            placeholder="123"
+            spellcheck="false"
+            autocomplete="off"
+          />
+          <button type="button" class="btn sm" onclick={verifyHuozhiBills} disabled={huozhiBusy || !form.huozhiBillIdsText.trim()}>
+            {huozhiBusy ? '校验中…' : '校验'}
+          </button>
+        </div>
+        {#if huozhiError}
+          <div class="huozhi-msg err">⚠ {huozhiError}</div>
+        {:else if huozhiPreview}
+          <div class="huozhi-msg ok">
+            ✓ 共 {huozhiPreview.bills.length} 笔，合计 {formatHuozhiMoney(huozhiPreview.total, huozhiPreview.currency)}{#if huozhiPreview.mixed_currency}（币种不一致，已直接相加）{/if}
+          </div>
+          {#if huozhiPreview.breakdown && huozhiPreview.breakdown.length}
+            <div class="huozhi-breakdown">
+              {#each huozhiPreview.breakdown as g (g.role)}
+                <span class="hz-bd-item">
+                  <span class="hz-bd-label">{g.label}</span>
+                  <span class="hz-bd-amt">{formatHuozhiMoney(g.total, g.currency)}</span>
+                  {#if g.mixed}<span class="hz-bd-mixed">混合币种</span>{/if}
+                </span>
+              {/each}
+            </div>
+          {/if}
+          <ul class="huozhi-list">
+            {#each huozhiPreview.bills as b (b.id)}
+              <li>
+                <span class="hz-id">#{b.id}</span>
+                <span class="hz-desc">{b.description || b.remark || '（无描述）'}</span>
+                {#if b.account}<span class="hz-acct">{b.account}</span>{/if}
+                {#if b.tx_date}<span class="hz-date">{b.tx_date.slice(0, 10)}</span>{/if}
+                <span class="hz-amt">{formatHuozhiMoney(b.amount, b.currency)}</span>
+              </li>
+            {/each}
+            {#each Object.entries(huozhiPreview.errors || {}) as [bid, msg] (bid)}
+              <li class="hz-fail">#{bid} 拉取失败：{msg}</li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+    {/if}
   </div>
 
   </div><!-- .col-left -->
