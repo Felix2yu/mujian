@@ -1,5 +1,16 @@
 name: Build
 
+# Runner images are pinned to explicit Ubuntu versions on purpose. The Go
+# binary is CGO-linked against the runner's glibc but runs inside the image
+# built from ./Dockerfile (debian:13-slim, an *older* glibc). glibc is
+# backward- but NOT forward-compatible: a binary linked against a newer glibc
+# than the runtime image fails at startup with "GLIBC_2.x not found". The
+# `ubuntu-latest` label silently moved from 24.04 to 26.04 between 2026-10-19
+# and 2026-11-19 (24.04 = glibc 2.39, 26.04 = glibc 2.42), which would have
+# flipped that relation with no workflow change — and the docker job cannot
+# catch it, because it only builds and pushes. Hence: explicit labels
+# everywhere, plus the "Verify glibc compatibility" step in the build job.
+
 on:
   push:
     branches: [main]
@@ -19,8 +30,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest,    label: amd64 }
-          - { os: ubuntu-24.04-arm, label: arm64 }
+          - { os: ubuntu-26.04,     label: amd64 }
+          - { os: ubuntu-26.04-arm, label: arm64 }
 
     steps:
       - uses: actions/checkout@v7
@@ -58,6 +69,29 @@ jobs:
         run: CGO_ENABLED=1 go build -o mujian .
         working-directory: backend
 
+      # The binary is dynamically linked against the *runner's* glibc but runs
+      # inside ./Dockerfile's base image. Fail here, with a readable message,
+      # if the binary needs a newer glibc than that image provides — otherwise
+      # the breakage only surfaces when someone starts the published container.
+      # The runtime version is read from the Dockerfile instead of hardcoded,
+      # so bumping the base image automatically relaxes this check.
+      - name: Verify glibc compatibility with the runtime image
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          command -v readelf >/dev/null || sudo apt-get install -y -q binutils
+          base=$(awk '/^FROM[[:space:]]/{print $2; exit}' ../Dockerfile)
+          required=$(readelf -V ./mujian | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1 || true)
+          available=$(docker run --rm --entrypoint sh "$base" -c 'ldd --version | head -1' | awk '{print $NF}')
+          echo "runtime image $base provides glibc $available; binary requires up to ${required:-none}"
+          if [ -n "$required" ]; then
+            newest=$(printf '%s\n%s\n' "$required" "$available" | sort -V | tail -1)
+            if [ "$newest" != "$available" ]; then
+              echo "::error::binary requires glibc $required but the runtime image ($base) only provides $available — bump FROM in Dockerfile or pin the runner to an older Ubuntu"
+              exit 1
+            fi
+          fi
+
       # Upload the prebuilt Go binary for this architecture. The Docker job
       # downloads it instead of compiling inside the image.
       - name: Upload binary
@@ -79,7 +113,7 @@ jobs:
 
   coverage:
     name: Coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     # Run coverage in its own job so `go test -coverprofile` does not slow down
     # the build/binary job.
     steps:
@@ -118,8 +152,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - { platform: linux/amd64, runner: ubuntu-latest,    label: amd64 }
-          - { platform: linux/arm64, runner: ubuntu-24.04-arm, label: arm64 }
+          - { platform: linux/amd64, runner: ubuntu-26.04,     label: amd64 }
+          - { platform: linux/arm64, runner: ubuntu-26.04-arm, label: arm64 }
 
     steps:
       - uses: actions/checkout@v7
@@ -179,7 +213,7 @@ jobs:
           cache-to: type=gha,scope=${{ matrix.label }},mode=max
 
   docker-manifest:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: docker
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
 

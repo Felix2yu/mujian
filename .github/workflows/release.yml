@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   frontend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
 
@@ -45,8 +45,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - { os: ubuntu-latest, label: linux-amd64 }
-          - { os: ubuntu-24.04-arm, label: linux-arm64 }
+          - { os: ubuntu-26.04,     label: linux-amd64 }
+          - { os: ubuntu-26.04-arm, label: linux-arm64 }
           - { os: macos-latest, label: darwin-arm64 }
           - { os: windows-latest, label: windows-amd64 }
 
@@ -77,6 +77,18 @@ jobs:
           go build -trimpath -ldflags="-s -w" -o mujian-${{ matrix.label }}.exe .
         working-directory: backend
 
+      # These binaries are downloaded and run directly on user machines, so the
+      # glibc floor they require is a distribution-compatibility fact worth
+      # recording: Ubuntu 22.04 = 2.35, Debian 12 = 2.36. Informational only —
+      # it never fails the release, it just makes the floor visible in the log.
+      - name: Report glibc requirement
+        if: runner.os == 'Linux'
+        working-directory: backend
+        run: |
+          command -v readelf >/dev/null || sudo apt-get install -y -q binutils
+          required=$(readelf -V ./mujian-${{ matrix.label }} | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1 || true)
+          echo "::notice::${{ matrix.label }} requires ${required:-no} GLIBC symbols (Ubuntu 22.04 ships 2.35, Debian 12 ships 2.36)"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
@@ -85,7 +97,7 @@ jobs:
 
   release:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v8
