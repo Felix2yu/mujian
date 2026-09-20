@@ -279,7 +279,9 @@
     max-height: 240px;
     overflow-y: auto;
     padding: 4px;
+    scrollbar-width: none;
   }
+  .ctags-suggest::-webkit-scrollbar { display: none; }
   .ctags-suggest-item {
     display: block;
     width: 100%;
