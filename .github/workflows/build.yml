@@ -65,9 +65,26 @@ jobs:
       - name: Copy frontend dist to backend
         run: cp -r frontend/dist backend/dist
 
-      - name: Build backend
-        run: CGO_ENABLED=1 go build -o mujian .
+      # CGO ties the artifact to the glibc it is linked against, so compiling on
+      # the runner makes the binary's glibc floor a property of GitHub's runner
+      # rotation: on ubuntu-26.04 (glibc 2.43) sqrtf/log10f — pulled in by the
+      # bundled WebP/AVIF codecs — carry a GLIBC_2.43 version tag, which
+      # debian:13-slim (glibc 2.41) cannot resolve. The published image would
+      # then die at startup with "GLIBC_2.43 not found" while CI stayed green.
+      # Compile inside a pinned, older-glibc image instead, so the floor is a
+      # property of this repository: bookworm = Debian 12 = glibc 2.36, safely
+      # below the runtime image's 2.41. The Verify step below enforces the
+      # relation either way.
+      - name: Build backend (pinned glibc)
         working-directory: backend
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$PWD/..:/src" -w /src/backend \
+            -v "$(go env GOMODCACHE):/go/pkg/mod" \
+            -e HOME=/tmp -e GOCACHE=/tmp/gocache -e GOTOOLCHAIN=local \
+            -e CGO_ENABLED=1 \
+            golang:1.27-bookworm \
+            go build -o mujian .
 
       # The binary is dynamically linked against the *runner's* glibc but runs
       # inside ./Dockerfile's base image. Fail here, with a readable message,

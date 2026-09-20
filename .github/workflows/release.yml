@@ -65,10 +65,27 @@ jobs:
           name: frontend-dist
           path: backend/dist
 
-      - name: Build backend (Unix)
-        if: runner.os != 'Windows'
-        run: CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o mujian-${{ matrix.label }} .
+      # Same rationale as build.yml: CGO links the Linux binaries against the
+      # runner's glibc, so compile them in a pinned image (bookworm = glibc
+      # 2.36) instead of inheriting whatever Ubuntu the runner happens to be.
+      # That also keeps the floor low for people running these binaries on
+      # older distributions.
+      - name: Build backend (Linux, pinned glibc)
+        if: runner.os == 'Linux'
         working-directory: backend
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$PWD/..:/src" -w /src/backend \
+            -v "$(go env GOMODCACHE):/go/pkg/mod" \
+            -e HOME=/tmp -e GOCACHE=/tmp/gocache -e GOTOOLCHAIN=local \
+            -e CGO_ENABLED=1 \
+            golang:1.27-bookworm \
+            go build -trimpath -ldflags="-s -w" -o mujian-${{ matrix.label }} .
+
+      - name: Build backend (macOS)
+        if: runner.os == 'macOS'
+        working-directory: backend
+        run: CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o mujian-${{ matrix.label }} .
 
       - name: Build backend (Windows)
         if: runner.os == 'Windows'
