@@ -74,9 +74,11 @@ jobs:
         if: runner.os == 'Linux'
         working-directory: backend
         run: |
+          modcache=$(go env GOMODCACHE)
+          mkdir -p "$modcache"
           docker run --rm --user "$(id -u):$(id -g)" \
             -v "$PWD/..:/src" -w /src/backend \
-            -v "$(go env GOMODCACHE):/go/pkg/mod" \
+            -v "$modcache:/go/pkg/mod" \
             -e HOME=/tmp -e GOCACHE=/tmp/gocache -e GOTOOLCHAIN=local \
             -e CGO_ENABLED=1 \
             golang:1.27-bookworm \
