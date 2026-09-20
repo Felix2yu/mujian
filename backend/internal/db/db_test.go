@@ -474,9 +474,13 @@ func TestReorderDramasAndCategories(t *testing.T) {
 	if c4.SortOrder != 3 {
 		t.Errorf("new category should append with sort_order 3, got %d", c4.SortOrder)
 	}
+	// The listing order is derived (record_count DESC, name ASC), so a new
+	// zero-record category is NOT last: 话剧 lands between 昆曲 and 越剧 by
+	// name. Only the sort_order column still records the append.
 	cats, _ = db.ListCategories()
-	if cats[len(cats)-1].Name != "话剧" {
-		t.Errorf("new category should be last: %+v", cats)
+	if len(cats) != 4 || cats[0].Name != "京剧" || cats[1].Name != "昆曲" ||
+		cats[2].Name != "话剧" || cats[3].Name != "越剧" {
+		t.Errorf("default category order should stay record_count desc, name asc: %+v", cats)
 	}
 }
 
