@@ -84,10 +84,13 @@ jobs:
           required=$(readelf -V ./mujian | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1 || true)
           available=$(docker run --rm --entrypoint sh "$base" -c 'ldd --version | head -1' | awk '{print $NF}')
           echo "runtime image $base provides glibc $available; binary requires up to ${required:-none}"
+          echo "build runner: $(ldd --version | head -1)"
           if [ -n "$required" ]; then
             newest=$(printf '%s\n%s\n' "$required" "$available" | sort -V | tail -1)
             if [ "$newest" != "$available" ]; then
               echo "::error::binary requires glibc $required but the runtime image ($base) only provides $available — bump FROM in Dockerfile or pin the runner to an older Ubuntu"
+              echo "symbols needing GLIBC_$required:"
+              objdump -T ./mujian | grep "GLIBC_$required" || true
               exit 1
             fi
           fi
