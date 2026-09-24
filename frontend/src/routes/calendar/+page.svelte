@@ -24,6 +24,20 @@
   let showYearPicker = $state(false);
   let pickerYear = $state(null);
 
+  // 中国节假日（含调休补班）：按年缓存，键为完整日期 "YYYY-MM-DD"。
+  // 属于锦上添花信息：加载失败静默降级，不影响日历本身的展示。
+  let holidays = $state({});
+
+  async function ensureHolidays(y) {
+    if (holidays[y]) return;
+    try {
+      const data = await api.getHolidays(y);
+      holidays = { ...holidays, [y]: data?.days || {} };
+    } catch (e) {
+      // 静默降级：拿不到节假日就只不显示角标
+    }
+  }
+
   // 年份选择器的上下限：shiftYear 原本可以一路点到公元几十万年。有数据的年份
   // 未知，夹到一个合理区间比不设限更不容易误操作。
   const MIN_YEAR = 1900;
@@ -78,6 +92,7 @@
     const seq = ++calReqSeq;
     loading = true;
     error = '';
+    ensureHolidays(year); // 与日历数据并行拉取，互不影响
     try {
       const ev = await api.getCalendar(year, month);
       if (seq !== calReqSeq) return; // 已翻到别的月份，丢弃本次响应
@@ -266,6 +281,9 @@
     return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
+  // 当日弹窗头部显示的节假日信息（休/班）
+  const modalHoliday = $derived(modalDay !== null ? holidays[year]?.[dateStr(modalDay)] : null);
+
   function categoryColor(name) {
     // 简单哈希生成稳定的柔和色彩
     if (!name) return 'cat-default';
@@ -380,6 +398,7 @@
                   <div class="cell empty" aria-hidden="true"></div>
                 {:else}
                   {@const evs = byDay[d] ?? []}
+                  {@const hd = holidays[year]?.[dateStr(d)]}
                   {@const hasToday = isToday(d)}
                   {@const isWeekend = i >= 5}
                   {@const showCount = Math.min(evs.length, MAX_SHOW)}
@@ -393,7 +412,8 @@
                     class:today={hasToday}
                     class:weekend={isWeekend}
                     class:has-event={evs.length > 0}
-                    aria-label={`${year}年${month}月${d}日${evs.length ? '，' + evs.length + '场演出' : ''}`}
+                    aria-label={`${year}年${month}月${d}日${hd ? '，' + (hd.off ? '休假' : '调休上班') + (hd.name ? '，' + hd.name : '') : ''}${evs.length ? '，' + evs.length + '场演出' : ''}`}
+                    title={hd?.name ? `${hd.name}${hd.off ? '（休）' : '（班）'}` : undefined}
                     onclick={() => onCellClick(d)}
                     onfocus={() => (focusDay = d)}
                   >
@@ -424,11 +444,18 @@
                       {/if}
                     {/if}
 
-                    <!-- 日期徽章：始终覆盖在格子左上角 -->
+                    <!-- 日期徽章：始终覆盖在格子左上角；节假日在徽章内显示 休/班 角标 -->
                     <span class="d-badge" class:today-badge={hasToday} class:weekend-badge={isWeekend && !evs.length}>
                       {d}
+                      {#if hd}
+                        <span class="h-badge" class:h-off={hd.off} class:h-work={!hd.off}>{hd.off ? '休' : '班'}</span>
+                      {/if}
                       {#if hasToday && !evs.length}<span class="today-dot"></span>{/if}
                     </span>
+                    <!-- 节日名：仅无海报的格子有空间展示，避免与演出海报抢位 -->
+                    {#if hd?.name && !evs.length}
+                      <span class="h-name">{hd.name}</span>
+                    {/if}
                   </button>
                 {/if}
               </div>
@@ -443,7 +470,8 @@
   </section>
 
   <p class="hint">
-    点击日期查看当天演出 · 点击空白日期可新增 · 方向键在日期间移动，PageUp / PageDown 翻月
+    点击日期查看当天演出 · 点击空白日期可新增 · 方向键在日期间移动，PageUp / PageDown 翻月<br />
+    <span class="hint-holiday"><i class="hb-off">休</i> 法定节假日 · <i class="hb-work">班</i> 调休补班日</span>
   </p>
 </div>
 
@@ -467,6 +495,11 @@
           <span class="modal-day">{modalDay}</span>
         </div>
         <div class="modal-sub">
+          {#if modalHoliday}
+            <span class="modal-holiday" class:mh-work={!modalHoliday.off} title={modalHoliday.name}>
+              {modalHoliday.name}{modalHoliday.off ? ' · 休' : ' · 班（调休）'}
+            </span>
+          {/if}
           {#if evs.length}
             <span class="modal-sub-text">共 {evs.length} 场演出</span>
           {:else}
@@ -980,6 +1013,85 @@
     margin-left: 1px;
   }
 
+  /* ============ 节假日 休/班 角标（嵌在日期徽章内） ============ */
+  .h-badge {
+    font-family: inherit;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2px 3px;
+    border-radius: 3px;
+    letter-spacing: 0;
+    flex-shrink: 0;
+  }
+  .h-badge.h-off {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+  .h-badge.h-work {
+    background: var(--gold-soft);
+    color: var(--gold);
+  }
+  /* 今日徽章是实底色，角标保持自身底色即可读 */
+  .has-event .h-badge {
+    font-size: 8px;
+    padding: 1px 2px;
+  }
+
+  /* 节日名：只在无海报的格子里展示，日期徽章正下方 */
+  .h-name {
+    position: absolute;
+    top: 27px;
+    left: 6px;
+    z-index: 2;
+    max-width: calc(100% - 12px);
+    font-size: 10px;
+    line-height: 1.1;
+    font-weight: 600;
+    color: var(--danger);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  /* 当日弹窗头部的节假日说明 */
+  .modal-holiday {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--danger);
+    margin-bottom: 3px;
+  }
+  .modal-holiday.mh-work {
+    color: var(--gold);
+  }
+
+  /* 页脚图例 */
+  .hint-holiday {
+    font-size: 11.5px;
+    color: var(--text-3);
+  }
+  .hint-holiday .hb-off,
+  .hint-holiday .hb-work {
+    display: inline-block;
+    font-style: normal;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2px 3px;
+    border-radius: 3px;
+    vertical-align: 1px;
+  }
+  .hint-holiday .hb-off {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+  .hint-holiday .hb-work {
+    background: var(--gold-soft);
+    color: var(--gold);
+  }
+
   /* 有海报时格子的整体暗化遮罩，让日期徽章更清晰 */
   .has-event::after {
     content: '';
@@ -1300,12 +1412,16 @@
       font-size: 11px;
       min-width: 15px; height: 15px;
       padding: 0 3px;
+      gap: 2px;
     }
+    .h-badge { font-size: 8px; padding: 1px 2px; }
+    .h-name { top: 22px; left: 4px; font-size: 9px; }
     .has-event .d-badge {
       font-size: 10px;
       min-width: 13px; height: 13px;
       padding: 0 2px;
     }
+    .has-event .h-badge { font-size: 7px; padding: 1px 2px; }
     .more-badge { font-size: 9px; padding: 1px 5px; bottom: 3px; right: 3px; }
 
     .modal-head { padding: 18px 18px 14px; }

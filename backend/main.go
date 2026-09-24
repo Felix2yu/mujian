@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/subtle"
 	"embed"
 	"encoding/xml"
@@ -21,6 +22,7 @@ import (
 	"mujian/internal/config"
 	"mujian/internal/db"
 	"mujian/internal/handlers"
+	"mujian/internal/holiday"
 	"mujian/internal/metrics"
 	"mujian/internal/storage"
 
@@ -416,6 +418,24 @@ func main() {
 
 	h := handlers.New(database, cfg, st, backupMgr)
 	r.Mount("/api", authMiddleware(cfg)(h.Routes()))
+
+	// 中国节假日：启动时先写入内置数据（离线可用），再异步尝试外部刷新；
+	// 刷新成功与否都不阻塞启动，失败静默保留已有数据（Refresh 内部按
+	// 12 小时节流，跨重启生效）。
+	go func() {
+		holiday.Seed(database)
+		refresh := func() {
+			if err := holiday.Refresh(context.Background(), database); err != nil {
+				slog.Debug("refresh holidays", "err", err)
+			}
+		}
+		refresh()
+		t := time.NewTicker(12 * time.Hour)
+		defer t.Stop()
+		for range t.C {
+			refresh()
+		}
+	}()
 
 	// MCP over Streamable HTTP：与 /api 同进程同库，供 AI 客户端远程调用
 	// （默认无鉴权，暴露面与 /api 一致，由反向代理/内网边界保护；配置

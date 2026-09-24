@@ -70,6 +70,8 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/records", h.listRecords)
 	r.Get("/records/all", h.listAllRecords)
 	r.Get("/records/search", h.searchRecords)
+	// 时间冲突检测：新建/编辑表单实时查询时段重叠的既有演出（仅提示，不阻止保存）
+	r.Get("/records/conflicts", h.getTimeConflicts)
 	r.Post("/records", h.createRecord)
 	r.Post("/records/import", h.importRecords)
 	r.Post("/records/align-venues", h.alignVenues)
@@ -141,6 +143,8 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/analytics", h.getAnalytics)
 	r.Get("/calendar", h.getCalendar)
 	r.Get("/calendar.ics", h.getICS)
+	// 中国节假日（含调休 / 补班）：日历页角标展示用
+	r.Get("/holidays", h.getHolidays)
 	r.Get("/map/points", h.getMapPoints)
 
 	r.Route("/covers", func(r chi.Router) {
@@ -1319,6 +1323,66 @@ func (h *Handler) getCalendar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResp(w, 200, events)
+}
+
+// getHolidays returns the China holiday layout for one year so the calendar
+// can render 休/班 badges (including 调休补班日):
+//
+//	GET /api/holidays?year=2026
+//	→ {"year":2026,"days":{"2026-10-01":{"name":"国庆节","off":true}, ...}}
+//
+// 缺少年份数据（如放假通知尚未发布的年份）返回空 days，前端静默降级。
+func (h *Handler) getHolidays(w http.ResponseWriter, r *http.Request) {
+	year := time.Now().Year()
+	if y := r.URL.Query().Get("year"); y != "" {
+		if v, err := strconv.Atoi(y); err == nil && v >= 2000 && v <= 2100 {
+			year = v
+		}
+	}
+	days, err := h.db.ListHolidayDays(year)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	m := make(map[string]map[string]any, len(days))
+	for _, d := range days {
+		m[d.Date] = map[string]any{"name": d.Name, "off": d.IsOffDay}
+	}
+	jsonResp(w, 200, map[string]any{"year": year, "days": m})
+}
+
+// getTimeConflicts finds existing performances whose time window overlaps the
+// slot being edited — the form shows a non-blocking warning so the user does
+// not double-book a ticket:
+//
+//	GET /api/records/conflicts?start=<unix>&duration=<minutes>&exclude=<id>
+//
+// duration 缺省/为 0 时按默认 120 分钟估算（与表单默认时长一致）。
+// See db.FindTimeOverlaps for the overlap semantics (statuses, estimation).
+func (h *Handler) getTimeConflicts(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	startStr := q.Get("start")
+	if startStr == "" {
+		jsonErr(w, 400, "start is required")
+		return
+	}
+	start, err := strconv.ParseInt(startStr, 10, 64)
+	if err != nil {
+		jsonErr(w, 400, "invalid start")
+		return
+	}
+	duration := 0
+	if d := q.Get("duration"); d != "" {
+		if v, err := strconv.Atoi(d); err == nil {
+			duration = v
+		}
+	}
+	recs, err := h.db.FindTimeOverlaps(start, duration, q.Get("exclude"), 20)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, recs)
 }
 
 func (h *Handler) getICS(w http.ResponseWriter, r *http.Request) {

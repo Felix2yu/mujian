@@ -304,6 +304,15 @@ func (db *DB) migrate() error {
 			PRIMARY KEY (record_id, field)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_cost_reviews_field ON cost_reviews(field)`,
+		// 中国节假日（含调休补班）：内置数据兜底 + 定期从外部源刷新，
+		// 见 internal/db/holidays.go 与 internal/holiday。
+		`CREATE TABLE IF NOT EXISTS holidays (
+			date TEXT PRIMARY KEY,
+			name TEXT NOT NULL DEFAULT '',
+			is_off INTEGER NOT NULL DEFAULT 1,
+			source TEXT NOT NULL DEFAULT 'builtin',
+			updated_at INTEGER NOT NULL DEFAULT 0
+		)`,
 	}
 
 	for _, q := range queries {

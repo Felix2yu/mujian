@@ -231,6 +231,16 @@ export const api = {
   getDashboard: () => request('/api/dashboard'),
   getAnalytics: () => request('/api/analytics'),
   getCalendar: (year, month) => request(`/api/calendar?year=${year}&month=${month}`),
+  // 中国节假日（含调休补班）：按年返回，日历页用于渲染 休/班 角标。
+  // 数据缺失时后端返回空 days，调用方静默降级。
+  getHolidays: (year) => request(`/api/holidays?year=${year}`),
+  // 时间冲突检测：找出与 [start, start+duration) 重叠的既有演出（仅提示用）。
+  // start 为 unix 秒，duration 为分钟；exclude 传当前编辑记录的 id 排除自身。
+  getTimeConflicts: ({ start, duration, exclude = '' }) => {
+    const q = new URLSearchParams({ start: String(start), duration: String(duration || 0) });
+    if (exclude) q.set('exclude', exclude);
+    return request(`/api/records/conflicts?${q.toString()}`);
+  },
   // ICS 订阅地址：服务端启用 token 鉴权时日历客户端无法带请求头，
   // 改以 ?token= 查询参数传递。extra 用于合并附加参数（如 dl=1），
   // 避免调用方手拼第二个 "?" 把 token 值污染掉。

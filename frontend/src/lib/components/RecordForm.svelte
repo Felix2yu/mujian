@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy, tick } from 'svelte';
   import { api, coverUrl } from '$lib/api.js';
+  import { formatEventTitle } from '$lib/eventTitle.js';
   import { geocodeAddress } from '$lib/geocode.js';
   import { STATUS_LABELS } from '$lib/statusPrefs.js';
   import CoverPicker from '$lib/components/CoverPicker.svelte';
@@ -104,6 +105,37 @@
   let huozhiBusy = $state(false);
   let huozhiError = $state('');
   let huozhiPreview = $state(null); // { bills, errors, total, currency, mixed_currency }
+
+  // 时间冲突检测：时间/时长变化后防抖查询与既有演出的时段重叠，仅提示、
+  // 不阻止保存（同一天连看两场是常见场景，硬阻止会误伤）。
+  // conflictSeq 用于丢弃连续修改产生的过期响应；检测失败静默降级。
+  let conflicts = $state([]);
+  let conflictSeq = 0;
+
+  $effect(() => {
+    const dl = form.date_local;
+    const dur = sanitizeDuration(form.duration);
+    const excludeId = record?.id || '';
+    const seq = ++conflictSeq;
+    const t = dl ? new Date(dl) : null;
+    if (!t || isNaN(t)) {
+      conflicts = [];
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const list = await api.getTimeConflicts({
+          start: Math.floor(t.getTime() / 1000),
+          duration: dur,
+          exclude: excludeId
+        });
+        if (seq === conflictSeq) conflicts = Array.isArray(list) ? list : [];
+      } catch (e) {
+        if (seq === conflictSeq) conflicts = [];
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  });
 
   onMount(async () => {
     try {
@@ -1626,6 +1658,24 @@
         <div class="money"><input class="input" type="number" inputmode="numeric" min="0" step="1" bind:value={form.duration} oninput={stripNegSign} onblur={normalizeDuration} placeholder="分钟" /><span class="unit">分钟</span></div>
       </div>
     </div>
+    {#if conflicts.length}
+      <!-- 时段重叠仅提示：列出撞车的场次，用户确认后仍可正常保存 -->
+      <div class="conflict-box" role="status">
+        <div class="cf-title">⚠ 该时段已有演出，注意购票时间冲突</div>
+        <ul class="cf-list">
+          {#each conflicts as c (c.id)}
+            <li>
+              <span class="cf-name">{formatEventTitle(c.name, c.categoryName, [])}</span>
+              <span class="cf-time">{c.dateText || fmtDateLocal(c.date).replace('T', ' ')}{c.duration > 0 ? ` · ${c.duration} 分钟` : ''}</span>
+              {#if c.city || c.address}
+                <span class="cf-loc">{[c.city, c.address].filter(Boolean).join(' · ')}</span>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+        <div class="cf-note">仅提醒，不影响保存。</div>
+      </div>
+    {/if}
     <div class="row two-equal">
       <div>
         <label>座位</label>
@@ -2052,6 +2102,54 @@
   .huozhi-msg { font-size: 12.5px; margin-top: 6px; }
   .huozhi-msg.ok { color: var(--text-2); }
   .huozhi-msg.err { color: #e5484d; }
+
+  /* ============ 时间冲突提示 ============ */
+  .conflict-box {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--gold-soft, rgba(217, 119, 6, 0.25));
+    background: var(--gold-softer, rgba(217, 119, 6, 0.07));
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .cf-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--gold);
+  }
+  .cf-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .cf-list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    font-size: 12.5px;
+    color: var(--text-2);
+    padding: 5px 8px;
+    background: var(--surface);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+  .cf-name { font-weight: 600; color: var(--text); }
+  .cf-time { color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .cf-loc {
+    color: var(--text-3);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+  .cf-note { font-size: 11.5px; color: var(--text-3); }
   .huozhi-list {
     list-style: none;
     margin: 6px 0 0;

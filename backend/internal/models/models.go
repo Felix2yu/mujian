@@ -253,6 +253,29 @@ type CalendarEvent struct {
 	CategoryNames []string `json:"categoryNames"`
 }
 
+// HolidayDay 是中国节假日安排中的一天：放假（休）或调休上班（班）。
+// 数据来源为国务院办公厅的放假通知（经 holiday-cn 汇总），date 为 YYYY-MM-DD。
+type HolidayDay struct {
+	Date     string `json:"date"`
+	Name     string `json:"name"`
+	IsOffDay bool   `json:"isOffDay"`
+	Source   string `json:"source,omitempty"`
+}
+
+// TimeConflict 是时间冲突检测的返回投影：与目标时段重叠的既有演出，
+// 只带前端冲突提示所需字段（名称 / 时间 / 地点 / 状态）。
+type TimeConflict struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Date         int64  `json:"date"`
+	DateText     string `json:"dateText"`
+	Duration     int    `json:"duration"`
+	City         string `json:"city"`
+	Address      string `json:"address"`
+	ActiveStatus int    `json:"active_status"`
+	CategoryName string `json:"categoryName"`
+}
+
 // MapPoint is the projection served by GET /api/map/points: only records that
 // carry coordinates, and only the fields the map page renders. JSON tags
 // intentionally reuse the Record naming so the frontend can consume both

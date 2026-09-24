@@ -8,8 +8,9 @@
 
 - **演出记录** — 添加/编辑/删除演出（删除进回收站，保留 30 天可恢复），批量更新与删除，搜索与多条件筛选；关键词搜索支持空格分隔多词（AND 组合，如「牡丹亭 上海」）
 - **复制新建** — 新建演出时可搜索既往演出，勾选需要的字段一键复制（内容类字段默认勾选，时间/封面/状态/评分/座位/同行默认不勾）
+- **时间冲突提醒** — 新建/编辑演出填写时间后，自动检测与既有演出的时段重叠（开场+时长区间），列出撞车场次提示购票时间冲突；仅提醒，不阻止保存
 - **剧目与折子** — 剧目（剧种）档案、折子别名、手动排序；演出自动关联剧目
-- **日历视图** — 按月查看演出，支持海报显示；ICS 订阅 / 导出，以及只读 CalDAV 服务端（iOS/macOS 原生日历，LOCATION 显示地图卡片），详见 [docs/calendar.md](docs/calendar.md)
+- **日历视图** — 按月查看演出，支持海报显示；显示中国法定节假日与调休补班（休/班角标 + 节日名，内置数据离线可用、定期自动刷新）；ICS 订阅 / 导出，以及只读 CalDAV 服务端（iOS/macOS 原生日历，LOCATION 显示地图卡片），详见 [docs/calendar.md](docs/calendar.md)
 - **数据分析** — 统计总览、月度趋势、分类/城市分布、消费统计、高分推荐
 - **地图** — Leaflet 地图按城市/场馆查看演出，同场馆坐标自动对齐
 - **封面管理** — 内容哈希去重合并、未引用封面清理与回收站、统一缩略图、批量格式转换（AVIF / WebP / JPEG）
@@ -185,6 +186,7 @@ mujian/
 | DELETE | `/records/{id}/purge` | 彻底删除（不可恢复） |
 | GET/POST/DELETE | `/records/{id}/photos` | 票根照片列表 / 关联 / 移除（`{pid}` 删除、`/reorder` 排序） |
 | POST | `/records/import` | 导入（JSON / 记录现场 ZIP） |
+| GET | `/records/conflicts?start=&duration=` | 时间冲突检测：返回与 `[start, start+duration)` 重叠的既有演出（`duration` 为 0 时按默认 120 分钟估算，`exclude=` 排除自身，仅提示不阻止保存） |
 | GET/POST | `/categories`；PUT/DELETE `/categories/{id}` | 分类管理 |
 | POST | `/categories/reorder` | 分类手动排序（`{"ids":[...]}`） |
 | GET/POST | `/dramas` | 剧目列表 / 创建 |
@@ -195,6 +197,7 @@ mujian/
 | POST | `/dramas/{id}/zhezis/reorder` | 折子排序 |
 | GET | `/dramas/tree` | 剧目+折子结构（选择器用） |
 | GET | `/calendar` `/calendar.ics` | 月历事件 / ICS 导出 |
+| GET | `/holidays?year=` | 中国法定节假日与调休补班（日历页 休/班 角标） |
 | PROPFIND/REPORT | `/caldav`（`/.well-known/caldav` 自动发现） | 只读 CalDAV 日历（密码=访问令牌），见 [docs/calendar.md](docs/calendar.md) |
 | GET | `/stats` `/dashboard` | 统计 / 仪表盘 |
 | GET | `/autocomplete/{field}` `/field/{field}/{value}` | 字段补全 / 字段筛选 |
