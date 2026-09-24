@@ -444,14 +444,16 @@
                       {/if}
                     {/if}
 
-                    <!-- 日期徽章：始终覆盖在格子左上角；节假日在徽章内显示 休/班 角标 -->
+                    <!-- 日期徽章：始终覆盖在格子左上角 -->
                     <span class="d-badge" class:today-badge={hasToday} class:weekend-badge={isWeekend && !evs.length}>
                       {d}
-                      {#if hd}
-                        <span class="h-badge" class:h-off={hd.off} class:h-work={!hd.off}>{hd.off ? '休' : '班'}</span>
-                      {/if}
                       {#if hasToday && !evs.length}<span class="today-dot"></span>{/if}
                     </span>
+                    <!-- 节假日 休/班 角标：独立放在格子右上角，实底白字，
+                         海报与暗色背景上都清晰，也不与左上日期徽章挤在一起 -->
+                    {#if hd}
+                      <span class="h-badge" class:h-off={hd.off} class:h-work={!hd.off}>{hd.off ? '休' : '班'}</span>
+                    {/if}
                     <!-- 节日名：仅无海报的格子有空间展示，避免与演出海报抢位 -->
                     {#if hd?.name && !evs.length}
                       <span class="h-name">{hd.name}</span>
@@ -1013,29 +1015,29 @@
     margin-left: 1px;
   }
 
-  /* ============ 节假日 休/班 角标（嵌在日期徽章内） ============ */
+  /* ============ 节假日 休/班 角标（格子右上角，实底白字） ============ */
+  /* 实底色而非淡底彩字：日期格可能铺满演出海报或处于暗色主题，
+     只有白字+饱和底色在两种背景上都清晰。 */
   .h-badge {
-    font-family: inherit;
-    font-size: 9px;
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 2;
+    font-size: 10.5px;
     font-weight: 700;
     line-height: 1;
-    padding: 2px 3px;
-    border-radius: 3px;
+    padding: 3px 5px;
+    border-radius: 5px;
     letter-spacing: 0;
-    flex-shrink: 0;
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
   }
   .h-badge.h-off {
-    background: var(--danger-soft);
-    color: var(--danger);
+    background: var(--danger);
   }
   .h-badge.h-work {
-    background: var(--gold-soft);
-    color: var(--gold);
-  }
-  /* 今日徽章是实底色，角标保持自身底色即可读 */
-  .has-event .h-badge {
-    font-size: 8px;
-    padding: 1px 2px;
+    background: #15803d;
   }
 
   /* 节日名：只在无海报的格子里展示，日期徽章正下方 */
@@ -1076,20 +1078,19 @@
   .hint-holiday .hb-work {
     display: inline-block;
     font-style: normal;
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 700;
     line-height: 1;
-    padding: 2px 3px;
-    border-radius: 3px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    color: #fff;
     vertical-align: 1px;
   }
   .hint-holiday .hb-off {
-    background: var(--danger-soft);
-    color: var(--danger);
+    background: var(--danger);
   }
   .hint-holiday .hb-work {
-    background: var(--gold-soft);
-    color: var(--gold);
+    background: #15803d;
   }
 
   /* 有海报时格子的整体暗化遮罩，让日期徽章更清晰 */
@@ -1414,14 +1415,13 @@
       padding: 0 3px;
       gap: 2px;
     }
-    .h-badge { font-size: 8px; padding: 1px 2px; }
-    .h-name { top: 22px; left: 4px; font-size: 9px; }
+    .h-badge { top: 3px; right: 3px; font-size: 9.5px; padding: 2px 4px; border-radius: 4px; }
+    .h-name { top: 22px; left: 4px; font-size: 9.5px; }
     .has-event .d-badge {
       font-size: 10px;
       min-width: 13px; height: 13px;
       padding: 0 2px;
     }
-    .has-event .h-badge { font-size: 7px; padding: 1px 2px; }
     .more-badge { font-size: 9px; padding: 1px 5px; bottom: 3px; right: 3px; }
 
     .modal-head { padding: 18px 18px 14px; }
