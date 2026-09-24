@@ -121,6 +121,34 @@
     load(true);
   }
 
+  // 关闭当日弹窗并把焦点还给触发它的日期格：关闭按钮 / 遮罩 / Esc 都会
+  // 让焦点随弹窗销毁落回 body，此后方向键全部失灵（macOS Safari 默认
+  // Tab 又不移动焦点，用户无法自行回到网格）。
+  async function closeDayModal() {
+    const d = modalDay;
+    modalDay = null;
+    if (d !== null) await focusDayCell(d);
+  }
+
+  // PageUp / PageDown 全局翻月：此前只绑在网格 keydown 上，焦点不在日期
+  // 格时按了无反应（默认行为变成滚动页面）。方向键仍只在网格内生效，
+  // 避免劫持页面滚动。
+  function onWindowKey(e) {
+    if (e.key === 'Escape') {
+      if (modalDay !== null) closeDayModal();
+      else showYearPicker = false;
+      return;
+    }
+    if (e.key !== 'PageUp' && e.key !== 'PageDown') return;
+    if (showYearPicker || modalDay !== null) return; // 弹窗期间不翻月
+    const t = e.target;
+    const tag = t?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t?.isContentEditable) return;
+    e.preventDefault(); // 阻止浏览器把 PageUp/Down 解释为页面滚动
+    if (e.key === 'PageUp') shift(-1);
+    else shift(1);
+  }
+
   // 浏览器前进/后退：pushState 不触发 popstate，所以这只可能是真正的历史导航。
   function onPopState() {
     const p = new URLSearchParams(location.search);
@@ -201,13 +229,12 @@
   }
 
   // 方向键在网格内移动；跨出本月上下边界时连带翻月（标准日期选择器的手感）。
+  // PageUp / PageDown 已上移到 onWindowKey 全局处理，这里不再接管，避免双重翻月。
   async function onGridKey(e) {
-    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'PageUp', 'PageDown'].includes(e.key)) return;
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home'].includes(e.key)) return;
     const days = cells.filter((d) => d !== null);
     if (days.length === 0) return;
     e.preventDefault();
-    if (e.key === 'PageUp') { shift(-1); return; }
-    if (e.key === 'PageDown') { shift(1); return; }
     if (e.key === 'Home') { goToday(); return; }
     const cur = focusDay ?? days[0];
     const idx = days.indexOf(cur);
@@ -311,7 +338,7 @@
   });
 </script>
 
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape') { modalDay = null; showYearPicker = false; } }} />
+<svelte:window onkeydown={onWindowKey} />
 <svelte:head><title>日历 - 幕间</title></svelte:head>
 
 <div class="fade-up">
@@ -472,7 +499,7 @@
   </section>
 
   <p class="hint">
-    点击日期查看当天演出 · 点击空白日期可新增 · 方向键在日期间移动，PageUp / PageDown 翻月<br />
+    点击日期查看当天演出 · 点击空白日期可新增 · PageUp / PageDown 随时翻月 · 点开日期关闭后可用方向键移动<br />
     <span class="hint-holiday"><i class="hb-off">休</i> 法定节假日 · <i class="hb-work">班</i> 调休补班日</span>
   </p>
 </div>
@@ -482,7 +509,7 @@
   <!-- 遮罩本身不再是「带 onclick 的非交互 div」：改为内部的 <button> 承接点击，
        弹窗主体是它的兄弟节点，避免把一堆链接塞进按钮里（button 不能包交互元素）。 -->
   <div class="mask" transition:fade={{ duration: 180 }}>
-    <button class="mask-bg" type="button" aria-label="关闭" onclick={() => (modalDay = null)}></button>
+    <button class="mask-bg" type="button" aria-label="关闭" onclick={closeDayModal}></button>
     <div
       class="modal card"
       role="dialog"
@@ -554,7 +581,7 @@
       {/if}
 
       <footer class="modal-foot">
-        <button class="btn ghost sm" onclick={() => (modalDay = null)} type="button">关闭</button>
+        <button class="btn ghost sm" onclick={closeDayModal} type="button">关闭</button>
         <button class="btn primary sm" onclick={() => openNew(modalDay)} type="button">+ 新增演出</button>
       </footer>
     </div>
