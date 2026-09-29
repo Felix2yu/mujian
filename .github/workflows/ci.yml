@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# 「幕间」是唯一需要 CGO 动态链接 glibc 的仓库：内置的 WebP / AVIF 编解码器
+# 自带 C 实现。因此：
+#   · 编译在固定 glibc 的容器（golang:1.27-bookworm，glibc 2.36）里进行，
+#     把 glibc 下限变成仓库自己的属性，而不是 GitHub runner 轮换的属性；
+#   · 编译后自动校验「编译机 glibc ≤ 运行镜像 glibc」（debian:13-slim = 2.41）。
+# 其余仓库保持 cgo: off / musl，看不到这两条额外步骤。
+jobs:
+  test:
+    uses: Felix2yu/.github/.github/workflows/reusable-test.yml@v1
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    with:
+      go-dir: backend
+      test-packages: ./internal/...
+      test-cgo: '1'
+      web-dir: frontend
+      frontend-stage-command: |
+        rm -rf backend/dist
+        cp -r frontend/dist backend/dist
+
+  image:
+    needs: test
+    if: github.event_name != 'release'
+    permissions:
+      contents: read
+      packages: write
+    uses: Felix2yu/.github/.github/workflows/reusable-image.yml@v1
+    with:
+      go-dir: backend
+      binary-name: mujian
+      image-name: ghcr.io/felix2yu/mujian
+      cgo: glibc
+      web-dir: frontend
+      frontend-stage-command: |
+        rm -rf backend/dist
+        cp -r frontend/dist backend/dist
+
+  release:
+    if: github.event_name == 'release'
+    permissions:
+      contents: write
+    uses: Felix2yu/.github/.github/workflows/reusable-release.yml@v1
+    with:
+      go-dir: backend
+      binary-name: mujian
+      cgo: glibc
+      web-dir: frontend
+      frontend-stage-command: |
+        rm -rf backend/dist
+        cp -r frontend/dist backend/dist
