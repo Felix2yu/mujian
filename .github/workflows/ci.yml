@@ -36,8 +36,10 @@ jobs:
       test-cgo: '1'
       web-dir: frontend
       frontend-stage-command: |
-        rm -rf backend/dist
+        # backend/dist 供 go:embed；根目录 dist/ 供 Dockerfile COPY
+        rm -rf backend/dist dist
         cp -r frontend/dist backend/dist
+        cp -r frontend/dist dist
 
   image:
     needs: test
@@ -53,8 +55,10 @@ jobs:
       cgo: glibc
       web-dir: frontend
       frontend-stage-command: |
-        rm -rf backend/dist
+        # backend/dist 供 go:embed；根目录 dist/ 供 Dockerfile COPY
+        rm -rf backend/dist dist
         cp -r frontend/dist backend/dist
+        cp -r frontend/dist dist
 
   release:
     if: github.event_name == 'release'
@@ -67,5 +71,7 @@ jobs:
       cgo: glibc
       web-dir: frontend
       frontend-stage-command: |
-        rm -rf backend/dist
+        # backend/dist 供 go:embed；根目录 dist/ 供 Dockerfile COPY
+        rm -rf backend/dist dist
         cp -r frontend/dist backend/dist
+        cp -r frontend/dist dist
