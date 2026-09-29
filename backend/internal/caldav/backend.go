@@ -408,7 +408,10 @@ func (b *Backend) toCalendarObject(rec models.Record, zheziNames map[string]stri
 }
 
 // calendarObjectFromICS parses rendered ICS text into a CalendarObject with a
-// content-derived ETag (first 16 bytes of SHA-256, quoted per RFC 7232).
+// content-derived ETag (first 16 bytes of SHA-256). go-webdav expects the bare
+// value and adds the RFC 7232 quotes itself at each serialization point; a
+// pre-quoted value comes out double-quoted in XML and mismatched against the
+// GET header, which makes Apple CalendarAgent abort the refresh.
 func calendarObjectFromICS(p, text string, modTime time.Time) (emcaldav.CalendarObject, error) {
 	cal, err := ical.NewDecoder(strings.NewReader(text)).Decode()
 	if err != nil {
@@ -419,7 +422,7 @@ func calendarObjectFromICS(p, text string, modTime time.Time) (emcaldav.Calendar
 		Path:          p,
 		ModTime:       modTime,
 		ContentLength: int64(len(text)),
-		ETag:          `"` + hex.EncodeToString(sum[:16]) + `"`,
+		ETag:          hex.EncodeToString(sum[:16]),
 		Data:          cal,
 	}, nil
 }

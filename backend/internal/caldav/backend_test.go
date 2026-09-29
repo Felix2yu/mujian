@@ -85,8 +85,11 @@ func TestListCalendarObjects(t *testing.T) {
 	if co.Path != CalendarPath+"rec-1.ics" {
 		t.Errorf("path = %q", co.Path)
 	}
-	if !strings.Contains(co.ETag, `"`) {
-		t.Errorf("ETag should be quoted, got %q", co.ETag)
+	if strings.Contains(co.ETag, `"`) {
+		t.Errorf("ETag must be the bare value (go-webdav adds quotes), got %q", co.ETag)
+	}
+	if len(co.ETag) != 32 {
+		t.Errorf("ETag = %q, want 32 hex chars", co.ETag)
 	}
 	events := co.Data.Events()
 	if len(events) != 1 {
