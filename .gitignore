@@ -1,6 +1,12 @@
 # Dependencies
 node_modules/
 vendor/
+# 统一 pnpm。其他包管理器的锁文件不入库——历史上正是「bun.lock/package-lock
+# 与 pnpm-lock 并存」让 CI 猜错过包管理器，这里从约定上杜绝。
+package-lock.json
+yarn.lock
+bun.lock
+bun.lockb
 
 # Build
 frontend/dist/
