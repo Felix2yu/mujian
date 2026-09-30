@@ -20,19 +20,10 @@ updates:
       timezone: "UTC"
     open-pull-requests-limit: 10
 
-  # 根目录与 backend 的工具脚本依赖（happy-dom / playwright-core / jsdom）。
-  # 之前只监控 /frontend，这两处 package.json 长期无人升。
+  # 根目录的工具脚本依赖（happy-dom / playwright-core）。
+  # 之前只监控 /frontend，这处 package.json 长期无人升。
   - package-ecosystem: "npm"
     directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "friday"
-      time: "00:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 10
-
-  - package-ecosystem: "npm"
-    directory: "/backend"
     schedule:
       interval: "weekly"
       day: "friday"

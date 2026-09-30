@@ -1,6 +1,0 @@
-{
-  "packageManager": "pnpm@11.22.0",
-  "dependencies": {
-    "jsdom": "^30.0.1"
-  }
-}
