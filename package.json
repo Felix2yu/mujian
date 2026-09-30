@@ -1,7 +1,7 @@
 {
   "packageManager": "pnpm@11.22.0",
   "devDependencies": {
-    "happy-dom": "^20.11.6",
+    "happy-dom": "^20.14.5",
     "playwright-core": "^1.62.1"
   }
 }
