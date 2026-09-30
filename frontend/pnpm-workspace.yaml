@@ -1,2 +1,6 @@
+# pnpm 的设置集中在本文件；package.json 顶层的 "overrides" 是 npm 字段，pnpm 不读。
+packages:
+  - "."
+
 overrides:
   cookie: ^0.7.0
