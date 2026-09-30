@@ -43,7 +43,6 @@ jobs:
 
   image:
     needs: test
-    if: github.event_name != 'release'
     permissions:
       contents: read
       packages: write
