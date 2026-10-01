@@ -1403,12 +1403,27 @@ func TestBodyLimitRejectsOversizedJSON(t *testing.T) {
 		t.Errorf("oversized JSON body: got %d, want 400", res.StatusCode)
 	}
 
-	// A normal payload still goes through.
+	// A normal payload still goes through. 演出时间是必填项（缺了会落库成 1970-01-01）。
 	res, body := doReq(t, "POST", ts.URL+"/api/records",
-		strings.NewReader(`{"name":"正常记录"}`), "application/json")
+		strings.NewReader(`{"name":"正常记录","date":1785000000}`), "application/json")
 	if res.StatusCode != http.StatusCreated {
 		t.Errorf("normal create after limit middleware: got %d, body %s", res.StatusCode, body)
 	}
+}
+
+// 演出时间是必填项：不带 date / dateText 会落库成 0（前端显示 1970-01-01），必须拒。
+func TestCreateRecordRequiresDate(t *testing.T) {
+	ts, _, _, _ := newTestServer(t, nil)
+
+	res, body := doJSON(t, "POST", ts.URL+"/api/records", map[string]interface{}{"name": "无时间"})
+	expectStatus(t, res, 400, "create without date")
+	if !strings.Contains(string(body), "date is required") {
+		t.Errorf("unexpected body: %s", body)
+	}
+
+	// dateText 同样算有值（normalizeRecord 会解析成 date）。
+	res, _ = doJSON(t, "POST", ts.URL+"/api/records", map[string]interface{}{"name": "仅有日期文本", "dateText": "2026-05-01 19:30"})
+	expectStatus(t, res, 201, "create with dateText only")
 }
 
 // The multipart endpoints get a larger allowance: the 40MB upload cap must

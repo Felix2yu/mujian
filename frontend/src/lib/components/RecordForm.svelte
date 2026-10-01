@@ -87,6 +87,9 @@
 
   let form = $state(fromRecord(record));
   let error = $state('');
+  // 演出时间单独校验：空值提交会落库成 1970-01-01（后端 date=0），故在提交前拦截，
+  // 并在时间输入框下方就地提示。
+  let dateError = $state('');
   let uploading = $state(false);
   let saving = $state(false);
   let pickerOpen = $state(false);
@@ -988,10 +991,34 @@
     }
   }
 
+  // 演出时间校验：返回 'empty' 表示没填，'invalid' 表示格式非法，'' 表示通过。
+  // 编辑历史数据（原本就没时间）时放宽为「仅提示」，否则老记录连改票价都存不了。
+  function checkDateLocal() {
+    const hadDate = record ? !!(record.date || record.dateText) : true;
+    const dl = (form.date_local || '').trim();
+    if (!dl) {
+      if (!hadDate) {
+        dateError = '';
+        return '';
+      }
+      return 'empty';
+    }
+    if (isNaN(new Date(dl).getTime())) return 'invalid';
+    dateError = '';
+    return '';
+  }
+
   async function handleSubmit() {
     error = '';
     if (!form.name.trim()) {
       error = '名称为必填项';
+      return;
+    }
+    // 演出时间必填：不填会被存成 1970-01-01，属脏数据，直接拦下。
+    const dateIssue = checkDateLocal();
+    if (dateIssue) {
+      error = '请填写演出时间（不能为空，否则会存成 1970-01-01）';
+      dateError = error;
       return;
     }
     commitArtistInput(); // 输入框里未回车的残留名字也一并收进胶囊
@@ -1389,7 +1416,12 @@
     if (on('friends')) form.friends = src.friends || '';
     if (on('remark')) form.remark = src.remark || '';
     if (on('rating')) form.rating = src.rating || 0;
-    if (on('date')) form.date_local = fmtDateLocal(src.date);
+    // 源记录没有时间（历史数据或本就空着）：保留表单里已有的时间，不要抹成空值。
+    // fmtDateLocal(0) 返回 ''，直接赋值会让「时间必填」误伤本次复制。
+    if (on('date')) {
+      const d = fmtDateLocal(src.date);
+      if (d) form.date_local = d;
+    }
     if (on('cover')) {
       form.coverFile = src.coverFile || '';
       form.coverThumb = src.coverThumb || '';
@@ -1458,6 +1490,9 @@
   <!-- ============ 从既往演出复制 ============ -->
   <div class="card section copy-card">
     <h3>从既往演出复制</h3>
+    {#if !form.date_local}
+      <p class="copy-hint warn">「演出时间」尚未填写：默认不复制时间，保存前请在上方「观演信息」补填，否则无法保存。</p>
+    {/if}
     {#if !copySource}
       <input
         class="input"
@@ -1632,8 +1667,16 @@
     <h3>观演信息</h3>
     <div class="row four-equal">
       <div>
-        <label>演出时间</label>
-        <input class="input" type="datetime-local" bind:value={form.date_local} autocomplete="off" />
+        <label>演出时间 <span class="req">*</span></label>
+        <input
+          class="input"
+          class:date-invalid={!!dateError}
+          type="datetime-local"
+          bind:value={form.date_local}
+          oninput={() => (dateError = '')}
+          autocomplete="off"
+        />
+        {#if dateError}<div class="date-err">⚠ {dateError}</div>{/if}
       </div>
       <div>
         <label>状态</label>
@@ -2103,6 +2146,10 @@
   .huozhi-msg.ok { color: var(--text-2); }
   .huozhi-msg.err { color: #e5484d; }
 
+  /* ============ 演出时间必填 ============ */
+  .date-invalid { border-color: #e5484d; }
+  .date-err { margin-top: 5px; font-size: 12px; color: #e5484d; }
+
   /* ============ 时间冲突提示 ============ */
   .conflict-box {
     margin-top: 10px;
@@ -2529,6 +2576,7 @@
 
   /* ---------- 从既往演出复制 ---------- */
   .copy-hint { padding: 6px 2px 0; font-size: 13px; }
+  .copy-hint.warn { color: #e5484d; }
   .copy-results {
     margin-top: 8px;
     border: 1px solid var(--border);

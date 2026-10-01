@@ -373,6 +373,11 @@ func (h *Handler) createRecord(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "name is required")
 		return
 	}
+	// 演出时间必填：date 与 date_text 同时为空会落库成 0，前端显示 1970-01-01。
+	if req.Date == 0 && req.DateText == "" {
+		jsonErr(w, 400, "date is required (provide date or date_text)")
+		return
+	}
 	normalizeRecord(&req)
 
 	rec, err := h.db.CreateRecord(req)
@@ -390,6 +395,8 @@ func (h *Handler) updateRecord(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "invalid request body")
 		return
 	}
+	// 更新不强制带时间：PUT 是部分更新语义，「不带 date」应保持原值，
+	// 一刀切会误伤「只改封面 / 只改票价」这类调用；清空时间的拦截交给前端表单。
 	normalizeRecord(&req)
 
 	rec, err := h.db.UpdateRecord(id, req)
