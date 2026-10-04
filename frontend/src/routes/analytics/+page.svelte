@@ -114,14 +114,21 @@
   let diversity = $derived(data?.diversity);
   let intervals = $derived(data?.intervals);
   function pct1(v) { return Math.round(v * 1000) / 10; }
+
+  // ---- extra dimensions derived ----
+  let durationBars = $derived((data?.duration?.buckets ?? []).map((d) => ({ label: d.name, value: d.count })));
+  let awayCityBars = $derived((data?.geo?.away_cities ?? []).map((d) => ({ label: d.name, value: d.count })));
 </script>
 
 <svelte:head><title>分析 - 幕间</title></svelte:head>
 
 <div class="fade-up">
   <div class="page-head">
-    <h1>分析</h1>
-    <p class="sub">从趋势、占比、对比、异常、相关性多个视角解读你的观演数据</p>
+    <div>
+      <h1>分析</h1>
+      <p class="sub">从趋势、占比、对比、异常、相关性多个视角解读你的观演数据</p>
+    </div>
+    <a class="yearly-link" href="/analytics/{new Date().getFullYear()}">📄 年度报告 →</a>
   </div>
 
   {#if loading}
@@ -365,14 +372,110 @@
       </div>
     </section>
 
-    <p class="footer-note">分析维度：趋势（24 个月序列）· 占比（计数归一化）· 对比（同比栏状）· 异常（z-score &gt; 1.5）· 相关性（Pearson r）· 行为（周几 / 复看率 / 多样性 / 间隔）· 经济（票价分布）· 探索（每月新发现的演员与剧目）。所有数据均来自本地演出记录。</p>
+    <!-- ============ 更多维度 ============ -->
+    <section class="block">
+      <h2 class="sec-title">🧩 更多维度 <span class="hint">状态 · 地理 · 同伴 · 时长与折子</span></h2>
+      <div class="grid-2">
+        <div class="card sec">
+          <h3>状态漏斗 <span class="hint">想看 / 赴约 / 错过</span></h3>
+          {#if data.status_funnel && data.status_funnel.total > 0}
+            <div class="stat-row">
+              <div class="stat"><div class="v">{data.status_funnel.watched}</div><div class="l">已观看（{data.status_funnel.watched_pct}%）</div></div>
+              <div class="stat"><div class="v">{data.status_funnel.want_pending}</div><div class="l">想看池中</div></div>
+              <div class="stat"><div class="v">{data.status_funnel.canceled + data.status_funnel.no_show}</div><div class="l">取消 / 未赴约</div></div>
+              {#if data.status_funnel.canceled + data.status_funnel.no_show + data.status_funnel.watched > 0}
+                <div class="stat"><div class="v">{data.status_funnel.attended_pct}%</div><div class="l">排期兑现率</div></div>
+              {/if}
+            </div>
+            <Donut items={data.status_funnel.dist} max={4} />
+          {:else}
+            <p class="tiny">暂无数据</p>
+          {/if}
+        </div>
+        <div class="card sec">
+          <h3>地理足迹 <span class="hint">常驻城市与异地观演</span></h3>
+          {#if data.geo && data.geo.home_city}
+            <div class="stat-row">
+              <div class="stat"><div class="v">{data.geo.home_city}</div><div class="l">常驻城市（场次最多）</div></div>
+              <div class="stat"><div class="v">{data.geo.away_count} 场</div><div class="l">异地观演 {data.geo.away_pct}%</div></div>
+              <div class="stat"><div class="v">{data.geo.away_city_count}</div><div class="l">走过的异地城市</div></div>
+            </div>
+            {#if awayCityBars.length > 0}
+              <VBarChart data={awayCityBars} height={170} labelEvery={1} unit=" 场" color="var(--accent)" />
+            {:else}
+              <p class="tiny">还没有异地观演记录</p>
+            {/if}
+          {:else}
+            <p class="tiny">补充城市字段后这里会亮起来</p>
+          {/if}
+        </div>
+        <div class="card sec">
+          <h3>观演同伴 <span class="hint">独自 vs 结伴</span></h3>
+          {#if data.companions && data.companions.total > 0}
+            <div class="stat-row">
+              <div class="stat"><div class="v">{data.companions.solo_pct}%</div><div class="l">独自 {data.companions.solo} 场</div></div>
+              <div class="stat"><div class="v">{data.companions.with_pct}%</div><div class="l">结伴 {data.companions.with_friends} 场</div></div>
+            </div>
+            {#if data.companions.top_companions.length > 0}
+              <RankList items={data.companions.top_companions} unit="次" />
+            {:else}
+              <p class="tiny">还没有填过同伴，结伴观演时记一笔吧</p>
+            {/if}
+          {:else}
+            <p class="tiny">暂无数据</p>
+          {/if}
+        </div>
+        <div class="card sec">
+          <h3>观演时长 <span class="hint">总时长与单日密度</span></h3>
+          {#if data.duration}
+            <div class="stat-row">
+              <div class="stat"><div class="v">{data.duration.total_hours || '—'} h</div><div class="l">剧场总时长</div></div>
+              <div class="stat"><div class="v">{data.duration.avg_minutes || '—'} 分钟</div><div class="l">平均单场</div></div>
+              <div class="stat"><div class="v">{data.duration.multi_show_days} 天</div><div class="l">单日多场</div></div>
+              <div class="stat"><div class="v">{data.duration.max_shows_per_day} 场</div><div class="l">单日最多</div></div>
+            </div>
+            {#if durationBars.length > 0}
+              <VBarChart data={durationBars} height={170} labelEvery={1} unit=" 场" color="var(--gold)" />
+            {:else}
+              <p class="tiny">补充「时长」字段后可查看分布</p>
+            {/if}
+          {/if}
+        </div>
+      </div>
+      <div class="card sec" style="margin-top:12px;">
+        <h3>折子覆盖率 <span class="hint">已看折子 / 剧目档案折子总数</span></h3>
+        {#if data.zhezi_coverage && data.zhezi_coverage.total_zhezis > 0}
+          <div class="stat-row">
+            <div class="stat"><div class="v">{data.zhezi_coverage.overall_pct}%</div><div class="l">整体 {data.zhezi_coverage.covered_zhezis}/{data.zhezi_coverage.total_zhezis} 折</div></div>
+          </div>
+          {#if data.zhezi_coverage.dramas.length > 0}
+            <ul class="cov">
+              {#each data.zhezi_coverage.dramas as c}
+                <li>
+                  <a class="cn" href="/dramas/{c.drama_id}" title={c.drama_name}>{c.drama_name}</a>
+                  <span class="track"><span class="fill" style="width:{c.pct}%"></span></span>
+                  <span class="cv">{c.seen}/{c.total} 折 · {c.pct}%</span>
+                </li>
+              {/each}
+            </ul>
+          {:else}
+            <p class="tiny">档案里的折子都还没看过，去演出记录里勾选折子吧</p>
+          {/if}
+        {:else}
+          <p class="tiny">还没有折子档案，先给剧目建折子档案</p>
+        {/if}
+      </div>
+    </section>
+
+    <p class="footer-note">分析维度：趋势（24 个月序列）· 占比（计数归一化）· 对比（同比栏状）· 异常（z-score &gt; 1.5）· 相关性（Pearson r）· 行为（周几 / 复看率 / 多样性 / 间隔）· 经济（票价分布）· 探索（每月新发现的演员与剧目）· 状态漏斗 / 地理 / 同伴 / 时长与折子覆盖。所有数据均来自本地演出记录。想看某个自然年的完整回顾？点右上角的「年度报告」。</p>
   {/if}
 </div>
 
 <style>
-  .page-head { margin-bottom: 14px; }
+  .page-head { margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
   .page-head h1 { margin: 0; font-size: 26px; }
   .sub { color: var(--text-muted); font-size: 13.5px; margin: 4px 0 0; }
+  .yearly-link { font-size: 13.5px; color: var(--accent); text-decoration: none; white-space: nowrap; }
 
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
   .kpi { padding: 16px; }
@@ -428,6 +531,15 @@
   .cp-na { color: var(--text-muted); font-size: 12px; }
 
   .note { font-size: 11.5px; color: var(--text-muted); margin: 12px 0 0; }
+
+  /* 折子覆盖率列表 */
+  .cov { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; font-size: 13.5px; }
+  .cov li { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .cov .cn { color: var(--text); text-decoration: none; flex: 0 0 auto; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cov .cn:hover { color: var(--accent); }
+  .cov .track { flex: 1; height: 8px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+  .cov .fill { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
+  .cov .cv { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
 
   /* behavioural stat cards */
   .stat-row { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 8px; }

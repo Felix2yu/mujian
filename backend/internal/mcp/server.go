@@ -149,6 +149,10 @@ func (s *Server) registerTools() {
 	mcp.AddTool(s.server, roTool("get_dashboard",
 		"获取看板统计（与网页首页一致）：总场次/总消费/平均评分、近 12 个月按月与按剧种/按城市分布、成本趋势、最高评分与最近记录。"), s.handleGetDashboard)
 
+	mcp.AddTool(s.server, roTool("get_yearly_report",
+		"年度观演报告（自然年）：年度 KPI 与同比、12 个月序列、剧种/城市/评分/星期/票价分布、演员剧目场馆折子 Top、年度亮点（最活跃月/最贵一票/最高分/首末场/年度首遇演员剧目/最长间隔）、历年排名与节假日观演。year 省略时为当前年。",
+		toolSchema(nil, map[string]*jsonschema.Schema{"year": intProp()})), s.handleGetYearlyReport)
+
 	mcp.AddTool(s.server, roTool("search_records_by_location",
 		"按坐标中心点和半径（米）搜索附近的演出记录。返回按距离排序的列表，含距离信息。建议半径不超过 10000（10公里）。",
 		toolSchema([]string{"latitude", "longitude", "radius"}, map[string]*jsonschema.Schema{

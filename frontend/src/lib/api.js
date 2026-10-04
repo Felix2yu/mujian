@@ -230,6 +230,7 @@ export const api = {
   getStats: () => request('/api/stats'),
   getDashboard: () => request('/api/dashboard'),
   getAnalytics: () => request('/api/analytics'),
+  getYearlyReport: (year) => request(`/api/analytics/yearly${year ? `?year=${year}` : ''}`),
   getCalendar: (year, month) => request(`/api/calendar?year=${year}&month=${month}`),
   // 中国节假日（含调休补班）：按年返回，日历页用于渲染 休/班 角标。
   // 数据缺失时后端返回空 days，调用方静默降级。

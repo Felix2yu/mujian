@@ -2,9 +2,15 @@ package mcp
 
 import (
 	"context"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// YearlyReportInput feeds get_yearly_report; year omitted means current year.
+type YearlyReportInput struct {
+	Year int `json:"year,omitempty"`
+}
 
 // get_analytics / get_dashboard expose the same aggregates the web UI's
 // analytics and dashboard pages render, so agents can answer "how many shows
@@ -25,4 +31,16 @@ func (s *Server) handleGetDashboard(ctx context.Context, req *mcp.CallToolReques
 		return errResult("查询失败：%v", err)
 	}
 	return jsonResult(stats)
+}
+
+func (s *Server) handleGetYearlyReport(ctx context.Context, req *mcp.CallToolRequest, in YearlyReportInput) (*mcp.CallToolResult, any, error) {
+	year := in.Year
+	if year <= 0 {
+		year = time.Now().Year()
+	}
+	report, err := s.db.GetYearlyReport(year)
+	if err != nil {
+		return errResult("查询失败：%v", err)
+	}
+	return jsonResult(report)
 }

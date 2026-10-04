@@ -476,6 +476,166 @@ type AnalyticsData struct {
 	Diversity        *DiversityIndex `json:"diversity"`          // 多样性指数
 	Intervals        *IntervalStats  `json:"intervals"`          // 观演间隔
 	WeekdayDist      []WeekdayItem   `json:"weekday_dist"`       // 周几分布
+
+	// 状态 / 地理 / 同伴 / 时长与折子覆盖扩展维度
+	StatusFunnel   *StatusFunnel    `json:"status_funnel"`   // 想看转化漏斗
+	Geo            *GeoStats        `json:"geo"`             // 常驻城市与异地观演
+	Companions     *CompanionStats  `json:"companions"`      // 独自/结伴与同伴排行
+	Duration       *DurationStats   `json:"duration"`        // 观演时长与单日密度
+	ZheziCover     *ZheziCoverage   `json:"zhezi_coverage"`  // 剧目折子覆盖率
+}
+
+// StatusFunnel breaks records down by active_status (0 正常/已观看, 1 想看,
+// 2 已取消, 3 未赴约) and derives the share that actually happened.
+type StatusFunnel struct {
+	Watched      int        `json:"watched"`
+	Want         int        `json:"want"`
+	Canceled     int        `json:"canceled"`
+	NoShow       int        `json:"no_show"`
+	Total        int        `json:"total"`
+	WatchedPct   float64    `json:"watched_pct"`   // watched / total
+	AttendedPct  float64    `json:"attended_pct"`  // watched / (watched+canceled+no_show) 排期兑现率
+	WantPending  int        `json:"want_pending"`  // 仍在想看池子里的场次数
+	Dist         []DistItem `json:"dist"`
+}
+
+// GeoStats infers a "home city" (the most-attended one) and splits viewing
+// into local vs away, listing the travel destinations.
+type GeoStats struct {
+	HomeCity      string     `json:"home_city"`
+	HomeCount     int        `json:"home_count"`
+	LocalCount    int        `json:"local_count"`
+	LocalPct      float64    `json:"local_pct"`
+	AwayCount     int        `json:"away_count"`
+	AwayPct       float64    `json:"away_pct"`
+	AwayCities    []DistItem `json:"away_cities"` // 非常驻城市 Top10
+	AwayCityCount int        `json:"away_city_count"`
+}
+
+// CompanionStats contrasts solo outings with accompanied ones and ranks the
+// most frequent companions. The friends field is free text; multi-person
+// strings are split on common separators before ranking names.
+type CompanionStats struct {
+	Solo          int        `json:"solo"`
+	WithFriends   int        `json:"with_friends"`
+	Total         int        `json:"total"`
+	SoloPct       float64    `json:"solo_pct"`
+	WithPct       float64    `json:"with_pct"`
+	TopCompanions []DistItem `json:"top_companions"`
+}
+
+// DurationStats aggregates 演出时长 coverage and day-level viewing density.
+type DurationStats struct {
+	TotalHours     float64    `json:"total_hours"`
+	AvgMinutes     float64    `json:"avg_minutes"` // avg over records with duration > 0
+	WithDuration   int        `json:"with_duration"`
+	TotalRecords   int        `json:"total_records"`
+	Buckets        []DistItem `json:"buckets"`
+	MultiShowDays  int        `json:"multi_show_days"` // 单日 ≥2 场的天数
+	MaxShowsPerDay int        `json:"max_shows_per_day"`
+}
+
+// ZheziCoverageItem is one drama's progress collecting its 折子.
+type ZheziCoverageItem struct {
+	DramaID   string  `json:"drama_id"`
+	DramaName string  `json:"drama_name"`
+	Seen      int     `json:"seen"`
+	Total     int     `json:"total"`
+	Pct       float64 `json:"pct"`
+}
+
+// ZheziCoverage measures how much of the archived 折子 has actually been seen.
+type ZheziCoverage struct {
+	TotalZhezis   int                 `json:"total_zhezis"`
+	CoveredZhezis int                 `json:"covered_zhezis"`
+	OverallPct    float64             `json:"overall_pct"`
+	Dramas        []ZheziCoverageItem `json:"dramas"` // 覆盖率 Top10（仅已看过至少一折的）
+}
+
+// ---------- 年度观演报告 ----------
+
+// YearShowRef points at one record highlighted in the yearly report (e.g. the
+// priciest or best-rated show of the year).
+type YearShowRef struct {
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	DateText string  `json:"date_text"`
+	City     string  `json:"city"`
+	Value    float64 `json:"value"` // 语义随场景：票价（元）或评分
+}
+
+// YearNameDate is a first-discovery entry: the artist/drama name and the date
+// of the show where it was first encountered.
+type YearNameDate struct {
+	Name     string `json:"name"`
+	DateText string `json:"date_text"`
+}
+
+// YearKpi holds the headline numbers for one calendar year plus YoY deltas.
+type YearKpi struct {
+	TotalRecords     int     `json:"total_records"`
+	TotalCost        float64 `json:"total_cost"`
+	AvgRating        float64 `json:"avg_rating"`
+	TotalCities      int     `json:"total_cities"`
+	TotalHours       float64 `json:"total_hours"` // 有 duration 记录的总观演小时
+	NewArtists       int     `json:"new_artists"` // 今年首次遇到的演员
+	NewDramas        int     `json:"new_dramas"`  // 今年首次看到的剧目
+	RecordsDeltaPct  float64 `json:"records_delta_pct"`
+	CostDeltaPct     float64 `json:"cost_delta_pct"`
+	RatingDelta      float64 `json:"rating_delta"`
+}
+
+// YearHighlights are the "annual report card" picks that only make sense
+// inside a single year window.
+type YearHighlights struct {
+	PeakMonth      string         `json:"peak_month"` // YYYY-MM，最活跃月份
+	PeakMonthCount int            `json:"peak_month_count"`
+	MostExpensive  *YearShowRef   `json:"most_expensive"`
+	BestRated      *YearShowRef   `json:"best_rated"`
+	FirstShow      *YearShowRef   `json:"first_show"`
+	LastShow       *YearShowRef   `json:"last_show"`
+	LongestGapDays float64        `json:"longest_gap_days"`
+	FirstArtists   []YearNameDate `json:"first_artists"` // 年度首遇演员（至多 12）
+	FirstDramas    []YearNameDate `json:"first_dramas"`
+}
+
+// YearRankContext places the year's totals against every year on record.
+type YearRankContext struct {
+	YearsWithShows int     `json:"years_with_shows"`
+	CountRank      int     `json:"count_rank"` // 场次在历年中的名次（1 = 最多）
+	CostRank       int     `json:"cost_rank"`
+	CountPercentile float64 `json:"count_percentile"` // 0-100，越高越活跃
+	IsRecordCount  bool     `json:"is_record_count"`
+	IsRecordCost   bool     `json:"is_record_cost"`
+}
+
+// YearHolidayStats summarises shows attended on statutory holidays (休).
+type YearHolidayStats struct {
+	Shows     int        `json:"shows"`
+	Pct       float64    `json:"pct"` // 占全年场次比例
+	ByHoliday []DistItem `json:"by_holiday"`
+}
+
+// YearlyReport is the full payload of GET /api/analytics/yearly.
+type YearlyReport struct {
+	GeneratedAt    int64            `json:"generated_at"`
+	Year           int              `json:"year"`
+	AvailableYears []int            `json:"available_years"`
+	Overview       YearKpi          `json:"overview"`
+	Monthly        []TrendPoint     `json:"monthly"` // 固定 12 点，缺月补零
+	CategoryDist   []DistItem       `json:"category_dist"`
+	CityDist       []DistItem       `json:"city_dist"`
+	RatingDist     []DistItem       `json:"rating_dist"`
+	WeekdayDist    []WeekdayItem    `json:"weekday_dist"`
+	PriceBuckets   []DistItem       `json:"price_buckets"`
+	TopArtists     []RankItem       `json:"top_artists"`
+	TopDramas      []RankItem       `json:"top_dramas"`
+	TopVenues      []RankItem       `json:"top_venues"`
+	TopZhezis      []RankItem       `json:"top_zhezis"`
+	Intervals      *IntervalStats   `json:"intervals"`
+	Highlights     YearHighlights   `json:"highlights"`
+	Rank           YearRankContext  `json:"rank"`
+	Holiday        YearHolidayStats `json:"holiday"`
 }
 
 // Settings / request structures are reused from config.

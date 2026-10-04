@@ -375,14 +375,20 @@ func (db *DB) GetAnalytics() (*models.AnalyticsData, error) {
 		WHERE deleted_at = 0 AND address != '' GROUP BY address ORDER BY cnt DESC LIMIT 10`)
 
 	// ---- New behavioural / economic dimensions ----
-	out.PriceBuckets = db.priceBucketDist()
+	out.PriceBuckets = db.priceBucketDist("")
 	out.OtherCostBuckets = db.otherCostBucketDist()
 	out.TopZhezis = db.topZhezis()
 	out.Rewatch = db.rewatchStats()
 	out.Discovery = db.discoverySeries()
 	out.Diversity = db.diversityIndex()
-	out.Intervals = db.intervalStats()
-	out.WeekdayDist = db.weekdayDist()
+	out.Intervals = db.intervalStats("")
+	out.WeekdayDist = db.weekdayDist("")
+
+	out.StatusFunnel = db.statusFunnel()
+	out.Geo = db.geoStats(out.CityDist)
+	out.Companions = db.companionStats()
+	out.Duration = db.durationStats()
+	out.ZheziCover = db.zheziCoverage()
 
 	return out, nil
 }
@@ -536,8 +542,9 @@ func ternary(cond bool, a, b string) string {
 
 // priceBucketDist buckets effective price (pay_price if > 0, else price) into
 // standard ranges. Only records with a positive effective price are considered;
-// an empty slice is returned when no price data exists.
-func (db *DB) priceBucketDist() []models.DistItem {
+// an empty slice is returned when no price data exists. extraWhere is an
+// optional SQL predicate fragment (e.g. "AND date >= ? AND date < ?").
+func (db *DB) priceBucketDist(extraWhere string, args ...interface{}) []models.DistItem {
 	order := []string{"0–99", "100–199", "200–399", "400–799", "800+"}
 	rows, err := db.conn.Query(`
 		SELECT
@@ -549,9 +556,9 @@ func (db *DB) priceBucketDist() []models.DistItem {
 				ELSE '800+'
 			END AS bucket,
 			COUNT(*) AS cnt
-		FROM (SELECT CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price FROM records WHERE deleted_at = 0)
+		FROM (SELECT CASE WHEN pay_price > 0 THEN pay_price ELSE COALESCE(price, 0) END AS effective_price FROM records WHERE deleted_at = 0 `+extraWhere+`)
 		WHERE effective_price > 0
-		GROUP BY bucket`)
+		GROUP BY bucket`, args...)
 	if err != nil {
 		return []models.DistItem{}
 	}
@@ -766,8 +773,9 @@ func shannon(counts []int) (float64, float64) {
 }
 
 // intervalStats summarises the gaps (in days) between consecutive performances.
-func (db *DB) intervalStats() *models.IntervalStats {
-	rows, err := db.conn.Query(`SELECT date FROM records WHERE deleted_at = 0 AND date > 0 ORDER BY date`)
+// extraWhere optionally restricts which records are considered.
+func (db *DB) intervalStats(extraWhere string, args ...interface{}) *models.IntervalStats {
+	rows, err := db.conn.Query(`SELECT date FROM records WHERE deleted_at = 0 AND date > 0 `+extraWhere+` ORDER BY date`, args...)
 	if err != nil {
 		return &models.IntervalStats{Buckets: []models.DistItem{}}
 	}
@@ -834,11 +842,12 @@ func (db *DB) intervalStats() *models.IntervalStats {
 }
 
 // weekdayDist returns show counts per weekday, ordered Monday → Sunday.
-func (db *DB) weekdayDist() []models.WeekdayItem {
+// extraWhere optionally restricts which records are considered.
+func (db *DB) weekdayDist(extraWhere string, args ...interface{}) []models.WeekdayItem {
 	names := []string{"周日", "周一", "周二", "周三", "周四", "周五", "周六"}
 	order := []int{1, 2, 3, 4, 5, 6, 0}
 	counts := map[int]int{}
-	if rows, err := db.conn.Query(`SELECT CAST(strftime('%w', datetime(date, 'unixepoch')) AS INTEGER) AS wd, COUNT(*) FROM records WHERE deleted_at = 0 AND date > 0 GROUP BY wd`); err == nil {
+	if rows, err := db.conn.Query(`SELECT CAST(strftime('%w', datetime(date, 'unixepoch')) AS INTEGER) AS wd, COUNT(*) FROM records WHERE deleted_at = 0 AND date > 0 `+extraWhere+` GROUP BY wd`, args...); err == nil {
 		defer rows.Close()
 		for rows.Next() {
 			var wd, c int

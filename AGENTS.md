@@ -14,7 +14,7 @@
 | 查询 | `search_records_by_location` | 按坐标中心点和半径搜索附近演出 |
 | 查询 | `get_record` / `get_artist_detail` / `get_drama_detail` | 单条详情 |
 | 查询 | `list_artists` / `list_dramas` / `list_venues` | 实体清单 |
-| 查询 | `value_counts` / `get_stats` / `get_analytics` / `get_dashboard` | 取值频次 / 总览统计 / 深度分析 / 看板统计 |
+| 查询 | `value_counts` / `get_stats` / `get_analytics` / `get_dashboard` / `get_yearly_report` | 取值频次 / 总览统计 / 深度分析 / 看板统计 / 年度观演报告 |
 | 记录 CRUD | `create_record` / `update_record` / `delete_record` / `batch_delete_records` | 演出记录增删改 |
 | 批量 | `batch_update_company_by_artist` | 统一某演员所有演出的剧团名（支持 dry_run） |
 | 批量 | `batch_merge_venues` | 合并同一场馆的不同写法（支持 dry_run、坐标同步） |
@@ -32,7 +32,7 @@
 | 备份 | `run_backup` / `list_backups` / `delete_backup` / `restore_from_backup` | 备份管理与恢复（run_backup 直接执行，无 dry_run） |
 | 地图 | `list_map_points` | 获取有坐标的演出记录（地图展示） |
 
-共 55 个工具，详细说明见 [docs/mcp.md](docs/mcp.md)。
+共 56 个工具，详细说明见 [docs/mcp.md](docs/mcp.md)。
 
 ### Prompts
 

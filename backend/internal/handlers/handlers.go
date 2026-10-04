@@ -31,6 +31,9 @@ type Handler struct {
 	statsCache     *statsCache[*models.Stats]
 	dashboardCache *statsCache[*models.DashboardStats]
 	analyticsCache *statsCache[*models.AnalyticsData]
+	// per-year cache for the yearly report (single-entry statsCache holding
+	// the map lets different years coexist while one invalidate clears all).
+	yearlyCache *statsCache[map[int]*models.YearlyReport]
 }
 
 func New(database *db.DB, cfg *config.Config, st storage.Storage, bm *backup.Manager) *Handler {
@@ -42,6 +45,7 @@ func New(database *db.DB, cfg *config.Config, st storage.Storage, bm *backup.Man
 		statsCache:     newStatsCache[*models.Stats](5 * time.Second),
 		dashboardCache: newStatsCache[*models.DashboardStats](5 * time.Second),
 		analyticsCache: newStatsCache[*models.AnalyticsData](5 * time.Second),
+		yearlyCache:    newStatsCache[map[int]*models.YearlyReport](5 * time.Second),
 	}
 	// 自动备份的 JSON/ZIP 两种格式复用导出端点的构建逻辑；数据库快照格式
 	// 由 backup.Manager 自己执行 VACUUM INTO，无需导出器。
@@ -56,6 +60,7 @@ func (h *Handler) invalidateStats() {
 	h.statsCache.invalidate()
 	h.dashboardCache.invalidate()
 	h.analyticsCache.invalidate()
+	h.yearlyCache.invalidate()
 }
 
 func (h *Handler) Routes() chi.Router {
@@ -141,6 +146,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/stats", h.getStats)
 	r.Get("/dashboard", h.getDashboard)
 	r.Get("/analytics", h.getAnalytics)
+	r.Get("/analytics/yearly", h.getYearlyReport)
 	r.Get("/calendar", h.getCalendar)
 	r.Get("/calendar.ics", h.getICS)
 	// 中国节假日（含调休 / 补班）：日历页角标展示用
@@ -1293,6 +1299,38 @@ func (h *Handler) getAnalytics(w http.ResponseWriter, r *http.Request) {
 	}
 	h.analyticsCache.set(data)
 	jsonResp(w, 200, data)
+}
+
+// getYearlyReport serves the calendar-year viewing report:
+//
+//	GET /api/analytics/yearly?year=2026  (year omitted → current year)
+func (h *Handler) getYearlyReport(w http.ResponseWriter, r *http.Request) {
+	year := time.Now().Year()
+	if y := r.URL.Query().Get("year"); y != "" {
+		if v, err := strconv.Atoi(y); err == nil && v > 0 {
+			year = v
+		}
+	}
+	if m, ok := h.yearlyCache.get(); ok {
+		if rep, ok := m[year]; ok {
+			jsonResp(w, 200, rep)
+			return
+		}
+	}
+	rep, err := h.db.GetYearlyReport(year)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	m := map[int]*models.YearlyReport{}
+	if old, ok := h.yearlyCache.get(); ok {
+		for k, v := range old {
+			m[k] = v
+		}
+	}
+	m[year] = rep
+	h.yearlyCache.set(m)
+	jsonResp(w, 200, rep)
 }
 
 // getMapPoints serves the lightweight payload for the map page: only records
