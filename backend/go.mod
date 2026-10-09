@@ -14,7 +14,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5
 	golang.org/x/image v0.46.0
-	modernc.org/sqlite v1.60.0
+	modernc.org/sqlite v1.60.1
 )
 
 require (
