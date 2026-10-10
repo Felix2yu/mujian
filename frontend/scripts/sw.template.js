@@ -26,7 +26,7 @@ const WARM_API = [
 
 const STATIC_ASSETS = [
   '/',
-  '/manifest.json',
+  '/manifest.webmanifest',
   '/favicon.svg'
 ];
 
@@ -178,6 +178,13 @@ async function servePageOrApi(request, url) {
       const loose = await matchByPathname(DATA_CACHE, url.pathname);
       if (loose) return loose;
     }
+    // 导航请求（打开某个子路由，如 /records/123）离线且没有该 URL 的副本时，
+    // 回落首页壳而不是 Response.error() —— 后者是浏览器错误页，用户看到的是
+    // 「应用坏了」；首页壳至少能起来，进去后再由前端自己提示离线。
+    if (request.mode === 'navigate') {
+      const shell = await caches.match('/');
+      if (shell) return shell;
+    }
     return Response.error();
   }
 }
@@ -221,8 +228,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || '幕间提醒';
   const options = {
     body: data.body || '',
-    icon: '/icons/icon-192.svg',
-    badge: '/icons/icon-192.svg',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
     vibrate: [200, 100, 200],
     tag: data.tag || 'mujian-notification',
     data: data.url || '/',

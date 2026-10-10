@@ -521,6 +521,16 @@ func main() {
 		} else {
 			w.Header().Set("Cache-Control", "no-cache")
 		}
+		// Go 的标准库不认识 .webmanifest，会嗅探成 text/plain。装应用照样能过，
+		// 但浏览器会记一条「MIME 不合规」的告警；显式声明即可消除。
+		if path == "manifest.webmanifest" {
+			w.Header().Set("Content-Type", "application/manifest+json")
+		}
+		// sw.js 与 manifest 必须能被立刻拿到：被缓存住的话浏览器会一直用旧 SW
+		// 接管页面，「有新版本」的提示也就永远等不来。
+		if path == "sw.js" || path == "manifest.webmanifest" {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
 		fileServer.ServeHTTP(w, r)
 	})
 
