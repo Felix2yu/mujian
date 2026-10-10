@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { api } from '$lib/api.js';
-  import { askConfirm } from '$lib/confirm.js';
+  import { api } from '#lib/api.js';
+  import { askConfirm } from '#lib/confirm.js';
 
   // ===== 场馆治理 =====
   //

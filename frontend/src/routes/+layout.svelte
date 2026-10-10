@@ -1,13 +1,13 @@
 <script>
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { api, initStorageInfo, getAuthToken, verifyAuthToken } from '$lib/api.js';
-  import { initTheme } from '$lib/stores.js';
+  import { api, initStorageInfo, getAuthToken, verifyAuthToken } from '#lib/api.js';
+  import { initTheme } from '#lib/stores.js';
   import { onMount } from 'svelte';
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-  import '$lib/app.css';
+  import ConfirmModal from '#lib/components/ConfirmModal.svelte';
+  import '#lib/app.css';
 
   let { children } = $props();
 

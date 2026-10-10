@@ -1,5 +1,5 @@
 <script>
-  import { confirmState, resolveConfirm } from '$lib/confirm.js';
+  import { confirmState, resolveConfirm } from '#lib/confirm.js';
   import { fade } from 'svelte/transition';
 
   function onKey(e) {

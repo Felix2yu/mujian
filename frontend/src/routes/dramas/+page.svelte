@@ -1,8 +1,8 @@
 <script>
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { api } from '$lib/api.js';
-  import CategoryTags from '$lib/components/CategoryTags.svelte';
+  import { api } from '#lib/api.js';
+  import CategoryTags from '#lib/components/CategoryTags.svelte';
 
   let dramas = $state([]);
   let categories = $state([]);

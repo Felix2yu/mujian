@@ -1,5 +1,5 @@
 <script>
-  import { api } from '$lib/api.js';
+  import { api } from '#lib/api.js';
 
   // kind: 'drama' | 'artist'；selfId/selfName 为「保留方」（target）。
   // 合并方向：把所选的「重复项」（source）并入当前 this 实体。

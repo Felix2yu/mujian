@@ -1,11 +1,11 @@
 <script>
   import { onMount, onDestroy, tick } from 'svelte';
-  import { api, coverUrl } from '$lib/api.js';
-  import { formatEventTitle } from '$lib/eventTitle.js';
-  import { geocodeAddress } from '$lib/geocode.js';
-  import { STATUS_LABELS } from '$lib/statusPrefs.js';
-  import CoverPicker from '$lib/components/CoverPicker.svelte';
-  import CategoryTags from '$lib/components/CategoryTags.svelte';
+  import { api, coverUrl } from '#lib/api.js';
+  import { formatEventTitle } from '#lib/eventTitle.js';
+  import { geocodeAddress } from '#lib/geocode.js';
+  import { STATUS_LABELS } from '#lib/statusPrefs.js';
+  import CoverPicker from '#lib/components/CoverPicker.svelte';
+  import CategoryTags from '#lib/components/CategoryTags.svelte';
 
   // 批量分隔符：英文逗号 / 全角逗号 / 顿号；分隔符后的空格经 trim 忽略（非强制）。
   const SEP = /[,，、]/;

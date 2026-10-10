@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { api } from '$lib/api.js';
+  import { api } from '#lib/api.js';
 
   // 自动备份：从「设置」页迁到「数据」页（备份属于数据管理，与导入 / 导出同源）。
   //

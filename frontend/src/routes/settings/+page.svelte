@@ -1,9 +1,9 @@
 <script>
   import { onMount } from 'svelte';
-  import { api, resetStorageInfo } from '$lib/api.js';
-  import { theme } from '$lib/stores.js';
-  import { STATUS_LABELS, ALL_STATUSES, loadStatusFilter, saveStatusFilter } from '$lib/statusPrefs.js';
-  import { loadPref as loadJsonPref, savePref as saveJsonPref } from '$lib/prefs.js';
+  import { api, resetStorageInfo } from '#lib/api.js';
+  import { theme } from '#lib/stores.js';
+  import { STATUS_LABELS, ALL_STATUSES, loadStatusFilter, saveStatusFilter } from '#lib/statusPrefs.js';
+  import { loadPref as loadJsonPref, savePref as saveJsonPref } from '#lib/prefs.js';
 
   let settings = $state({
     storage_type: 'local',

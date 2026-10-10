@@ -1,13 +1,13 @@
 <script>
   import { onMount } from 'svelte';
-  import { api, formatCurrency } from '$lib/api.js';
-  import KpiCard from '$lib/components/analytics/KpiCard.svelte';
-  import Donut from '$lib/components/analytics/Donut.svelte';
-  import VBarChart from '$lib/components/analytics/VBarChart.svelte';
-  import LineChart from '$lib/components/analytics/LineChart.svelte';
-  import CompareBars from '$lib/components/analytics/CompareBars.svelte';
-  import ScatterChart from '$lib/components/analytics/ScatterChart.svelte';
-  import RankList from '$lib/components/analytics/RankList.svelte';
+  import { api, formatCurrency } from '#lib/api.js';
+  import KpiCard from '#lib/components/analytics/KpiCard.svelte';
+  import Donut from '#lib/components/analytics/Donut.svelte';
+  import VBarChart from '#lib/components/analytics/VBarChart.svelte';
+  import LineChart from '#lib/components/analytics/LineChart.svelte';
+  import CompareBars from '#lib/components/analytics/CompareBars.svelte';
+  import ScatterChart from '#lib/components/analytics/ScatterChart.svelte';
+  import RankList from '#lib/components/analytics/RankList.svelte';
 
   let data = $state(null);
   let loading = $state(true);

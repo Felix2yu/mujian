@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { api, coverUrl } from '$lib/api.js';
-  import OperaIcon from '$lib/components/OperaIcon.svelte';
+  import { api, coverUrl } from '#lib/api.js';
+  import OperaIcon from '#lib/components/OperaIcon.svelte';
 
   let artists = $state([]);
   let loading = $state(true);

@@ -1,11 +1,11 @@
 <script>
   import { page } from '$app/stores';
-  import { api, formatCurrency } from '$lib/api.js';
-  import KpiCard from '$lib/components/analytics/KpiCard.svelte';
-  import Donut from '$lib/components/analytics/Donut.svelte';
-  import VBarChart from '$lib/components/analytics/VBarChart.svelte';
-  import LineChart from '$lib/components/analytics/LineChart.svelte';
-  import RankList from '$lib/components/analytics/RankList.svelte';
+  import { api, formatCurrency } from '#lib/api.js';
+  import KpiCard from '#lib/components/analytics/KpiCard.svelte';
+  import Donut from '#lib/components/analytics/Donut.svelte';
+  import VBarChart from '#lib/components/analytics/VBarChart.svelte';
+  import LineChart from '#lib/components/analytics/LineChart.svelte';
+  import RankList from '#lib/components/analytics/RankList.svelte';
 
   let report = $state(null);
   let loading = $state(true);

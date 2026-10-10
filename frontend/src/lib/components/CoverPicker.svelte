@@ -1,6 +1,6 @@
 <script>
   import { untrack, tick } from 'svelte';
-  import { api, coverUrl } from '$lib/api.js';
+  import { api, coverUrl } from '#lib/api.js';
 
   let { open, onSelect, onClose } = $props();
 

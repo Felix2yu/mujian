@@ -1,7 +1,7 @@
 <script>
-  import { coverUrl, formatCurrency } from '$lib/api.js';
-  import { STATUS_LABELS } from '$lib/statusPrefs.js';
-  import { formatEventTitle } from '$lib/eventTitle.js';
+  import { coverUrl, formatCurrency } from '#lib/api.js';
+  import { STATUS_LABELS } from '#lib/statusPrefs.js';
+  import { formatEventTitle } from '#lib/eventTitle.js';
   let { record, selectionMode = false, selected = false } = $props();
   let coverFailed = $state(false);
 

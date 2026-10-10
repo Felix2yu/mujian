@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { api, coverUrl } from '$lib/api.js';
-  import { gcj02ToWgs84 } from '$lib/geo.js';
+  import { api, coverUrl } from '#lib/api.js';
+  import { gcj02ToWgs84 } from '#lib/geo.js';
   import 'leaflet/dist/leaflet.css';
   import 'leaflet.markercluster/dist/MarkerCluster.css';
   import 'leaflet.markercluster/dist/MarkerCluster.Default.css';

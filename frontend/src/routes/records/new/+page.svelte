@@ -1,9 +1,9 @@
 <script>
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { api } from '$lib/api.js';
-  import BackLink from '$lib/components/BackLink.svelte';
-  import RecordForm from '$lib/components/RecordForm.svelte';
+  import { api } from '#lib/api.js';
+  import BackLink from '#lib/components/BackLink.svelte';
+  import RecordForm from '#lib/components/RecordForm.svelte';
 
   let categories = $state([]);
   let error = $state('');

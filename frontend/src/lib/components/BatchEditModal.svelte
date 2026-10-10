@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { api } from '$lib/api.js';
-  import CategoryTags from '$lib/components/CategoryTags.svelte';
+  import { api } from '#lib/api.js';
+  import CategoryTags from '#lib/components/CategoryTags.svelte';
 
   let { selectedIds, records, onClose, onSaved } = $props();
 

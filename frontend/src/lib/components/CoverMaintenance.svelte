@@ -1,5 +1,5 @@
 <script>
-  import { api, coverUrl } from '$lib/api.js';
+  import { api, coverUrl } from '#lib/api.js';
 
   let groups = $state([]);
   let groupsLoading = $state(false);

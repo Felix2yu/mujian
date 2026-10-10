@@ -2,12 +2,12 @@
   import { onMount, onDestroy, tick } from 'svelte';
   import { fade, fly } from 'svelte/transition';
   import { page } from '$app/stores';
-  import { api } from '$lib/api.js';
-  import { askConfirm } from '$lib/confirm.js';
-  import { loadStatusFilter, ALL_STATUSES } from '$lib/statusPrefs.js';
-  import { loadPref, savePref } from '$lib/prefs.js';
-  import RecordCard from '$lib/components/RecordCard.svelte';
-  import OperaIcon from '$lib/components/OperaIcon.svelte';
+  import { api } from '#lib/api.js';
+  import { askConfirm } from '#lib/confirm.js';
+  import { loadStatusFilter, ALL_STATUSES } from '#lib/statusPrefs.js';
+  import { loadPref, savePref } from '#lib/prefs.js';
+  import RecordCard from '#lib/components/RecordCard.svelte';
+  import OperaIcon from '#lib/components/OperaIcon.svelte';
   // BatchEditModal 改为按需动态加载（见 openBatchEdit），不进首页关键路径。
 
   let records = $state([]);
@@ -224,7 +224,7 @@
     if (!BatchEditModal) {
       batchModalLoading = true;
       try {
-        BatchEditModal = (await import('$lib/components/BatchEditModal.svelte')).default;
+        BatchEditModal = (await import('#lib/components/BatchEditModal.svelte')).default;
       } finally {
         batchModalLoading = false;
       }

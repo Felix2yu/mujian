@@ -1,9 +1,9 @@
 <script>
   import { page } from '$app/stores';
   import { fade, scale } from 'svelte/transition';
-  import { api, coverUrl, formatCurrency, formatDate } from '$lib/api.js';
-  import { STATUS_LABELS, ALL_STATUSES } from '$lib/statusPrefs.js';
-  import BackLink from '$lib/components/BackLink.svelte';
+  import { api, coverUrl, formatCurrency, formatDate } from '#lib/api.js';
+  import { STATUS_LABELS, ALL_STATUSES } from '#lib/statusPrefs.js';
+  import BackLink from '#lib/components/BackLink.svelte';
 
   // 响应式：id 变化时重新加载
   let id = $derived($page.params.id);

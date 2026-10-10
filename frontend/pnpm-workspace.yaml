@@ -3,4 +3,7 @@ packages:
   - "."
 
 overrides:
-  cookie: ^0.7.0
+  # 0.7.x 已修 CVE，但 SvelteKit 3 要求 cookie 的 named export（parseCookie 等），
+  # 只有 2.x 才有；继续钉在 0.7.x 会让 kit 3 在 prerender 阶段抛
+  # "parseCookie is not a function"。
+  cookie: ^2.0.1

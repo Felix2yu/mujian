@@ -1,9 +1,9 @@
 <script>
   import { onMount, tick, untrack } from 'svelte';
   import { fade, scale } from 'svelte/transition';
-  import { api, coverUrl } from '$lib/api.js';
-  import { formatEventTitle } from '$lib/eventTitle.js';
-  import { loadPref, savePref } from '$lib/prefs.js';
+  import { api, coverUrl } from '#lib/api.js';
+  import { formatEventTitle } from '#lib/eventTitle.js';
+  import { loadPref, savePref } from '#lib/prefs.js';
 
   // 「今天」必须随时间推进：此前是组件创建时冻结的 Date，页面长期停留跨天后
   // 今日高亮与「今天」按钮都会停在旧日期。
@@ -319,7 +319,7 @@
     return `cat-${(h % 12)}`;
   }
 
-  // 演出显示名（「剧种《剧名》」）的规则下沉到 $lib/eventTitle.js：
+  // 演出显示名（「剧种《剧名》」）的规则下沉到 #lib/eventTitle.js：
   // 此前只有日历页用这套拼法，列表页显示裸名，同一场演出两个叫法。
 
   onMount(() => {

@@ -1,11 +1,11 @@
 <script>
   import { page } from '$app/stores';
-  import { api } from '$lib/api.js';
-  import BackLink from '$lib/components/BackLink.svelte';
-  import RecordCard from '$lib/components/RecordCard.svelte';
-  import CategoryTags from '$lib/components/CategoryTags.svelte';
-  import MergePanel from '$lib/components/MergePanel.svelte';
-  import { askConfirm } from '$lib/confirm.js';
+  import { api } from '#lib/api.js';
+  import BackLink from '#lib/components/BackLink.svelte';
+  import RecordCard from '#lib/components/RecordCard.svelte';
+  import CategoryTags from '#lib/components/CategoryTags.svelte';
+  import MergePanel from '#lib/components/MergePanel.svelte';
+  import { askConfirm } from '#lib/confirm.js';
 
   let id = $derived($page.params.id);
   let drama = $state(null);

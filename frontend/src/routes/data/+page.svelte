@@ -1,11 +1,11 @@
 <script>
   import { onMount } from 'svelte';
-  import { api } from '$lib/api.js';
-  import { askConfirm } from '$lib/confirm.js';
-  import BackupPanel from '$lib/components/BackupPanel.svelte';
-  import CostCompletion from '$lib/components/CostCompletion.svelte';
-  import CoverMaintenance from '$lib/components/CoverMaintenance.svelte';
-  import VenuePanel from '$lib/components/VenuePanel.svelte';
+  import { api } from '#lib/api.js';
+  import { askConfirm } from '#lib/confirm.js';
+  import BackupPanel from '#lib/components/BackupPanel.svelte';
+  import CostCompletion from '#lib/components/CostCompletion.svelte';
+  import CoverMaintenance from '#lib/components/CoverMaintenance.svelte';
+  import VenuePanel from '#lib/components/VenuePanel.svelte';
 
   let file = $state(null);
   let result = $state(null);

@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { api, coverUrl } from '$lib/api.js';
+  import { api, coverUrl } from '#lib/api.js';
 
   // ===== 费用补全 =====
   //
