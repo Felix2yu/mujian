@@ -13,7 +13,10 @@ const devProxy = {
 };
 
 // SvelteKit 3 起不再读取 svelte.config.js，配置一律通过 sveltekit() 插件传入。
-// 不属于 SvelteKit 的键会透传给 vite-plugin-svelte。
+// 只有 SvelteKit 自己的键（adapter / paths …）能放进插件；`vite` 不是 Kit 配置键，
+// 插件会报 "invalid plugin option `vite`" 并丢弃它，所以 dev proxy 只能写在
+// Vite 自己的顶层 server.proxy 里——写两处不会合并，反而会让 /mcp、/healthz
+// 这两条只在插件里声明的路径在 dev 下 404。
 export default defineConfig({
 	plugins: [
 		sveltekit({
@@ -26,18 +29,10 @@ export default defineConfig({
 			}),
 			paths: {
 				base: ''
-			},
-			vite: {
-				server: {
-					proxy: devProxy
-				}
 			}
 		})
 	],
 	server: {
-		proxy: {
-			'/api': 'http://localhost:8080',
-			'/uploads': 'http://localhost:8080'
-		}
+		proxy: devProxy
 	}
 });

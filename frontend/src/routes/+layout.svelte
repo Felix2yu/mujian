@@ -1,6 +1,6 @@
 <script>
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { api, initStorageInfo, getAuthToken, verifyAuthToken } from '#lib/api.js';
   import { initTheme } from '#lib/stores.js';
   import { onMount } from 'svelte';
@@ -41,7 +41,7 @@
     try {
       if (typeof navigator.sendBeacon !== 'function') return;
       const nav = performance.getEntriesByType('navigation')[0];
-      const v = { route: $page.url.pathname, ttfb_ms: nav ? Math.round(nav.responseStart) : 0 };
+      const v = { route: page.url.pathname, ttfb_ms: nav ? Math.round(nav.responseStart) : 0 };
       const paint = performance.getEntriesByType('paint') || [];
       for (const p of paint) {
         if (p.name === 'first-contentful-paint') v.fcp_ms = Math.round(p.startTime);
@@ -169,14 +169,14 @@
   }
 
   function isActive(href) {
-    const p = $page.url.pathname;
+    const p = page.url.pathname;
     if (href === '/') return p === '/';
     return p.startsWith(href);
   }
 
   // 路由变化后自动收起侧栏
   $effect(() => {
-    $page.url.pathname;
+    page.url.pathname;
     drawerOpen = false;
   });
 

@@ -1,5 +1,5 @@
 <script>
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { api, formatCurrency } from '#lib/api.js';
   import KpiCard from '#lib/components/analytics/KpiCard.svelte';
   import Donut from '#lib/components/analytics/Donut.svelte';
@@ -11,7 +11,7 @@
   let loading = $state(true);
   let error = $state('');
 
-  let year = $derived($page.params.year);
+  let year = $derived(page.params.year);
 
   $effect(() => {
     const y = year;

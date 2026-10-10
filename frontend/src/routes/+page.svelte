@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy, tick } from 'svelte';
   import { fade, fly } from 'svelte/transition';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { api } from '#lib/api.js';
   import { askConfirm } from '#lib/confirm.js';
   import { loadStatusFilter, ALL_STATUSES } from '#lib/statusPrefs.js';
@@ -536,7 +536,7 @@
   });
 
   onMount(() => {
-    const sp = new URLSearchParams($page.url.search);
+    const sp = new URLSearchParams(page.url.search);
     filters = {
       q: sp.get('q') || '',
       category: sp.get('category') || '',

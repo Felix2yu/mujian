@@ -1,12 +1,12 @@
 <script>
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { fade, scale } from 'svelte/transition';
   import { api, coverUrl, formatCurrency, formatDate } from '#lib/api.js';
   import { STATUS_LABELS, ALL_STATUSES } from '#lib/statusPrefs.js';
   import BackLink from '#lib/components/BackLink.svelte';
 
   // 响应式：id 变化时重新加载
-  let id = $derived($page.params.id);
+  let id = $derived(page.params.id);
   const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   function weekday(ts) {
     if (!ts) return '';

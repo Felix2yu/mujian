@@ -1,11 +1,11 @@
 <script>
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { api } from '#lib/api.js';
   import BackLink from '#lib/components/BackLink.svelte';
   import RecordForm from '#lib/components/RecordForm.svelte';
 
-  let id = $derived($page.params.id);
+  let id = $derived(page.params.id);
   let record = $state(null);
   let categories = $state([]);
   let loading = $state(true);

@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { api } from '#lib/api.js';
   import CategoryTags from '#lib/components/CategoryTags.svelte';
 
@@ -127,7 +127,7 @@
 
   onMount(() => {
     // 剧种页的剧种名会跳到 /dramas?cat=<剧种>，这里读回筛选状态
-    filterCat = new URLSearchParams($page.url.search).get('cat') || '';
+    filterCat = new URLSearchParams(page.url.search).get('cat') || '';
     urlReady = true;
     load();
   });
