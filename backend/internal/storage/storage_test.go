@@ -435,6 +435,32 @@ func encodeRawPNG(t *testing.T, img image.Image) []byte {
 	return buf.Bytes()
 }
 
+// A thumb is only ever shown at card size, so it must not carry the poster's
+// bitrate. The source is high-frequency so the encoders actually respond to
+// the quality setting instead of collapsing both outputs to the same size.
+func TestEncodeThumbUsesLowerRateThanPoster(t *testing.T) {
+	src := image.NewRGBA(image.Rect(0, 0, 800, 1000))
+	for y := 0; y < 1000; y++ {
+		for x := 0; x < 800; x++ {
+			src.Set(x, y, color.RGBA{R: uint8(x ^ y), G: uint8(x * y >> 5), B: uint8(y % 251), A: 255})
+		}
+	}
+	resized := ResizeToWidth(src, 400)
+	for _, format := range []string{"avif", "webp", "jpeg"} {
+		poster, _, err := EncodeImage(resized, format)
+		if err != nil {
+			t.Fatalf("%s poster: %v", format, err)
+		}
+		thumb, err := encodeThumb(src, 400, format)
+		if err != nil {
+			t.Fatalf("%s thumb: %v", format, err)
+		}
+		if len(thumb) >= len(poster) {
+			t.Errorf("%s: thumb %d B should stay below poster %d B", format, len(thumb), len(poster))
+		}
+	}
+}
+
 func TestThumbIndex(t *testing.T) {
 	s := newLocal(t, "avif")
 	jpg := jpegBytes(t)
