@@ -105,7 +105,7 @@ func decodeImage(b []byte) (image.Image, error) {
 	return DecodeImage(b)
 }
 
-// ThumbJPEG renders a ≤maxW-wide JPEG thumbnail (quality 60) of img.
+// ThumbJPEG renders a ≤maxW-wide JPEG thumbnail of img.
 func ThumbJPEG(img image.Image, maxW int) ([]byte, error) {
 	bounds := img.Bounds()
 	w, h := bounds.Dx(), bounds.Dy()
@@ -116,7 +116,7 @@ func ThumbJPEG(img image.Image, maxW int) ([]byte, error) {
 		img = dst
 	}
 	var buf bytes.Buffer
-	if err := encodeJPEG(&buf, img, 60); err != nil {
+	if err := encodeJPEG(&buf, img, thumbJPEGQuality); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -124,14 +124,16 @@ func ThumbJPEG(img image.Image, maxW int) ([]byte, error) {
 
 // encodeThumb scales img down to at most maxW wide and encodes it in the
 // requested format (avif/webp/jpeg), returning the raw encoded bytes.
+// Thumbs use lower rates than EncodeImage's poster settings: the detail a
+// poster rate preserves is not visible once the image is card sized.
 func encodeThumb(img image.Image, maxW int, format string) ([]byte, error) {
 	img = ResizeToWidth(img, maxW)
 	switch format {
 	case "webp":
-		b, _, err := EncodeImage(img, "webp")
+		b, _, err := encodeWebP(img, thumbWebPQuality)
 		return b, err
 	case "avif":
-		b, _, err := EncodeImage(img, "avif")
+		b, _, err := encodeAVIF(img, thumbAVIFColorQuality)
 		return b, err
 	default:
 		return ThumbJPEG(img, maxW)

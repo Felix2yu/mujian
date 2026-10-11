@@ -82,20 +82,32 @@ func DecodeImage(b []byte) (image.Image, error) {
 
 const maxPosterWidth = 2000
 
+// Posters are encoded to hold detail at up to 2000px; thumbnails only ever
+// reach card size, so they use the lower thumb* rates.
+const (
+	posterAVIFColorQuality = 65
+	posterWebPQuality      = 80
+	posterJPEGQuality      = 85
+
+	thumbAVIFColorQuality = 50
+	thumbWebPQuality      = 65
+	thumbJPEGQuality      = 50
+)
+
 // EncodeImage encodes img to the specified format and returns the bytes and extension.
 // Supported formats: "avif", "webp", "jpeg"
 func EncodeImage(img image.Image, format string) ([]byte, string, error) {
 	switch format {
 	case "webp":
-		return encodeWebP(img, 80)
+		return encodeWebP(img, posterWebPQuality)
 	case "jpeg":
 		var buf bytes.Buffer
-		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 85}); err != nil {
+		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: posterJPEGQuality}); err != nil {
 			return nil, "", err
 		}
 		return buf.Bytes(), ".jpg", nil
 	default: // "avif"
-		return encodeAVIF(img)
+		return encodeAVIF(img, posterAVIFColorQuality)
 	}
 }
 
@@ -105,11 +117,11 @@ func encodeJPEG(w io.Writer, img image.Image, quality int) error {
 }
 
 // encodeAVIF encodes img to AVIF format.
-func encodeAVIF(img image.Image) ([]byte, string, error) {
+func encodeAVIF(img image.Image, colorQuality int) ([]byte, string, error) {
 	var buf bytes.Buffer
 	if err := avif.Encode(&buf, img, &avif.Options{
 		Speed:        6,
-		ColorQuality: 65,
+		ColorQuality: colorQuality,
 		AlphaQuality: 60,
 	}); err != nil {
 		return nil, "", err
