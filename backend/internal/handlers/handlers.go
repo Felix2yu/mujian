@@ -332,8 +332,9 @@ func (h *Handler) listRecords(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResp(w, 200, map[string]interface{}{
-		"records": recs,
-		"total":   total,
+		"records":          recs,
+		"total":            total,
+		"search_truncated": db.SearchQueryTruncated(f.Query),
 	})
 }
 

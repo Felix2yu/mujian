@@ -128,11 +128,11 @@ export const api = {
       if (v !== '' && v != null) q.set(k, v);
     }
     const data = await request(`/api/records?${q.toString()}`);
-    // 后端返回 {records: [...], total: N}；兼容旧版返回纯数组
+    // 后端返回 {records: [...], total: N, search_truncated: bool}；兼容旧版返回纯数组
     if (Array.isArray(data)) {
-      return { records: data, total: data.length };
+      return { records: data, total: data.length, searchTruncated: false };
     }
-    return { records: data.records ?? [], total: data.total ?? 0 };
+    return { records: data.records ?? [], total: data.total ?? 0, searchTruncated: !!data.search_truncated };
   },
   // 地图专用精简投影：仅含带坐标的记录与地图渲染所需字段，
   // 体积约为 /api/records 全量响应的 1/12。

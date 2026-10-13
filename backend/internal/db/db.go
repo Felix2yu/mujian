@@ -1085,12 +1085,32 @@ func appendSearchPredicate(f RecordFilter, where *[]string, args *[]interface{})
 		*args = append(*args, f.Query)
 		return
 	}
-	for _, tok := range strings.Fields(f.Query) {
+	toks := strings.Fields(f.Query)
+	if len(toks) > maxSearchTokens {
+		toks = toks[:maxSearchTokens]
+	}
+	for _, tok := range toks {
 		*where = append(*where, searchLikeCols)
 		for range 12 {
 			*args = append(*args, "%"+tok+"%")
 		}
 	}
+}
+
+// maxSearchTokens 限制关键词搜索的分词数。appendSearchPredicate 会为每个词
+// 复制一份 searchLikeCols（12 列 OR，含 2 个关联子查询），词数线性放大成
+// 12×N 个子句——粘贴长文本会把 WHERE 炸成数百个全表 LIKE。超过上限只取前
+// maxSearchTokens 个词，UI 据此提示「搜索词已截断」。
+const maxSearchTokens = 8
+
+// MaxSearchTokens 是关键词搜索允许的最大分词数（与 maxSearchTokens 一致），
+// 供 HTTP 层判断是否需要提示用户。
+const MaxSearchTokens = maxSearchTokens
+
+// SearchQueryTruncated 报告 q 的分词数是否超过上限，即实际搜索只用了前
+// MaxSearchTokens 个词（其余被丢弃，结果为超集）。
+func SearchQueryTruncated(q string) bool {
+	return len(strings.Fields(q)) > maxSearchTokens
 }
 
 func (db *DB) ListRecordsContext(ctx context.Context, f RecordFilter) ([]models.Record, error) {

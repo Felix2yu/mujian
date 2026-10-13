@@ -23,6 +23,9 @@
   let hasMore = $state(false);
   // 所有演出总数（不受筛选影响），来自 /api/stats.total_records。
   let allTotal = $state(0);
+  // 关键词分词数超过后端上限（8）时，搜索被截断为前 8 个词（结果为超集），
+  // 需向用户明示，避免「粘贴长文却只按前几个词匹配」造成困惑。
+  let searchTruncated = $state(false);
   let filters = $state({
     q: '', category: '', city: '', year: '', month: '',
     drama: '', zhezi: '', artist: '',
@@ -392,6 +395,7 @@
       if (seq !== listReqSeq) return; // 已有更新的请求，丢弃本次响应
       records = listRes.records;
       total = listRes.total;
+      searchTruncated = listRes.searchTruncated;
       if (stats) allTotal = stats.total_records ?? 0;
       hasMore = PAGE_SIZE < listRes.total;
     } catch (e) {
@@ -705,6 +709,9 @@
 
   <div class="count-row">
     <h1>记录 <span class="num">{total}</span>{#if isFiltered && allTotal > 0} / {allTotal}{/if}</h1>
+    {#if searchTruncated}
+      <span class="search-truncated" role="status">搜索词过多，仅按前 8 个词匹配</span>
+    {/if}
       {#if savedViews.length}
         <span class="views-row">
           {#each savedViews as v (v.name)}
@@ -1275,6 +1282,17 @@
 
   .count-row h1 { font-size: 20px; margin: 4px 0 0; }
   .count-row .num { color: var(--accent); font-family: var(--font-sans); font-weight: 700; font-size: 18px; margin-left: 4px; }
+  .search-truncated {
+    align-self: center;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--accent);
+    background: var(--accent-softer);
+    border: 1px solid var(--accent-soft);
+    border-radius: 999px;
+    padding: 2px 10px;
+    white-space: nowrap;
+  }
 
   .batch-bar {
     display: flex;
