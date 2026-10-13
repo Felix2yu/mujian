@@ -40,6 +40,10 @@
   let saveError = $state('');
   let backups = $state([]);
   let restoring = $state('');
+  let cleaning = $state(false);
+  // 列表渲染上限：堆积上千份时不渲染全部行，避免浏览器卡死。
+  const LIST_LIMIT = 50;
+  const shown = $derived(backups.slice(0, LIST_LIMIT));
 
   // 存量值不在预设档位时（如旧配置的 6 小时）动态补一个选项，避免下拉显示空白
   const intervalOptions = $derived(
@@ -131,6 +135,42 @@
     refreshBackups();
   }
 
+  // 批量清理：历史堆积上千份时逐条删除不可用，提供「只保留最新 N 份」与「清空」。
+  // 两者都不可恢复，因此都要二次确认并在提示里点明数量。
+  async function pruneTo(keep) {
+    const extra = remote ? `（${backups.length - keep} 份中的 S3 副本会一并删除）` : '';
+    if (!confirm(`只保留最新的 ${keep} 份备份，其余 ${backups.length - keep} 份将被删除${extra}。确认？`)) return;
+    cleaning = true;
+    try {
+      const res = await api.backupPrune(keep);
+      msg = `已清理 ${res.deleted} 份${res.remote_deleted ? `（含 S3 副本 ${res.remote_deleted} 份）` : ''}，保留 ${res.remaining} 份`;
+      await refreshBackups();
+    } catch (e) {
+      msg = '清理失败：' + (e.message || '未知错误');
+    } finally {
+      cleaning = false;
+      clearTimeout(msgTimer);
+      msgTimer = setTimeout(() => (msg = ''), 6000);
+    }
+  }
+
+  async function removeAll() {
+    if (!confirm(`删除全部 ${backups.length} 份备份？此操作不可恢复${remote ? '，并会同步删除 S3 上 backups/ 的同名副本' : ''}。`)) return;
+    if (!confirm('再确认一次：清空本地全部备份？')) return;
+    cleaning = true;
+    try {
+      const res = await api.backupDeleteAll();
+      msg = `已清空 ${res.deleted} 份备份${res.remote_deleted ? `（含 S3 副本 ${res.remote_deleted} 份）` : ''}`;
+      await refreshBackups();
+    } catch (e) {
+      msg = '清空失败：' + (e.message || '未知错误');
+    } finally {
+      cleaning = false;
+      clearTimeout(msgTimer);
+      msgTimer = setTimeout(() => (msg = ''), 6000);
+    }
+  }
+
   onMount(async () => {
     try {
       const s = await api.getSettings();
@@ -180,7 +220,7 @@
           <option value={it.v}>{it.label}</option>
         {/each}
       </select>
-      <span class="hint">按间隔自动把所选格式的备份写入服务端 backups/ 目录</span>
+      <span class="hint">按间隔自动把所选格式的备份写入服务端 backups/ 目录；单日最多写 24 份（兜底闸），超出即跳过，次日自动恢复</span>
     </label>
     <label class="field">
       <span>保留份数</span>
@@ -199,10 +239,10 @@
       <input type="checkbox" bind:checked={remote} onchange={persist} disabled={loading || !s3Ready} />
       <span>备份后上传到 S3</span>
     </span>
-    <span class="hint">
-      {#if s3Ready}
-        每次备份成功后把该文件推送到 S3 桶内的 backups/ 目录（本机备份仍保留）
-      {:else}
+      <span class="hint">
+        {#if s3Ready}
+          每次备份成功后把该文件推送到 S3 桶内的 backups/ 目录（本机备份仍保留）；本地删除 / 裁剪时同名远端副本会一并删除
+        {:else}
         需要先在「设置 → S3 对象存储」填写完整的 Bucket 与 Access Key
       {/if}
     </span>
@@ -216,8 +256,17 @@
   </div>
 
   {#if backups.length}
+    <div class="backup-toolbar">
+      <span class="hint" style="margin: 0;">共 {backups.length} 份{#if backups.length > LIST_LIMIT}，显示最近 {LIST_LIMIT} 份{/if}</span>
+      <span class="backup-ops">
+        <button type="button" class="btn sm" disabled={cleaning || backups.length <= keep} onclick={() => pruneTo(keep)}>
+          {cleaning ? '清理中…' : `只保留最新 ${keep} 份`}
+        </button>
+        <button type="button" class="btn sm danger" disabled={cleaning} onclick={removeAll}>清空全部</button>
+      </span>
+    </div>
     <div class="backup-list">
-      {#each backups as b (b.file)}
+      {#each shown as b (b.file)}
         <div class="backup-row">
           <span class="backup-name" title={b.file}>{b.file}</span>
           <span class="backup-size">{fmtSize(b.size)}</span>
@@ -292,7 +341,14 @@
     border-top: 1px dashed var(--border);
   }
 
-  .backup-list { margin-top: 12px; border: 1px solid var(--border); border-radius: var(--radius, 10px); overflow: hidden; }
+  .backup-list { margin-top: 8px; border: 1px solid var(--border); border-radius: var(--radius, 10px); overflow: hidden; }
+  .backup-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
   .backup-row {
     display: flex;
     align-items: center;

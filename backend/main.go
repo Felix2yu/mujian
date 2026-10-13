@@ -38,6 +38,17 @@ func fatal(format string, args ...any) {
 	os.Exit(1)
 }
 
+// runGuarded 执行后台任务并吞掉 panic：这些 goroutine 与 HTTP 服务同进程，
+// 一次 panic 会把整个服务带走；吞掉后定时任务还能继续跑下一轮。
+func runGuarded(name string, f func()) {
+	defer func() {
+		if p := recover(); p != nil {
+			slog.Error("background task panicked", "task", name, "panic", p)
+		}
+	}()
+	f()
+}
+
 func init() {
 	// chi's methodMap only knows the standard HTTP methods and answers 405
 	// for anything else. WebDAV methods must be registered BEFORE any routes
@@ -389,6 +400,14 @@ func main() {
 		s := storage.NewS3StorageFromSettings(s3cfg, cfg.GetImageFormat)
 		return s.PutRaw(key, data)
 	})
+	backupMgr.SetRemoteDeleter(func(key string) error {
+		s3cfg := cfg.GetS3Settings()
+		if s3cfg.Bucket == "" || s3cfg.AccessKey == "" {
+			return nil // 没配 S3：远端本来就没有副本，按“已删除”处理
+		}
+		s := storage.NewS3StorageFromSettings(s3cfg, cfg.GetImageFormat)
+		return s.DeleteRaw(key)
+	})
 	backupMgr.Start()
 	defer backupMgr.Stop()
 
@@ -408,11 +427,11 @@ func main() {
 				slog.Info("pruned caldav changelog", "rows", n)
 			}
 		}
-		purge()
+		runGuarded("purge-expired-trash", purge)
 		t := time.NewTicker(24 * time.Hour)
 		defer t.Stop()
 		for range t.C {
-			purge()
+			runGuarded("purge-expired-trash", purge)
 		}
 	}()
 
@@ -423,17 +442,17 @@ func main() {
 	// 刷新成功与否都不阻塞启动，失败静默保留已有数据（Refresh 内部按
 	// 12 小时节流，跨重启生效）。
 	go func() {
-		holiday.Seed(database)
 		refresh := func() {
+			runGuarded("holiday-seed", func() { holiday.Seed(database) })
 			if err := holiday.Refresh(context.Background(), database); err != nil {
 				slog.Debug("refresh holidays", "err", err)
 			}
 		}
-		refresh()
+		runGuarded("refresh-holidays", refresh)
 		t := time.NewTicker(12 * time.Hour)
 		defer t.Stop()
 		for range t.C {
-			refresh()
+			runGuarded("refresh-holidays", refresh)
 		}
 	}()
 

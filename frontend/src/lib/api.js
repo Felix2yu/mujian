@@ -293,6 +293,9 @@ export const api = {
   },
   backupRestoreFrom: (file) => request('/api/backup/restore-from', { method: 'POST', body: JSON.stringify({ file }) }),
   backupDelete: (file) => request(`/api/backup?file=${encodeURIComponent(file)}`, { method: 'DELETE' }),
+  // 批量清理：裁剪到最新 keep 份 / 清空全部（历史快照堆积上千份时的收口手段）
+  backupPrune: (keep) => request('/api/backup/prune', { method: 'POST', body: JSON.stringify({ keep }) }),
+  backupDeleteAll: () => request('/api/backup/all', { method: 'DELETE' }),
 
   uploadFile: async (file) => {
     const form = new FormData();

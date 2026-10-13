@@ -460,6 +460,41 @@ type S3Storage struct {
 	cfgProvider func() string
 }
 
+// s3OpTimeout 是单次 S3 操作的耗时预算。原先所有调用都传 context.TODO()：端点
+// 不可达时请求会一直挂着（叠加 SDK 默认 3 次重试），一次封面写入能把 handler
+// 拖到数分钟，goroutine 与连接随之堆积——与备份高频重试同源。备份直传
+// （PutRaw / DeleteRaw）复用同一个预算，测试可覆盖此值。
+var s3OpTimeout = 60 * time.Second
+
+// 单次 ListObjectsV2 的页大小（S3 上限 1000）与累计条数上限。桶里对象极多时
+// 宁可报错也不要把内存吃光：调用方（回收站清理、缩略图索引）据此知道「没列
+// 全」，比静默截断后误判清理完成更安全。
+const (
+	listPageSize = 1000
+	maxListKeys  = 100_000
+)
+
+// opCtx 返回带超时的上下文，供所有 S3 调用使用（替代 context.TODO()）。
+func opCtx() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), s3OpTimeout)
+}
+
+// maxCoverBytes 是单次封面读取的上限。远端对象异常巨大（或被别的程序写坏）时
+// 不要整块读进内存；被截断时返回明确错误，而不是交付损坏的图片。
+const maxCoverBytes = 32 << 20
+
+// readAllLimited 最多读取 limit 字节，超出则返回错误。
+func readAllLimited(r io.Reader, limit int64) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(b)) > limit {
+		return nil, fmt.Errorf("对象超过 %d 字节上限，已中止读取", limit)
+	}
+	return b, nil
+}
+
 func NewS3Storage(cfg *config.Config) *S3Storage {
 	s := cfg.GetS3Settings()
 	return NewS3StorageFromSettings(s, cfg.GetImageFormat)
@@ -590,19 +625,21 @@ func (s *S3Storage) MakeThumbnail(coverKey string, srcData []byte, maxW int, for
 }
 
 func (s *S3Storage) saveThumb(coverKey string, data []byte, format string) (string, error) {
+	ctx, cancel := opCtx()
+	defer cancel()
 	key := thumbKeyFor(coverKey, format)
 	base := strings.TrimSuffix(coverKey, filepath.Ext(coverKey))
 	prefix := "covers/" + filepath.Base(base) + ".thumb."
-	if keys, err := s.listKeys(prefix); err == nil {
+	if keys, err := s.listKeysCtx(ctx, prefix); err == nil {
 		for _, k := range keys {
 			if k != key {
-				_, _ = s.client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+				_, _ = s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 					Bucket: aws.String(s.bucket), Key: aws.String(k),
 				})
 			}
 		}
 	}
-	_, err := s.client.PutObject(context.TODO(), &s3.PutObjectInput{
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:       aws.String(s.bucket),
 		Key:          aws.String(key),
 		Body:         bytes.NewReader(data),
@@ -623,7 +660,9 @@ func (s *S3Storage) SaveCoverBytes(data []byte, ext string) (string, bool, error
 	if s.CoverExists(key) {
 		return key, false, nil
 	}
-	_, err := s.client.PutObject(context.TODO(), &s3.PutObjectInput{
+	ctx, cancel := opCtx()
+	defer cancel()
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:       aws.String(s.bucket),
 		Key:          aws.String(key),
 		Body:         bytes.NewReader(data),
@@ -636,7 +675,9 @@ func (s *S3Storage) SaveCoverBytes(data []byte, ext string) (string, bool, error
 }
 
 func (s *S3Storage) ReadCover(key string) ([]byte, error) {
-	out, err := s.client.GetObject(context.TODO(), &s3.GetObjectInput{
+	ctx, cancel := opCtx()
+	defer cancel()
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 	})
@@ -644,11 +685,13 @@ func (s *S3Storage) ReadCover(key string) ([]byte, error) {
 		return nil, err
 	}
 	defer out.Body.Close()
-	return io.ReadAll(out.Body)
+	return readAllLimited(out.Body, maxCoverBytes)
 }
 
 func (s *S3Storage) CoverExists(key string) bool {
-	_, err := s.client.HeadObject(context.TODO(), &s3.HeadObjectInput{
+	ctx, cancel := opCtx()
+	defer cancel()
+	_, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 	})
@@ -656,16 +699,18 @@ func (s *S3Storage) CoverExists(key string) bool {
 }
 
 func (s *S3Storage) DeleteCover(key string) error {
+	ctx, cancel := opCtx()
+	defer cancel()
 	base := strings.TrimSuffix(key, filepath.Ext(key))
 	prefix := "covers/" + filepath.Base(base) + ".thumb."
-	if keys, err := s.listKeys(prefix); err == nil {
+	if keys, err := s.listKeysCtx(ctx, prefix); err == nil {
 		for _, k := range keys {
-			_, _ = s.client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+			_, _ = s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 				Bucket: aws.String(s.bucket), Key: aws.String(k),
 			})
 		}
 	}
-	_, err := s.client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 	})
@@ -682,7 +727,9 @@ func (s *S3Storage) ListCoverKeys() ([]string, error) {
 
 func (s *S3Storage) MoveCoverToTrash(key string) error {
 	name := filepath.Base(key)
-	if _, err := s.client.CopyObject(context.TODO(), &s3.CopyObjectInput{
+	ctx, cancel := opCtx()
+	defer cancel()
+	if _, err := s.client.CopyObject(ctx, &s3.CopyObjectInput{
 		Bucket:     aws.String(s.bucket),
 		CopySource: aws.String(s.bucket + "/" + key),
 		Key:        aws.String(trashKey(name)),
@@ -705,12 +752,21 @@ func (s *S3Storage) ThumbIndex() map[string]string {
 }
 
 func (s *S3Storage) listKeys(prefix string) ([]string, error) {
+	ctx, cancel := opCtx()
+	defer cancel()
+	return s.listKeysCtx(ctx, prefix)
+}
+
+// listKeysCtx 分页列出指定前缀下的所有对象。累计条数超过 maxListKeys 时返回
+// 错误：与其把几十万个 key 读进内存或静默截断，不如让调用方知道没列全。
+func (s *S3Storage) listKeysCtx(ctx context.Context, prefix string) ([]string, error) {
 	var keys []string
 	var token *string
 	for {
-		out, err := s.client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+		out, err := s.client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
 			Bucket:            aws.String(s.bucket),
 			Prefix:            aws.String(prefix),
+			MaxKeys:           aws.Int32(listPageSize),
 			ContinuationToken: token,
 		})
 		if err != nil {
@@ -720,6 +776,9 @@ func (s *S3Storage) listKeys(prefix string) ([]string, error) {
 			if obj.Key != nil {
 				keys = append(keys, *obj.Key)
 			}
+		}
+		if len(keys) > maxListKeys {
+			return nil, fmt.Errorf("列出 %s 的对象超过 %d 个上限，请分批清理", prefix, maxListKeys)
 		}
 		if out.IsTruncated == nil || !*out.IsTruncated {
 			break

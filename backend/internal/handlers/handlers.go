@@ -184,6 +184,8 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/backup/download", h.downloadBackup)
 	r.Post("/backup/restore-from", h.restoreFromBackup)
 	r.Delete("/backup", h.deleteBackup)
+	r.Delete("/backup/all", h.deleteAllBackups)
+	r.Post("/backup/prune", h.pruneBackups)
 	r.Post("/storage/migrate-to-s3", h.migrateToS3)
 
 	return r
@@ -1532,6 +1534,47 @@ func (h *Handler) deleteBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResp(w, 200, map[string]string{"message": "deleted"})
+}
+
+// POST /api/backup/prune {"keep": N} — 手工把快照裁剪到最新 N 份，返回删除数。
+// keep 缺省或 <=0 时用配置的保留份数；不改配置本身，也不会触发新的备份。
+// 用途：收敛历史堆积（调度缺陷留下的大量快照）。
+func (h *Handler) pruneBackups(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Keep int `json:"keep"`
+	}
+	// 空 body 也要放行：此时按配置份数裁剪。
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if req.Keep < 0 {
+		jsonErr(w, 400, "keep 不能为负数")
+		return
+	}
+	// 本地删除会同步删除 S3 上的同名副本（仅当已开启 S3 推送）。
+	deleted, remoteDeleted, err := h.backup.PruneTo(req.Keep)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]interface{}{
+		"deleted":        deleted,
+		"remote_deleted": remoteDeleted,
+		"remaining":      len(h.backup.List()),
+	})
+}
+
+// DELETE /api/backup/all — 清空全部本地快照，并同步删除 S3 上的同名副本
+// （仅当已开启 S3 推送；桶内的其他对象不受影响）。
+func (h *Handler) deleteAllBackups(w http.ResponseWriter, r *http.Request) {
+	deleted, remoteDeleted, err := h.backup.DeleteAll()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonResp(w, 200, map[string]interface{}{
+		"deleted":        deleted,
+		"remote_deleted": remoteDeleted,
+		"remaining":      0,
+	})
 }
 
 // POST /api/backup/restore-from {"file": ...} — 从已有快照恢复。

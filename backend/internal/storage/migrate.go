@@ -2,12 +2,34 @@ package storage
 
 import (
 	"bytes"
-	"context"
+	"errors"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
+
+// DeleteRaw removes one exact key from the bucket (counterpart of PutRaw).
+// 用于同步删除 S3 上的备份副键：本地快照被裁剪 / 删除时不要把对象留在桶里。
+// 缺失的键视为成功（NoSuchKey），这样「上传失败过、远端本就没有」的快照也
+// 能被正常收敛。
+func (s *S3Storage) DeleteRaw(key string) error {
+	ctx, cancel := opCtx()
+	defer cancel()
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		var nsk *types.NoSuchKey
+		if errors.As(err, &nsk) {
+			return nil
+		}
+		return fmt.Errorf("s3 delete %s: %w", key, err)
+	}
+	return nil
+}
 
 // MigrateStats summarizes one local → S3 migration run.
 type MigrateStats struct {
@@ -22,7 +44,9 @@ type MigrateStats struct {
 // (covers/<hash>.<ext> posters plus covers/<hash>.thumb.* thumbnails).
 // Unlike SaveCoverBytes it never renames by content hash.
 func (s *S3Storage) PutRaw(key string, data []byte) error {
-	_, err := s.client.PutObject(context.TODO(), &s3.PutObjectInput{
+	ctx, cancel := opCtx()
+	defer cancel()
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:       aws.String(s.bucket),
 		Key:          aws.String(key),
 		Body:         bytes.NewReader(data),
