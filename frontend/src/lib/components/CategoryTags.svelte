@@ -23,6 +23,10 @@
     return list.slice(0, 60);
   });
 
+  // 配色口径与演员 / 剧团胶囊一致：红＝库里已有该剧种档案，灰＝库里还没有。
+  // 与演员不同，保存记录不会自动建剧种档案，灰胶囊需要去「剧种」页补建。
+  const knownCats = $derived(new Set(categories.map((c) => c.name.toLowerCase())));
+
   function commit(raw) {
     const parts = String(raw || '')
       .split(/[,，、]\s*/)
@@ -140,8 +144,11 @@
 
 <div class="ctags">
   {#each values as v, i (v)}
+    {@const isKnown = knownCats.has(v.toLowerCase())}
     <span
       class="chip"
+      class:known={isKnown}
+      class:new={!isKnown}
       draggable="true"
       class:dragging={dragIdx === i}
       class:drop-before={overIdx === i && dragIdx !== i && overBefore}
@@ -204,8 +211,7 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    background: var(--accent-soft);
-    color: var(--accent);
+    border: 1px solid transparent; /* 两态同尺寸：灰态描边不再让 chip 比红态高 2px */
     border-radius: 999px;
     padding: 2px 4px 2px 6px;
     font-size: 13px;
@@ -215,6 +221,9 @@
     cursor: grab;
     transition: opacity var(--t-fast, 0.15s) ease, outline-color var(--t-fast, 0.15s) ease;
   }
+  /* 与演出表单的胶囊同一口径：known＝库里已有剧种档案，new＝库里还没有 */
+  .chip.known { background: var(--accent-soft); color: var(--accent); }
+  .chip.new { background: var(--surface-3); color: var(--text-2); border-color: var(--border); }
   .chip:active { cursor: grabbing; }
   .chip.dragging { opacity: 0.35; }
   /* 拖拽插入指示：目标左/右侧显示竖线光标，表示松手后的插入位置 */

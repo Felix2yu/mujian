@@ -523,6 +523,8 @@
   const companyTags = $derived(
     (form.company || '').split(SEP).map((s) => s.trim()).filter(Boolean)
   );
+  // 胶囊配色：红＝既往演出用过该写法，灰＝全新剧团名（后端已按 SEP 切分复合历史值）
+  const knownCompanies = $derived(new Set(ac.company.map((v) => v.toLowerCase())));
   function addCompany(name) {
     name = (name || '').trim();
     if (!name) return;
@@ -1568,7 +1570,7 @@
         <input class="input" spellcheck="false" bind:value={form.name} placeholder="演出名称" />
       </div>
       <div>
-        <label>剧种（可多个）</label>
+        <label>剧种（可多个）<span class="hint">红＝已有剧种档案，灰＝尚未建档（保存只记录文字，需到「剧种」页新建）</span></label>
         <CategoryTags bind:values={form.categoryNames} {categories} placeholder="如：昆剧，回车添加" />
       </div>
     </div>
@@ -1753,14 +1755,14 @@
   <!-- ============ 阵容 ============ -->
   <div class="card section">
     <h3>阵容</h3>
-    <label>演员 <span class="hint">回车生成胶囊；逗号分隔可一次添加多个；与既有档案同名（含空格/全半角差异）自动关联；<b>未匹配的名字在保存时会自动创建演员档案</b>，若只是临时写法请在上方下拉里改选既有档案</span></label>
+    <label>演员 <span class="hint">胶囊红＝已关联演员档案，灰＝<b>保存时会自动创建演员档案</b>；回车生成胶囊，逗号分隔可一次添加多个；与既有档案同名（含空格/全半角差异）自动关联，若只是临时写法请在上方下拉里改选既有档案</span></label>
     <div class="combo">
       <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
         {#each artistItems as item, i (item.key)}
           <span
                 class="capsule"
-                class:linked={item.kind === 'linked'}
-                class:free={item.kind === 'free'}
+                class:known={item.kind === 'linked'}
+                class:new={item.kind === 'free'}
                 class:cap-dragging={artistDragIdx === i}
                 class:drop-before={artistOverIdx === i && artistDragIdx !== i && artistOverBefore}
                 class:drop-after={artistOverIdx === i && artistDragIdx !== i && !artistOverBefore}
@@ -1809,12 +1811,15 @@
         </div>
       {/if}
     </div>
-    <label>剧团 <span class="hint">已有团体失焦自动添加；新名称回车生成胶囊，逗号分隔可一次添加多个</span></label>
+    <label>剧团 <span class="hint">胶囊红＝既往演出用过该写法，灰＝全新剧团名；已有团体失焦自动添加，新名称回车生成胶囊，逗号分隔可一次添加多个</span></label>
     <div class="combo">
       <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
         {#each companyTags as t, ti (t)}
+          {@const capKnown = knownCompanies.has(t.toLowerCase())}
           <span
-            class="capsule free"
+            class="capsule"
+            class:known={capKnown}
+            class:new={!capKnown}
             class:cap-dragging={companyDragIdx === ti}
             class:drop-before={companyOverIdx === ti && companyDragIdx !== ti && companyOverBefore}
             class:drop-after={companyOverIdx === ti && companyDragIdx !== ti && !companyOverBefore}
@@ -2370,6 +2375,7 @@
     align-items: center;
     gap: 4px;
     padding: 3px 6px 3px 6px;
+    border: 1px solid transparent; /* 两态同尺寸：灰态的描边不再让胶囊比红态高 2px */
     border-radius: 999px;
     font-size: 13px;
     font-weight: 500;
@@ -2398,8 +2404,9 @@
   }
   .capsule.drop-before::before { left: -5px; }
   .capsule.drop-after::after { right: -5px; }
-  .capsule.linked { background: var(--accent-soft); color: var(--accent); }
-  .capsule.free { background: var(--surface-3); color: var(--text-2); border: 1px solid var(--border); }
+  /* 统一配色口径（演员 / 剧团胶囊）：known＝库里已有该写法，new＝库里还没有 */
+  .capsule.known { background: var(--accent-soft); color: var(--accent); }
+  .capsule.new { background: var(--surface-3); color: var(--text-2); border-color: var(--border); }
   .cap-x {
     flex: 0 0 auto;
     border: none;
