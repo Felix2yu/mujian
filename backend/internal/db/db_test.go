@@ -821,11 +821,13 @@ func TestAutocompleteAndByField(t *testing.T) {
 	}
 	_ = db.UpsertRecord(models.Record{ID: "f2", Name: "雷峰塔", City: "杭州", Company: "上海昆剧团, 苏州昆剧院", Date: time.Now().Unix()})
 	_ = db.UpsertRecord(models.Record{ID: "f3", Name: "占花魁", City: "杭州", Company: "苏州昆剧院，上海评弹团", Date: time.Now().Unix()})
+	// 、 也是前端认的分隔符，必须一并拆开，否则整串会作为一个取值混进建议列表。
+	_ = db.UpsertRecord(models.Record{ID: "f4", Name: "昭君出塞", City: "杭州", Company: "北方昆曲剧院、上海京剧院", Date: time.Now().Unix()})
 	companies, err := db.GetAutocomplete("company")
 	if err != nil {
 		t.Fatalf("autocomplete company: %v", err)
 	}
-	want := []string{"上海昆剧团", "上海评弹团", "苏州昆剧院"}
+	want := []string{"上海京剧院", "上海昆剧团", "上海评弹团", "北方昆曲剧院", "苏州昆剧院"}
 	if !slices.Equal(companies, want) {
 		t.Fatalf("company autocomplete = %v, want %v", companies, want)
 	}
