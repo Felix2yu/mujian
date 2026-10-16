@@ -3772,7 +3772,9 @@ func (db *DB) GetAutocomplete(field string) ([]string, error) {
 		}
 		parts := []string{v}
 		if field == "company" || field == "friends" {
-			parts = strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == '，' })
+			// 分隔符必须与前端 RecordForm 的 SEP（, ／ ， ／ 、）一致：少一个就会把
+			// 「A、B」整串当成一个取值返回，前端拆成两个胶囊后各自都认不出来。
+			parts = strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == '，' || r == '、' })
 		}
 		for _, part := range parts {
 			part = strings.TrimSpace(part)
