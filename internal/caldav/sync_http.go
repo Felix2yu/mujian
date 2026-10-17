@@ -310,7 +310,7 @@ func writeElemEnd(b *bytes.Buffer, tag string) {
 // writeElem writes <tag>escaped-text</tag>.
 func writeElem(b *bytes.Buffer, tag, text string) {
 	writeElemStart(b, tag)
-	xml.EscapeText(b, []byte(text))
+	_ = xml.EscapeText(b, []byte(text))
 	writeElemEnd(b, tag)
 }
 
@@ -335,7 +335,7 @@ func writeEmptyProp(b *bytes.Buffer, name xml.Name) {
 		b.WriteString(`<X:`)
 		b.WriteString(name.Local)
 		b.WriteString(` xmlns:X="`)
-		xml.EscapeText(b, []byte(name.Space))
+		_ = xml.EscapeText(b, []byte(name.Space))
 		b.WriteString(`"/>`)
 	}
 }

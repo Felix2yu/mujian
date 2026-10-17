@@ -126,9 +126,6 @@ func (db *DB) GetDuplicateGroups() ([]models.DupGroup, error) {
 	}
 	defer rows.Close()
 
-	type groupAcc struct {
-		g *models.DupGroup
-	}
 	groups := make(map[string]*models.DupGroup)
 	for rows.Next() {
 		var id, name, coverFile, hash, ext string

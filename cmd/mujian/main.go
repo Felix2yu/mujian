@@ -284,11 +284,11 @@ func handlePropPatch(w http.ResponseWriter, r *http.Request) {
 	var buf bytes.Buffer
 	buf.WriteString(`<?xml version="1.0" encoding="utf-8"?>`)
 	buf.WriteString(`<D:multistatus xmlns:D="DAV:"><D:response><D:href>`)
-	xml.EscapeText(&buf, []byte(r.URL.Path))
+	_ = xml.EscapeText(&buf, []byte(r.URL.Path))
 	buf.WriteString(`</D:href><D:propstat><D:prop>`)
 	for _, n := range names {
 		buf.WriteString(`<D:`)
-		xml.EscapeText(&buf, []byte(n.Local))
+		_ = xml.EscapeText(&buf, []byte(n.Local))
 		buf.WriteString(`/>`)
 	}
 	buf.WriteString(`</D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response></D:multistatus>`)
@@ -332,7 +332,9 @@ func main() {
 	defer database.Close()
 	database.SetLocation(cfg.Location())
 
-	cfg.LoadFromFile(filepath.Join(filepath.Dir(cfg.DBPath), "settings.json"))
+	if err := cfg.LoadFromFile(filepath.Join(filepath.Dir(cfg.DBPath), "settings.json")); err != nil {
+		fatal("failed to load settings.json: %v", err)
+	}
 
 	// 存储后端按当前配置动态解析：设置页切换 本地↔S3 或改凭据即时生效，
 	// 无需重启（storage.New 仅保留给测试使用）。

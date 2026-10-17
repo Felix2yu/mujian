@@ -2034,7 +2034,10 @@ func (db *DB) CreateRecord(r models.RecordRequest) (*models.Record, error) {
 		return nil, err
 	}
 	// 同场馆（同地址）坐标保持一致：把其他同地址演出的坐标同步为本次值
-	db.SyncVenueCoordinates(rec.Address, rec.Coordinate, rec.ID)
+	// 坐标同步失败不回滚本次写入，只记日志
+	if _, err := db.SyncVenueCoordinates(rec.Address, rec.Coordinate, rec.ID); err != nil {
+		slog.Warn("sync venue coordinates", "addr", rec.Address, "err", err)
+	}
 	return db.GetRecord(rec.ID)
 }
 
@@ -2074,7 +2077,10 @@ func (db *DB) UpdateRecord(id string, r models.RecordRequest) (*models.Record, e
 		return nil, err
 	}
 	// 同场馆（同地址）坐标保持一致：把其他同地址演出的坐标同步为本次值
-	db.SyncVenueCoordinates(rec.Address, rec.Coordinate, rec.ID)
+	// 坐标同步失败不回滚本次写入，只记日志
+	if _, err := db.SyncVenueCoordinates(rec.Address, rec.Coordinate, rec.ID); err != nil {
+		slog.Warn("sync venue coordinates", "addr", rec.Address, "err", err)
+	}
 	return db.GetRecord(id)
 }
 
@@ -2394,7 +2400,9 @@ func (db *DB) syncBatchVenueCoordinates(ids []string, coord *models.Coordinate) 
 	}
 
 	for _, addr := range addresses {
-		db.SyncVenueCoordinates(addr, coord, "")
+		if _, err := db.SyncVenueCoordinates(addr, coord, ""); err != nil {
+			slog.Warn("sync venue coordinates", "addr", addr, "err", err)
+		}
 	}
 }
 
@@ -3596,7 +3604,9 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 		defer rows.Close()
 		for rows.Next() {
 			var m models.MonthStat
-			rows.Scan(&m.Month, &m.Count)
+			if err := rows.Scan(&m.Month, &m.Count); err != nil {
+				continue
+			}
 			s.ByMonth = append(s.ByMonth, m)
 		}
 	}
@@ -3611,7 +3621,9 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 		defer rows2.Close()
 		for rows2.Next() {
 			var c models.CategoryStat
-			rows2.Scan(&c.Name, &c.Count)
+			if err := rows2.Scan(&c.Name, &c.Count); err != nil {
+				continue
+			}
 			s.ByCategory = append(s.ByCategory, c)
 		}
 	}
@@ -3623,7 +3635,9 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 		defer rows3.Close()
 		for rows3.Next() {
 			var c models.CityStat
-			rows3.Scan(&c.Name, &c.Count)
+			if err := rows3.Scan(&c.Name, &c.Count); err != nil {
+				continue
+			}
 			s.ByCity = append(s.ByCity, c)
 		}
 	}
@@ -3638,7 +3652,9 @@ func (db *DB) GetDashboardStats() (*models.DashboardStats, error) {
 		defer rows4.Close()
 		for rows4.Next() {
 			var c models.CostStat
-			rows4.Scan(&c.Month, &c.Cost)
+			if err := rows4.Scan(&c.Month, &c.Cost); err != nil {
+				continue
+			}
 			s.CostByMonth = append(s.CostByMonth, c)
 		}
 	}

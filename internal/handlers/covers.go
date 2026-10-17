@@ -18,6 +18,22 @@ import (
 // database and the filesystem (single-user app, in-process mutex is enough).
 var coverMu sync.Mutex
 
+// dropCoverMeta 删除封面元数据。调用点都是「文件已经删掉」的收尾动作，
+// 元数据删失败只会留下一条指向不存在文件的记录，不影响主流程，记日志即可。
+func (h *Handler) dropCoverMeta(fileName string) {
+	if err := h.db.DeleteCoverMeta(fileName); err != nil {
+		slog.Warn("delete cover meta", "file", fileName, "err", err)
+	}
+}
+
+// saveCoverMeta 写封面元数据。封面文件此时已经落盘，元数据写失败会让后续
+// 按 key 查不到信息（尺寸、扩展名），但不应连带把已完成的转换判为失败。
+func (h *Handler) saveCoverMeta(hash, fileName, ext string, size int64) {
+	if err := h.db.UpsertCoverMeta(hash, fileName, ext, size); err != nil {
+		slog.Warn("upsert cover meta", "file", fileName, "err", err)
+	}
+}
+
 // GET /covers — distinct covers for the reuse picker.
 func (h *Handler) listCovers(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
@@ -92,7 +108,9 @@ func (h *Handler) mergeCovers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.db.SyncCovers(h.storage)
+	if _, err := h.db.SyncCovers(h.storage); err != nil {
+		slog.Warn("sync covers", "err", err)
+	}
 
 	mergedGroups, updated := 0, int64(0)
 	freed := int64(0)
@@ -142,11 +160,11 @@ func (h *Handler) mergeCovers(w http.ResponseWriter, r *http.Request) {
 			size, _ := h.db.CoverSize(old)
 			if err := h.storage.DeleteCover(old); err == nil {
 				freed += size
-				h.db.DeleteCoverMeta(old)
+				h.dropCoverMeta(old)
 			}
 		}
 
-		h.db.UpsertCoverMeta(hash, canonical, cover.Ext, cover.Size)
+		h.saveCoverMeta(hash, canonical, cover.Ext, cover.Size)
 		mergedGroups++
 	}
 
@@ -229,7 +247,7 @@ func (h *Handler) cleanupCovers(w http.ResponseWriter, r *http.Request) {
 		if err := h.storage.MoveCoverToTrash(k); err == nil {
 			moved++
 			freed += size
-			h.db.DeleteCoverMeta(k)
+			h.dropCoverMeta(k)
 		}
 	}
 	if req.DryRun {
@@ -580,7 +598,7 @@ func (h *Handler) convertOneCover(k, format string, res *batchConvertResult) (st
 			if cnt, _ := h.db.CountCoverRefs(k); cnt == 0 {
 				if sz, ok := h.db.CoverSize(k); ok {
 					res.Freed += sz
-					h.db.DeleteCoverMeta(k)
+					h.dropCoverMeta(k)
 				}
 			}
 		}

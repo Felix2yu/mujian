@@ -109,7 +109,7 @@ func (f *fakeS3) listObjects(w http.ResponseWriter, r *http.Request) {
 	out.IsTruncated = false
 	w.Header().Set("Content-Type", "application/xml")
 	w.WriteHeader(http.StatusOK)
-	xml.NewEncoder(w).Encode(out)
+	_ = xml.NewEncoder(w).Encode(out)
 }
 
 func sortedKeys(m map[string][]byte) []string {
@@ -362,7 +362,7 @@ func TestS3ListKeysAndTrashMissing(t *testing.T) {
 	}
 	// MoveCoverToTrash of a missing file: CopyObject copies nothing; not an error.
 	_ = os.MkdirAll(filepath.Join(t.TempDir(), "unused"), 0755)
-	if err := s.MoveCoverToTrash("covers/ghost.jpg"); err == nil {
-		// allowed (mock copies nothing); no assertion on error
-	}
+	// 对不存在 key 的回收没有任何可断言的结果（mock 什么都不复制），
+	// 这里只要求它不 panic。
+	_ = s.MoveCoverToTrash("covers/ghost.jpg")
 }

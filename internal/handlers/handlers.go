@@ -1656,7 +1656,12 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.cfg.Update(&req)
-	h.cfg.SaveToFile(filepath.Join(h.cfg.DBPath, "..", "settings.json"))
+	if err := h.cfg.SaveToFile(filepath.Join(h.cfg.DBPath, "..", "settings.json")); err != nil {
+		// 内存里已经生效，落盘失败说明下次启动会回到旧设置——如实告诉前端，
+		// 别让它显示"已保存"。
+		jsonErr(w, 500, "settings applied but failed to persist: "+err.Error())
+		return
+	}
 	// 备份间隔可能变了：让调度器重算下次运行时间
 	h.backup.Reschedule()
 	jsonResp(w, 200, h.cfg.GetSettingsResponse())
@@ -1748,7 +1753,10 @@ func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 403, "local storage is disabled")
 		return
 	}
-	r.ParseMultipartForm(32 << 20)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		jsonErr(w, 400, "invalid multipart form: "+err.Error())
+		return
+	}
 	_, header, err := r.FormFile("file")
 	if err != nil {
 		jsonErr(w, 400, "no file provided")
@@ -1872,7 +1880,10 @@ func writeZipEntryBytes(zw *zip.Writer, name string, data []byte) error {
 }
 
 func (h *Handler) backupRestore(w http.ResponseWriter, r *http.Request) {
-	r.ParseMultipartForm(32 << 20)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		jsonErr(w, 400, "invalid multipart form: "+err.Error())
+		return
+	}
 	file, _, err := r.FormFile("file")
 	if err != nil {
 		jsonErr(w, 400, "no file provided")

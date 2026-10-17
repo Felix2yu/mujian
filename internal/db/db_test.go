@@ -364,7 +364,7 @@ func TestBatchUpdateAndDelete(t *testing.T) {
 
 	// Exercise every scalar field + every array op so BatchUpdateRecords'
 	// optional branches are fully covered.
-	db.UpsertRecord(models.Record{ID: "bf", Name: "全字段", Date: base, Play: []string{"p0"}, Guest: []string{"g0"}})
+	_ = db.UpsertRecord(models.Record{ID: "bf", Name: "全字段", Date: base, Play: []string{"p0"}, Guest: []string{"g0"}})
 	cat, rate, act, addr, chanS, comp, fr, remark, seat := "昆曲", 5, 1, "剧场", "大麦", "院团", "友人", "注", "A1"
 	price, pp, oc := 200.0, 180.0, 20.0
 	pcur, ppcur, ocur := "CNY", "CNY", "CNY"
@@ -1665,7 +1665,7 @@ func TestArtistResolutionAndMigration(t *testing.T) {
 
 	// migrateArtistRelations: seed a legacy record with artist_names JSON, run
 	// the migration, then verify the relation table is populated + idempotent.
-	db.conn.Exec("INSERT INTO records (id, name, artist_names, date) VALUES ('leg1','老数据',?,?)",
+	_, _ = db.conn.Exec("INSERT INTO records (id, name, artist_names, date) VALUES ('leg1','老数据',?,?)",
 		marshalJSON([]string{"新演员", "小李"}), time.Now().Unix())
 	if err := db.migrateArtistRelations(); err != nil {
 		t.Fatal(err)
@@ -2149,17 +2149,17 @@ func TestGetAnalytics(t *testing.T) {
 	dramas := []string{"牡丹亭", "长生殿", "西厢记", "玉簪记", "赵氏孤儿", "雷峰塔"}
 	for _, name := range dramas {
 		id := fmt.Sprintf("d-%s", name)
-		db.conn.Exec("INSERT OR IGNORE INTO dramas (id, name, aliases) VALUES (?, ?, '[]')", id, name)
+		_, _ = db.conn.Exec("INSERT OR IGNORE INTO dramas (id, name, aliases) VALUES (?, ?, '[]')", id, name)
 	}
 	zhezis := []string{"惊梦", "寻梦", "叫画", "琴挑", "断桥", "哭塔"}
 	for _, name := range zhezis {
 		id := fmt.Sprintf("z-%s", name)
-		db.conn.Exec("INSERT OR IGNORE INTO zhezis (id, name, drama_id) VALUES (?, ?, 'd-牡丹亭')", id, name)
+		_, _ = db.conn.Exec("INSERT OR IGNORE INTO zhezis (id, name, drama_id) VALUES (?, ?, 'd-牡丹亭')", id, name)
 	}
 	artists := []string{"张军", "王芳", "沈昳丽", "黎安", "余彬", "倪徐浩", "罗晨雪", "袁国良"}
 	for _, name := range artists {
 		id := fmt.Sprintf("a-%s", name)
-		db.conn.Exec("INSERT OR IGNORE INTO artists (id, name) VALUES (?, ?)", id, name)
+		_, _ = db.conn.Exec("INSERT OR IGNORE INTO artists (id, name) VALUES (?, ?)", id, name)
 	}
 
 	// 插入多样化演出（跨城市、评分、价格、时间、演员、剧目）
@@ -2327,9 +2327,9 @@ func TestCountRecordsBranches(t *testing.T) {
 	db := newTestDB(t)
 
 	// 先插入 dramas / zhezis / artists 实体
-	db.conn.Exec("INSERT OR IGNORE INTO dramas (id, name, aliases) VALUES ('d-1', '牡丹亭', '[]'), ('d-2', '长生殿', '[]')")
-	db.conn.Exec("INSERT OR IGNORE INTO zhezis (id, name, drama_id) VALUES ('z-1', '惊梦', 'd-1'), ('z-2', '寻梦', 'd-1')")
-	db.conn.Exec("INSERT OR IGNORE INTO artists (id, name) VALUES ('a-1', '张军'), ('a-2', '王芳')")
+	_, _ = db.conn.Exec("INSERT OR IGNORE INTO dramas (id, name, aliases) VALUES ('d-1', '牡丹亭', '[]'), ('d-2', '长生殿', '[]')")
+	_, _ = db.conn.Exec("INSERT OR IGNORE INTO zhezis (id, name, drama_id) VALUES ('z-1', '惊梦', 'd-1'), ('z-2', '寻梦', 'd-1')")
+	_, _ = db.conn.Exec("INSERT OR IGNORE INTO artists (id, name) VALUES ('a-1', '张军'), ('a-2', '王芳')")
 
 	// 6 条记录，覆盖不同组合
 	now := time.Now()

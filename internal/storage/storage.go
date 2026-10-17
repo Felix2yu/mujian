@@ -12,6 +12,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"mujian/internal/config"
 	"os"
@@ -191,9 +192,13 @@ type LocalStorage struct {
 }
 
 func NewLocalStorage(uploadDir string, cfgProvider func() string) *LocalStorage {
-	os.MkdirAll(uploadDir, 0755)
-	os.MkdirAll(filepath.Join(uploadDir, "covers"), 0755)
-	os.MkdirAll(filepath.Join(uploadDir, "covers_trash"), 0755)
+	// 构造期没有错误出口：目录建不出来时，后续每次读写都会报出真实错误，
+	// 这里只是提前把原因留在日志里。
+	for _, dir := range []string{uploadDir, filepath.Join(uploadDir, "covers"), filepath.Join(uploadDir, "covers_trash")} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			slog.Warn("create local storage dir", "dir", dir, "err", err)
+		}
+	}
 	if cfgProvider == nil {
 		cfgProvider = func() string { return "avif" }
 	}
@@ -337,7 +342,9 @@ func (s *LocalStorage) MoveCoverToTrash(key string) error {
 	}
 	from := s.localPath(key)
 	to := filepath.Join(s.uploadDir, trashKey(filepath.Base(key)))
-	os.MkdirAll(filepath.Dir(to), 0755)
+	if err := os.MkdirAll(filepath.Dir(to), 0755); err != nil {
+		return err
+	}
 	err := os.Rename(from, to)
 	if os.IsNotExist(err) {
 		return nil
@@ -442,9 +449,12 @@ func (s *LocalStorage) ConvertCover(key string, targetFormat string) (string, bo
 		return "", false, err
 	}
 
-	// Delete old file if it's different from the new one
+	// Delete old file if it's different from the new one. 删不掉只会留下一个
+	// 孤儿文件，不影响本次转换结果，记日志即可。
 	if newKey != key {
-		s.DeleteCover(key)
+		if err := s.DeleteCover(key); err != nil {
+			slog.Warn("delete stale cover", "key", key, "err", err)
+		}
 	}
 
 	return newKey, created, nil
@@ -456,7 +466,6 @@ type S3Storage struct {
 	client      *s3.Client
 	bucket      string
 	publicURL   string
-	baseKey     string
 	cfgProvider func() string
 }
 
@@ -823,9 +832,12 @@ func (s *S3Storage) ConvertCover(key string, targetFormat string) (string, bool,
 		return "", false, err
 	}
 
-	// Delete old file if it's different from the new one
+	// Delete old file if it's different from the new one. 删不掉只会留下一个
+	// 孤儿文件，不影响本次转换结果，记日志即可。
 	if newKey != key {
-		s.DeleteCover(key)
+		if err := s.DeleteCover(key); err != nil {
+			slog.Warn("delete stale cover", "key", key, "err", err)
+		}
 	}
 
 	return newKey, created, nil

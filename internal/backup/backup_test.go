@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
 	"mujian/internal/config"
+
+	_ "modernc.org/sqlite"
 )
 
 // testVacuumer wraps a plain sqlite handle; production passes *db.DB which
@@ -148,9 +149,7 @@ func TestSchedulerRunsOnInterval(t *testing.T) {
 
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, err := os.Stat(filepath.Join(bdir, "mujian-backup-20000101-000000.db")); err != nil {
-			// 旧文件被清掉了？keep=5 不会。直接数文件。
-		}
+		// 只看目录里的文件数：keep=5 不会删掉刚生成的两个文件。
 		files, _ := os.ReadDir(bdir)
 		if len(files) >= 2 {
 			return // 补跑成功

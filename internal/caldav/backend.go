@@ -323,9 +323,9 @@ func objectID(p string) (id string, isTask bool, ok bool) {
 	clean := stdpath.Clean(p)
 	switch {
 	case strings.HasPrefix(clean, TasksPath):
-		id, isTask, ok = strings.TrimPrefix(clean, TasksPath), true, true
+		id, isTask = strings.TrimPrefix(clean, TasksPath), true
 	case strings.HasPrefix(clean, CalendarPath):
-		id, isTask, ok = strings.TrimPrefix(clean, CalendarPath), false, true
+		id, isTask = strings.TrimPrefix(clean, CalendarPath), false
 	default:
 		return "", false, false
 	}

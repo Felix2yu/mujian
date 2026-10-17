@@ -76,7 +76,7 @@ func TestCostsEndpoints(t *testing.T) {
 	}
 
 	// 3) 批量标记为 0 元：未填写记录落 0，已填 280 的记录保持不变。
-	res, b = doJSON(t, "POST", ts.URL+"/api/costs/review", map[string]interface{}{
+	res, _ = doJSON(t, "POST", ts.URL+"/api/costs/review", map[string]interface{}{
 		"ids": []string{empty.ID, filled.ID}, "field": "price", "action": "zero",
 	})
 	expectStatus(t, res, 200, "POST costs/review zero")
@@ -105,7 +105,7 @@ func TestCostsEndpoints(t *testing.T) {
 	}
 
 	// 4) 单条填入明确金额。
-	res, b = doJSON(t, "POST", ts.URL+"/api/costs/review", map[string]interface{}{
+	res, _ = doJSON(t, "POST", ts.URL+"/api/costs/review", map[string]interface{}{
 		"items": []map[string]interface{}{
 			{"id": empty.ID, "field": "pay_price", "action": "amount", "amount": 88},
 		},

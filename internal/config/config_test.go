@@ -71,8 +71,6 @@ func TestLoadTimezoneInvalid(t *testing.T) {
 	}
 }
 
-func strptr(s string) *string { return &s }
-
 func TestUpdate(t *testing.T) {
 	c := &Config{AllowLocalStorage: true}
 	theme := "light"

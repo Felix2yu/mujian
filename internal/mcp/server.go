@@ -436,14 +436,6 @@ func dryRun(p *bool) bool {
 	return p == nil || *p
 }
 
-// objProp returns an object property schema with the given properties.
-func objProp(props map[string]*jsonschema.Schema) *jsonschema.Schema {
-	return &jsonschema.Schema{
-		Type:       "object",
-		Properties: props,
-	}
-}
-
 // toolSchema creates a JSON Schema for a tool with the given properties.
 func toolSchema(required []string, props map[string]*jsonschema.Schema) *jsonschema.Schema {
 	return &jsonschema.Schema{
