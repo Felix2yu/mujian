@@ -178,7 +178,7 @@ func TestRecordsEndpoints(t *testing.T) {
 	expectStatus(t, res, 400, "create missing name")
 
 	// Get.
-	res, b = doJSON(t, "GET", ts.URL+"/api/records/"+created.ID, nil)
+	res, _ = doJSON(t, "GET", ts.URL+"/api/records/"+created.ID, nil)
 	expectStatus(t, res, 200, "get record")
 	res, _ = doJSON(t, "GET", ts.URL+"/api/records/missing", nil)
 	expectStatus(t, res, 404, "get missing")
@@ -226,7 +226,7 @@ func TestRecordsEndpoints(t *testing.T) {
 	}
 
 	// Batch update / delete.
-	res, b = doJSON(t, "POST", ts.URL+"/api/records/batch", map[string]interface{}{
+	res, _ = doJSON(t, "POST", ts.URL+"/api/records/batch", map[string]interface{}{
 		"ids": []string{created.ID}, "city": "北京", "play": map[string]interface{}{"op": "append", "value": []string{"寻梦"}},
 	})
 	expectStatus(t, res, 200, "batch update")
@@ -235,7 +235,7 @@ func TestRecordsEndpoints(t *testing.T) {
 	res, _ = doJSON(t, "POST", ts.URL+"/api/records/batch", []byte("{"))
 	expectStatus(t, res, 400, "batch update invalid body")
 
-	res, b = doJSON(t, "POST", ts.URL+"/api/records/batch/delete", map[string]interface{}{"ids": []string{created.ID}})
+	res, _ = doJSON(t, "POST", ts.URL+"/api/records/batch/delete", map[string]interface{}{"ids": []string{created.ID}})
 	expectStatus(t, res, 200, "batch delete")
 	res, _ = doJSON(t, "POST", ts.URL+"/api/records/batch/delete", map[string]interface{}{})
 	expectStatus(t, res, 400, "batch delete empty")
@@ -373,7 +373,7 @@ func TestStatsCalendarSettings(t *testing.T) {
 	res, _ = doJSON(t, "GET", ts.URL+"/api/calendar", nil)
 	expectStatus(t, res, 200, "calendar default")
 
-	res, b = doJSON(t, "GET", ts.URL+"/api/calendar?year=abc&month=99", nil)
+	res, _ = doJSON(t, "GET", ts.URL+"/api/calendar?year=abc&month=99", nil)
 	expectStatus(t, res, 200, "calendar invalid params")
 	// 非法参数必须回退到「当前月」：插入一条当前月记录，
 	// 若 year=0 / month 被 normalize 到别的月份，这里查不到它。
@@ -435,7 +435,7 @@ func TestStatsCalendarSettings(t *testing.T) {
 	res, _ = doJSON(t, "GET", ts.URL+"/api/field/bogus/x", nil)
 	expectStatus(t, res, 400, "field invalid")
 
-	res, b = doJSON(t, "GET", ts.URL+"/api/settings", nil)
+	res, _ = doJSON(t, "GET", ts.URL+"/api/settings", nil)
 	expectStatus(t, res, 200, "get settings")
 	res, b = doJSON(t, "PUT", ts.URL+"/api/settings", map[string]interface{}{"theme": "dark", "image_format": "webp"})
 	expectStatus(t, res, 200, "update settings")
@@ -542,7 +542,7 @@ func TestUploadExportImport(t *testing.T) {
 		"customCategory": []map[string]interface{}{{"id": "cat1", "name": "越剧"}},
 	}
 	ajb, _ := json.Marshal(androidJSON)
-	fw.Write(ajb)
+	_, _ = fw.Write(ajb)
 	fw.Close()
 
 	var zbuf2 bytes.Buffer
@@ -559,7 +559,7 @@ func TestUploadExportImport(t *testing.T) {
 	}
 
 	// backup/restore endpoint.
-	res, b = uploadFile(t, ts.URL+"/api/backup/restore", "file", "data.json", eb, "")
+	res, _ = uploadFile(t, ts.URL+"/api/backup/restore", "file", "data.json", eb, "")
 	expectStatus(t, res, 200, "backup restore")
 	res, _ = uploadFile(t, ts.URL+"/api/backup/restore", "file", "bad.json", []byte("{bad"), "")
 	expectStatus(t, res, 400, "backup restore bad json")
@@ -905,7 +905,7 @@ func TestImportAndroidZlib(t *testing.T) {
 	// zlib-compressed (not raw deflate) payload.
 	var zc bytes.Buffer
 	zw := zlib.NewWriter(&zc)
-	zw.Write(ajb)
+	_, _ = zw.Write(ajb)
 	zw.Close()
 
 	var zbuf bytes.Buffer
@@ -929,11 +929,11 @@ func TestImportAndroidZlib(t *testing.T) {
 func TestArtistsEndpoints(t *testing.T) {
 	ts, _, _, _ := newTestServer(t, nil)
 
-	res, b := doJSON(t, "GET", ts.URL+"/api/artists", nil)
+	res, _ := doJSON(t, "GET", ts.URL+"/api/artists", nil)
 	expectStatus(t, res, 200, "list artists (empty)")
 
 	// Create with trimming + aliases.
-	res, b = doJSON(t, "POST", ts.URL+"/api/artists", map[string]interface{}{
+	res, b := doJSON(t, "POST", ts.URL+"/api/artists", map[string]interface{}{
 		"name":    " 张军 ",
 		"aliases": []string{"张三"},
 		"bio":     "昆曲演员",
@@ -952,7 +952,7 @@ func TestArtistsEndpoints(t *testing.T) {
 	expectStatus(t, res, 400, "create artist invalid body")
 
 	// Link a record to the artist; verify reverse lookup counts it.
-	res, b = doJSON(t, "POST", ts.URL+"/api/records", map[string]interface{}{
+	res, _ = doJSON(t, "POST", ts.URL+"/api/records", map[string]interface{}{
 		"name":         "牡丹亭",
 		"date":         time.Date(2026, 8, 22, 19, 30, 0, 0, time.UTC).Unix(),
 		"artist_names": []string{"张军"},
@@ -1489,7 +1489,7 @@ func TestTestS3Connection(t *testing.T) {
 			t.Fatalf("status %d: %s", res.StatusCode, b)
 		}
 		var out map[string]interface{}
-		json.Unmarshal(b, &out)
+		_ = json.Unmarshal(b, &out)
 		return out
 	}
 
@@ -1539,7 +1539,7 @@ func TestTestS3Connection(t *testing.T) {
 			t.Fatalf("status %d: %s", res.StatusCode, b)
 		}
 		var out map[string]interface{}
-		json.Unmarshal(b, &out)
+		_ = json.Unmarshal(b, &out)
 		return out
 	}
 	if out := call2(map[string]string{

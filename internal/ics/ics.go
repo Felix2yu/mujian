@@ -302,7 +302,7 @@ func writeTodo(b *strings.Builder, rec models.Record, loc *time.Location, zheziN
 		b.WriteString(foldICSLine(s))
 		b.WriteString("\r\n")
 	}
-	writeLine(fmt.Sprintf("BEGIN:VTODO"))
+	writeLine("BEGIN:VTODO")
 	writeLine(fmt.Sprintf("UID:%s@mujian", rec.ID))
 	// DTSTAMP deterministic (derived from the event time) so the CalDAV ETag
 	// stays stable across syncs instead of forcing re-fetches.

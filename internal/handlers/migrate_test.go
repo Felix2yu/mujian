@@ -102,7 +102,7 @@ func TestMigrateToS3Endpoint(t *testing.T) {
 		t.Fatalf("re-migrate: status %d", res.StatusCode)
 	}
 	out = map[string]interface{}{}
-	json.Unmarshal([]byte(ndjsonLast(t, body)), &out)
+	_ = json.Unmarshal([]byte(ndjsonLast(t, body)), &out)
 	if out["skipped"].(float64) != 1 || out["migrated"].(float64) != 0 {
 		t.Fatalf("re-migrate result: %v", out)
 	}

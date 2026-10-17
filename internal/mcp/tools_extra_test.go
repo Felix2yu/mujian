@@ -833,9 +833,8 @@ func TestCoverHandlers(t *testing.T) {
 	}
 
 	// cover_duplicates：两个不同文件、相同 hash → 应成组。
-	if err := s.db.UpsertCoverMeta("duphash", "covers/a.avif", ".avif", 100); err == nil {
-		// 覆盖为相同 hash 之前已存在，确保 a、b 同 hash。
-	}
+	// a 可能在上一步已经写入过，重复写失败不影响后续断言。
+	_ = s.db.UpsertCoverMeta("duphash", "covers/a.avif", ".avif", 100)
 	if err := s.db.UpsertCoverMeta("duphash", "covers/b.avif", ".avif", 100); err != nil {
 		t.Fatal(err)
 	}

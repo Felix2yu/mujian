@@ -169,7 +169,6 @@ func (db *DB) RescanVenues() (added, removed int, err error) {
 		return 0, 0, err
 	}
 	venueByNorm := map[string]string{}
-	var venueIDs []string
 	for rows.Next() {
 		var id, name string
 		if err := rows.Scan(&id, &name); err != nil {
@@ -177,7 +176,6 @@ func (db *DB) RescanVenues() (added, removed int, err error) {
 			return 0, 0, err
 		}
 		venueByNorm[normVenueName(name)] = id
-		venueIDs = append(venueIDs, id)
 	}
 	rows.Close()
 
@@ -336,8 +334,7 @@ func (db *DB) ListVenues() ([]Venue, error) {
 	for g := 1; g < nextGroup; g++ {
 		parent[g] = g
 	}
-	var find func(int) int
-	find = func(x int) int {
+	find := func(x int) int {
 		for parent[x] != x {
 			parent[x] = parent[parent[x]]
 			x = parent[x]

@@ -39,7 +39,10 @@ var importMu sync.Mutex
 func (h *Handler) importRecords(w http.ResponseWriter, r *http.Request) {
 	// maxMemory only bounds the in-RAM portion; the rest spills to disk. The
 	// total request size is capped by bodyLimitMiddleware (640MB).
-	r.ParseMultipartForm(32 << 20)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		jsonErr(w, 400, "invalid multipart form: "+err.Error())
+		return
+	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		jsonErr(w, 400, "no file provided")
@@ -443,7 +446,7 @@ func (h *Handler) extractCovers(zr *zip.Reader, records []models.Record) ([]stri
 			continue
 		}
 		rec.CoverFile = key
-		h.db.UpsertCoverMeta(storage.HashBytes(data), key, ext, int64(len(data)))
+		h.saveCoverMeta(storage.HashBytes(data), key, ext, int64(len(data)))
 		imported = append(imported, key)
 	}
 	return imported, missing

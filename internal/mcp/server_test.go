@@ -220,7 +220,7 @@ func TestBatchCreateZhezisSkipsExisting(t *testing.T) {
 	}
 
 	// 按名称解析剧目再写一次，别名也不应重复创建。
-	res, _, err = s.handleBatchCreateZhezis(context.Background(), nil,
+	_, _, err = s.handleBatchCreateZhezis(context.Background(), nil,
 		BatchCreateZhezisInput{DramaName: "牡丹亭", Names: []string{"游园惊梦"}, DryRun: boolPtr(false)})
 	if err != nil {
 		t.Fatal(err)

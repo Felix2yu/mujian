@@ -36,7 +36,7 @@ func TestRecordPhotosEndpoints(t *testing.T) {
 	// 上传两张图，依次关联。
 	keys := uploadCoverKeys(t, ts, 2)
 	for _, key := range keys {
-		res, b = doJSON(t, "POST", ts.URL+"/api/records/"+rec.ID+"/photos", map[string]string{"key": key})
+		res, _ = doJSON(t, "POST", ts.URL+"/api/records/"+rec.ID+"/photos", map[string]string{"key": key})
 		expectStatus(t, res, 201, "add photo "+key)
 	}
 
@@ -64,7 +64,7 @@ func TestRecordPhotosEndpoints(t *testing.T) {
 	res, _ = doJSON(t, "POST", ts.URL+"/api/records/"+rec.ID+"/photos/reorder", []byte("not-json"))
 	expectStatus(t, res, 400, "reorder photos invalid body")
 
-	res, b = doJSON(t, "GET", ts.URL+"/api/records/"+rec.ID+"/photos", nil)
+	_, b = doJSON(t, "GET", ts.URL+"/api/records/"+rec.ID+"/photos", nil)
 	decodeResp(t, b, &page)
 	if page.Photos[0].FileName != keys[1] {
 		t.Fatalf("reorder did not apply: %+v", page.Photos)
@@ -250,16 +250,16 @@ func TestBackupEndpoints(t *testing.T) {
 func TestMapPointsEndpoint(t *testing.T) {
 	ts, _, _, _ := newTestServer(t, nil)
 
-	res, b := doJSON(t, "GET", ts.URL+"/api/map/points", nil)
+	res, _ := doJSON(t, "GET", ts.URL+"/api/map/points", nil)
 	expectStatus(t, res, 200, "map points empty")
 
-	_, b = doJSON(t, "POST", ts.URL+"/api/records", map[string]interface{}{
+	_, b := doJSON(t, "POST", ts.URL+"/api/records", map[string]interface{}{
 		"name": "有坐标", "date": time.Now().Unix(),
 		"coordinate": map[string]float64{"lat": 31.23, "lng": 121.47},
 	})
 	var with models.Record
 	decodeResp(t, b, &with)
-	_, b = doJSON(t, "POST", ts.URL+"/api/records", map[string]interface{}{"name": "无坐标", "date": time.Now().Unix()})
+	_, _ = doJSON(t, "POST", ts.URL+"/api/records", map[string]interface{}{"name": "无坐标", "date": time.Now().Unix()})
 
 	res, b = doJSON(t, "GET", ts.URL+"/api/map/points", nil)
 	expectStatus(t, res, 200, "map points")
