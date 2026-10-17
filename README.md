@@ -49,7 +49,7 @@
 
 ```bash
 # 前端（端口 5173，API 自动代理到 :8080）
-cd frontend && pnpm install
+cd web && pnpm install
 pnpm run dev
 
 # 后端（端口 8080，dev.sh 监听 .go 变化自动重建重启）
@@ -64,10 +64,10 @@ cd .. && make dev-backend
 make build
 ```
 
-产物为 `backend/mujian`（前端 dist 已内嵌），运行：
+产物为 `bin/mujian`（前端 dist 已内嵌），运行：
 
 ```bash
-cd backend && ./mujian
+./bin/mujian
 ```
 
 配置通过环境变量，见下文「环境变量」。
@@ -83,7 +83,7 @@ make docker   # docker compose up -d
 ### 测试与覆盖率
 
 ```bash
-cd backend && CGO_ENABLED=1 go test ./... -coverprofile=coverage.out
+CGO_ENABLED=1 go test ./... -coverprofile=coverage.out
 ```
 
 CI 中每次推送/PR 都会运行测试并上传 Codecov；`codecov.yml` 设定 project 与 patch 覆盖率目标 **85%**（`main.go` 与 pprof 调试桩不计入门禁）。
@@ -93,7 +93,7 @@ CI 中每次推送/PR 都会运行测试并上传 Codecov；`codecov.yml` 设定
 后端内置 MCP（Model Context Protocol）服务器，随 HTTP 服务启动并通过 `/mcp` 端点以 Streamable HTTP 暴露，直接读写数据库，供 opencode 等 AI 编程助手批量查找、修改、分析演出数据。
 
 ```bash
-cd backend && ./mujian        # MCP 随服务自动启动；opencode 用户由项目根 opencode.json 接管（remote 指向 /mcp）
+./bin/mujian        # MCP 随服务自动启动；opencode 用户由项目根 opencode.json 接管（remote 指向 /mcp）
 ```
 
 工具共 8 类 34 个，覆盖查询分析、CRUD、批量修改、剧目/折子/演员/分类/封面管理。详细清单见 [docs/mcp.md](docs/mcp.md)。
@@ -137,34 +137,36 @@ cd backend && ./mujian        # MCP 随服务自动启动；opencode 用户由�
 
 ```
 mujian/
-├── frontend/                  # SvelteKit 前端
-│   └── src/
-│       ├── lib/               # 组件 (RecordForm, RecordCard, BatchEditModal...)、api.js、stores.js
-│       └── routes/            # 页面路由
-│           ├── +page.svelte           # 首页（演出列表）
-│           ├── records/               # 演出详情 / 新增 / 编辑
-│           ├── dramas/                # 剧目与折子
-│           ├── categories/            # 分类管理
-│           ├── covers/                # 封面管理（去重/清理/缩略图/格式转换）
-│           ├── map/                   # 地图
-│           ├── import/                # 导入
-│           ├── analytics/             # 数据分析
-│           └── settings/              # 设置
+├── cmd/mujian/                # 入口：flag 解析 / 装配 / 启动
+│   ├── main.go                # 路由挂载（/api、/mcp、/caldav）、uploads 静态服务（os.Root 防护）
+│   ├── version.go             # -X main.version 注入对象
+│   └── default.pgo            # PGO profile
+├── internal/                  # Go 私有业务包
+│   ├── config/                # 配置加载与设置持久化
+│   ├── db/                    # SQLite 数据层
+│   ├── handlers/              # HTTP 处理器（含流式进度接口）
+│   ├── ics/                   # iCalendar 导出
+│   ├── caldav/                # 只读 CalDAV 服务端（go-webdav 适配）
+│   ├── mcp/                   # MCP 服务器（AI 批量查询/修改/分析工具）
+│   ├── models/                # 数据模型
+│   ├── storage/               # 封面存储（本地/S3）、图片编解码、格式嗅探
+│   └── web/                   # go:embed 内嵌前端产物（embed.go + dist/ 占位）
+├── web/                       # SvelteKit 前端
+│   ├── src/
+│   │   ├── lib/               # 组件 (RecordForm, RecordCard, BatchEditModal...)、api.js、stores.js
+│   │   └── routes/            # 页面路由
+│   │       ├── +page.svelte           # 首页（演出列表）
+│   │       ├── records/               # 演出详情 / 新增 / 编辑
+│   │       ├── dramas/                # 剧目与折子
+│   │       ├── categories/            # 分类管理
+│   │       ├── covers/                # 封面管理（去重/清理/缩略图/格式转换）
+│   │       ├── map/                   # 地图
+│   │       ├── import/                # 导入
+│   │       ├── analytics/             # 数据分析
+│   │       └── settings/              # 设置
 │   └── static/sw.js           # Service Worker（PWA 缓存与推送）
-├── backend/                   # Go 后端（前端 dist 通过 go:embed 内嵌）
-│   ├── main.go                # 入口、路由挂载（/api、/mcp、/caldav）、uploads 静态服务（os.Root 防护）
-│   ├── default.pgo            # PGO profile
-│   └── internal/
-│       ├── config/            # 配置加载与设置持久化
-│       ├── db/                # SQLite 数据层
-│       ├── handlers/          # HTTP 处理器（含流式进度接口）
-│       ├── ics/               # iCalendar 导出
-│       ├── caldav/            # 只读 CalDAV 服务端（go-webdav 适配）
-│       ├── mcp/               # MCP 服务器（AI 批量查询/修改/分析工具）
-│       ├── models/            # 数据模型
-│       └── storage/           # 封面存储（本地/S3）、图片编解码、格式嗅探
 ├── codecov.yml                # Codecov 覆盖率门禁
-├── .github/workflows/build.yml # CI：构建 + 测试 + 覆盖率上传 + Docker 镜像
+├── .github/workflows/ci.yml   # CI：构建 + 测试 + 覆盖率上传 + Docker 镜像
 ├── docker-compose.yml
 ├── Dockerfile
 └── Makefile

@@ -31,15 +31,15 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     with:
-      go-dir: backend
+      go-dir: .
       test-packages: ./internal/...
       test-cgo: '1'
-      web-dir: frontend
+      web-dir: web
       frontend-stage-command: |
-        # backend/dist 供 go:embed；根目录 dist/ 供 Dockerfile COPY
-        rm -rf backend/dist dist
-        cp -r frontend/dist backend/dist
-        cp -r frontend/dist dist
+        # internal/web/dist 供 go:embed；根目录 dist/ 供 Dockerfile COPY
+        rm -rf internal/web/dist dist
+        cp -r web/dist internal/web/dist
+        cp -r web/dist dist
 
   image:
     needs: test
@@ -48,16 +48,19 @@ jobs:
       packages: write
     uses: Felix2yu/.github/.github/workflows/reusable-image.yml@v1
     with:
-      go-dir: backend
+      go-dir: .
+      # 入口在 cmd/mujian/：main-package 的默认值是 "."，入口迁走后不显式传
+      # 会在 Build binary 步骤失败（本地 go build 发现不了）
+      main-package: ./cmd/mujian
       binary-name: mujian
       image-name: ghcr.io/felix2yu/mujian
       cgo: glibc
-      web-dir: frontend
+      web-dir: web
       frontend-stage-command: |
-        # backend/dist 供 go:embed；根目录 dist/ 供 Dockerfile COPY
-        rm -rf backend/dist dist
-        cp -r frontend/dist backend/dist
-        cp -r frontend/dist dist
+        # internal/web/dist 供 go:embed；根目录 dist/ 供 Dockerfile COPY
+        rm -rf internal/web/dist dist
+        cp -r web/dist internal/web/dist
+        cp -r web/dist dist
 
   release:
     if: github.event_name == 'release'
@@ -65,12 +68,13 @@ jobs:
       contents: write
     uses: Felix2yu/.github/.github/workflows/reusable-release.yml@v1
     with:
-      go-dir: backend
+      go-dir: .
+      main-package: ./cmd/mujian
       binary-name: mujian
       cgo: glibc
-      web-dir: frontend
+      web-dir: web
       frontend-stage-command: |
-        # backend/dist 供 go:embed；根目录 dist/ 供 Dockerfile COPY
-        rm -rf backend/dist dist
-        cp -r frontend/dist backend/dist
-        cp -r frontend/dist dist
+        # internal/web/dist 供 go:embed；根目录 dist/ 供 Dockerfile COPY
+        rm -rf internal/web/dist dist
+        cp -r web/dist internal/web/dist
+        cp -r web/dist dist

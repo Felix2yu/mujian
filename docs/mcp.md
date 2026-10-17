@@ -5,14 +5,14 @@
 ## 架构
 
 ```
-AI 客户端 ──Streamable HTTP (JSON-RPC)──▶ https://<服务地址>/mcp ──▶ backend/data/mujian.db
+AI 客户端 ──Streamable HTTP (JSON-RPC)──▶ https://<服务地址>/mcp ──▶ data/mujian.db
 ```
 
 - 传输：Streamable HTTP（Stateless + JSON 响应），MCP 服务随主 HTTP 服务一起启动，挂载在 `/mcp` 端点。
 
 - 数据库：与 HTTP API 共用同一个 SQLite（WAL）、同一个 `*db.DB` 实例。
 
-- 入口：`main.go` 的 `/mcp` 路由；实现在 `backend/internal/mcp/`。
+- 入口：`cmd/mujian/main.go` 的 `/mcp` 路由；实现在 `internal/mcp/`。
 
 - 鉴权：若设置了 `MJ_AUTH_TOKEN` 环境变量，所有 MCP 请求需要在 HTTP 头携带 `Authorization: Bearer <令牌>`。
 
@@ -22,7 +22,7 @@ AI 客户端 ──Streamable HTTP (JSON-RPC)──▶ https://<服务地址>/mc
 
 ```bash
 # MCP 随 HTTP 服务自动启动，无需单独运行
-cd backend && ./mujian   # 之后 AI 客户端连接 http://<服务地址>/mcp
+cd <仓库根> && ./bin/mujian   # 之后 AI 客户端连接 http://<服务地址>/mcp
 ```
 
 ## 客户端配置

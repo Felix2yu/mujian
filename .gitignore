@@ -9,16 +9,26 @@ bun.lock
 bun.lockb
 
 # Build
-frontend/dist/
-frontend/.svelte-kit/
-backend/mujian
-backend/mujian-server
-backend/dist/
-backend/coverage.out
+# 全部加 / 锚定：无斜杠的规则会匹配任意层级的同名目录
+# （例如裸写 mujian 会命中 cmd/mujian/，把整个入口包判成忽略）
+web/dist/
+web/.svelte-kit/
+/mujian
+/mujian-server
+/bin/
+/dist/
+/coverage.out
+
+# 前端内嵌产物：internal/web/dist 由构建脚本生成，仓库里只留 .gitkeep 占位
+# （否则 //go:embed all:dist 在未构建前端时直接编译不过）
+internal/web/dist/*
+!internal/web/dist/.gitkeep
 
 # Data
 /data/
-backend/data/
+
+# 迁移残留（backend/ 已回根，仅剩未跟踪的本地产物/数据，待人工确认后删除）
+/backend/
 
 # IDE
 .vscode/
@@ -44,6 +54,6 @@ reasonix.toml
 
 # 记录现场 export (本地导出数据，含封面图片，不纳入仓库)
 recordlive_export/
-frontend/static/sw.js
+web/static/sw.js
 outputs/
 .zcode/

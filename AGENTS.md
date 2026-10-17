@@ -4,7 +4,7 @@
 
 ## MCP 服务（mujian）
 
-本项目通过 `opencode.json` 注册了 remote MCP 服务 `mujian`，指向后端 HTTP 服务的 `/mcp` 端点（Streamable HTTP，随服务启动，无单独进程），直接读写 `backend/data/mujian.db`。涉及演出数据查询、批量修改、分析时优先使用这些 MCP 工具，而不是直接用 sqlite 命令行改库。
+本项目通过 `opencode.json` 注册了 remote MCP 服务 `mujian`，指向后端 HTTP 服务的 `/mcp` 端点（Streamable HTTP，随服务启动，无单独进程），直接读写 `data/mujian.db`。涉及演出数据查询、批量修改、分析时优先使用这些 MCP 工具，而不是直接用 sqlite 命令行改库。
 
 ### 工具速查
 
@@ -54,14 +54,14 @@
 
 ## 开发
 
-- 后端：`cd backend && go build .`；测试 `go test ./...`
+- 后端（模块根 = 仓库根，入口 `./cmd/mujian`）：`go build ./...`；测试 `go test ./...`
 - 一键开发环境：`./dev.sh`
 
 ## 包管理器（强制）
 
 本项目前端统一使用 **pnpm 11.22.0**，不使用 npm / yarn：
 
-- `frontend/package.json` 已声明 `"packageManager": "pnpm@11.22.0"`，锁文件为 `frontend/pnpm-lock.yaml`
+- `web/package.json` 已声明 `"packageManager": "pnpm@11.22.0"`，锁文件为 `web/pnpm-lock.yaml`
 - 安装依赖：`pnpm install`
 - 添加 / 移除依赖：`pnpm add <pkg>` / `pnpm remove <pkg>`
 - 运行脚本：`pnpm run <script>`
