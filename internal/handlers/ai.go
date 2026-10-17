@@ -192,11 +192,11 @@ const pageUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebK
 const maxPageChars = 15000
 
 var (
-	headRe     = regexp.MustCompile(`(?is)<head[^>]*>.*?</head>`)
-	scriptRe   = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
-	styleRe    = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
-	commentRe  = regexp.MustCompile(`(?s)<!--.*?-->`)
-	titleRe    = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+	headRe    = regexp.MustCompile(`(?is)<head[^>]*>.*?</head>`)
+	scriptRe  = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
+	styleRe   = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
+	commentRe = regexp.MustCompile(`(?s)<!--.*?-->`)
+	titleRe   = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
 	// WeChat article pages ship an empty <title> (filled client-side); the
 	// real title sits in the og:title meta and the #activity-name h1.
 	ogTitleRe  = regexp.MustCompile(`(?is)<meta[^>]*og:title[^>]*>`)

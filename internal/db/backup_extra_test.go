@@ -12,7 +12,7 @@ func TestPreviewImport(t *testing.T) {
 
 	base := time.Now().Unix()
 	data := &models.ExportData{
-		Source:     "mujian",
+		Source: "mujian",
 		Records: []models.Record{
 			{ID: "pi1", Name: "新记录", Date: base},
 			{ID: "pi2", Name: "另一条", Date: base},

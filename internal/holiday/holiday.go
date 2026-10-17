@@ -34,7 +34,7 @@ const refreshInterval = 12 * time.Hour
 
 // remoteFile 是数据源的单年文件结构（holiday-cn 格式）。
 type remoteFile struct {
-	Year int              `json:"year"`
+	Year int                 `json:"year"`
 	Days []models.HolidayDay `json:"days"`
 }
 

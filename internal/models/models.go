@@ -12,11 +12,13 @@ type Coordinate struct {
 // 提供「整数 → Go 标识符」别名，供后端过滤逻辑（ics / caldav）使用；不持有任何文字标签。
 //
 // 同步契约（三者必须保持一致，否则状态语义错位）：
-//   1. 数据库列 records.active_status 是取值真相源（0/1/2/3）；
-//   2. 前端 frontend/src/lib/statusPrefs.js 的 STATUS_LABELS 持有「整数 → 中文」展示映射；
-//   3. 本常量块持有「整数 → Go 标识符」别名，语义须与上面两处完全相同。
+//  1. 数据库列 records.active_status 是取值真相源（0/1/2/3）；
+//  2. 前端 frontend/src/lib/statusPrefs.js 的 STATUS_LABELS 持有「整数 → 中文」展示映射；
+//  3. 本常量块持有「整数 → Go 标识符」别名，语义须与上面两处完全相同。
+//
 // 修改任一处的取值或语义时，必须同步另外两处。
-//   0=正常 1=想看 2=已取消 3=未赴约
+//
+//	0=正常 1=想看 2=已取消 3=未赴约
 const (
 	StatusNormal    = 0
 	StatusWantWatch = 1
@@ -478,25 +480,25 @@ type AnalyticsData struct {
 	WeekdayDist      []WeekdayItem   `json:"weekday_dist"`       // 周几分布
 
 	// 状态 / 地理 / 同伴 / 时长与折子覆盖扩展维度
-	StatusFunnel   *StatusFunnel    `json:"status_funnel"`   // 想看转化漏斗
-	Geo            *GeoStats        `json:"geo"`             // 常驻城市与异地观演
-	Companions     *CompanionStats  `json:"companions"`      // 独自/结伴与同伴排行
-	Duration       *DurationStats   `json:"duration"`        // 观演时长与单日密度
-	ZheziCover     *ZheziCoverage   `json:"zhezi_coverage"`  // 剧目折子覆盖率
+	StatusFunnel *StatusFunnel   `json:"status_funnel"`  // 想看转化漏斗
+	Geo          *GeoStats       `json:"geo"`            // 常驻城市与异地观演
+	Companions   *CompanionStats `json:"companions"`     // 独自/结伴与同伴排行
+	Duration     *DurationStats  `json:"duration"`       // 观演时长与单日密度
+	ZheziCover   *ZheziCoverage  `json:"zhezi_coverage"` // 剧目折子覆盖率
 }
 
 // StatusFunnel breaks records down by active_status (0 正常/已观看, 1 想看,
 // 2 已取消, 3 未赴约) and derives the share that actually happened.
 type StatusFunnel struct {
-	Watched      int        `json:"watched"`
-	Want         int        `json:"want"`
-	Canceled     int        `json:"canceled"`
-	NoShow       int        `json:"no_show"`
-	Total        int        `json:"total"`
-	WatchedPct   float64    `json:"watched_pct"`   // watched / total
-	AttendedPct  float64    `json:"attended_pct"`  // watched / (watched+canceled+no_show) 排期兑现率
-	WantPending  int        `json:"want_pending"`  // 仍在想看池子里的场次数
-	Dist         []DistItem `json:"dist"`
+	Watched     int        `json:"watched"`
+	Want        int        `json:"want"`
+	Canceled    int        `json:"canceled"`
+	NoShow      int        `json:"no_show"`
+	Total       int        `json:"total"`
+	WatchedPct  float64    `json:"watched_pct"`  // watched / total
+	AttendedPct float64    `json:"attended_pct"` // watched / (watched+canceled+no_show) 排期兑现率
+	WantPending int        `json:"want_pending"` // 仍在想看池子里的场次数
+	Dist        []DistItem `json:"dist"`
 }
 
 // GeoStats infers a "home city" (the most-attended one) and splits viewing
@@ -573,16 +575,16 @@ type YearNameDate struct {
 
 // YearKpi holds the headline numbers for one calendar year plus YoY deltas.
 type YearKpi struct {
-	TotalRecords     int     `json:"total_records"`
-	TotalCost        float64 `json:"total_cost"`
-	AvgRating        float64 `json:"avg_rating"`
-	TotalCities      int     `json:"total_cities"`
-	TotalHours       float64 `json:"total_hours"` // 有 duration 记录的总观演小时
-	NewArtists       int     `json:"new_artists"` // 今年首次遇到的演员
-	NewDramas        int     `json:"new_dramas"`  // 今年首次看到的剧目
-	RecordsDeltaPct  float64 `json:"records_delta_pct"`
-	CostDeltaPct     float64 `json:"cost_delta_pct"`
-	RatingDelta      float64 `json:"rating_delta"`
+	TotalRecords    int     `json:"total_records"`
+	TotalCost       float64 `json:"total_cost"`
+	AvgRating       float64 `json:"avg_rating"`
+	TotalCities     int     `json:"total_cities"`
+	TotalHours      float64 `json:"total_hours"` // 有 duration 记录的总观演小时
+	NewArtists      int     `json:"new_artists"` // 今年首次遇到的演员
+	NewDramas       int     `json:"new_dramas"`  // 今年首次看到的剧目
+	RecordsDeltaPct float64 `json:"records_delta_pct"`
+	CostDeltaPct    float64 `json:"cost_delta_pct"`
+	RatingDelta     float64 `json:"rating_delta"`
 }
 
 // YearHighlights are the "annual report card" picks that only make sense
@@ -601,12 +603,12 @@ type YearHighlights struct {
 
 // YearRankContext places the year's totals against every year on record.
 type YearRankContext struct {
-	YearsWithShows int     `json:"years_with_shows"`
-	CountRank      int     `json:"count_rank"` // 场次在历年中的名次（1 = 最多）
-	CostRank       int     `json:"cost_rank"`
+	YearsWithShows  int     `json:"years_with_shows"`
+	CountRank       int     `json:"count_rank"` // 场次在历年中的名次（1 = 最多）
+	CostRank        int     `json:"cost_rank"`
 	CountPercentile float64 `json:"count_percentile"` // 0-100，越高越活跃
-	IsRecordCount  bool     `json:"is_record_count"`
-	IsRecordCost   bool     `json:"is_record_cost"`
+	IsRecordCount   bool    `json:"is_record_count"`
+	IsRecordCost    bool    `json:"is_record_cost"`
 }
 
 // YearHolidayStats summarises shows attended on statutory holidays (休).
@@ -723,7 +725,7 @@ type BatchUpdateParams struct {
 	CategoryNames     *BatchArrayOp // 多剧种 set/append/remove（覆盖 CategoryName）
 	Rating            *int
 	ActiveStatus      *int
-	Watched           *bool  // 已观看/已到场，即 CalDAV VTODO 完成态；nil=不改，true=完成，false=未完成
+	Watched           *bool // 已观看/已到场，即 CalDAV VTODO 完成态；nil=不改，true=完成，false=未完成
 	City              *string
 	Address           *string
 	Channel           *string

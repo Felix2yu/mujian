@@ -11,15 +11,15 @@ import (
 // counts MergeArtists / MergeDramas would produce, without writing anything.
 // The web UI shows it before asking for confirmation.
 type MergePreview struct {
-	Kind           string     `json:"kind"` // artist | drama | venue
-	Source         MergeSide  `json:"source"`
-	Target         MergeSide  `json:"target"`
+	Kind           string      `json:"kind"` // artist | drama | venue
+	Source         MergeSide   `json:"source"`
+	Target         MergeSide   `json:"target"`
 	Sources        []MergeSide `json:"sources,omitempty"` // 多源合并时逐源明细
-	RecordsRepoint int        `json:"records_repoint"`
-	RecordsDedupe  int        `json:"records_dedupe"`
-	ZhezisMoved    int        `json:"zhezis_moved"`
-	ZhezisDeduped  int        `json:"zhezis_deduped"`
-	AliasesAdded   []string   `json:"aliases_added"`
+	RecordsRepoint int         `json:"records_repoint"`
+	RecordsDedupe  int         `json:"records_dedupe"`
+	ZhezisMoved    int         `json:"zhezis_moved"`
+	ZhezisDeduped  int         `json:"zhezis_deduped"`
+	AliasesAdded   []string    `json:"aliases_added"`
 }
 
 // MergeSide summarises one side of a prospective merge.
@@ -254,8 +254,8 @@ type MergeDramasResult struct {
 	TargetID         string   `json:"target_id"`
 	RecordsRepointed int64    `json:"records_repointed"`
 	RecordsDeduped   int64    `json:"records_deduped"`
-	ZhezisMoved      int      `json:"zhezis_moved"`       // 折子改挂到 target
-	ZhezisDeduped    int      `json:"zhezis_deduped"`     // 与 target 同名折子去重（链接改挂后删除）
+	ZhezisMoved      int      `json:"zhezis_moved"`   // 折子改挂到 target
+	ZhezisDeduped    int      `json:"zhezis_deduped"` // 与 target 同名折子去重（链接改挂后删除）
 	AliasesAdded     []string `json:"aliases_added"`
 	RemarkTakenOver  bool     `json:"remark_taken_over"`
 }

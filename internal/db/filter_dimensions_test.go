@@ -49,7 +49,7 @@ func TestFilterDimensions(t *testing.T) {
 		{"rating>=8", RecordFilter{RatingMin: 8, HasRatingMin: true}, 2},
 		{"rating>=0 等价于「有评分」", RecordFilter{RatingMin: 0, HasRatingMin: true}, 5},
 		{"price>=100", RecordFilter{PriceMin: 100}, 2},
-		{"price<=100", RecordFilter{PriceMax: 100, HasPriceMax: true}, 1}, // NULL 价格不参与比较，只有"昆曲·B"匹配
+		{"price<=100", RecordFilter{PriceMax: 100, HasPriceMax: true}, 1},                 // NULL 价格不参与比较，只有"昆曲·B"匹配
 		{"price 60~150", RecordFilter{PriceMin: 60, PriceMax: 150, HasPriceMax: true}, 1}, // NULL 价格不参与比较，只有"京剧·A"匹配
 		{"price<=0 只看免费", RecordFilter{PriceMax: 0, HasPriceMax: true}, 0},
 		{"status=1(想看)", RecordFilter{ActiveStatus: 1, HasActiveStatus: true}, 1},

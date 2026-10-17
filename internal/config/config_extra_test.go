@@ -67,7 +67,7 @@ func TestGetHuozhiSettings(t *testing.T) {
 
 func TestGetReminderConfig(t *testing.T) {
 	c := &Config{
-		ReminderMode:       "same_day",
+		ReminderMode:        "same_day",
 		ReminderBeforeHours: 3,
 		ReminderDailyHour:   10,
 		ReminderDailyMinute: 30,
