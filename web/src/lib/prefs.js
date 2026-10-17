@@ -11,5 +11,7 @@ export function loadPref(key, fallback) {
 export function savePref(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }

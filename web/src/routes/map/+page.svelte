@@ -1,4 +1,5 @@
 <script>
+  import { resolve } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
   import { api, coverUrl } from '#lib/api.js';
   import { gcj02ToWgs84 } from '#lib/geo.js';
@@ -19,9 +20,10 @@
   // 城市、地址、分类都是用户可控数据（导入/MCP/批量编辑均可写入），必须先
   // 转义再拼接，否则构成存储型 XSS。
   function escapeHtml(s) {
-    return String(s ?? '').replace(/[&<>"']/g, (c) => (
-      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-    ));
+    return String(s ?? '').replace(
+      /[&<>"']/g,
+      (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+    );
   }
 
   // 库里存的场馆坐标是 GCJ-02（国内地图复制出来的值）。高德 / 腾讯瓦片本身
@@ -179,9 +181,10 @@
 
       const icon = L.divIcon({
         className: 'muj-mark',
-        html: count > 1
-          ? `<div class="pin multi"><span>${count}</span></div>`
-          : '<div class="pin"></div>',
+        html:
+          count > 1
+            ? `<div class="pin multi"><span>${count}</span></div>`
+            : '<div class="pin"></div>',
         iconSize: [38, 42],
         iconAnchor: [19, 40],
         popupAnchor: [0, -38]
@@ -193,30 +196,33 @@
 
       const list = grp
         .slice(0, 8)
-        .map(
-          (r) => {
-            const cov = r.coverThumb ? coverUrl(r.coverThumb) : coverUrl(r.coverFile);
-            const full = r.coverFile ? coverUrl(r.coverFile) : cov;
-            const dateStr = r.dateText ? r.dateText.split(' ')[0].replace('年', '.').replace('月', '.').replace('日', '') : '';
-            const catStr = r.categoryName ? ' · ' + escapeHtml(r.categoryName) : '';
-            return `
-              <a class="mrow" href="/records/${encodeURIComponent(r.id)}">
+        .map((r) => {
+          const cov = r.coverThumb ? coverUrl(r.coverThumb) : coverUrl(r.coverFile);
+          const full = r.coverFile ? coverUrl(r.coverFile) : cov;
+          const dateStr = r.dateText
+            ? r.dateText.split(' ')[0].replace('年', '.').replace('月', '.').replace('日', '')
+            : '';
+          const catStr = r.categoryName ? ' · ' + escapeHtml(r.categoryName) : '';
+          return `
+              <a class="mrow" href={resolve('/records/${encodeURIComponent(r.id)}')}>
                 ${cov ? `<img class="mcov coverable" src="${escapeHtml(cov)}" data-full="${escapeHtml(full)}" alt=""/>` : '<div class="mcov ph"></div>'}
                 <div class="minfo">
                   <div class="mtitle">${escapeHtml(r.name)}</div>
                   <div class="msub">${escapeHtml(dateStr)}${catStr}</div>
                 </div>
               </a>`;
-          }
-        )
+        })
         .join('');
 
-      const more = count > 8 ? `<a class="mmore" href="/?q=${encodeURIComponent(first.name)}">还有 ${count - 8} 场…</a>` : '';
+      const more =
+        count > 8
+          ? `<a class="mmore" href={resolve('/?q=${encodeURIComponent(first.name)}')}>还有 ${count - 8} 场…</a>`
+          : '';
 
-      mk.bindPopup(() =>
-        createPopup(first, cityText, count, list, more),
-        { maxWidth: 340, className: 'muj-popup' }
-      );
+      mk.bindPopup(() => createPopup(first, cityText, count, list, more), {
+        maxWidth: 340,
+        className: 'muj-popup'
+      });
 
       clusterGroup.addLayer(mk);
     }
@@ -226,9 +232,10 @@
   function createPopup(first, cityText, count, list, more) {
     const cover = first.coverThumb ? coverUrl(first.coverThumb) : coverUrl(first.coverFile);
     const full = first.coverFile ? coverUrl(first.coverFile) : cover;
-    const titleHtml = count > 1
-      ? `<b>${escapeHtml(cityText)}</b> · ${count} 场`
-      : `<b>${escapeHtml(first.name)}</b>`;
+    const titleHtml =
+      count > 1
+        ? `<b>${escapeHtml(cityText)}</b> · ${count} 场`
+        : `<b>${escapeHtml(first.name)}</b>`;
     const address = first.address ? `<div class="paddr">${escapeHtml(first.address)}</div>` : '';
     return `
       <div class="pc">
@@ -245,7 +252,9 @@
     source = key;
     try {
       localStorage.setItem('mujian:map_source', key);
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
     if (map) {
       applySource(key);
       // 高德/腾讯(GCJ-02) 与 OSM(默认 WGS-84) 底图坐标系不同，切换后需重绘
@@ -266,7 +275,7 @@
   <div class="map-toolbar" class:hidden={!loading && records.length === 0}>
     <span class="src-label">底图</span>
     <div class="seg">
-      {#each Object.entries(SOURCES) as [key, s]}
+      {#each Object.entries(SOURCES) as [key, s] (key)}
         <button class="seg-btn {source === key ? 'active' : ''}" onclick={() => switchSource(key)}>
           {s.name}
         </button>
@@ -284,28 +293,59 @@
     <!-- 0 个坐标点时 Leaflet 不初始化，此前只剩一个空白容器（无提示、无引导） -->
     <div class="empty card">
       <div class="ico" aria-hidden="true">
-        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          width="44"
+          height="44"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="M12 21s7-5.1 7-11a7 7 0 1 0-14 0c0 5.9 7 11 7 11z" />
           <circle cx="12" cy="10" r="2.6" />
         </svg>
       </div>
       <div class="t">还没有可定位的演出</div>
       <div class="h">填了地址的演出会在保存时自动解析坐标，之后就会出现在这张地图上。</div>
-      <a class="btn sm" href="/?missing=coordinate">查看缺少坐标的演出</a>
+      <a class="btn sm" href={resolve('/?missing=coordinate')}>查看缺少坐标的演出</a>
     </div>
   {:else}
-    <div class="map-shell" style="position:relative; height: calc(100vh - 260px); min-height: 420px;">
+    <div
+      class="map-shell"
+      style="position:relative; height: calc(100vh - 260px); min-height: 420px;"
+    >
       <div bind:this={mapEl} id="map" style="position:absolute; inset:0; z-index:0;"></div>
     </div>
   {/if}
 </div>
 
 <style>
-  .page-head h1 { margin-bottom: 2px; }
-  .map-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-  .map-toolbar.hidden { display: none; }
-  .src-label { font-size: 13px; color: var(--text-muted); }
-  .seg { display: inline-flex; background: var(--surface-3); border-radius: 999px; padding: 3px; gap: 2px; }
+  .page-head h1 {
+    margin-bottom: 2px;
+  }
+  .map-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .map-toolbar.hidden {
+    display: none;
+  }
+  .src-label {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .seg {
+    display: inline-flex;
+    background: var(--surface-3);
+    border-radius: 999px;
+    padding: 3px;
+    gap: 2px;
+  }
   .seg-btn {
     border: none;
     background: transparent;
@@ -314,22 +354,43 @@
     border-radius: 999px;
     font-size: 13px;
     cursor: pointer;
-    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+    transition:
+      background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease),
+      box-shadow var(--t-fast) var(--ease);
   }
-  .seg-btn:hover { color: var(--text); }
-  .seg-btn.active { background: var(--surface); color: var(--accent); font-weight: 600; box-shadow: var(--shadow-sm); }
+  .seg-btn:hover {
+    color: var(--text);
+  }
+  .seg-btn.active {
+    background: var(--surface);
+    color: var(--accent);
+    font-weight: 600;
+    box-shadow: var(--shadow-sm);
+  }
 
-  .map-shell { border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-md); border: 1px solid var(--border); }
+  .map-shell {
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border);
+  }
 
   /* Leaflet 标记与弹窗（Leaflet 在组件外渲染，需全局） */
-  :global(.muj-mark) { background: transparent; border: none; }
+  :global(.muj-mark) {
+    background: transparent;
+    border: none;
+  }
   :global(.muj-mark .pin) {
     position: relative;
     width: 38px;
     height: 42px;
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='38' height='42' viewBox='0 0 38 42'%3E%3Cpath d='M19 1C9.6 1 2 8.5 2 18c0 12.6 17 23 17 23s17-10.4 17-23C36 8.5 28.4 1 19 1z' fill='%23b42318'/%3E%3Ccircle cx='19' cy='18' r='6' fill='white'/%3E%3C/svg%3E") no-repeat center / 100%;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='38' height='42' viewBox='0 0 38 42'%3E%3Cpath d='M19 1C9.6 1 2 8.5 2 18c0 12.6 17 23 17 23s17-10.4 17-23C36 8.5 28.4 1 19 1z' fill='%23b42318'/%3E%3Ccircle cx='19' cy='18' r='6' fill='white'/%3E%3C/svg%3E")
+      no-repeat center / 100%;
   }
-  :global(.muj-mark .pin.multi) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='38' height='42' viewBox='0 0 38 42'%3E%3Cpath d='M19 1C9.6 1 2 8.5 2 18c0 12.6 17 23 17 23s17-10.4 17-23C36 8.5 28.4 1 19 1z' fill='%23991b1b'/%3E%3Ccircle cx='19' cy='18' r='7' fill='white'/%3E%3C/svg%3E"); }
+  :global(.muj-mark .pin.multi) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='38' height='42' viewBox='0 0 38 42'%3E%3Cpath d='M19 1C9.6 1 2 8.5 2 18c0 12.6 17 23 17 23s17-10.4 17-23C36 8.5 28.4 1 19 1z' fill='%23991b1b'/%3E%3Ccircle cx='19' cy='18' r='7' fill='white'/%3E%3C/svg%3E");
+  }
   :global(.muj-mark .pin.multi span) {
     position: absolute;
     top: 18px;
@@ -381,13 +442,41 @@
     box-shadow: var(--shadow-lg);
     padding: 0;
   }
-  :global(.muj-popup .leaflet-popup-content) { margin: 0; width: 320px !important; }
-  :global(.muj-popup .pc) { padding: 0; }
-  :global(.muj-popup .phead) { display: flex; gap: 10px; padding: 12px 14px; align-items: center; border-bottom: 1px solid var(--border); }
-  :global(.muj-popup .phead img) { width: 40px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 6px; flex: 0 0 auto; }
-  :global(.muj-popup .ptext b) { font-family: var(--font-serif); font-size: 15px; }
-  :global(.muj-popup .paddr) { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-  :global(.muj-popup .plist) { padding: 4px 6px; max-height: 260px; overflow-y: auto; }
+  :global(.muj-popup .leaflet-popup-content) {
+    margin: 0;
+    width: 320px !important;
+  }
+  :global(.muj-popup .pc) {
+    padding: 0;
+  }
+  :global(.muj-popup .phead) {
+    display: flex;
+    gap: 10px;
+    padding: 12px 14px;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+  :global(.muj-popup .phead img) {
+    width: 40px;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    border-radius: 6px;
+    flex: 0 0 auto;
+  }
+  :global(.muj-popup .ptext b) {
+    font-family: var(--font-serif);
+    font-size: 15px;
+  }
+  :global(.muj-popup .paddr) {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  :global(.muj-popup .plist) {
+    padding: 4px 6px;
+    max-height: 260px;
+    overflow-y: auto;
+  }
   :global(.muj-popup .mrow) {
     display: flex;
     align-items: center;
@@ -399,7 +488,9 @@
     margin-bottom: 2px;
     transition: background var(--t-fast) var(--ease);
   }
-  :global(.muj-popup .mrow:hover) { background: var(--surface-3); }
+  :global(.muj-popup .mrow:hover) {
+    background: var(--surface-3);
+  }
   :global(.muj-popup .mcov) {
     width: 36px;
     aspect-ratio: 1 / 1;
@@ -413,7 +504,10 @@
     background: linear-gradient(135deg, var(--surface-3), var(--surface-2));
     border: 1px solid var(--border);
   }
-  :global(.muj-popup .minfo) { flex: 1 1 auto; min-width: 0; }
+  :global(.muj-popup .minfo) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
   :global(.muj-popup .mtitle) {
     color: var(--text);
     font-weight: 600;
@@ -422,6 +516,17 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  :global(.muj-popup .msub) { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
-  :global(.muj-popup .mmore) { display: block; padding: 8px 14px 12px; color: var(--accent); font-size: 13px; text-decoration: none; text-align: center; }
+  :global(.muj-popup .msub) {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  :global(.muj-popup .mmore) {
+    display: block;
+    padding: 8px 14px 12px;
+    color: var(--accent);
+    font-size: 13px;
+    text-decoration: none;
+    text-align: center;
+  }
 </style>

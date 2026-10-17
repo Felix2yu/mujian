@@ -6,10 +6,10 @@ import { defineConfig } from 'vite';
 // 前端代码里 API_BASE = ''，所有 fetch 都是相对路径 /api/*，Vite proxy
 // 在这里接管转发；生产构建由 Go embed 直接 serve，不走 Vite。
 const devProxy = {
-	'/api': { target: 'http://localhost:8080', changeOrigin: true },
-	'/mcp': { target: 'http://localhost:8080', changeOrigin: true },
-	'/uploads': { target: 'http://localhost:8080', changeOrigin: true },
-	'/healthz': { target: 'http://localhost:8080', changeOrigin: true }
+  '/api': { target: 'http://localhost:8080', changeOrigin: true },
+  '/mcp': { target: 'http://localhost:8080', changeOrigin: true },
+  '/uploads': { target: 'http://localhost:8080', changeOrigin: true },
+  '/healthz': { target: 'http://localhost:8080', changeOrigin: true }
 };
 
 // SvelteKit 3 起不再读取 svelte.config.js，配置一律通过 sveltekit() 插件传入。
@@ -18,21 +18,21 @@ const devProxy = {
 // Vite 自己的顶层 server.proxy 里——写两处不会合并，反而会让 /mcp、/healthz
 // 这两条只在插件里声明的路径在 dev 下 404。
 export default defineConfig({
-	plugins: [
-		sveltekit({
-			adapter: adapter({
-				pages: 'dist',
-				assets: 'dist',
-				fallback: 'index.html',
-				precompress: false,
-				strict: true
-			}),
-			paths: {
-				base: ''
-			}
-		})
-	],
-	server: {
-		proxy: devProxy
-	}
+  plugins: [
+    sveltekit({
+      adapter: adapter({
+        pages: 'dist',
+        assets: 'dist',
+        fallback: 'index.html',
+        precompress: false,
+        strict: true
+      }),
+      paths: {
+        base: ''
+      }
+    })
+  ],
+  server: {
+    proxy: devProxy
+  }
 });

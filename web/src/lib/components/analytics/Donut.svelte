@@ -6,9 +6,18 @@
   let { items = [], max = 8, size = 200, title = '' } = $props();
 
   const palette = [
-    '#b42318', '#d97706', '#0e7490', '#7c3aed', '#15803d',
-    '#be123c', '#0369a1', '#a16207', '#4d7c0f', '#9333ea',
-    '#dc2626', '#0891b2'
+    '#b42318',
+    '#d97706',
+    '#0e7490',
+    '#7c3aed',
+    '#15803d',
+    '#be123c',
+    '#0369a1',
+    '#a16207',
+    '#4d7c0f',
+    '#9333ea',
+    '#dc2626',
+    '#0891b2'
   ];
 
   let total = $derived(items.reduce((s, i) => s + (i.count || 0), 0));
@@ -71,26 +80,46 @@
     <div class="donut-svg">
       <svg
         bind:this={svgEl}
-        viewBox="0 0 {size} {size}" width={size} height={size}
-        role="img" aria-label={title}
-        onmousemove={onMove} onmouseleave={hideTip}
+        viewBox="0 0 {size} {size}"
+        width={size}
+        height={size}
+        role="img"
+        aria-label={title}
+        onmousemove={onMove}
+        onmouseleave={hideTip}
       >
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-3)" stroke-width="16" />
-        {#each segments as s}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          {r}
+          fill="none"
+          stroke="var(--surface-3)"
+          stroke-width="16"
+        />
+        {#each segments as s (s.name)}
           <circle
-            cx={size / 2} cy={size / 2} r={r} fill="none"
-            stroke={s.color} stroke-width="16" stroke-linecap="butt"
+            cx={size / 2}
+            cy={size / 2}
+            {r}
+            fill="none"
+            stroke={s.color}
+            stroke-width="16"
+            stroke-linecap="butt"
             stroke-dasharray="{s.len} {C - s.len}"
             stroke-dashoffset={s.offset}
             transform="rotate(-90 {size / 2} {size / 2})"
           />
         {/each}
-        <text x={size / 2} y={size / 2 - 4} text-anchor="middle" class="donut-center-num">{total}</text>
-        <text x={size / 2} y={size / 2 + 14} text-anchor="middle" class="donut-center-lbl">总计</text>
+        <text x={size / 2} y={size / 2 - 4} text-anchor="middle" class="donut-center-num"
+          >{total}</text
+        >
+        <text x={size / 2} y={size / 2 + 14} text-anchor="middle" class="donut-center-lbl"
+          >总计</text
+        >
       </svg>
     </div>
     <ul class="legend">
-      {#each segments as s}
+      {#each segments as s (s.name)}
         <li>
           <span class="dot" style="background:{s.color}"></span>
           <span class="lg-name" title={s.name}>{s.name}</span>
@@ -104,16 +133,76 @@
 <ChartTip {tip} />
 
 <style>
-  .donut-wrap { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-  .donut-svg { flex: 0 0 auto; }
-  .donut-center-num { font-size: 22px; font-weight: 700; fill: var(--text); font-variant-numeric: tabular-nums; }
-  .donut-center-lbl { font-size: 11px; fill: var(--text-muted); }
-  .legend { list-style: none; margin: 0; padding: 0; flex: 1 1 160px; min-width: 0; }
-  .legend li { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; }
-  .legend .dot { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
-  .legend .lg-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
-  .legend .lg-val { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; display: flex; align-items: baseline; gap: 5px; }
-  .legend .lg-pct { font-size: 11px; color: var(--text-muted); font-weight: 500; }
-  .empty-state { width: 100%; padding: 42px 10px; text-align: center; color: var(--text-muted); font-size: 13px; }
-  svg circle[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 999px; }
+  .donut-wrap {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .donut-svg {
+    flex: 0 0 auto;
+  }
+  .donut-center-num {
+    font-size: 22px;
+    font-weight: 700;
+    fill: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .donut-center-lbl {
+    font-size: 11px;
+    fill: var(--text-muted);
+  }
+  .legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+  .legend li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+    font-size: 13px;
+  }
+  .legend .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    flex: 0 0 auto;
+  }
+  .legend .lg-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-2);
+  }
+  .legend .lg-val {
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    font-weight: 600;
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+  }
+  .legend .lg-pct {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .empty-state {
+    width: 100%;
+    padding: 42px 10px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  svg circle[tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 999px;
+  }
 </style>

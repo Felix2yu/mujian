@@ -20,7 +20,11 @@
   const BACKUP_FORMATS = [
     { v: 'db', label: '数据库快照（.db）', hint: '单个 SQLite 库文件，停机后直接换回文件即可恢复' },
     { v: 'json', label: '纯数据（data.json）', hint: '体积小，可从上方导入区还原，不含封面' },
-    { v: 'zip', label: '数据 + 封面（.zip）', hint: 'data.json 加全部封面文件，可从上方导入区完整还原' }
+    {
+      v: 'zip',
+      label: '数据 + 封面（.zip）',
+      hint: 'data.json 加全部封面文件，可从上方导入区完整还原'
+    }
   ];
 
   let format = $state('db');
@@ -72,7 +76,9 @@
     try {
       const res = await api.backupList();
       backups = res.backups || [];
-    } catch (e) { /* 列表加载失败不打断页面 */ }
+    } catch (e) {
+      /* 列表加载失败不打断页面 */
+    }
   }
 
   async function persist() {
@@ -139,7 +145,12 @@
   // 两者都不可恢复，因此都要二次确认并在提示里点明数量。
   async function pruneTo(keep) {
     const extra = remote ? `（${backups.length - keep} 份中的 S3 副本会一并删除）` : '';
-    if (!confirm(`只保留最新的 ${keep} 份备份，其余 ${backups.length - keep} 份将被删除${extra}。确认？`)) return;
+    if (
+      !confirm(
+        `只保留最新的 ${keep} 份备份，其余 ${backups.length - keep} 份将被删除${extra}。确认？`
+      )
+    )
+      return;
     cleaning = true;
     try {
       const res = await api.backupPrune(keep);
@@ -155,7 +166,12 @@
   }
 
   async function removeAll() {
-    if (!confirm(`删除全部 ${backups.length} 份备份？此操作不可恢复${remote ? '，并会同步删除 S3 上 backups/ 的同名副本' : ''}。`)) return;
+    if (
+      !confirm(
+        `删除全部 ${backups.length} 份备份？此操作不可恢复${remote ? '，并会同步删除 S3 上 backups/ 的同名副本' : ''}。`
+      )
+    )
+      return;
     if (!confirm('再确认一次：清空本地全部备份？')) return;
     cleaning = true;
     try {
@@ -198,7 +214,9 @@
       class:err={saveState === 'error'}
       role="status"
       aria-live="polite"
-    >{#if loading}读取配置…{:else if saveState === 'saving'}保存中…{:else if saveState === 'saved'}已保存 ✓{:else if saveState === 'error'}⚠ {saveError}{:else}改动即存{/if}</span>
+      >{#if loading}读取配置…{:else if saveState === 'saving'}保存中…{:else if saveState === 'saved'}已保存
+        ✓{:else if saveState === 'error'}⚠ {saveError}{:else}改动即存{/if}</span
+    >
   </div>
 
   {#if loadError}<div class="banner error">⚠ {loadError}</div>{/if}
@@ -206,7 +224,13 @@
   <div class="s3-grid">
     <label class="field">
       <span>备份格式</span>
-      <select class="input" bind:value={format} onchange={persist} disabled={loading} style="max-width: 260px;">
+      <select
+        class="input"
+        bind:value={format}
+        onchange={persist}
+        disabled={loading}
+        style="max-width: 260px;"
+      >
         {#each BACKUP_FORMATS as f (f.v)}
           <option value={f.v}>{f.label}</option>
         {/each}
@@ -215,16 +239,34 @@
     </label>
     <label class="field">
       <span>备份间隔</span>
-      <select class="input" bind:value={interval} onchange={persist} disabled={loading} style="max-width: 200px;">
+      <select
+        class="input"
+        bind:value={interval}
+        onchange={persist}
+        disabled={loading}
+        style="max-width: 200px;"
+      >
         {#each intervalOptions as it (it.v)}
           <option value={it.v}>{it.label}</option>
         {/each}
       </select>
-      <span class="hint">按间隔自动把所选格式的备份写入服务端 backups/ 目录；单日最多写 24 份（兜底闸），超出即跳过，次日自动恢复</span>
+      <span class="hint"
+        >按间隔自动把所选格式的备份写入服务端 backups/ 目录；单日最多写 24
+        份（兜底闸），超出即跳过，次日自动恢复</span
+      >
     </label>
     <label class="field">
       <span>保留份数</span>
-      <input class="input" type="number" min="1" max="100" bind:value={keep} onchange={persist} disabled={loading} style="max-width: 120px;" />
+      <input
+        class="input"
+        type="number"
+        min="1"
+        max="100"
+        bind:value={keep}
+        onchange={persist}
+        disabled={loading}
+        style="max-width: 120px;"
+      />
       <span class="hint">超出后自动删除最旧的快照</span>
     </label>
     <label class="field">
@@ -236,13 +278,19 @@
   <!-- 开关单独一行：它带一句较长的说明，塞进上面的网格会在窄屏把单元格撑得很难看 -->
   <label class="field s3-toggle">
     <span class="check-row">
-      <input type="checkbox" bind:checked={remote} onchange={persist} disabled={loading || !s3Ready} />
+      <input
+        type="checkbox"
+        bind:checked={remote}
+        onchange={persist}
+        disabled={loading || !s3Ready}
+      />
       <span>备份后上传到 S3</span>
     </span>
-      <span class="hint">
-        {#if s3Ready}
-          每次备份成功后把该文件推送到 S3 桶内的 backups/ 目录（本机备份仍保留）；本地删除 / 裁剪时同名远端副本会一并删除
-        {:else}
+    <span class="hint">
+      {#if s3Ready}
+        每次备份成功后把该文件推送到 S3 桶内的 backups/ 目录（本机备份仍保留）；本地删除 /
+        裁剪时同名远端副本会一并删除
+      {:else}
         需要先在「设置 → S3 对象存储」填写完整的 Bucket 与 Access Key
       {/if}
     </span>
@@ -257,12 +305,21 @@
 
   {#if backups.length}
     <div class="backup-toolbar">
-      <span class="hint" style="margin: 0;">共 {backups.length} 份{#if backups.length > LIST_LIMIT}，显示最近 {LIST_LIMIT} 份{/if}</span>
+      <span class="hint" style="margin: 0;"
+        >共 {backups.length} 份{#if backups.length > LIST_LIMIT}，显示最近 {LIST_LIMIT} 份{/if}</span
+      >
       <span class="backup-ops">
-        <button type="button" class="btn sm" disabled={cleaning || backups.length <= keep} onclick={() => pruneTo(keep)}>
+        <button
+          type="button"
+          class="btn sm"
+          disabled={cleaning || backups.length <= keep}
+          onclick={() => pruneTo(keep)}
+        >
           {cleaning ? '清理中…' : `只保留最新 ${keep} 份`}
         </button>
-        <button type="button" class="btn sm danger" disabled={cleaning} onclick={removeAll}>清空全部</button>
+        <button type="button" class="btn sm danger" disabled={cleaning} onclick={removeAll}
+          >清空全部</button
+        >
       </span>
     </div>
     <div class="backup-list">
@@ -272,13 +329,24 @@
           <span class="backup-size">{fmtSize(b.size)}</span>
           <span class="backup-time">{fmtTime(b.modified)}</span>
           <span class="backup-ops">
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
             <a class="btn sm" href={api.backupDownloadUrl(b.file)} download>下载</a>
             {#if b.file.endsWith('.json') || b.file.endsWith('.zip')}
-              <button type="button" class="btn sm" disabled={restoring === b.file} onclick={() => restore(b.file)}>
+              <button
+                type="button"
+                class="btn sm"
+                disabled={restoring === b.file}
+                onclick={() => restore(b.file)}
+              >
                 {restoring === b.file ? '恢复中…' : '恢复'}
               </button>
             {:else}
-              <button type="button" class="btn sm" disabled title=".db 快照需停机后替换数据库文件恢复">恢复</button>
+              <button
+                type="button"
+                class="btn sm"
+                disabled
+                title=".db 快照需停机后替换数据库文件恢复">恢复</button
+              >
             {/if}
             <button type="button" class="btn sm danger" onclick={() => remove(b.file)}>删除</button>
           </span>
@@ -286,9 +354,13 @@
       {/each}
     </div>
   {:else}
-    <p class="hint" style="margin-top: 10px;">还没有备份文件：点「立即备份」生成第一份，或把备份间隔调成非「关闭」。</p>
+    <p class="hint" style="margin-top: 10px;">
+      还没有备份文件：点「立即备份」生成第一份，或把备份间隔调成非「关闭」。
+    </p>
   {/if}
-  <p class="hint" style="margin-top: 8px;">以上改动立即生效，无需另行保存。重启服务不会重置备份节奏（按最近一份快照的时间续算）。</p>
+  <p class="hint" style="margin-top: 8px;">
+    以上改动立即生效，无需另行保存。重启服务不会重置备份节奏（按最近一份快照的时间续算）。
+  </p>
 </div>
 
 <style>
@@ -297,8 +369,14 @@
      ⚠️ 必须连 margin-top 一起声明——页面上的 `.sec` 是
      `padding: 18px 20px; margin-top: 16px`，这里只写 padding 的话，
      本卡与上一张卡之间就是 0 间距（曾出现两张卡贴成 1px 的问题）。 */
-  .sec { padding: 18px 20px; margin-top: 16px; }
-  .sec h3 { margin: 0; font-size: 15.5px; }
+  .sec {
+    padding: 18px 20px;
+    margin-top: 16px;
+  }
+  .sec h3 {
+    margin: 0;
+    font-size: 15.5px;
+  }
   .card-head {
     display: flex;
     align-items: baseline;
@@ -307,9 +385,16 @@
     flex-wrap: wrap;
     margin-bottom: 12px;
   }
-  .save-state { font-size: 12px; color: var(--text-3); }
-  .save-state.ok { color: var(--success); }
-  .save-state.err { color: var(--danger); }
+  .save-state {
+    font-size: 12px;
+    color: var(--text-3);
+  }
+  .save-state.ok {
+    color: var(--success);
+  }
+  .save-state.err {
+    color: var(--danger);
+  }
 
   .s3-grid {
     display: grid;
@@ -318,10 +403,28 @@
     grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
     gap: 12px 16px;
   }
-  .field { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--text-2); }
-  .hint { font-weight: 400; color: var(--text-3); font-size: 12px; display: block; margin-top: 4px; }
-  .s3-toggle { margin-top: 14px; }
-  .check-row { display: flex; align-items: center; gap: 8px; }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13.5px;
+    color: var(--text-2);
+  }
+  .hint {
+    font-weight: 400;
+    color: var(--text-3);
+    font-size: 12px;
+    display: block;
+    margin-top: 4px;
+  }
+  .s3-toggle {
+    margin-top: 14px;
+  }
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
   .check-row input[type='checkbox'] {
     width: 18px;
     height: 18px;
@@ -329,7 +432,9 @@
     accent-color: var(--accent);
     cursor: pointer;
   }
-  .check-row input[type='checkbox']:disabled { cursor: not-allowed; }
+  .check-row input[type='checkbox']:disabled {
+    cursor: not-allowed;
+  }
 
   .convert-actions {
     display: flex;
@@ -341,7 +446,12 @@
     border-top: 1px dashed var(--border);
   }
 
-  .backup-list { margin-top: 8px; border: 1px solid var(--border); border-radius: var(--radius, 10px); overflow: hidden; }
+  .backup-list {
+    margin-top: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 10px);
+    overflow: hidden;
+  }
   .backup-toolbar {
     display: flex;
     align-items: center;
@@ -358,9 +468,31 @@
     border-bottom: 1px solid var(--border);
     background: var(--surface);
   }
-  .backup-row:last-child { border-bottom: none; }
-  .backup-name { flex: 1 1 180px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-  .backup-size { color: var(--text-3); font-size: 12px; flex: none; }
-  .backup-time { color: var(--text-3); font-size: 12px; flex: none; }
-  .backup-ops { display: flex; gap: 6px; flex: none; margin-left: auto; }
+  .backup-row:last-child {
+    border-bottom: none;
+  }
+  .backup-name {
+    flex: 1 1 180px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+  .backup-size {
+    color: var(--text-3);
+    font-size: 12px;
+    flex: none;
+  }
+  .backup-time {
+    color: var(--text-3);
+    font-size: 12px;
+    flex: none;
+  }
+  .backup-ops {
+    display: flex;
+    gap: 6px;
+    flex: none;
+    margin-left: auto;
+  }
 </style>

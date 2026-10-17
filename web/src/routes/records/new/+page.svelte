@@ -1,4 +1,5 @@
 <script>
+  import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { api } from '#lib/api.js';
@@ -12,7 +13,7 @@
   async function onSubmit(payload) {
     try {
       const rec = await api.createRecord(payload);
-      goto(`/records/${rec.id}`, { replaceState: true });
+      goto(resolve(`/records/${rec.id}`));
     } catch (e) {
       error = e.message;
       throw e;
@@ -20,11 +21,15 @@
   }
 
   onMount(async () => {
-    try { categories = await api.listCategories(); } catch (e) {}
+    try {
+      categories = await api.listCategories();
+    } catch (e) {
+      /* 分类加载失败不阻塞建单流程，下拉留空由用户手输 */
+    }
   });
 </script>
-<svelte:head><title>新建演出 - 幕间</title></svelte:head>
 
+<svelte:head><title>新建演出 - 幕间</title></svelte:head>
 
 <div class="fade-up">
   <BackLink />
@@ -33,11 +38,21 @@
     <p class="sub">记录一次现场演出</p>
   </div>
   {#if error}<div class="banner error">⚠ {error}</div>{/if}
-  <RecordForm {categories} {initialDate} onSubmit={onSubmit} onCancel={() => (location.href = '/')} />
+  <RecordForm {categories} {initialDate} {onSubmit} onCancel={() => (location.href = '/')} />
 </div>
 
 <style>
-  .fade-up { max-width: 1200px; margin: 0 auto; }
-  .back { display: inline-flex; color: var(--text-muted); font-size: 13.5px; margin-bottom: 10px; }
-  .back:hover { color: var(--accent); }
+  .fade-up {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .back {
+    display: inline-flex;
+    color: var(--text-muted);
+    font-size: 13.5px;
+    margin-bottom: 10px;
+  }
+  .back:hover {
+    color: var(--accent);
+  }
 </style>

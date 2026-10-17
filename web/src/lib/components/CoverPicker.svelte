@@ -48,7 +48,11 @@
       restoreScroll();
       cancelInFlight();
       if (active instanceof HTMLElement && active.isConnected) {
-        try { active.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+        try {
+          active.focus({ preventScroll: true });
+        } catch (e) {
+          /* ignore */
+        }
       }
     };
   });
@@ -57,7 +61,9 @@
     if (typeof document === 'undefined') return () => {};
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }
 
   function cancelInFlight() {
@@ -85,7 +91,10 @@
     controller?.abort();
     const mine = new AbortController();
     controller = mine;
-    timeoutTimer = setTimeout(() => mine.abort(new DOMException('timeout', 'TimeoutError')), requestTimeoutMs);
+    timeoutTimer = setTimeout(
+      () => mine.abort(new DOMException('timeout', 'TimeoutError')),
+      requestTimeoutMs
+    );
 
     loading = true;
     error = '';
@@ -107,9 +116,10 @@
       covers = [];
       total = 0;
       // 走到这里的一定是「当前」请求超时（被替代的请求在上一层已被过滤）。
-      error = e?.name === 'TimeoutError' || e?.name === 'AbortError'
-        ? '请求超时，请重试'
-        : (e?.message || '封面加载失败');
+      error =
+        e?.name === 'TimeoutError' || e?.name === 'AbortError'
+          ? '请求超时，请重试'
+          : e?.message || '封面加载失败';
     } finally {
       if (my === seq) {
         loading = false;
@@ -166,7 +176,8 @@
   function onWindowKeydown(e) {
     if (!open) return;
     const t = e.target;
-    const typing = t instanceof HTMLElement &&
+    const typing =
+      t instanceof HTMLElement &&
       (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -174,8 +185,13 @@
       return;
     }
     if (typing) return;
-    if (e.key === 'ArrowLeft') { e.preventDefault(); goto(page - 1); }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); goto(page + 1); }
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      goto(page - 1);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      goto(page + 1);
+    }
   }
 
   // 浮层必须是 body 的直接子节点：本组件挂在 .fade-up 内，而 fadeUp 动画的
@@ -183,7 +199,11 @@
   // 定位基准不再是视口（页面滚动后弹窗会跑到可见区之外）。
   function portal(node) {
     if (typeof document !== 'undefined') document.body.appendChild(node);
-    return { destroy() { node.remove(); } };
+    return {
+      destroy() {
+        node.remove();
+      }
+    };
   }
 
   function reload() {
@@ -214,7 +234,12 @@
           bind:this={inputEl}
           bind:value={kw}
           oninput={onKeywordInput}
-          onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitSearch(); } }}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              submitSearch();
+            }
+          }}
           placeholder="搜索演出名称或分类…"
           aria-label="搜索封面"
           autocomplete="off"
@@ -231,7 +256,7 @@
         {:else if loaded}
           共 {total} 张封面{#if q}（匹配「{q}」）{/if}
         {:else}
-           
+
         {/if}
       </div>
 
@@ -276,7 +301,9 @@
         <div class="empty">
           <div class="ico">🖼</div>
           <div class="t">{q ? '没有匹配的封面' : '还没有任何封面'}</div>
-          <div class="h">{q ? '换个关键词试试，或清除搜索查看全部封面' : '先上传封面，或从「记录现场」导入数据'}</div>
+          <div class="h">
+            {q ? '换个关键词试试，或清除搜索查看全部封面' : '先上传封面，或从「记录现场」导入数据'}
+          </div>
           {#if q}
             <button type="button" class="btn sm" onclick={clearSearch}>清除搜索</button>
           {/if}
@@ -285,11 +312,33 @@
 
       {#if totalPages > 1}
         <div class="pager">
-          <button type="button" class="btn sm" disabled={page === 0 || loading} onclick={() => goto(0)} aria-label="第一页">«</button>
-          <button type="button" class="btn sm" disabled={page === 0 || loading} onclick={() => goto(page - 1)}>上一页</button>
+          <button
+            type="button"
+            class="btn sm"
+            disabled={page === 0 || loading}
+            onclick={() => goto(0)}
+            aria-label="第一页">«</button
+          >
+          <button
+            type="button"
+            class="btn sm"
+            disabled={page === 0 || loading}
+            onclick={() => goto(page - 1)}>上一页</button
+          >
           <span class="tiny pager-label">{page + 1} / {totalPages}</span>
-          <button type="button" class="btn sm" disabled={page >= totalPages - 1 || loading} onclick={() => goto(page + 1)}>下一页</button>
-          <button type="button" class="btn sm" disabled={page >= totalPages - 1 || loading} onclick={() => goto(totalPages - 1)} aria-label="最后一页">»</button>
+          <button
+            type="button"
+            class="btn sm"
+            disabled={page >= totalPages - 1 || loading}
+            onclick={() => goto(page + 1)}>下一页</button
+          >
+          <button
+            type="button"
+            class="btn sm"
+            disabled={page >= totalPages - 1 || loading}
+            onclick={() => goto(totalPages - 1)}
+            aria-label="最后一页">»</button
+          >
         </div>
       {/if}
     </div>
@@ -319,21 +368,56 @@
     padding: 16px;
     animation: fadeUp 0.25s var(--ease);
   }
-  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-  .head h3 { margin: 0; font-size: 16px; }
-  .x {
-    border: none; background: none; font-size: 15px; cursor: pointer;
-    color: var(--text-muted); width: 30px; height: 30px; border-radius: 50%;
-    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
   }
-  .x:hover { background: var(--surface-3); color: var(--text); }
+  .head h3 {
+    margin: 0;
+    font-size: 16px;
+  }
+  .x {
+    border: none;
+    background: none;
+    font-size: 15px;
+    cursor: pointer;
+    color: var(--text-muted);
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    transition:
+      background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease);
+  }
+  .x:hover {
+    background: var(--surface-3);
+    color: var(--text);
+  }
 
-  .search-row { display: flex; flex-wrap: wrap; gap: 8px; }
-  .search-row .input { flex: 1 1 200px; min-width: 0; }
+  .search-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .search-row .input {
+    flex: 1 1 200px;
+    min-width: 0;
+  }
 
-  .meta { margin: 8px 2px 10px; min-height: 16px; }
+  .meta {
+    margin: 8px 2px 10px;
+    min-height: 16px;
+  }
 
-  .picker-error { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .picker-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
 
   /* flex 子项默认 min-height:auto 会拒绝收缩，导致内容溢出 max-height；
      显式 min-height:0 让网格自己滚动而不是把面板顶出视口。 */
@@ -348,7 +432,9 @@
     padding: 2px;
     transition: opacity var(--t-fast) var(--ease);
   }
-  .grid.refreshing { opacity: 0.55; }
+  .grid.refreshing {
+    opacity: 0.55;
+  }
 
   .item {
     border: 1px solid var(--border);
@@ -360,13 +446,35 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    transition: border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+    transition:
+      border-color var(--t-fast) var(--ease),
+      transform var(--t-fast) var(--ease),
+      box-shadow var(--t-fast) var(--ease);
     text-align: left;
   }
-  .item:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow-md); }
-  .item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .item img, .item .img-fallback { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; background: var(--surface-3); }
-  .item .img-fallback { display: grid; place-items: center; font-size: 22px; opacity: 0.5; }
+  .item:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+  .item:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .item img,
+  .item .img-fallback {
+    width: 100%;
+    aspect-ratio: 3/4;
+    object-fit: cover;
+    display: block;
+    background: var(--surface-3);
+  }
+  .item .img-fallback {
+    display: grid;
+    place-items: center;
+    font-size: 22px;
+    opacity: 0.5;
+  }
   .iname {
     font-size: 12px;
     padding: 6px 8px 0;
@@ -375,16 +483,42 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .iref { font-size: 11px; color: var(--text-muted); padding: 2px 8px 8px; }
+  .iref {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 2px 8px 8px;
+  }
 
-  .sk-item { aspect-ratio: 3/4; border-radius: var(--radius); }
+  .sk-item {
+    aspect-ratio: 3/4;
+    border-radius: var(--radius);
+  }
 
-  .pager { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-  .pager-label { min-width: 64px; text-align: center; }
+  .pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .pager-label {
+    min-width: 64px;
+    text-align: center;
+  }
 
   @media (max-width: 640px) {
-    .overlay { padding: 0; }
-    .panel { width: 100%; height: 100%; max-height: 100vh; border-radius: 0; }
-    .grid { grid-template-columns: repeat(auto-fill, minmax(min(96px, 100%), 1fr)); }
+    .overlay {
+      padding: 0;
+    }
+    .panel {
+      width: 100%;
+      height: 100%;
+      max-height: 100vh;
+      border-radius: 0;
+    }
+    .grid {
+      grid-template-columns: repeat(auto-fill, minmax(min(96px, 100%), 1fr));
+    }
   }
 </style>

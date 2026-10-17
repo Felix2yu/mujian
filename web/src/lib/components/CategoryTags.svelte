@@ -83,7 +83,10 @@
   let blurTimer = null;
 
   function onFocus() {
-    if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; }
+    if (blurTimer) {
+      clearTimeout(blurTimer);
+      blurTimer = null;
+    }
     showList = true;
     activeIndex = -1;
   }
@@ -154,10 +157,18 @@
       class:drop-before={overIdx === i && dragIdx !== i && overBefore}
       class:drop-after={overIdx === i && dragIdx !== i && !overBefore}
       title="拖动调整顺序"
-      ondragstart={(e) => { dragIdx = i; e.dataTransfer.effectAllowed = 'move'; }}
+      ondragstart={(e) => {
+        dragIdx = i;
+        e.dataTransfer.effectAllowed = 'move';
+      }}
       ondragover={(e) => onDragOver(e, i)}
-      ondragleave={() => { if (overIdx === i) overIdx = -1; }}
-      ondrop={(e) => { e.preventDefault(); onDropAt(i, overBefore); }}
+      ondragleave={() => {
+        if (overIdx === i) overIdx = -1;
+      }}
+      ondrop={(e) => {
+        e.preventDefault();
+        onDropAt(i, overBefore);
+      }}
       ondragend={resetDrag}
     >
       <span class="grip" aria-hidden="true">⠿</span>
@@ -185,8 +196,8 @@
           class="ctags-suggest-item"
           class:active={i === activeIndex}
           onmousedown={(e) => e.preventDefault()}
-          onclick={() => pick(s)}
-        >{s}</button>
+          onclick={() => pick(s)}>{s}</button
+        >
       {/each}
     </div>
   {/if}
@@ -205,7 +216,9 @@
     background: var(--surface-2);
     min-height: 38px;
   }
-  .ctags:focus-within { border-color: var(--accent); }
+  .ctags:focus-within {
+    border-color: var(--accent);
+  }
   .chip {
     position: relative;
     display: inline-flex;
@@ -219,13 +232,26 @@
     line-height: 1.5;
     white-space: nowrap;
     cursor: grab;
-    transition: opacity var(--t-fast, 0.15s) ease, outline-color var(--t-fast, 0.15s) ease;
+    transition:
+      opacity var(--t-fast, 0.15s) ease,
+      outline-color var(--t-fast, 0.15s) ease;
   }
   /* 与演出表单的胶囊同一口径：known＝库里已有剧种档案，new＝库里还没有 */
-  .chip.known { background: var(--accent-soft); color: var(--accent); }
-  .chip.new { background: var(--surface-3); color: var(--text-2); border-color: var(--border); }
-  .chip:active { cursor: grabbing; }
-  .chip.dragging { opacity: 0.35; }
+  .chip.known {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .chip.new {
+    background: var(--surface-3);
+    color: var(--text-2);
+    border-color: var(--border);
+  }
+  .chip:active {
+    cursor: grabbing;
+  }
+  .chip.dragging {
+    opacity: 0.35;
+  }
   /* 拖拽插入指示：目标左/右侧显示竖线光标，表示松手后的插入位置 */
   .chip.drop-before::before,
   .chip.drop-after::after {
@@ -238,8 +264,12 @@
     background: var(--accent);
     pointer-events: none;
   }
-  .chip.drop-before::before { left: -5px; }
-  .chip.drop-after::after { right: -5px; }
+  .chip.drop-before::before {
+    left: -5px;
+  }
+  .chip.drop-after::after {
+    right: -5px;
+  }
   .grip {
     color: currentColor;
     opacity: 0.5;
@@ -263,7 +293,10 @@
     align-items: center;
     justify-content: center;
   }
-  .x:hover { opacity: 1; background: rgba(0, 0, 0, 0.12); }
+  .x:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.12);
+  }
   .ctag-input {
     flex: 1;
     min-width: 110px;
@@ -290,7 +323,9 @@
     padding: 4px;
     scrollbar-width: none;
   }
-  .ctags-suggest::-webkit-scrollbar { display: none; }
+  .ctags-suggest::-webkit-scrollbar {
+    display: none;
+  }
   .ctags-suggest-item {
     display: block;
     width: 100%;

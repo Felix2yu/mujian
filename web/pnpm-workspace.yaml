@@ -1,6 +1,6 @@
 # pnpm 的设置集中在本文件；package.json 顶层的 "overrides" 是 npm 字段，pnpm 不读。
 packages:
-  - "."
+  - '.'
 
 overrides:
   # 0.7.x 已修 CVE，但 SvelteKit 3 要求 cookie 的 named export（parseCookie 等），

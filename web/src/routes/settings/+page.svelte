@@ -2,7 +2,12 @@
   import { onMount } from 'svelte';
   import { api, resetStorageInfo } from '#lib/api.js';
   import { theme } from '#lib/stores.js';
-  import { STATUS_LABELS, ALL_STATUSES, loadStatusFilter, saveStatusFilter } from '#lib/statusPrefs.js';
+  import {
+    STATUS_LABELS,
+    ALL_STATUSES,
+    loadStatusFilter,
+    saveStatusFilter
+  } from '#lib/statusPrefs.js';
   import { loadPref as loadJsonPref, savePref as saveJsonPref } from '#lib/prefs.js';
 
   let settings = $state({
@@ -46,9 +51,19 @@
   // 一遍真实高度（见技能 mujian-frontend-visual-check）再更新下面的表即可。
   const CARD_COLS = (() => {
     const cards = [
-      ['theme', 162], ['storage', 158], ['s3', 843], ['encode', 305], ['ics', 316], ['caldav', 594],
-      ['fields', 410], ['status', 178], ['list', 224], ['security', 324], ['map', 435],
-      ['ai', 532], ['huozhi', 825]
+      ['theme', 162],
+      ['storage', 158],
+      ['s3', 843],
+      ['encode', 305],
+      ['ics', 316],
+      ['caldav', 594],
+      ['fields', 410],
+      ['status', 178],
+      ['list', 224],
+      ['security', 324],
+      ['map', 435],
+      ['ai', 532],
+      ['huozhi', 825]
     ];
     // dp: (col0 高度 - col1 高度) -> [col0 的卡片, col1 的卡片]
     let dp = new Map([[0, [[], []]]]);
@@ -79,7 +94,13 @@
   let converting = $state(false);
   let convertResult = $state(null);
   let convertError = $state('');
-  let convertProgress = $state({ processed: 0, total: 0, converted: 0, skipped: 0, freed_bytes: 0 });
+  let convertProgress = $state({
+    processed: 0,
+    total: 0,
+    converted: 0,
+    skipped: 0,
+    freed_bytes: 0
+  });
 
   let aligning = $state(false);
   let alignResult = $state(null);
@@ -163,7 +184,9 @@
       localStorage.setItem('mujian:map_source', mapSource);
       localStorage.setItem('mujian:map_custom_key', mapKey || '');
       localStorage.setItem('mujian:map_custom_url', mapCustomUrl || '');
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   async function load() {
@@ -176,7 +199,14 @@
       if (!settings.theme) settings.theme = 'auto';
       if (!settings.image_format) settings.image_format = 'avif';
       if (typeof settings.allow_local_storage !== 'boolean') settings.allow_local_storage = true;
-      for (const k of ['s3_endpoint', 's3_bucket', 's3_region', 's3_access_key', 's3_secret_key', 's3_public_url']) {
+      for (const k of [
+        's3_endpoint',
+        's3_bucket',
+        's3_region',
+        's3_access_key',
+        's3_secret_key',
+        's3_public_url'
+      ]) {
         if (typeof settings[k] !== 'string') settings[k] = '';
       }
       if (!settings.s3_region) settings.s3_region = 'us-east-1';
@@ -198,10 +228,26 @@
       if (typeof settings.show_other_cost !== 'boolean') settings.show_other_cost = true;
       if (typeof settings.multi_currency !== 'boolean') settings.multi_currency = true;
       if (!settings.default_start_time) settings.default_start_time = '19:30';
-      if (!['hours_before', 'same_day'].includes(settings.reminder_mode)) settings.reminder_mode = 'hours_before';
-      if (typeof settings.reminder_before_hours !== 'number' || settings.reminder_before_hours < 0 || settings.reminder_before_hours > 72) settings.reminder_before_hours = 12;
-      if (typeof settings.reminder_daily_hour !== 'number' || settings.reminder_daily_hour < 0 || settings.reminder_daily_hour > 23) settings.reminder_daily_hour = 10;
-      if (typeof settings.reminder_daily_minute !== 'number' || settings.reminder_daily_minute < 0 || settings.reminder_daily_minute > 59) settings.reminder_daily_minute = 0;
+      if (!['hours_before', 'same_day'].includes(settings.reminder_mode))
+        settings.reminder_mode = 'hours_before';
+      if (
+        typeof settings.reminder_before_hours !== 'number' ||
+        settings.reminder_before_hours < 0 ||
+        settings.reminder_before_hours > 72
+      )
+        settings.reminder_before_hours = 12;
+      if (
+        typeof settings.reminder_daily_hour !== 'number' ||
+        settings.reminder_daily_hour < 0 ||
+        settings.reminder_daily_hour > 23
+      )
+        settings.reminder_daily_hour = 10;
+      if (
+        typeof settings.reminder_daily_minute !== 'number' ||
+        settings.reminder_daily_minute < 0 ||
+        settings.reminder_daily_minute > 59
+      )
+        settings.reminder_daily_minute = 0;
       mapSource = loadPref('mujian:map_source', 'osm');
       mapKey = loadPref('mujian:map_custom_key', '');
       mapCustomUrl = loadPref('mujian:map_custom_url', '');
@@ -222,7 +268,9 @@
     saving = true;
     try {
       localStorage.setItem('mujian:auth_token', authToken || '');
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
     // 令牌变了，订阅链接里的 ?token= 也要跟着刷新
     icsUrl = `${window.location.origin}${api.getICSUrl()}`;
     caldavUrl = `${window.location.origin}/caldav/user/calendars/mujian/`;
@@ -238,9 +286,15 @@
         cost_enabled_fields: settings.cost_enabled_fields || 'price',
         default_start_time: settings.default_start_time || '19:30',
         reminder_mode: settings.reminder_mode || 'hours_before',
-        reminder_before_hours: Math.max(0, Math.min(72, Number(settings.reminder_before_hours) || 12)),
+        reminder_before_hours: Math.max(
+          0,
+          Math.min(72, Number(settings.reminder_before_hours) || 12)
+        ),
         reminder_daily_hour: Math.max(0, Math.min(23, Number(settings.reminder_daily_hour) || 10)),
-        reminder_daily_minute: Math.max(0, Math.min(59, Number(settings.reminder_daily_minute) || 0)),
+        reminder_daily_minute: Math.max(
+          0,
+          Math.min(59, Number(settings.reminder_daily_minute) || 0)
+        )
       };
       // S3 凭据独立于存储方式：本地存储模式下也可配置（供备份推送等使用），
       // 始终提交。掩码值（含 ****）说明用户没有改密钥，不回传；后端同样会忽略。
@@ -434,6 +488,7 @@
     return () => unsub();
   });
 </script>
+
 <svelte:head><title>设置 - 幕间</title></svelte:head>
 
 <div class="fade-up">
@@ -455,577 +510,886 @@
     </div>
   {:else}
     <div class="settings-grid">
-{#snippet themeCard()}
-<div class="card sec">
-      <h3>主题</h3>
-      <div class="theme-row">
-        {#each themes as t}
-          <button
-            class="theme-opt"
-            class:on={currentTheme === t.v}
-            onclick={() => setTheme(t.v)}
-          >
-            <span class="tico">
-              {#if t.v === 'light'}
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="4" />
-                  <line x1="12" y1="2" x2="12" y2="4.5" /><line x1="12" y1="19.5" x2="12" y2="22" />
-                  <line x1="2" y1="12" x2="4.5" y2="12" /><line x1="19.5" y1="12" x2="22" y2="12" />
-                  <line x1="4.6" y1="4.6" x2="6.3" y2="6.3" /><line x1="17.7" y1="17.7" x2="19.4" y2="19.4" />
-                  <line x1="4.6" y1="19.4" x2="6.3" y2="17.7" /><line x1="17.7" y1="6.3" x2="19.4" y2="4.6" />
-                </svg>
-              {:else if t.v === 'dark'}
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8z" />
-                </svg>
-              {:else}
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
-                </svg>
-              {/if}
-            </span>
-            <span>{t.label}</span>
-          </button>
-        {/each}
-      </div>
-    </div>
-{/snippet}
+      {#snippet themeCard()}
+        <div class="card sec">
+          <h3>主题</h3>
+          <div class="theme-row">
+            {#each themes as t (t.v)}
+              <button
+                class="theme-opt"
+                class:on={currentTheme === t.v}
+                onclick={() => setTheme(t.v)}
+              >
+                <span class="tico">
+                  {#if t.v === 'light'}
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="18"
+                      height="18"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="4" />
+                      <line x1="12" y1="2" x2="12" y2="4.5" /><line
+                        x1="12"
+                        y1="19.5"
+                        x2="12"
+                        y2="22"
+                      />
+                      <line x1="2" y1="12" x2="4.5" y2="12" /><line
+                        x1="19.5"
+                        y1="12"
+                        x2="22"
+                        y2="12"
+                      />
+                      <line x1="4.6" y1="4.6" x2="6.3" y2="6.3" /><line
+                        x1="17.7"
+                        y1="17.7"
+                        x2="19.4"
+                        y2="19.4"
+                      />
+                      <line x1="4.6" y1="19.4" x2="6.3" y2="17.7" /><line
+                        x1="17.7"
+                        y1="6.3"
+                        x2="19.4"
+                        y2="4.6"
+                      />
+                    </svg>
+                  {:else if t.v === 'dark'}
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="18"
+                      height="18"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8z" />
+                    </svg>
+                  {:else}
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="18"
+                      height="18"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
+                    </svg>
+                  {/if}
+                </span>
+                <span>{t.label}</span>
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/snippet}
 
-{#snippet storageCard()}
-<div class="card sec">
-      <h3>存储</h3>
-      <label>封面图片存储方式</label>
-      <select class="input" bind:value={settings.storage_type} style="max-width: 280px;">
-        <option value="local" disabled={!settings.allow_local_storage}>本地存储</option>
-        <option value="s3">S3 对象存储</option>
-      </select>
+      {#snippet storageCard()}
+        <div class="card sec">
+          <h3>存储</h3>
+          <label>封面图片存储方式</label>
+          <select class="input" bind:value={settings.storage_type} style="max-width: 280px;">
+            <option value="local" disabled={!settings.allow_local_storage}>本地存储</option>
+            <option value="s3">S3 对象存储</option>
+          </select>
 
-      {#if settings.storage_type === 's3'}
-        {#if !settings.s3_bucket.trim() || !settings.s3_access_key.trim()}
-          <div class="banner error">⚠ 存储方式为 S3，但下方「S3 对象存储」卡片的 Bucket / Access Key 未填写，保存后会退回本地存储</div>
-        {:else}
-          <p class="hint-row">✓ S3 凭据已配置（见下方「S3 对象存储」卡片），保存后立即生效，无需重启</p>
-        {/if}
-        <p class="hint-row">切换存储方式不会自动迁移已有封面：切到 S3 后旧图仍留在本地磁盘，新上传的才会写入 S3；<br />可在下方 S3 卡片中执行「把本地封面上传到 S3」实现无缝衔接</p>
-      {/if}
-    </div>
-{/snippet}
-
-{#snippet encodeCard()}
-<div class="card sec">
-      <h3>封面编码</h3>
-      <label>默认编码格式
-        <span class="hint">新上传海报会使用所选格式保存；更改后立即生效，无需重启</span>
-      </label>
-      <select class="input" bind:value={settings.image_format} style="max-width: 280px;">
-        {#each IMAGE_FORMATS as f}
-          <option value={f.k}>{f.label}</option>
-        {/each}
-      </select>
-      {#each IMAGE_FORMATS as f}
-        {#if settings.image_format === f.k}
-          <div class="hint-row">💡 {f.hint}</div>
-        {/if}
-      {/each}
-
-      <div class="convert-actions">
-        <button
-          class="btn"
-          class:disabled={converting}
-          onclick={() => runBatchConvert(settings.image_format)}
-          disabled={converting}
-        >
-          {#if converting}
-            转换中…
-          {:else}
-            批量转换已有海报为 {settings.image_format.toUpperCase()}
+          {#if settings.storage_type === 's3'}
+            {#if !settings.s3_bucket.trim() || !settings.s3_access_key.trim()}
+              <div class="banner error">
+                ⚠ 存储方式为 S3，但下方「S3 对象存储」卡片的 Bucket / Access Key
+                未填写，保存后会退回本地存储
+              </div>
+            {:else}
+              <p class="hint-row">
+                ✓ S3 凭据已配置（见下方「S3 对象存储」卡片），保存后立即生效，无需重启
+              </p>
+            {/if}
+            <p class="hint-row">
+              切换存储方式不会自动迁移已有封面：切到 S3 后旧图仍留在本地磁盘，新上传的才会写入 S3；<br
+              />可在下方 S3 卡片中执行「把本地封面上传到 S3」实现无缝衔接
+            </p>
           {/if}
-        </button>
-        <span class="hint">会重新编码所有历史海报文件并自动更新数据库引用，此操作不可撤销</span>
-      </div>
-
-      {#if converting && convertProgress.total > 0}
-        <div class="banner info">
-          <span>⏳ 转换中… {convertProgress.processed}/{convertProgress.total}</span>
-          <span class="hint" style="margin: 0;">已转换 {convertProgress.converted}，跳过 {convertProgress.skipped}，释放 {Math.round(convertProgress.freed_bytes / 1024)} KB</span>
         </div>
-      {/if}
+      {/snippet}
 
-      {#if convertResult}
-        <div class="banner success">
-          ✓ 已转换 {convertResult.converted} 个文件，跳过 {convertResult.skipped} 个（已是目标格式），释放 {Math.round(convertResult.freed_bytes / 1024)} KB
-        </div>
-      {/if}
-      {#if convertError}
-        <div class="banner error">⚠ {convertError}</div>
-      {/if}
-    </div>
-{/snippet}
-
-{#snippet icsCard()}
-<div class="card sec">
-      <h3>ICS 订阅</h3>
-      <p class="hint" style="margin-bottom: 12px;">
-        把演出记录导出为标准 <b>.ics</b> 日历订阅源，兼容性最好：Google 日历、Outlook 及大部分第三方日历客户端都能订阅。限制：Apple 日历对订阅源（subscription）一律不渲染地图卡片（LOCATION 不可点），这是 Apple 平台限制，无法绕过；且为只读，演出改动需等客户端轮询刷新。
-      </p>
-      <div class="cal-actions">
-        <a class="btn" href={api.getICSUrl({ dl: '1' })}>⇩ 导出日历 (.ics)</a>
-        <div class="cal-subscribe">
-          <input class="input" readonly value={icsUrl} onfocus={(e) => e.currentTarget.select()} />
-          <button
-            type="button"
-            class="btn"
-            onclick={async () => {
-              try {
-                await navigator.clipboard.writeText(icsUrl);
-                icsCopied = true;
-                setTimeout(() => (icsCopied = false), 2000);
-              } catch {
-                // 剪贴板不可用时退化为选中文本手动复制
-              }
-            }}
-          >
-            {icsCopied ? '已复制' : '复制'}
-          </button>
-        </div>
-        <span class="hint">订阅链接（自动附带 ?token=，日历客户端无法自定义请求头，故直接拼在 URL 上）。地址含令牌，请勿公开分享。两种方式详细对比见仓库 docs/calendar.md。</span>
-      </div>
-    </div>
-{/snippet}
-
-{#snippet caldavCard()}
-<div class="card sec">
-      <h3>CalDAV 账户</h3>
-      <p class="hint" style="margin-bottom: 12px;">
-        以账户方式把演出同步进 iOS / macOS 原生日历（推荐方式）。一个 CalDAV 账户会同步两类内容：<b>日历事件</b>——演出作为本地一等事件，LOCATION 显示可点地图卡片，随记录自动增量更新；<b>提醒事项任务清单「幕间·提醒」</b>——每场演出是一条到期提醒，在提醒事项 App 勾选完成即标记「已观看 / 已到场」并同步回幕间。所有内容只读，日历侧的增删改会被服务端拒绝。
-      </p>
-      <div class="cal-actions">
-        <div class="cal-subscribe">
-          <input class="input" readonly value={caldavUrl} onfocus={(e) => e.currentTarget.select()} />
-          <button
-            type="button"
-            class="btn"
-            onclick={async () => {
-              try {
-                await navigator.clipboard.writeText(caldavUrl);
-                caldavCopied = true;
-                setTimeout(() => (caldavCopied = false), 2000);
-              } catch {
-                // 剪贴板不可用时退化为选中文本手动复制
-              }
-            }}
-          >
-            {caldavCopied ? '已复制' : '复制'}
-          </button>
-        </div>
-        <span class="hint">账户地址：iOS「设置 → 日历 → 账户 → 其他 → 添加 CalDAV 账户」/ macOS「系统设置 → 互联网账户」，服务器只填域名，用户名随意，密码填上面的访问令牌。<br />
-        需 HTTPS；与 ICS 订阅并存会导致事件重复，配好后请退订旧订阅。</span>
-      </div>
-
-      <h4 style="margin: 18px 0 8px; font-size: 15px;">演出提醒（提醒事项）</h4>
-      <p class="hint" style="margin-bottom: 12px;">
-        控制「幕间·提醒」任务清单中每条演出的提醒时机：可选「演出前 N 小时」或「当天固定时刻」两种方式。保存后下次日历同步生效。
-      </p>
-      <div class="status-row">
-        <label class="status-opt" class:on={settings.reminder_mode === 'hours_before'}>
-          <input type="radio" name="reminder_mode" value="hours_before" checked={settings.reminder_mode === 'hours_before'} onchange={() => (settings.reminder_mode = 'hours_before')} />
-          <span>演出前 N 小时</span>
-        </label>
-        <label class="status-opt" class:on={settings.reminder_mode === 'same_day'}>
-          <input type="radio" name="reminder_mode" value="same_day" checked={settings.reminder_mode === 'same_day'} onchange={() => (settings.reminder_mode = 'same_day')} />
-          <span>当天固定时刻</span>
-        </label>
-      </div>
-
-      {#if settings.reminder_mode === 'hours_before'}
-        <label class="field" style="margin-top: 12px;">
-          <span>提前小时数（0–72）</span>
-          <input class="input" type="number" min="0" max="72" bind:value={settings.reminder_before_hours} style="max-width: 110px;" />
-          <span class="hint">演出开始前这么多个小时提醒。例：下午 2 点的演出设 2 小时，则中午 12 点提醒，而非凌晨。</span>
-        </label>
-      {:else}
-        <label class="field" style="margin-top: 12px;">
-          <span>当天提醒时刻</span>
-          <input class="input" type="time"
-            value={String(settings.reminder_daily_hour).padStart(2, '0') + ':' + String(settings.reminder_daily_minute).padStart(2, '0')}
-            onchange={(e) => { const [h, m] = e.currentTarget.value.split(':').map(Number); settings.reminder_daily_hour = h || 0; settings.reminder_daily_minute = m || 0; }}
-            style="max-width: 130px;" />
-          <span class="hint">无论演出几点开始，统一在这一天这个时刻弹出提醒（按服务端时区）。例：设为 10:00，则每天上午 10 点提醒当天全部演出。</span>
-        </label>
-      {/if}
-    </div>
-{/snippet}
-
-{#snippet fieldsCard()}
-<div class="card sec">
-      <h3>记录字段</h3>
-      <p class="hint" style="margin-bottom: 12px;">控制新建 / 编辑演出时是否显示以下字段，不常用的可按需隐藏</p>
-      <label class="switch-row">
-        <span>显示「同行人」</span>
-        <input type="checkbox" bind:checked={settings.show_friends} />
-      </label>
-      <label class="switch-row">
-        <span>显示「实付金额」</span>
-        <input type="checkbox" bind:checked={settings.show_pay_price} />
-      </label>
-      <label class="switch-row">
-        <span>显示「其他花费」</span>
-        <input type="checkbox" bind:checked={settings.show_other_cost} />
-      </label>
-      <label class="switch-row">
-        <span>启用多币种（金额可单独选择币种）</span>
-        <input type="checkbox" bind:checked={settings.multi_currency} />
-      </label>
-      <div class="sub-sec">
-        <span class="sub-title">费用补全参与字段</span>
-        <span class="hint">仅勾选的字段会进入「数据 → 费用补全」待确认清单。默认仅「票价」——实付/其他花费全库多为 0，纳入会产生大量无效待办。需要补全时再勾选。</span>
-        <label class="switch-row">
-          <span>票价</span>
-          <input type="checkbox" checked={costFieldOn('price')} onchange={() => toggleCostField('price')} />
-        </label>
-        <label class="switch-row">
-          <span>实付金额</span>
-          <input type="checkbox" checked={costFieldOn('pay_price')} onchange={() => toggleCostField('pay_price')} />
-        </label>
-        <label class="switch-row">
-          <span>其他花费</span>
-          <input type="checkbox" checked={costFieldOn('other_cost')} onchange={() => toggleCostField('other_cost')} />
-        </label>
-      </div>
-      <div class="time-row">
-        <span>默认演出开始时间</span>
-        <input class="input" type="time" bind:value={settings.default_start_time} style="max-width: 120px;" />
-      </div>
-    </div>
-{/snippet}
-
-{#snippet statusCard()}
-<div class="card sec">
-      <h3>演出状态</h3>
-      <p class="hint" style="margin-bottom: 12px;">控制首页列表显示哪些状态的演出（本地偏好，立即生效）</p>
-      <div class="status-row">
-        {#each ALL_STATUSES as sv}
-          <label class="status-opt" class:on={statusFilter.includes(sv)}>
-            <input type="checkbox" checked={statusFilter.includes(sv)} onchange={() => toggleStatus(sv)} />
-            <span>{STATUS_LABELS[sv]}</span>
+      {#snippet encodeCard()}
+        <div class="card sec">
+          <h3>封面编码</h3>
+          <label
+            >默认编码格式
+            <span class="hint">新上传海报会使用所选格式保存；更改后立即生效，无需重启</span>
           </label>
-        {/each}
-      </div>
-    </div>
-{/snippet}
+          <select class="input" bind:value={settings.image_format} style="max-width: 280px;">
+            {#each IMAGE_FORMATS as f (f)}
+              <option value={f.k}>{f.label}</option>
+            {/each}
+          </select>
+          {#each IMAGE_FORMATS as f (f)}
+            {#if settings.image_format === f.k}
+              <div class="hint-row">💡 {f.hint}</div>
+            {/if}
+          {/each}
 
-{#snippet listCard()}
-<div class="card sec">
-      <h3>列表</h3>
-      <p class="hint" style="margin-bottom: 12px;">首页浏览辅助（本地偏好，立即生效）</p>
-      <label class="switch-row">
-        <span>进入首页自动定位到当前时间</span>
-        <input type="checkbox" checked={jumpNowPref} onchange={(e) => setJumpNowPref(e.target.checked)} />
-      </label>
-      <p class="hint" style="margin-top: 8px;">开启后每次打开演出列表会自动滚动到最近已发生（含今天）的演出；列表右下角也随时提供手动定位按钮</p>
-    </div>
-{/snippet}
+          <div class="convert-actions">
+            <button
+              class="btn"
+              class:disabled={converting}
+              onclick={() => runBatchConvert(settings.image_format)}
+              disabled={converting}
+            >
+              {#if converting}
+                转换中…
+              {:else}
+                批量转换已有海报为 {settings.image_format.toUpperCase()}
+              {/if}
+            </button>
+            <span class="hint">会重新编码所有历史海报文件并自动更新数据库引用，此操作不可撤销</span>
+          </div>
 
-{#snippet securityCard()}
-<div class="card sec">
-      <h3>访问安全</h3>
-      <label>
-        访问令牌（可选）
-        {#if authRequired}<span class="hint" style="color: var(--warn, #b45309);">· 服务端已启用鉴权</span>{/if}
-      </label>
-      <input class="input" type="password" bind:value={authToken} placeholder="未设置" autocomplete="new-password" style="max-width: 320px;" />
-      <p class="hint" style="margin-top: 8px;">
-        在服务器上配置环境变量 MJ_AUTH_TOKEN（或设置文件中的 auth_token）即启用鉴权，此后所有 API/MCP 请求都必须携带这个令牌。<br />
-        在上方填入与服务器相同的值并保存即可正常使用：本页只把它记在本机浏览器（localStorage），每次请求自动附带；
-        保存时不会把令牌发回服务器——服务器已经从环境变量拿到了这个值，无需再存一份。
-      </p>
-      {#if authRequired}
-      <p class="hint" style="margin-top: 8px;">服务端已启用鉴权：未填写或填错时，除本页外的所有页面和接口都会提示 401 未授权，填对后立即恢复，无需重启。</p>
-      {/if}
-      <p class="hint" style="margin-top: 8px;">ICS 订阅与 CalDAV 地址会自动附带 ?token= 参数（日历客户端无法自定义请求头，故直接拼在 URL 上）。</p>
-    </div>
-{/snippet}
+          {#if converting && convertProgress.total > 0}
+            <div class="banner info">
+              <span>⏳ 转换中… {convertProgress.processed}/{convertProgress.total}</span>
+              <span class="hint" style="margin: 0;"
+                >已转换 {convertProgress.converted}，跳过 {convertProgress.skipped}，释放 {Math.round(
+                  convertProgress.freed_bytes / 1024
+                )} KB</span
+              >
+            </div>
+          {/if}
 
-{#snippet mapCard()}
-<div class="card sec">
-      <h3>地图</h3>
-      <label>默认底图</label>
-      <select class="input" bind:value={mapSource} style="max-width: 280px;">
-        {#each MAP_SOURCES as s}
-          <option value={s.k}>{s.label}</option>
-        {/each}
-      </select>
+          {#if convertResult}
+            <div class="banner success">
+              ✓ 已转换 {convertResult.converted} 个文件，跳过 {convertResult.skipped} 个（已是目标格式），释放
+              {Math.round(convertResult.freed_bytes / 1024)} KB
+            </div>
+          {/if}
+          {#if convertError}
+            <div class="banner error">⚠ {convertError}</div>
+          {/if}
+        </div>
+      {/snippet}
 
-      <label style="margin-top: 12px;">
-        平台 Key（可选）
-        <span class="hint">高德/腾讯地图在网页应用需填写 key 才会出图；可留空使用公共瓦片</span>
-      </label>
-      <input class="input" type="text" bind:value={mapKey} placeholder="例如高德或腾讯 JS 应用的 key" style="max-width: 320px;" />
+      {#snippet icsCard()}
+        <div class="card sec">
+          <h3>ICS 订阅</h3>
+          <p class="hint" style="margin-bottom: 12px;">
+            把演出记录导出为标准 <b>.ics</b> 日历订阅源，兼容性最好：Google 日历、Outlook 及大部分第三方日历客户端都能订阅。限制：Apple
+            日历对订阅源（subscription）一律不渲染地图卡片（LOCATION 不可点），这是 Apple 平台限制，无法绕过；且为只读，演出改动需等客户端轮询刷新。
+          </p>
+          <div class="cal-actions">
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+            <a class="btn" href={api.getICSUrl({ dl: '1' })}>⇩ 导出日历 (.ics)</a>
+            <div class="cal-subscribe">
+              <input
+                class="input"
+                readonly
+                value={icsUrl}
+                onfocus={(e) => e.currentTarget.select()}
+              />
+              <button
+                type="button"
+                class="btn"
+                onclick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(icsUrl);
+                    icsCopied = true;
+                    setTimeout(() => (icsCopied = false), 2000);
+                  } catch {
+                    // 剪贴板不可用时退化为选中文本手动复制
+                  }
+                }}
+              >
+                {icsCopied ? '已复制' : '复制'}
+              </button>
+            </div>
+            <span class="hint"
+              >订阅链接（自动附带 ?token=，日历客户端无法自定义请求头，故直接拼在 URL
+              上）。地址含令牌，请勿公开分享。两种方式详细对比见仓库 docs/calendar.md。</span
+            >
+          </div>
+        </div>
+      {/snippet}
 
-      <label style="margin-top: 12px;">自定义瓦片 URL（可选）</label>
-      <input class="input" type="text" bind:value={mapCustomUrl} placeholder={'https://{s}.example.com/tiles/{z}/{x}/{y}.png'} style="max-width: 420px;" />
+      {#snippet caldavCard()}
+        <div class="card sec">
+          <h3>CalDAV 账户</h3>
+          <p class="hint" style="margin-bottom: 12px;">
+            以账户方式把演出同步进 iOS / macOS 原生日历（推荐方式）。一个 CalDAV
+            账户会同步两类内容：<b>日历事件</b>——演出作为本地一等事件，LOCATION
+            显示可点地图卡片，随记录自动增量更新；<b>提醒事项任务清单「幕间·提醒」</b
+            >——每场演出是一条到期提醒，在提醒事项 App 勾选完成即标记「已观看 /
+            已到场」并同步回幕间。所有内容只读，日历侧的增删改会被服务端拒绝。
+          </p>
+          <div class="cal-actions">
+            <div class="cal-subscribe">
+              <input
+                class="input"
+                readonly
+                value={caldavUrl}
+                onfocus={(e) => e.currentTarget.select()}
+              />
+              <button
+                type="button"
+                class="btn"
+                onclick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(caldavUrl);
+                    caldavCopied = true;
+                    setTimeout(() => (caldavCopied = false), 2000);
+                  } catch {
+                    // 剪贴板不可用时退化为选中文本手动复制
+                  }
+                }}
+              >
+                {caldavCopied ? '已复制' : '复制'}
+              </button>
+            </div>
+            <span class="hint"
+              >账户地址：iOS「设置 → 日历 → 账户 → 其他 → 添加 CalDAV 账户」/ macOS「系统设置 →
+              互联网账户」，服务器只填域名，用户名随意，密码填上面的访问令牌。<br />
+              需 HTTPS；与 ICS 订阅并存会导致事件重复，配好后请退订旧订阅。</span
+            >
+          </div>
 
-      <div class="convert-actions">
-        <button
-          class="btn"
-          class:disabled={aligning}
-          onclick={() => runAlignVenues()}
-          disabled={aligning}
-        >
-          {#if aligning}
-            对齐中…
+          <h4 style="margin: 18px 0 8px; font-size: 15px;">演出提醒（提醒事项）</h4>
+          <p class="hint" style="margin-bottom: 12px;">
+            控制「幕间·提醒」任务清单中每条演出的提醒时机：可选「演出前 N
+            小时」或「当天固定时刻」两种方式。保存后下次日历同步生效。
+          </p>
+          <div class="status-row">
+            <label class="status-opt" class:on={settings.reminder_mode === 'hours_before'}>
+              <input
+                type="radio"
+                name="reminder_mode"
+                value="hours_before"
+                checked={settings.reminder_mode === 'hours_before'}
+                onchange={() => (settings.reminder_mode = 'hours_before')}
+              />
+              <span>演出前 N 小时</span>
+            </label>
+            <label class="status-opt" class:on={settings.reminder_mode === 'same_day'}>
+              <input
+                type="radio"
+                name="reminder_mode"
+                value="same_day"
+                checked={settings.reminder_mode === 'same_day'}
+                onchange={() => (settings.reminder_mode = 'same_day')}
+              />
+              <span>当天固定时刻</span>
+            </label>
+          </div>
+
+          {#if settings.reminder_mode === 'hours_before'}
+            <label class="field" style="margin-top: 12px;">
+              <span>提前小时数（0–72）</span>
+              <input
+                class="input"
+                type="number"
+                min="0"
+                max="72"
+                bind:value={settings.reminder_before_hours}
+                style="max-width: 110px;"
+              />
+              <span class="hint"
+                >演出开始前这么多个小时提醒。例：下午 2 点的演出设 2 小时，则中午 12
+                点提醒，而非凌晨。</span
+              >
+            </label>
           {:else}
-            对齐同场馆坐标
+            <label class="field" style="margin-top: 12px;">
+              <span>当天提醒时刻</span>
+              <input
+                class="input"
+                type="time"
+                value={String(settings.reminder_daily_hour).padStart(2, '0') +
+                  ':' +
+                  String(settings.reminder_daily_minute).padStart(2, '0')}
+                onchange={(e) => {
+                  const [h, m] = e.currentTarget.value.split(':').map(Number);
+                  settings.reminder_daily_hour = h || 0;
+                  settings.reminder_daily_minute = m || 0;
+                }}
+                style="max-width: 130px;"
+              />
+              <span class="hint"
+                >无论演出几点开始，统一在这一天这个时刻弹出提醒（按服务端时区）。例：设为
+                10:00，则每天上午 10 点提醒当天全部演出。</span
+              >
+            </label>
           {/if}
-        </button>
-        <span class="hint">按地址分组，用每组已有坐标回填同场馆其他演出，统一历史数据</span>
-      </div>
-
-      {#if alignResult}
-        <div class="banner success">
-          ✓ 已对齐 {alignResult.groups_aligned}/{alignResult.groups_total} 组场馆，更新 {alignResult.records_updated} 条记录
         </div>
-      {/if}
-      {#if alignError}
-        <div class="banner error">⚠ {alignError}</div>
-      {/if}
-    </div>
-{/snippet}
+      {/snippet}
 
-{#snippet s3Card()}
-<div class="card sec">
-      <h3>S3 对象存储</h3>
-      <p class="tiny muted" style="margin: 0 0 10px;">封面存储与「数据」页自动备份的 S3 推送共用这组凭据；无论当前存储方式如何都可在此配置。</p>
-      <div class="s3-grid">
-        <label class="field">
-          <span>S3 Endpoint</span>
-          <input class="input" type="text" bind:value={settings.s3_endpoint} placeholder="https://<accountid>.r2.cloudflarestorage.com" autocomplete="off" spellcheck="false" />
-          <span class="hint">兼容 AWS S3 / Cloudflare R2 / MinIO / OSS 等 S3 协议端点；AWS 官方 S3 可留空</span>
-        </label>
-        <label class="field">
-          <span>Bucket</span>
-          <input class="input" type="text" bind:value={settings.s3_bucket} placeholder="mujian" autocomplete="off" spellcheck="false" />
-        </label>
-        <label class="field">
-          <span>Region</span>
-          <input class="input" type="text" bind:value={settings.s3_region} placeholder="us-east-1" autocomplete="off" spellcheck="false" />
-        </label>
-        <label class="field">
-          <span>Access Key ID</span>
-          <input class="input" type="text" bind:value={settings.s3_access_key} autocomplete="off" spellcheck="false" />
-          <span class="hint">已配置的 Access Key 会以掩码显示；保持不变即可保留原值，填入新值可覆盖</span>
-        </label>
-        <label class="field">
-          <span>Secret Access Key</span>
-          <input class="input" type="password" bind:value={settings.s3_secret_key} placeholder={loadedS3Secret || '未设置'} autocomplete="new-password" />
-          <span class="hint">已配置的密钥会以掩码显示；保持不变即可保留原密钥，清空后保存可移除</span>
-        </label>
-        <label class="field">
-          <span>公网访问地址（Public URL）</span>
-          <input class="input" type="text" bind:value={settings.s3_public_url} placeholder="https://cdn.example.com/mujian" spellcheck="false" />
-          <span class="hint">前端从该地址直接加载封面，要求桶可公开读取或挂了 CDN。<br />留空则回退到 /uploads/ 路径（仅当反向代理把该路径映射到桶时可用）</span>
-        </label>
-      </div>
+      {#snippet fieldsCard()}
+        <div class="card sec">
+          <h3>记录字段</h3>
+          <p class="hint" style="margin-bottom: 12px;">
+            控制新建 / 编辑演出时是否显示以下字段，不常用的可按需隐藏
+          </p>
+          <label class="switch-row">
+            <span>显示「同行人」</span>
+            <input type="checkbox" bind:checked={settings.show_friends} />
+          </label>
+          <label class="switch-row">
+            <span>显示「实付金额」</span>
+            <input type="checkbox" bind:checked={settings.show_pay_price} />
+          </label>
+          <label class="switch-row">
+            <span>显示「其他花费」</span>
+            <input type="checkbox" bind:checked={settings.show_other_cost} />
+          </label>
+          <label class="switch-row">
+            <span>启用多币种（金额可单独选择币种）</span>
+            <input type="checkbox" bind:checked={settings.multi_currency} />
+          </label>
+          <div class="sub-sec">
+            <span class="sub-title">费用补全参与字段</span>
+            <span class="hint"
+              >仅勾选的字段会进入「数据 →
+              费用补全」待确认清单。默认仅「票价」——实付/其他花费全库多为
+              0，纳入会产生大量无效待办。需要补全时再勾选。</span
+            >
+            <label class="switch-row">
+              <span>票价</span>
+              <input
+                type="checkbox"
+                checked={costFieldOn('price')}
+                onchange={() => toggleCostField('price')}
+              />
+            </label>
+            <label class="switch-row">
+              <span>实付金额</span>
+              <input
+                type="checkbox"
+                checked={costFieldOn('pay_price')}
+                onchange={() => toggleCostField('pay_price')}
+              />
+            </label>
+            <label class="switch-row">
+              <span>其他花费</span>
+              <input
+                type="checkbox"
+                checked={costFieldOn('other_cost')}
+                onchange={() => toggleCostField('other_cost')}
+              />
+            </label>
+          </div>
+          <div class="time-row">
+            <span>默认演出开始时间</span>
+            <input
+              class="input"
+              type="time"
+              bind:value={settings.default_start_time}
+              style="max-width: 120px;"
+            />
+          </div>
+        </div>
+      {/snippet}
 
-      {#if settings.storage_type === 's3' && (!settings.s3_bucket.trim() || !settings.s3_access_key.trim())}
-        <div class="banner error">⚠ 存储方式为 S3：Bucket 与 Access Key 必须填写，否则保存后退回本地存储</div>
-      {:else if settings.s3_bucket.trim() && settings.s3_access_key.trim()}
-        <p class="hint-row">✓ S3 配置已就绪，保存后立即生效，无需重启</p>
-      {/if}
+      {#snippet statusCard()}
+        <div class="card sec">
+          <h3>演出状态</h3>
+          <p class="hint" style="margin-bottom: 12px;">
+            控制首页列表显示哪些状态的演出（本地偏好，立即生效）
+          </p>
+          <div class="status-row">
+            {#each ALL_STATUSES as sv (sv)}
+              <label class="status-opt" class:on={statusFilter.includes(sv)}>
+                <input
+                  type="checkbox"
+                  checked={statusFilter.includes(sv)}
+                  onchange={() => toggleStatus(sv)}
+                />
+                <span>{STATUS_LABELS[sv]}</span>
+              </label>
+            {/each}
+          </div>
+        </div>
+      {/snippet}
 
-        {#if settings.s3_bucket.trim() && settings.s3_access_key.trim()}
-        <div class="convert-actions">
-          <button
-            class="btn"
-            class:disabled={migrating}
-            onclick={runMigrateToS3}
-            disabled={migrating}
-          >
-            {#if migrating}
-              迁移中…
-            {:else}
-              把本地封面上传到 S3
-            {/if}
-          </button>
-          <button
-            class="btn"
-            class:disabled={testingS3}
-            onclick={testS3}
-            disabled={testingS3}
-          >
+      {#snippet listCard()}
+        <div class="card sec">
+          <h3>列表</h3>
+          <p class="hint" style="margin-bottom: 12px;">首页浏览辅助（本地偏好，立即生效）</p>
+          <label class="switch-row">
+            <span>进入首页自动定位到当前时间</span>
+            <input
+              type="checkbox"
+              checked={jumpNowPref}
+              onchange={(e) => setJumpNowPref(e.target.checked)}
+            />
+          </label>
+          <p class="hint" style="margin-top: 8px;">
+            开启后每次打开演出列表会自动滚动到最近已发生（含今天）的演出；列表右下角也随时提供手动定位按钮
+          </p>
+        </div>
+      {/snippet}
+
+      {#snippet securityCard()}
+        <div class="card sec">
+          <h3>访问安全</h3>
+          <label>
+            访问令牌（可选）
+            {#if authRequired}<span class="hint" style="color: var(--warn, #b45309);"
+                >· 服务端已启用鉴权</span
+              >{/if}
+          </label>
+          <input
+            class="input"
+            type="password"
+            bind:value={authToken}
+            placeholder="未设置"
+            autocomplete="new-password"
+            style="max-width: 320px;"
+          />
+          <p class="hint" style="margin-top: 8px;">
+            在服务器上配置环境变量 MJ_AUTH_TOKEN（或设置文件中的 auth_token）即启用鉴权，此后所有
+            API/MCP 请求都必须携带这个令牌。<br />
+            在上方填入与服务器相同的值并保存即可正常使用：本页只把它记在本机浏览器（localStorage），每次请求自动附带；
+            保存时不会把令牌发回服务器——服务器已经从环境变量拿到了这个值，无需再存一份。
+          </p>
+          {#if authRequired}
+            <p class="hint" style="margin-top: 8px;">
+              服务端已启用鉴权：未填写或填错时，除本页外的所有页面和接口都会提示 401
+              未授权，填对后立即恢复，无需重启。
+            </p>
+          {/if}
+          <p class="hint" style="margin-top: 8px;">
+            ICS 订阅与 CalDAV 地址会自动附带 ?token= 参数（日历客户端无法自定义请求头，故直接拼在
+            URL 上）。
+          </p>
+        </div>
+      {/snippet}
+
+      {#snippet mapCard()}
+        <div class="card sec">
+          <h3>地图</h3>
+          <label>默认底图</label>
+          <select class="input" bind:value={mapSource} style="max-width: 280px;">
+            {#each MAP_SOURCES as s (s)}
+              <option value={s.k}>{s.label}</option>
+            {/each}
+          </select>
+
+          <label style="margin-top: 12px;">
+            平台 Key（可选）
+            <span class="hint">高德/腾讯地图在网页应用需填写 key 才会出图；可留空使用公共瓦片</span>
+          </label>
+          <input
+            class="input"
+            type="text"
+            bind:value={mapKey}
+            placeholder="例如高德或腾讯 JS 应用的 key"
+            style="max-width: 320px;"
+          />
+
+          <label style="margin-top: 12px;">自定义瓦片 URL（可选）</label>
+          <input
+            class="input"
+            type="text"
+            bind:value={mapCustomUrl}
+            placeholder={'https://{s}.example.com/tiles/{z}/{x}/{y}.png'}
+            style="max-width: 420px;"
+          />
+
+          <div class="convert-actions">
+            <button
+              class="btn"
+              class:disabled={aligning}
+              onclick={() => runAlignVenues()}
+              disabled={aligning}
+            >
+              {#if aligning}
+                对齐中…
+              {:else}
+                对齐同场馆坐标
+              {/if}
+            </button>
+            <span class="hint">按地址分组，用每组已有坐标回填同场馆其他演出，统一历史数据</span>
+          </div>
+
+          {#if alignResult}
+            <div class="banner success">
+              ✓ 已对齐 {alignResult.groups_aligned}/{alignResult.groups_total} 组场馆，更新 {alignResult.records_updated}
+              条记录
+            </div>
+          {/if}
+          {#if alignError}
+            <div class="banner error">⚠ {alignError}</div>
+          {/if}
+        </div>
+      {/snippet}
+
+      {#snippet s3Card()}
+        <div class="card sec">
+          <h3>S3 对象存储</h3>
+          <p class="tiny muted" style="margin: 0 0 10px;">
+            封面存储与「数据」页自动备份的 S3 推送共用这组凭据；无论当前存储方式如何都可在此配置。
+          </p>
+          <div class="s3-grid">
+            <label class="field">
+              <span>S3 Endpoint</span>
+              <input
+                class="input"
+                type="text"
+                bind:value={settings.s3_endpoint}
+                placeholder="https://<accountid>.r2.cloudflarestorage.com"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <span class="hint"
+                >兼容 AWS S3 / Cloudflare R2 / MinIO / OSS 等 S3 协议端点；AWS 官方 S3 可留空</span
+              >
+            </label>
+            <label class="field">
+              <span>Bucket</span>
+              <input
+                class="input"
+                type="text"
+                bind:value={settings.s3_bucket}
+                placeholder="mujian"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
+            <label class="field">
+              <span>Region</span>
+              <input
+                class="input"
+                type="text"
+                bind:value={settings.s3_region}
+                placeholder="us-east-1"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
+            <label class="field">
+              <span>Access Key ID</span>
+              <input
+                class="input"
+                type="text"
+                bind:value={settings.s3_access_key}
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <span class="hint"
+                >已配置的 Access Key 会以掩码显示；保持不变即可保留原值，填入新值可覆盖</span
+              >
+            </label>
+            <label class="field">
+              <span>Secret Access Key</span>
+              <input
+                class="input"
+                type="password"
+                bind:value={settings.s3_secret_key}
+                placeholder={loadedS3Secret || '未设置'}
+                autocomplete="new-password"
+              />
+              <span class="hint"
+                >已配置的密钥会以掩码显示；保持不变即可保留原密钥，清空后保存可移除</span
+              >
+            </label>
+            <label class="field">
+              <span>公网访问地址（Public URL）</span>
+              <input
+                class="input"
+                type="text"
+                bind:value={settings.s3_public_url}
+                placeholder="https://cdn.example.com/mujian"
+                spellcheck="false"
+              />
+              <span class="hint"
+                >前端从该地址直接加载封面，要求桶可公开读取或挂了 CDN。<br />留空则回退到 /uploads/
+                路径（仅当反向代理把该路径映射到桶时可用）</span
+              >
+            </label>
+          </div>
+
+          {#if settings.storage_type === 's3' && (!settings.s3_bucket.trim() || !settings.s3_access_key.trim())}
+            <div class="banner error">
+              ⚠ 存储方式为 S3：Bucket 与 Access Key 必须填写，否则保存后退回本地存储
+            </div>
+          {:else if settings.s3_bucket.trim() && settings.s3_access_key.trim()}
+            <p class="hint-row">✓ S3 配置已就绪，保存后立即生效，无需重启</p>
+          {/if}
+
+          {#if settings.s3_bucket.trim() && settings.s3_access_key.trim()}
+            <div class="convert-actions">
+              <button
+                class="btn"
+                class:disabled={migrating}
+                onclick={runMigrateToS3}
+                disabled={migrating}
+              >
+                {#if migrating}
+                  迁移中…
+                {:else}
+                  把本地封面上传到 S3
+                {/if}
+              </button>
+              <button class="btn" class:disabled={testingS3} onclick={testS3} disabled={testingS3}>
+                {#if testingS3}
+                  测试中…
+                {:else}
+                  测试 S3 连接
+                {/if}
+              </button>
+              <span class="hint"
+                >「测试连接」会用当前配置（含已保存的掩码密钥）做一次真实读写探测，验证连通性、凭据与
+                path-style 寻址是否正确，不影响已存数据</span
+              >
+            </div>
+
             {#if testingS3}
-              测试中…
-            {:else}
-              测试 S3 连接
+              <div class="banner info"><span>⏳ 正在探测 S3 连接…</span></div>
             {/if}
-          </button>
-          <span class="hint">「测试连接」会用当前配置（含已保存的掩码密钥）做一次真实读写探测，验证连通性、凭据与 path-style 寻址是否正确，不影响已存数据</span>
+            {#if s3TestOk}
+              <div class="banner success">
+                ✓ S3 连接成功：已可向该桶写入并读取（path-style 寻址正常）
+              </div>
+            {/if}
+            {#if s3TestError}
+              <div class="banner error">⚠ S3 连接失败：{s3TestError}</div>
+            {/if}
+
+            {#if migrating && migrateProgress.total > 0}
+              <div class="banner info">
+                <span>⏳ 迁移中… {migrateProgress.processed}/{migrateProgress.total}</span>
+              </div>
+            {/if}
+
+            {#if migrateResult}
+              <div class="banner success">
+                ✓ 共 {migrateResult.total} 个文件：新上传 {migrateResult.migrated}，已存在跳过 {migrateResult.skipped}{#if migrateResult.failed}，失败
+                  {migrateResult.failed}{/if}
+              </div>
+            {/if}
+            {#if migrateError}
+              <div class="banner error">⚠ {migrateError}</div>
+            {/if}
+          {/if}
         </div>
+      {/snippet}
 
-        {#if testingS3}
-          <div class="banner info"><span>⏳ 正在探测 S3 连接…</span></div>
-        {/if}
-        {#if s3TestOk}
-          <div class="banner success">✓ S3 连接成功：已可向该桶写入并读取（path-style 寻址正常）</div>
-        {/if}
-        {#if s3TestError}
-          <div class="banner error">⚠ S3 连接失败：{s3TestError}</div>
-        {/if}
-
-        {#if migrating && migrateProgress.total > 0}
-          <div class="banner info">
-            <span>⏳ 迁移中… {migrateProgress.processed}/{migrateProgress.total}</span>
+      {#snippet aiCard()}
+        <div class="card sec">
+          <h3>AI 填写</h3>
+          <p class="tiny muted" style="margin: 0 0 10px;">
+            配置一个 OpenAI 兼容的聊天模型接口后，新建演出时可粘贴演出信息（购票短信 /
+            宣传文案等），一键把内容填进对应字段。密钥仅保存在服务端，不会下发到浏览器。
+          </p>
+          <label class="switch-row">
+            <span>启用 AI 填写</span>
+            <input type="checkbox" bind:checked={settings.ai_enabled} />
+          </label>
+          <div class="s3-grid" style="margin-top: 12px;">
+            <label class="field">
+              <span>API 地址（Base URL）</span>
+              <input
+                class="input"
+                type="text"
+                bind:value={settings.ai_base_url}
+                placeholder="https://api.openai.com/v1"
+                spellcheck="false"
+                autocomplete="off"
+              />
+              <span class="hint"
+                >OpenAI 兼容服务的 chat/completions 基址，如 https://api.openai.com/v1</span
+              >
+            </label>
+            <label class="field">
+              <span>模型（Model）</span>
+              <input
+                class="input"
+                type="text"
+                bind:value={settings.ai_model}
+                placeholder="gpt-4o-mini"
+                spellcheck="false"
+                autocomplete="off"
+              />
+            </label>
+            <label class="field">
+              <span>API Key</span>
+              <input
+                class="input"
+                type="password"
+                bind:value={settings.ai_api_key}
+                placeholder={loadedAIApiKey || '未设置'}
+                autocomplete="new-password"
+              />
+              <span class="hint"
+                >已配置的密钥会以掩码显示；保持不变即可保留原值，清空后保存可移除</span
+              >
+            </label>
           </div>
-        {/if}
+        </div>
+      {/snippet}
 
-        {#if migrateResult}
-          <div class="banner success">
-            ✓ 共 {migrateResult.total} 个文件：新上传 {migrateResult.migrated}，已存在跳过 {migrateResult.skipped}{#if migrateResult.failed}，失败 {migrateResult.failed}{/if}
+      {#snippet huozhiCard()}
+        <div class="card sec">
+          <h3>货殖账单关联</h3>
+          <p class="tiny muted" style="margin: 0 0 10px;">
+            货殖是自建的个人记账系统。<a
+              href="https://github.com/Felix2yu/huozhi"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="color: var(--accent); text-decoration: underline; text-underline-offset: 2px;"
+              >项目主页 ↗</a
+            ><br />
+            配置后，演出记录可绑定货殖账单 ID：详情页会展示这些账单的合计金额（悬停看描述 / 账户等明细，点击跳转账单页），并在货殖有数据时优先采用接口金额而非内建费用。<br
+            />
+            历史演出不做回溯关联，只在新建 / 编辑时手动绑定。
+          </p>
+          <label class="switch-row">
+            <span>启用货殖关联</span>
+            <input type="checkbox" bind:checked={settings.huozhi_enabled} />
+          </label>
+          <div class="s3-grid" style="margin-top: 12px;">
+            <label class="field">
+              <span>货殖域名</span>
+              <input
+                class="input"
+                type="text"
+                bind:value={settings.huozhi_domain}
+                placeholder="https://huozhi.example.com"
+                spellcheck="false"
+                autocomplete="off"
+              />
+              <span class="hint"
+                >站点根地址；接口按「域名 + /api/public/bills/账单ID」拼接，只填主机名时自动补
+                https://</span
+              >
+            </label>
+            <label class="field">
+              <span>API Key</span>
+              <input
+                class="input"
+                type="password"
+                bind:value={settings.huozhi_api_key}
+                placeholder={loadedHuozhiApiKey || '未设置'}
+                autocomplete="new-password"
+              />
+              <span class="hint"
+                >以 X-API-Key 请求头发送，仅存服务端；保持不变即保留原值，清空后保存可移除</span
+              >
+            </label>
+            <label class="field">
+              <span>账单页面路径</span>
+              <input
+                class="input"
+                type="text"
+                bind:value={settings.huozhi_bill_path}
+                placeholder={'/bills/{id}'}
+                spellcheck="false"
+                autocomplete="off"
+              />
+              <span class="hint">详情页跳转用的网页路径模板，其中的 id 会替换成账单 ID</span>
+            </label>
+            <label class="field">
+              <span>门票分类关键词</span>
+              <input
+                class="input"
+                type="text"
+                bind:value={settings.huozhi_ticket_categories}
+                placeholder="娱乐,演出,门票"
+                spellcheck="false"
+                autocomplete="off"
+              />
+              <span class="hint"
+                >货殖账单的分类（category）匹配这些关键词（逗号分隔）则归为「门票实付」，其余（交通/酒店等）归为「其他开销」</span
+              >
+            </label>
           </div>
+          <div class="huozhi-test">
+            <input
+              class="input"
+              type="text"
+              bind:value={huozhiTestBillId}
+              placeholder="账单 ID（可选，如 123）"
+              spellcheck="false"
+              autocomplete="off"
+              style="max-width: 220px;"
+            />
+            <button class="btn sm" onclick={testHuozhi} disabled={testingHuozhi}>
+              {testingHuozhi ? '测试中…' : '测试连接'}
+            </button>
+            <span class="hint"
+              >填写账单 ID 会真实拉取一次账单以验证接口返回；留空则只探测连通性</span
+            >
+          </div>
+          {#if huozhiTestOk}
+            <div class="banner success">✓ {huozhiTestMsg}</div>
           {/if}
-          {#if migrateError}
-            <div class="banner error">⚠ {migrateError}</div>
+          {#if huozhiTestError}
+            <div class="banner error">⚠ 货殖连接失败：{huozhiTestError}</div>
           {/if}
-      {/if}
-    </div>
-{/snippet}
+          {#if settings.huozhi_enabled && !settings.huozhi_domain.trim()}
+            <div class="banner error">⚠ 已启用但未填写货殖域名，保存后不会生效</div>
+          {/if}
+        </div>
+      {/snippet}
 
-{#snippet aiCard()}
-<div class="card sec">
-      <h3>AI 填写</h3>
-      <p class="tiny muted" style="margin: 0 0 10px;">配置一个 OpenAI 兼容的聊天模型接口后，新建演出时可粘贴演出信息（购票短信 / 宣传文案等），一键把内容填进对应字段。密钥仅保存在服务端，不会下发到浏览器。</p>
-      <label class="switch-row">
-        <span>启用 AI 填写</span>
-        <input type="checkbox" bind:checked={settings.ai_enabled} />
-      </label>
-      <div class="s3-grid" style="margin-top: 12px;">
-        <label class="field">
-          <span>API 地址（Base URL）</span>
-          <input class="input" type="text" bind:value={settings.ai_base_url} placeholder="https://api.openai.com/v1" spellcheck="false" autocomplete="off" />
-          <span class="hint">OpenAI 兼容服务的 chat/completions 基址，如 https://api.openai.com/v1</span>
-        </label>
-        <label class="field">
-          <span>模型（Model）</span>
-          <input class="input" type="text" bind:value={settings.ai_model} placeholder="gpt-4o-mini" spellcheck="false" autocomplete="off" />
-        </label>
-        <label class="field">
-          <span>API Key</span>
-          <input class="input" type="password" bind:value={settings.ai_api_key} placeholder={loadedAIApiKey || '未设置'} autocomplete="new-password" />
-          <span class="hint">已配置的密钥会以掩码显示；保持不变即可保留原值，清空后保存可移除</span>
-        </label>
+      <!-- 两列按卡片高度权重最短列优先分配（CARD_COLS），保证列高大致均衡 -->
+      <div class="col">
+        {#each CARD_COLS[0] as key (key)}
+          {#if key === 'theme'}{@render themeCard()}
+          {:else if key === 'storage'}{@render storageCard()}
+          {:else if key === 's3'}{@render s3Card()}
+          {:else if key === 'encode'}{@render encodeCard()}
+          {:else if key === 'ics'}{@render icsCard()}
+          {:else if key === 'caldav'}{@render caldavCard()}
+          {:else if key === 'fields'}{@render fieldsCard()}
+          {:else if key === 'status'}{@render statusCard()}
+          {:else if key === 'list'}{@render listCard()}
+          {:else if key === 'security'}{@render securityCard()}
+          {:else if key === 'map'}{@render mapCard()}
+          {:else if key === 'ai'}{@render aiCard()}
+          {:else if key === 'huozhi'}{@render huozhiCard()}
+          {/if}
+        {/each}
+      </div>
+      <div class="col">
+        {#each CARD_COLS[1] as key (key)}
+          {#if key === 'theme'}{@render themeCard()}
+          {:else if key === 'storage'}{@render storageCard()}
+          {:else if key === 's3'}{@render s3Card()}
+          {:else if key === 'encode'}{@render encodeCard()}
+          {:else if key === 'ics'}{@render icsCard()}
+          {:else if key === 'caldav'}{@render caldavCard()}
+          {:else if key === 'fields'}{@render fieldsCard()}
+          {:else if key === 'status'}{@render statusCard()}
+          {:else if key === 'list'}{@render listCard()}
+          {:else if key === 'security'}{@render securityCard()}
+          {:else if key === 'map'}{@render mapCard()}
+          {:else if key === 'ai'}{@render aiCard()}
+          {:else if key === 'huozhi'}{@render huozhiCard()}
+          {/if}
+        {/each}
       </div>
     </div>
-{/snippet}
-
-{#snippet huozhiCard()}
-<div class="card sec">
-      <h3>货殖账单关联</h3>
-      <p class="tiny muted" style="margin: 0 0 10px;">
-        货殖是自建的个人记账系统。<a href="https://github.com/Felix2yu/huozhi" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: underline; text-underline-offset: 2px;">项目主页 ↗</a><br />
-        配置后，演出记录可绑定货殖账单 ID：详情页会展示这些账单的合计金额（悬停看描述 / 账户等明细，点击跳转账单页），并在货殖有数据时优先采用接口金额而非内建费用。<br />
-        历史演出不做回溯关联，只在新建 / 编辑时手动绑定。
-      </p>
-      <label class="switch-row">
-        <span>启用货殖关联</span>
-        <input type="checkbox" bind:checked={settings.huozhi_enabled} />
-      </label>
-      <div class="s3-grid" style="margin-top: 12px;">
-        <label class="field">
-          <span>货殖域名</span>
-          <input class="input" type="text" bind:value={settings.huozhi_domain} placeholder="https://huozhi.example.com" spellcheck="false" autocomplete="off" />
-          <span class="hint">站点根地址；接口按「域名 + /api/public/bills/账单ID」拼接，只填主机名时自动补 https://</span>
-        </label>
-        <label class="field">
-          <span>API Key</span>
-          <input class="input" type="password" bind:value={settings.huozhi_api_key} placeholder={loadedHuozhiApiKey || '未设置'} autocomplete="new-password" />
-          <span class="hint">以 X-API-Key 请求头发送，仅存服务端；保持不变即保留原值，清空后保存可移除</span>
-        </label>
-        <label class="field">
-          <span>账单页面路径</span>
-          <input class="input" type="text" bind:value={settings.huozhi_bill_path} placeholder={'/bills/{id}'} spellcheck="false" autocomplete="off" />
-          <span class="hint">详情页跳转用的网页路径模板，其中的 id 会替换成账单 ID</span>
-        </label>
-        <label class="field">
-          <span>门票分类关键词</span>
-          <input class="input" type="text" bind:value={settings.huozhi_ticket_categories} placeholder="娱乐,演出,门票" spellcheck="false" autocomplete="off" />
-          <span class="hint">货殖账单的分类（category）匹配这些关键词（逗号分隔）则归为「门票实付」，其余（交通/酒店等）归为「其他开销」</span>
-        </label>
-      </div>
-      <div class="huozhi-test">
-        <input
-          class="input"
-          type="text"
-          bind:value={huozhiTestBillId}
-          placeholder="账单 ID（可选，如 123）"
-          spellcheck="false"
-          autocomplete="off"
-          style="max-width: 220px;"
-        />
-        <button class="btn sm" onclick={testHuozhi} disabled={testingHuozhi}>
-          {testingHuozhi ? '测试中…' : '测试连接'}
-        </button>
-        <span class="hint">填写账单 ID 会真实拉取一次账单以验证接口返回；留空则只探测连通性</span>
-      </div>
-      {#if huozhiTestOk}
-        <div class="banner success">✓ {huozhiTestMsg}</div>
-      {/if}
-      {#if huozhiTestError}
-        <div class="banner error">⚠ 货殖连接失败：{huozhiTestError}</div>
-      {/if}
-      {#if settings.huozhi_enabled && !settings.huozhi_domain.trim()}
-        <div class="banner error">⚠ 已启用但未填写货殖域名，保存后不会生效</div>
-      {/if}
+    <p class="hint" style="margin: 4px 0 14px;">
+      除标注「本地偏好，立即生效」的项外，所有改动需点击「保存设置」才会写入服务端。
+    </p>
+    <div class="save-row">
+      <button class="btn primary" onclick={save} disabled={saving}
+        >{saving ? '保存中…' : '保存设置'}</button
+      >
+      {#if saved}<span class="save-ok">已保存 ✓</span>{/if}
+      {#if error}<span class="save-err">{error}</span>{/if}
     </div>
-{/snippet}
-
-  <!-- 两列按卡片高度权重最短列优先分配（CARD_COLS），保证列高大致均衡 -->
-  <div class="col">
-    {#each CARD_COLS[0] as key (key)}
-			{#if key === "theme"}{@render themeCard()}
-			{:else if key === "storage"}{@render storageCard()}
-			{:else if key === "s3"}{@render s3Card()}
-			{:else if key === "encode"}{@render encodeCard()}
-			{:else if key === "ics"}{@render icsCard()}
-			{:else if key === "caldav"}{@render caldavCard()}
-			{:else if key === "fields"}{@render fieldsCard()}
-			{:else if key === "status"}{@render statusCard()}
-			{:else if key === "list"}{@render listCard()}
-			{:else if key === "security"}{@render securityCard()}
-			{:else if key === "map"}{@render mapCard()}
-			{:else if key === "ai"}{@render aiCard()}
-			{:else if key === "huozhi"}{@render huozhiCard()}
-			{/if}
-    {/each}
-  </div>
-  <div class="col">
-    {#each CARD_COLS[1] as key (key)}
-			{#if key === "theme"}{@render themeCard()}
-			{:else if key === "storage"}{@render storageCard()}
-			{:else if key === "s3"}{@render s3Card()}
-			{:else if key === "encode"}{@render encodeCard()}
-			{:else if key === "ics"}{@render icsCard()}
-			{:else if key === "caldav"}{@render caldavCard()}
-			{:else if key === "fields"}{@render fieldsCard()}
-			{:else if key === "status"}{@render statusCard()}
-			{:else if key === "list"}{@render listCard()}
-			{:else if key === "security"}{@render securityCard()}
-			{:else if key === "map"}{@render mapCard()}
-			{:else if key === "ai"}{@render aiCard()}
-			{:else if key === "huozhi"}{@render huozhiCard()}
-			{/if}
-    {/each}
-  </div>
-</div>
-  <p class="hint" style="margin: 4px 0 14px;">除标注「本地偏好，立即生效」的项外，所有改动需点击「保存设置」才会写入服务端。</p>
-  <div class="save-row">
-    <button class="btn primary" onclick={save} disabled={saving}>{saving ? '保存中…' : '保存设置'}</button>
-    {#if saved}<span class="save-ok">已保存 ✓</span>{/if}
-    {#if error}<span class="save-err">{error}</span>{/if}
-  </div>
-
   {/if}
 </div>
+
 <style>
   /* 宽屏两列独立容器（按权重最短列优先分配，见 CARD_COLS），卡片保持
      自身高度；窄屏自动堆叠为单列。 */
@@ -1042,15 +1406,27 @@
     flex-direction: column;
     gap: 14px;
   }
-  .sec { padding: 18px 20px; margin-bottom: 0; }
+  .sec {
+    padding: 18px 20px;
+    margin-bottom: 0;
+  }
   @media (max-width: 859px) {
     /* 列堆叠后交叉轴变为横向：须 stretch 让各列填满容器宽度，
        否则 flex-start 会让列收缩到内容宽度、被内部宽内容顶破页面 */
-    .settings-grid { flex-direction: column; align-items: stretch; }
+    .settings-grid {
+      flex-direction: column;
+      align-items: stretch;
+    }
   }
-  .sec h3 { margin: 0 0 12px; font-size: 15.5px; }
+  .sec h3 {
+    margin: 0 0 12px;
+    font-size: 15.5px;
+  }
 
-  .theme-row { display: flex; gap: 8px; }
+  .theme-row {
+    display: flex;
+    gap: 8px;
+  }
   .theme-opt {
     flex: 1;
     display: flex;
@@ -1064,18 +1440,38 @@
     cursor: pointer;
     font-size: 13.5px;
     color: var(--text-2);
-    transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+    transition:
+      border-color var(--t-fast) var(--ease),
+      background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease);
   }
-  .theme-opt:hover { border-color: var(--border-strong); }
+  .theme-opt:hover {
+    border-color: var(--border-strong);
+  }
   .theme-opt.on {
     border-color: var(--accent);
     background: var(--accent-softer);
     color: var(--accent);
     font-weight: 600;
   }
-  .tico { font-size: 18px; display: inline-flex; align-items: center; justify-content: center; }
-  .hint { font-weight: 400; color: var(--text-3); font-size: 12px; display: block; margin-top: 4px; }
-  .hint-row { margin-top: 8px; font-size: 12.5px; color: var(--text-3); }
+  .tico {
+    font-size: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .hint {
+    font-weight: 400;
+    color: var(--text-3);
+    font-size: 12px;
+    display: block;
+    margin-top: 4px;
+  }
+  .hint-row {
+    margin-top: 8px;
+    font-size: 12.5px;
+    color: var(--text-3);
+  }
   .s3-grid {
     display: grid;
     /* 用 min() 兜底：容器窄于 240px 时轨道下限降为容器宽度，
@@ -1091,8 +1487,16 @@
     flex-wrap: wrap;
     margin-top: 14px;
   }
-  .huozhi-test .hint { margin-top: 0; }
-  .field { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--text-2); }
+  .huozhi-test .hint {
+    margin-top: 0;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13.5px;
+    color: var(--text-2);
+  }
 
   .convert-actions {
     display: flex;
@@ -1102,12 +1506,31 @@
     padding-top: 14px;
     border-top: 1px dashed var(--border);
   }
-  .convert-actions .btn { width: fit-content; }
-  .btn.disabled, .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-  .cal-actions { display: flex; flex-direction: column; gap: 8px; }
-  .cal-subscribe { display: flex; gap: 8px; }
-  .cal-subscribe .input { flex: 1; font-size: 16px; color: var(--text-2); }
-  .cal-subscribe .btn { white-space: nowrap; }
+  .convert-actions .btn {
+    width: fit-content;
+  }
+  .btn.disabled,
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .cal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .cal-subscribe {
+    display: flex;
+    gap: 8px;
+  }
+  .cal-subscribe .input {
+    flex: 1;
+    font-size: 16px;
+    color: var(--text-2);
+  }
+  .cal-subscribe .btn {
+    white-space: nowrap;
+  }
   .switch-row {
     display: flex;
     align-items: center;
@@ -1118,12 +1541,35 @@
     color: var(--text-2);
     border-top: 1px solid var(--border);
   }
-  .switch-row:first-of-type { border-top: none; }
-  .switch-row input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
-  .sub-sec { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
-  .sub-title { display: block; font-size: 13.5px; font-weight: 600; color: var(--text-1); margin-bottom: 4px; }
-  .sub-sec .hint { margin-bottom: 6px; }
-  .status-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .switch-row:first-of-type {
+    border-top: none;
+  }
+  .switch-row input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .sub-sec {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border);
+  }
+  .sub-title {
+    display: block;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-1);
+    margin-bottom: 4px;
+  }
+  .sub-sec .hint {
+    margin-bottom: 6px;
+  }
+  .status-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
   .status-opt {
     display: inline-flex;
     align-items: center;
@@ -1135,11 +1581,22 @@
     cursor: pointer;
     font-size: 13.5px;
     color: var(--text-2);
-    transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+    transition:
+      border-color var(--t-fast) var(--ease),
+      background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease);
     user-select: none;
   }
-  .status-opt input { accent-color: var(--accent); cursor: pointer; }
-  .status-opt.on { border-color: var(--accent); background: var(--accent-softer); color: var(--accent); font-weight: 600; }
+  .status-opt input {
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .status-opt.on {
+    border-color: var(--accent);
+    background: var(--accent-softer);
+    color: var(--accent);
+    font-weight: 600;
+  }
   .time-row {
     display: flex;
     align-items: center;

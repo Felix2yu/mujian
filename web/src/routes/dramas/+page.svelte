@@ -1,4 +1,5 @@
 <script>
+  import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { api } from '#lib/api.js';
@@ -36,10 +37,20 @@
   const visibleDramas = $derived.by(() => {
     let list = dramas;
     const q = filterQuery.trim().toLowerCase();
-    if (q) list = list.filter((d) => (d.name || '').toLowerCase().includes(q) || (d.remark || '').toLowerCase().includes(q));
+    if (q)
+      list = list.filter(
+        (d) =>
+          (d.name || '').toLowerCase().includes(q) || (d.remark || '').toLowerCase().includes(q)
+      );
     if (filterCat) list = list.filter((d) => d.categoryNames?.includes(filterCat));
-    if (sortBy === 'records') return [...list].sort((a, b) => b.recordCount - a.recordCount || a.name.localeCompare(b.name, 'zh'));
-    if (sortBy === 'zhezis') return [...list].sort((a, b) => b.zheziCount - a.zheziCount || a.name.localeCompare(b.name, 'zh'));
+    if (sortBy === 'records')
+      return [...list].sort(
+        (a, b) => b.recordCount - a.recordCount || a.name.localeCompare(b.name, 'zh')
+      );
+    if (sortBy === 'zhezis')
+      return [...list].sort(
+        (a, b) => b.zheziCount - a.zheziCount || a.name.localeCompare(b.name, 'zh')
+      );
     if (sortBy === 'name') return [...list].sort((a, b) => a.name.localeCompare(b.name, 'zh'));
     return list; // manual：后端已按 sort_order 排序
   });
@@ -48,7 +59,10 @@
     loading = true;
     error = '';
     try {
-      [dramas, categories] = await Promise.all([api.listDramas(), api.listCategories().catch(() => [])]);
+      [dramas, categories] = await Promise.all([
+        api.listDramas(),
+        api.listCategories().catch(() => [])
+      ]);
     } catch (e) {
       error = e.message;
     } finally {
@@ -62,7 +76,11 @@
     adding = true;
     error = '';
     try {
-      const d = await api.createDrama({ name, categoryNames: form.categoryNames.slice(), remark: form.remark.trim() });
+      const d = await api.createDrama({
+        name,
+        categoryNames: form.categoryNames.slice(),
+        remark: form.remark.trim()
+      });
       location.href = `/dramas/${d.id}`;
     } catch (e) {
       error = e.message;
@@ -111,7 +129,8 @@
     error = '';
     const shown = new Set(next.map((d) => d.id));
     const full = [...next, ...dramas.filter((d) => !shown.has(d.id))];
-    api.reorderDramas(full.map((x) => x.id))
+    api
+      .reorderDramas(full.map((x) => x.id))
       .then(() => {
         sortBy = 'manual';
         const order = new Map(full.map((d, i) => [d.id, i]));
@@ -132,29 +151,42 @@
     load();
   });
 </script>
-<svelte:head><title>剧目 - 幕间</title></svelte:head>
 
+<svelte:head><title>剧目 - 幕间</title></svelte:head>
 
 <div class="fade-up">
   <div class="page-head">
     <h1>剧目</h1>
-    <p class="sub">管理剧目档案与折子。点击剧目进入详情，可添加、排序并设置折子别名；拖动卡片可调整剧目显示顺序</p>
+    <p class="sub">
+      管理剧目档案与折子。点击剧目进入详情，可添加、排序并设置折子别名；拖动卡片可调整剧目显示顺序
+    </p>
   </div>
 
   <div class="card add-bar">
-    <input class="input grow" placeholder="剧目名称（必填），如：牡丹亭" bind:value={form.name} onkeydown={(e) => e.key === 'Enter' && add()} />
+    <input
+      class="input grow"
+      placeholder="剧目名称（必填），如：牡丹亭"
+      bind:value={form.name}
+      onkeydown={(e) => e.key === 'Enter' && add()}
+    />
     <div class="grow">
-      <CategoryTags bind:values={form.categoryNames} {categories} placeholder="剧种（可多个，可留空自动统计）" />
+      <CategoryTags
+        bind:values={form.categoryNames}
+        {categories}
+        placeholder="剧种（可多个，可留空自动统计）"
+      />
     </div>
     <input class="input grow" placeholder="备注（可选）" bind:value={form.remark} />
-    <button class="btn primary" onclick={add} disabled={adding || !form.name.trim()}>{adding ? '创建中…' : '＋ 创建剧目'}</button>
+    <button class="btn primary" onclick={add} disabled={adding || !form.name.trim()}
+      >{adding ? '创建中…' : '＋ 创建剧目'}</button
+    >
   </div>
 
   {#if error}<div class="banner error">⚠ {error}</div>{/if}
 
   {#if loading}
     <div class="grid">
-      {#each Array(6) as _}<div class="skeleton" style="height: 96px;"></div>{/each}
+      {#each Array(6) as _, i (i)}<div class="skeleton" style="height: 96px;"></div>{/each}
     </div>
   {:else if dramas.length === 0}
     <div class="empty card">
@@ -167,7 +199,7 @@
       <input class="input grow" placeholder="🔍 搜索剧目名称 / 备注…" bind:value={filterQuery} />
       <select class="input" bind:value={filterCat}>
         <option value="">全部剧种</option>
-        {#each allCats as c}<option value={c}>{c}</option>{/each}
+        {#each allCats as c (c)}<option value={c}>{c}</option>{/each}
         <!-- 从剧种页带参进入、但该剧种下暂无剧目时（allCats 由剧目自动聚合而来），
              补一个占位选项，避免 select 因无匹配项而显示空白 -->
         {#if filterCat && !allCats.includes(filterCat)}
@@ -184,65 +216,131 @@
     </div>
 
     {#if visibleDramas.length === 0}
-      <div class="empty card"><div class="t">无匹配剧目</div><div class="h">调整筛选条件试试</div></div>
+      <div class="empty card">
+        <div class="t">无匹配剧目</div>
+        <div class="h">调整筛选条件试试</div>
+      </div>
     {:else}
-    <div class="grid stagger">
-      {#each visibleDramas as d, i (d.id)}
-        <div
-          class="card drama"
-          draggable="true"
-          class:dragging={dragIdx === i}
-          class:drop-before={overIdx === i && dragIdx !== i && overBefore}
-          class:drop-after={overIdx === i && dragIdx !== i && !overBefore}
-          ondragstart={(e) => { onDragStart(i); e.dataTransfer.effectAllowed = 'move'; }}
-          ondragover={(e) => onDragOver(e, i)}
-          ondragleave={() => { if (overIdx === i) overIdx = -1; }}
-          ondrop={() => onDrop(i)}
-          ondragend={() => resetDrag()}
-        >
-          <a class="drama-main" href={`/dramas/${d.id}`}>
-            <div class="d-title">{d.name}</div>
-            <div class="d-meta">
-              {#if d.categoryNames?.length}
-                <div class="d-cats">
-                  {#each d.categoryNames.slice(0, 3) as cn}<span class="d-cat">{cn}</span>{/each}
-                  {#if d.categoryNames.length > 3}
-                    <span class="d-cat more" title={d.categoryNames.join(' / ')}>等</span>
-                  {/if}
-                </div>
-              {/if}
-              {#if d.remark}<span class="d-remark" title={d.remark}>{d.remark}</span>{/if}
+      <div class="stagger grid">
+        {#each visibleDramas as d, i (d.id)}
+          <div
+            class="card drama"
+            draggable="true"
+            class:dragging={dragIdx === i}
+            class:drop-before={overIdx === i && dragIdx !== i && overBefore}
+            class:drop-after={overIdx === i && dragIdx !== i && !overBefore}
+            ondragstart={(e) => {
+              onDragStart(i);
+              e.dataTransfer.effectAllowed = 'move';
+            }}
+            ondragover={(e) => onDragOver(e, i)}
+            ondragleave={() => {
+              if (overIdx === i) overIdx = -1;
+            }}
+            ondrop={() => onDrop(i)}
+            ondragend={() => resetDrag()}
+          >
+            <a class="drama-main" href={resolve(`/dramas/${d.id}`)}>
+              <div class="d-title">{d.name}</div>
+              <div class="d-meta">
+                {#if d.categoryNames?.length}
+                  <div class="d-cats">
+                    {#each d.categoryNames.slice(0, 3) as cn, i (i)}<span class="d-cat">{cn}</span
+                      >{/each}
+                    {#if d.categoryNames.length > 3}
+                      <span class="d-cat more" title={d.categoryNames.join(' / ')}>等</span>
+                    {/if}
+                  </div>
+                {/if}
+                {#if d.remark}<span class="d-remark" title={d.remark}>{d.remark}</span>{/if}
+              </div>
+            </a>
+            <div class="d-stats">
+              <span class="stat" title="折子数"><b>{d.zheziCount}</b> 折</span>
+              <span class="stat" title="演出数"><b>{d.recordCount}</b> 场</span>
             </div>
-          </a>
-          <div class="d-stats">
-            <span class="stat" title="折子数"><b>{d.zheziCount}</b> 折</span>
-            <span class="stat" title="演出数"><b>{d.recordCount}</b> 场</span>
+            <button class="del" title="删除剧目" onclick={() => remove(d.id, d.name)}>✕</button>
           </div>
-          <button class="del" title="删除剧目" onclick={() => remove(d.id, d.name)}>✕</button>
-        </div>
-      {/each}
-    </div>
+        {/each}
+      </div>
     {/if}
   {/if}
 </div>
 
 <style>
-  .add-bar { display: flex; gap: 10px; padding: 12px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
-  .add-bar .grow { flex: 1 1 160px; }
-  .filter-bar {
-    display: flex; gap: 10px; padding: 10px 12px; margin-bottom: 14px;
-    align-items: center; flex-wrap: wrap;
+  .add-bar {
+    display: flex;
+    gap: 10px;
+    padding: 12px;
+    margin-bottom: 16px;
+    align-items: center;
+    flex-wrap: wrap;
   }
-  .filter-bar .input { width: auto; min-width: 130px; }
-  .filter-bar .grow { flex: 1 1 180px; }
-  .filter-bar select { max-width: 150px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-  .drama { position: relative; display: flex; align-items: center; gap: 8px; padding: 14px 16px; }
-  .drama-main { flex: 1; min-width: 0; text-decoration: none; transition: color var(--t-fast) var(--ease); }
-  .drama-main:hover .d-title { color: var(--accent); }
-  .d-title { font-weight: 600; font-size: 15.5px; font-family: var(--font-serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .d-meta { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-muted); margin-top: 3px; min-width: 0; }
-  .d-cats { display: flex; flex-wrap: nowrap; gap: 6px; min-width: 0; }
+  .add-bar .grow {
+    flex: 1 1 160px;
+  }
+  .filter-bar {
+    display: flex;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .filter-bar .input {
+    width: auto;
+    min-width: 130px;
+  }
+  .filter-bar .grow {
+    flex: 1 1 180px;
+  }
+  .filter-bar select {
+    max-width: 150px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+  }
+  .drama {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 16px;
+  }
+  .drama-main {
+    flex: 1;
+    min-width: 0;
+    text-decoration: none;
+    transition: color var(--t-fast) var(--ease);
+  }
+  .drama-main:hover .d-title {
+    color: var(--accent);
+  }
+  .d-title {
+    font-weight: 600;
+    font-size: 15.5px;
+    font-family: var(--font-serif);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .d-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 3px;
+    min-width: 0;
+  }
+  .d-cats {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    min-width: 0;
+  }
   .d-cat {
     background: var(--accent-soft);
     color: var(--accent);
@@ -251,19 +349,60 @@
     line-height: 1.7;
     white-space: nowrap;
   }
-  .d-cat.more { background: var(--surface-3); color: var(--text-muted); }
-  .d-remark { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .d-stats { display: flex; gap: 8px; flex: 0 0 auto; align-self: flex-start; margin-top: 3px; }
-  .stat { font-size: 12px; color: var(--text-muted); }
-  .stat b { color: var(--accent); font-size: 13px; }
-  .del {
-    border: none; background: none; color: var(--text-3); cursor: pointer; font-size: 12px;
-    width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease); flex: 0 0 auto; align-self: flex-start;
+  .d-cat.more {
+    background: var(--surface-3);
+    color: var(--text-muted);
   }
-  .del:hover { background: var(--danger-soft); color: var(--danger); }
-  .drama.dragging { opacity: 0.4; cursor: grabbing; }
-  .drama { cursor: grab; }
+  .d-remark {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .d-stats {
+    display: flex;
+    gap: 8px;
+    flex: 0 0 auto;
+    align-self: flex-start;
+    margin-top: 3px;
+  }
+  .stat {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .stat b {
+    color: var(--accent);
+    font-size: 13px;
+  }
+  .del {
+    border: none;
+    background: none;
+    color: var(--text-3);
+    cursor: pointer;
+    font-size: 12px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease);
+    flex: 0 0 auto;
+    align-self: flex-start;
+  }
+  .del:hover {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+  .drama.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+  }
+  .drama {
+    cursor: grab;
+  }
   /* 拖拽插入指示：目标上方/下方显示横线，表示松手后的插入位置 */
   .drama.drop-before::before,
   .drama.drop-after::after {
@@ -277,10 +416,16 @@
     pointer-events: none;
     z-index: 1;
   }
-  .drama.drop-before::before { top: -6px; }
-  .drama.drop-after::after { bottom: -6px; }
+  .drama.drop-before::before {
+    top: -6px;
+  }
+  .drama.drop-after::after {
+    bottom: -6px;
+  }
 
   @media (max-width: 560px) {
-    .grid { grid-template-columns: 1fr; }
+    .grid {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

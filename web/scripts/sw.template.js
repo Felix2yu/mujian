@@ -3,7 +3,7 @@ const CACHE_NAME = 'mujian-' + BUILD_VERSION;
 const STATIC_CACHE = 'mujian-static-' + BUILD_VERSION;
 // 固定名称缓存：不随 BUILD_VERSION 变化，跨部署持久保留
 const COVERS_CACHE = 'mujian-covers'; // 封面/缩略图
-const DATA_CACHE = 'mujian-data';     // API 数据（列表/分类/设置等）
+const DATA_CACHE = 'mujian-data'; // API 数据（列表/分类/设置等）
 
 // 每次部署 BUILD_VERSION 随 git sha 变化，浏览器会检测到 sw.js 字节变化并重新
 // 安装本 SW，activate 阶段删除旧版本静态缓存，从而保证已安装的 PWA 能更新到新
@@ -18,44 +18,38 @@ const MAX_DATA_ENTRIES = 200;
 const API_NO_CACHE = new Set(['/api/export', '/api/calendar.ics']);
 
 // install 阶段预热的首屏必需接口，保证「重新部署后离线打开也能出列表」
-const WARM_API = [
-  '/api/settings',
-  '/api/categories',
-  '/api/records?offset=0&limit=30'
-];
+const WARM_API = ['/api/settings', '/api/categories', '/api/records?offset=0&limit=30'];
 
-const STATIC_ASSETS = [
-  '/',
-  '/manifest.webmanifest',
-  '/favicon.svg'
-];
+const STATIC_ASSETS = ['/', '/manifest.webmanifest', '/favicon.svg'];
 
 // 把一个 cover 字段值解析为可走同源 /uploads/ 预缓存的请求路径；
 // 内联 data:/裸 base64、跨域（S3）或非法值返回 null（跳过）。
 // storageType 来自 /api/settings，'s3' 时封面走 s3_public_url（跨域），SW 不缓存。
 function coverUploadUrl(value, storageType) {
   if (!value) return null;
-  if (value.startsWith('data:')) return null;          // 内联，无需网络
-  if (value.startsWith('http')) return null;            // 跨域（如 S3），SW 不缓存
-  if (storageType === 's3') return null;               // S3 走 s3_public_url，跨域
+  if (value.startsWith('data:')) return null; // 内联，无需网络
+  if (value.startsWith('http')) return null; // 跨域（如 S3），SW 不缓存
+  if (storageType === 's3') return null; // S3 走 s3_public_url，跨域
   // 本地存储：coverThumb/coverFile 形如 "covers/xxx.thumb.avif"
   const key = value.startsWith('/uploads/')
     ? value.slice('/uploads/'.length)
     : value.replace(/^\//, '');
-  if (!key || key.indexOf('.') === -1) return null;     // 裸 base64 无扩展名，跳过
+  if (!key || key.indexOf('.') === -1) return null; // 裸 base64 无扩展名，跳过
   return '/uploads/' + key;
 }
 
 // install：预缓存外壳 + 预热首屏接口 + 预取最近封面缩略图
 // （三者都是尽力而为，任意失败都不影响安装完成）
 self.addEventListener('install', (event) => {
-  event.waitUntil((async () => {
-    const cache = await caches.open(STATIC_CACHE);
-    await cache.addAll(STATIC_ASSETS).catch(() => {});
-    await warmApiCache().catch(() => {});
-    await prefetchCovers().catch(() => {});
-    // 不自动 skipWaiting：等前端提示用户刷新后再接管，避免开着不关的页面被强制刷新
-  })());
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(STATIC_CACHE);
+      await cache.addAll(STATIC_ASSETS).catch(() => {});
+      await warmApiCache().catch(() => {});
+      await prefetchCovers().catch(() => {});
+      // 不自动 skipWaiting：等前端提示用户刷新后再接管，避免开着不关的页面被强制刷新
+    })()
+  );
 });
 
 // 预热首屏必需的 API 到持久缓存。注意：SW 内部发起的 fetch 不会触发自身的
@@ -66,7 +60,9 @@ async function warmApiCache() {
     try {
       const resp = await fetch(url);
       if (resp && resp.ok) await cache.put(url, resp.clone());
-    } catch (_) { /* 离线或接口异常，跳过 */ }
+    } catch (_) {
+      /* 离线或接口异常，跳过 */
+    }
   }
   await pruneCache(cache, MAX_DATA_ENTRIES);
 }
@@ -78,14 +74,16 @@ async function prefetchCovers() {
   try {
     const s = await (await fetch('/api/settings')).json();
     if (s && s.storage_type) storageType = s.storage_type;
-  } catch (_) { /* 离线/失败：按本地处理 */ }
+  } catch (_) {
+    /* 离线/失败：按本地处理 */
+  }
   if (storageType === 's3') return;
 
   // 2) 拉取最近记录列表，收集封面缩略图 URL
   const res = await fetch('/api/records?limit=60');
   if (!res.ok) return;
   const data = await res.json();
-  const recs = Array.isArray(data) ? data : (data.records || []);
+  const recs = Array.isArray(data) ? data : data.records || [];
   if (!recs.length) return;
 
   const cache = await caches.open(COVERS_CACHE);
@@ -99,7 +97,9 @@ async function prefetchCovers() {
     try {
       const resp = await fetch(url);
       if (resp.ok) await cache.put(url, resp.clone());
-    } catch (_) { /* 跳过该封面 */ }
+    } catch (_) {
+      /* 跳过该封面 */
+    }
   }
 }
 
@@ -111,19 +111,24 @@ async function pruneCache(cache, max) {
     for (let i = 0; i < keys.length - max; i++) {
       await cache.delete(keys[i]);
     }
-  } catch (_) { /* 裁剪失败不影响主流程 */ }
+  } catch (_) {
+    /* 裁剪失败不影响主流程 */
+  }
 }
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        // 保留当前版本静态缓存与两个持久缓存，删除其余所有旧缓存
-        keys.filter(key =>
-          key !== STATIC_CACHE && key !== COVERS_CACHE && key !== DATA_CACHE
-        ).map(key => caches.delete(key))
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          // 保留当前版本静态缓存与两个持久缓存，删除其余所有旧缓存
+          keys
+            .filter((key) => key !== STATIC_CACHE && key !== COVERS_CACHE && key !== DATA_CACHE)
+            .map((key) => caches.delete(key))
+        )
       )
-    ).then(() => self.clients.claim())
+      .then(() => self.clients.claim())
   );
 });
 
@@ -156,14 +161,19 @@ async function servePageOrApi(request, url) {
       // 必须在任何 await 之前同步 clone，否则响应体可能已被消费而 clone 抛错
       const forStatic = response.clone();
       const forPersistent = persist ? response.clone() : null;
-      caches.open(STATIC_CACHE).then(c => c.put(request, forStatic)).catch(() => {});
+      caches
+        .open(STATIC_CACHE)
+        .then((c) => c.put(request, forStatic))
+        .catch(() => {});
       if (forPersistent) {
         (async () => {
           try {
             const dc = await caches.open(DATA_CACHE);
             await dc.put(request, forPersistent);
             await pruneCache(dc, MAX_DATA_ENTRIES);
-          } catch (_) { /* 写入失败不影响已返回的响应 */ }
+          } catch (_) {
+            /* 写入失败不影响已返回的响应 */
+          }
         })();
       }
     }
@@ -194,7 +204,7 @@ async function matchByPathname(cacheName, pathname) {
   try {
     const cache = await caches.open(cacheName);
     const keys = await cache.keys();
-    const hit = keys.find(k => new URL(k.url).pathname === pathname);
+    const hit = keys.find((k) => new URL(k.url).pathname === pathname);
     return hit ? await cache.match(hit) : undefined;
   } catch (_) {
     return undefined;
@@ -208,7 +218,9 @@ async function serveCover(request) {
   if (cached) {
     // 后台静默刷新，不阻塞当前响应
     fetch(request)
-      .then(resp => { if (resp && resp.ok) cache.put(request, resp.clone()); })
+      .then((resp) => {
+        if (resp && resp.ok) cache.put(request, resp.clone());
+      })
       .catch(() => {});
     return cached;
   }
@@ -236,9 +248,7 @@ self.addEventListener('push', (event) => {
     requireInteraction: true
   };
 
-  event.waitUntil(
-    self.registration.showNotification(title, options)
-  );
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', (event) => {
@@ -247,16 +257,15 @@ self.addEventListener('notificationclick', (event) => {
   const url = event.notification.data || '/';
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then(clientList => {
-        for (const client of clientList) {
-          if (client.url.includes(self.location.origin) && 'focus' in client) {
-            client.navigate(url);
-            return client.focus();
-          }
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.navigate(url);
+          return client.focus();
         }
-        return clients.openWindow(url);
-      })
+      }
+      return clients.openWindow(url);
+    })
   );
 });
 

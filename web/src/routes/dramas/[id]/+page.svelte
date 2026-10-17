@@ -1,4 +1,5 @@
 <script>
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api } from '#lib/api.js';
   import BackLink from '#lib/components/BackLink.svelte';
@@ -25,7 +26,11 @@
   let saving = $state(false);
   let deleting = $state(false);
 
-  const splitList = (s) => (s || '').split(/[,，、]/).map((x) => x.trim()).filter(Boolean);
+  const splitList = (s) =>
+    (s || '')
+      .split(/[,，、]/)
+      .map((x) => x.trim())
+      .filter(Boolean);
 
   async function load() {
     loading = true;
@@ -35,8 +40,16 @@
       drama = d;
       zhezis = d.zhezis || [];
       records = d.records || [];
-      info = { name: d.name, aliases: (d.aliases || []).join(', '), categoryNames: [], remark: d.remark };
-      api.listCategories().then((cs) => (categories = cs)).catch(() => {});
+      info = {
+        name: d.name,
+        aliases: (d.aliases || []).join(', '),
+        categoryNames: [],
+        remark: d.remark
+      };
+      api
+        .listCategories()
+        .then((cs) => (categories = cs))
+        .catch(() => {});
     } catch (e) {
       error = e.message;
     } finally {
@@ -46,7 +59,12 @@
 
   function startEdit() {
     // 编辑框显示当前生效剧种；清空保存则回到「按演出自动聚合」
-    info = { name: drama.name, aliases: (drama.aliases || []).join(', '), categoryNames: (drama.categoryNames || []).slice(), remark: drama.remark };
+    info = {
+      name: drama.name,
+      aliases: (drama.aliases || []).join(', '),
+      categoryNames: (drama.categoryNames || []).slice(),
+      remark: drama.remark
+    };
     editingInfo = true;
   }
 
@@ -56,7 +74,12 @@
     error = '';
     try {
       const aliases = splitList(info.aliases);
-      drama = await api.updateDrama(id, { name: info.name.trim(), aliases, categoryNames: info.categoryNames.slice(), remark: info.remark.trim() });
+      drama = await api.updateDrama(id, {
+        name: info.name.trim(),
+        aliases,
+        categoryNames: info.categoryNames.slice(),
+        remark: info.remark.trim()
+      });
       editingInfo = false;
     } catch (e) {
       error = e.message;
@@ -70,7 +93,9 @@
     try {
       const p = await api.previewDelete('drama', id);
       linked = p?.recordsAffected ?? 0;
-    } catch (e) { /* 预览失败不影响删除本身 */ }
+    } catch (e) {
+      /* 预览失败不影响删除本身 */
+    }
     const ok = await askConfirm({
       title: '删除剧目',
       message: `删除「${drama.name}」会一并删除其下所有折子，且不可恢复。\n关联的演出记录不会被删除，但会失去该剧目标签。`,
@@ -105,7 +130,11 @@
     saving = true;
     error = '';
     try {
-      const payload = { name: form.name.trim(), aliases: splitList(form.aliases), remark: form.remark.trim() };
+      const payload = {
+        name: form.name.trim(),
+        aliases: splitList(form.aliases),
+        remark: form.remark.trim()
+      };
       if (editingId) {
         await api.updateZhezi(editingId, payload);
       } else {
@@ -125,7 +154,9 @@
     try {
       const p = await api.previewDelete('zhezi', z.id);
       linked = p?.recordsAffected ?? 0;
-    } catch (e) { /* 预览失败不影响删除本身 */ }
+    } catch (e) {
+      /* 预览失败不影响删除本身 */
+    }
     const ok = await askConfirm({
       title: '删除折子',
       message: `删除「${z.name}」后，已关联该折子的演出记录不受影响。`,
@@ -170,7 +201,11 @@
     next.splice(targetIdx, 0, moved);
     resetDrag();
     error = '';
-    api.reorderZhezis(id, next.map((x) => x.id))
+    api
+      .reorderZhezis(
+        id,
+        next.map((x) => x.id)
+      )
       .then(() => {
         zhezis = next;
         if (drama) drama.zheziCount = next.length;
@@ -183,10 +218,12 @@
     overIdx = -1;
   }
 
-  $effect(() => { if (id) load(); });
+  $effect(() => {
+    if (id) load();
+  });
 </script>
-<svelte:head><title>{drama ? `${drama.name} - 幕间` : "剧目 - 幕间"}</title></svelte:head>
 
+<svelte:head><title>{drama ? `${drama.name} - 幕间` : '剧目 - 幕间'}</title></svelte:head>
 
 <div class="fade-up">
   <BackLink fallback="/dramas" label="← 剧目" />
@@ -206,15 +243,34 @@
     <div class="card head-card">
       {#if editingInfo}
         <input class="input" placeholder="剧目名称" bind:value={info.name} />
-        <input class="input" placeholder="别名（逗号分隔），如：三国志, 桃园三结义" bind:value={info.aliases} />
+        <input
+          class="input"
+          placeholder="别名（逗号分隔），如：三国志, 桃园三结义"
+          bind:value={info.aliases}
+        />
         <div class="row">
-          <CategoryTags bind:values={info.categoryNames} {categories} placeholder="剧种（可多个）；清空则按演出自动统计" />
+          <CategoryTags
+            bind:values={info.categoryNames}
+            {categories}
+            placeholder="剧种（可多个）；清空则按演出自动统计"
+          />
         </div>
-        <div class="row"><span class="muted small">留空剧种 = 按该剧目「单独演出」时的剧种自动统计（拼盘演出已自动排除）；手动填写可覆盖</span></div>
+        <div class="row">
+          <span class="muted small"
+            >留空剧种 = 按该剧目「单独演出」时的剧种自动统计（拼盘演出已自动排除）；手动填写可覆盖</span
+          >
+        </div>
         <textarea class="input" rows="2" placeholder="备注" bind:value={info.remark}></textarea>
         <div class="actions">
-          <button class="btn primary sm" onclick={saveInfo} disabled={saving || !info.name.trim()}>{saving ? '保存中…' : '保存'}</button>
-          <button class="btn ghost sm" onclick={() => { editingInfo = false; }}>取消</button>
+          <button class="btn primary sm" onclick={saveInfo} disabled={saving || !info.name.trim()}
+            >{saving ? '保存中…' : '保存'}</button
+          >
+          <button
+            class="btn ghost sm"
+            onclick={() => {
+              editingInfo = false;
+            }}>取消</button
+          >
         </div>
       {:else}
         <div class="head-main">
@@ -224,14 +280,20 @@
               {#if drama.aliases && drama.aliases.length}
                 <span class="aliases">别名：{drama.aliases.join(' / ')}</span>
               {/if}
-              {#each drama.categoryNames || [] as cn}<a class="pill" href={`/dramas?cat=${encodeURIComponent(cn)}`} title="查看该剧种下的剧目">{cn}</a>{/each}
+              {#each drama.categoryNames || [] as cn, i (i)}<a
+                  class="pill"
+                  href={resolve(`/dramas?cat=${encodeURIComponent(cn)}`)}
+                  title="查看该剧种下的剧目">{cn}</a
+                >{/each}
               <span class="muted">{drama.zheziCount} 折 · {drama.recordCount} 场演出</span>
             </div>
             {#if drama.remark}<p class="remark">{drama.remark}</p>{/if}
           </div>
           <div class="head-actions">
             <button class="btn sm" onclick={startEdit}>编辑</button>
-            <button class="btn danger sm" onclick={removeDrama} disabled={deleting}>{deleting ? '删除中…' : '删除'}</button>
+            <button class="btn danger sm" onclick={removeDrama} disabled={deleting}
+              >{deleting ? '删除中…' : '删除'}</button
+            >
           </div>
         </div>
         <MergePanel kind="drama" selfId={id} selfName={drama.name} />
@@ -241,31 +303,61 @@
     <div class="card section">
       <div class="sec-head">
         <h3>折子</h3>
-        <span class="muted small">一次演出可能只演其中部分折子；按住拖把上下拖动即可调整顺序，不同剧种/剧团称呼不同时可添加别名</span>
+        <span class="muted small"
+          >一次演出可能只演其中部分折子；按住拖把上下拖动即可调整顺序，不同剧种/剧团称呼不同时可添加别名</span
+        >
       </div>
 
       <div class="zhezis">
         {#each zhezis as z, i (z.id)}
-          <div class="z-row card"
+          <div
+            class="z-row card"
             draggable={editingId === z.id ? 'false' : 'true'}
             class:editing={editingId === z.id}
             class:dragging={dragIdx === i}
             class:drop-before={overIdx === i && dragIdx !== i && overBefore}
             class:drop-after={overIdx === i && dragIdx !== i && !overBefore}
-            ondragstart={(e) => { onDragStart(i); e.dataTransfer.effectAllowed = 'move'; }}
+            ondragstart={(e) => {
+              onDragStart(i);
+              e.dataTransfer.effectAllowed = 'move';
+            }}
             ondragover={(e) => onDragOver(e, i)}
-            ondragleave={() => { if (overIdx === i) overIdx = -1; }}
-            ondrop={(e) => { e.preventDefault(); onDrop(i); }}
+            ondragleave={() => {
+              if (overIdx === i) overIdx = -1;
+            }}
+            ondrop={(e) => {
+              e.preventDefault();
+              onDrop(i);
+            }}
             ondragend={() => resetDrag()}
           >
             <span class="grip" title="拖动排序">⠿</span>
             {#if editingId === z.id}
               <div class="z-edit grow">
-                <input class="input" placeholder="折子名称" bind:value={form.name} onkeydown={(e) => e.key === 'Enter' && saveZhezi()} />
-                <input class="input" placeholder="别名（逗号分隔），如：拾画 · 叫画" bind:value={form.aliases} onkeydown={(e) => e.key === 'Enter' && saveZhezi()} />
-                <input class="input" placeholder="备注（可选）" bind:value={form.remark} onkeydown={(e) => e.key === 'Enter' && saveZhezi()} />
+                <input
+                  class="input"
+                  placeholder="折子名称"
+                  bind:value={form.name}
+                  onkeydown={(e) => e.key === 'Enter' && saveZhezi()}
+                />
+                <input
+                  class="input"
+                  placeholder="别名（逗号分隔），如：拾画 · 叫画"
+                  bind:value={form.aliases}
+                  onkeydown={(e) => e.key === 'Enter' && saveZhezi()}
+                />
+                <input
+                  class="input"
+                  placeholder="备注（可选）"
+                  bind:value={form.remark}
+                  onkeydown={(e) => e.key === 'Enter' && saveZhezi()}
+                />
                 <div class="actions">
-                  <button class="btn primary sm" onclick={saveZhezi} disabled={saving || !form.name.trim()}>{saving ? '保存中…' : '保存'}</button>
+                  <button
+                    class="btn primary sm"
+                    onclick={saveZhezi}
+                    disabled={saving || !form.name.trim()}>{saving ? '保存中…' : '保存'}</button
+                  >
                   <button class="btn ghost sm" onclick={resetForm}>取消</button>
                 </div>
               </div>
@@ -296,12 +388,29 @@
         <div class="add-z card">
           <div class="add-title">＋ 添加折子</div>
           <div class="row">
-            <input class="input" placeholder="折子名称，如：游园" bind:value={form.name} onkeydown={(e) => e.key === 'Enter' && saveZhezi()} />
-            <input class="input" placeholder="别名（逗号分隔，可空）" bind:value={form.aliases} onkeydown={(e) => e.key === 'Enter' && saveZhezi()} />
+            <input
+              class="input"
+              placeholder="折子名称，如：游园"
+              bind:value={form.name}
+              onkeydown={(e) => e.key === 'Enter' && saveZhezi()}
+            />
+            <input
+              class="input"
+              placeholder="别名（逗号分隔，可空）"
+              bind:value={form.aliases}
+              onkeydown={(e) => e.key === 'Enter' && saveZhezi()}
+            />
           </div>
           <div class="row">
-            <input class="input" placeholder="备注（可选）" bind:value={form.remark} onkeydown={(e) => e.key === 'Enter' && saveZhezi()} />
-            <button class="btn primary" onclick={saveZhezi} disabled={saving || !form.name.trim()}>{saving ? '保存中…' : '添加'}</button>
+            <input
+              class="input"
+              placeholder="备注（可选）"
+              bind:value={form.remark}
+              onkeydown={(e) => e.key === 'Enter' && saveZhezi()}
+            />
+            <button class="btn primary" onclick={saveZhezi} disabled={saving || !form.name.trim()}
+              >{saving ? '保存中…' : '添加'}</button
+            >
           </div>
         </div>
       {/if}
@@ -323,38 +432,141 @@
 </div>
 
 <style>
-  .back { display: inline-flex; color: var(--text-muted); font-size: 13.5px; margin-bottom: 12px; }
-  .back:hover { color: var(--accent); }
-  .loading { display: flex; flex-direction: column; gap: 12px; }
+  .back {
+    display: inline-flex;
+    color: var(--text-muted);
+    font-size: 13.5px;
+    margin-bottom: 12px;
+  }
+  .back:hover {
+    color: var(--accent);
+  }
+  .loading {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
 
-  .head-card { padding: 18px 20px; margin-bottom: 14px; }
-  .head-main { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
-  h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.25; }
-  .sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .pill { background: var(--accent-soft); color: var(--accent); padding: 2px 10px; border-radius: 999px; font-size: 12.5px; }
+  .head-card {
+    padding: 18px 20px;
+    margin-bottom: 14px;
+  }
+  .head-main {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-size: 26px;
+    line-height: 1.25;
+  }
+  .sub {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .pill {
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 12.5px;
+  }
   /* 剧种标签可点：跳到「剧目」页并按该剧种筛选 */
-  a.pill { transition: background var(--t-fast) var(--ease); }
-  a.pill:hover { text-decoration: underline; }
-  .muted { color: var(--text-muted); font-size: 13px; }
-  .small { font-size: 12.5px; }
-  .remark { margin: 10px 0 0; color: var(--text-2); white-space: pre-wrap; line-height: 1.6; }
-  .head-actions { display: flex; gap: 8px; flex: 0 0 auto; }
-  .row { display: flex; gap: 10px; margin-top: 10px; }
-  .row .input { flex: 1; }
-  .actions { display: flex; gap: 8px; margin-top: 10px; }
+  a.pill {
+    transition: background var(--t-fast) var(--ease);
+  }
+  a.pill:hover {
+    text-decoration: underline;
+  }
+  .muted {
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  .small {
+    font-size: 12.5px;
+  }
+  .remark {
+    margin: 10px 0 0;
+    color: var(--text-2);
+    white-space: pre-wrap;
+    line-height: 1.6;
+  }
+  .head-actions {
+    display: flex;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+  .row {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .row .input {
+    flex: 1;
+  }
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
 
-  .section { padding: 18px 20px; margin-top: 14px; }
-  .section h3 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
-  .num { color: var(--accent); font-family: var(--font-sans); font-weight: 700; font-size: 15px; }
-  .sec-head { margin-bottom: 14px; }
-  .sec-head .muted { display: block; margin-top: 4px; }
+  .section {
+    padding: 18px 20px;
+    margin-top: 14px;
+  }
+  .section h3 {
+    margin: 0;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .num {
+    color: var(--accent);
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .sec-head {
+    margin-bottom: 14px;
+  }
+  .sec-head .muted {
+    display: block;
+    margin-top: 4px;
+  }
 
-  .zhezis { display: flex; flex-direction: column; gap: 8px; }
-  .z-row { position: relative; display: flex; align-items: center; gap: 8px; padding: 12px 14px; margin-bottom: 0; cursor: grab; }
-  .z-row .grow { flex: 1 1 auto; min-width: 0; }
-  .z-row:active { cursor: grabbing; }
-  .z-row.editing { cursor: default; }
-  .z-row.dragging { opacity: 0.4; cursor: grabbing; }
+  .zhezis {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .z-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    margin-bottom: 0;
+    cursor: grab;
+  }
+  .z-row .grow {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .z-row:active {
+    cursor: grabbing;
+  }
+  .z-row.editing {
+    cursor: default;
+  }
+  .z-row.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+  }
   /* 拖拽插入指示 */
   .z-row.drop-before::before,
   .z-row.drop-after::after {
@@ -368,33 +580,108 @@
     pointer-events: none;
     z-index: 1;
   }
-  .z-row.drop-before::before { top: -6px; }
-  .z-row.drop-after::after { bottom: -6px; }
-  .grip {
-    flex: 0 0 auto; color: var(--text-3); font-size: 14px; line-height: 1; cursor: grab;
-    padding: 4px 2px; user-select: none;
+  .z-row.drop-before::before {
+    top: -6px;
   }
-  .grip:hover { color: var(--accent); }
-  .z-info { min-width: 0; }
-  .z-name { font-size: 15px; font-weight: 600; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-  .aliases { font-size: 12px; font-weight: 400; color: var(--text-muted); }
-  .z-remark { font-size: 12.5px; color: var(--text-2); margin-top: 3px; }
-  .z-ops { display: flex; gap: 4px; flex: 0 0 auto; }
-  .op { border: none; background: none; color: var(--text-3); width: 26px; height: 26px; border-radius: 6px; cursor: pointer; font-size: 13px; }
-  .op:hover { background: var(--surface-3); color: var(--text); }
-  .op.danger:hover { background: var(--danger-soft); color: var(--danger); }
-  .z-edit { display: flex; flex-direction: column; gap: 8px; }
+  .z-row.drop-after::after {
+    bottom: -6px;
+  }
+  .grip {
+    flex: 0 0 auto;
+    color: var(--text-3);
+    font-size: 14px;
+    line-height: 1;
+    cursor: grab;
+    padding: 4px 2px;
+    user-select: none;
+  }
+  .grip:hover {
+    color: var(--accent);
+  }
+  .z-info {
+    min-width: 0;
+  }
+  .z-name {
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+  .aliases {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+  .z-remark {
+    font-size: 12.5px;
+    color: var(--text-2);
+    margin-top: 3px;
+  }
+  .z-ops {
+    display: flex;
+    gap: 4px;
+    flex: 0 0 auto;
+  }
+  .op {
+    border: none;
+    background: none;
+    color: var(--text-3);
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .op:hover {
+    background: var(--surface-3);
+    color: var(--text);
+  }
+  .op.danger:hover {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+  .z-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
 
-  .add-z { padding: 14px; margin-top: 10px; }
-  .add-title { font-weight: 600; margin-bottom: 6px; color: var(--text-2); }
+  .add-z {
+    padding: 14px;
+    margin-top: 10px;
+  }
+  .add-title {
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text-2);
+  }
 
-  .empty { padding: 14px; text-align: center; }
-  .empty.small .h { margin: 0; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 14px; margin-top: 4px; }
+  .empty {
+    padding: 14px;
+    text-align: center;
+  }
+  .empty.small .h {
+    margin: 0;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+    gap: 14px;
+    margin-top: 4px;
+  }
 
   @media (max-width: 640px) {
-    h1 { font-size: 22px; }
-    .head-main { flex-direction: column; }
-    .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+    h1 {
+      font-size: 22px;
+    }
+    .head-main {
+      flex-direction: column;
+    }
+    .grid {
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
   }
 </style>

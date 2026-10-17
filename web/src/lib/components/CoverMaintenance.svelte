@@ -23,8 +23,14 @@
   // 灯箱：点击封面放大查看
   let lightbox = $state(false);
   let lightboxSrc = $state('');
-  function openLightbox(src) { lightboxSrc = src; lightbox = true; }
-  function closeLightbox() { lightbox = false; lightboxSrc = ''; }
+  function openLightbox(src) {
+    lightboxSrc = src;
+    lightbox = true;
+  }
+  function closeLightbox() {
+    lightbox = false;
+    lightboxSrc = '';
+  }
 
   function fmtSize(n) {
     if (!n) return '0 B';
@@ -177,7 +183,7 @@
       <div class="sec-actions">
         {#if groups.length}<button class="btn ghost sm" onclick={selectAllHashes}>全选</button>{/if}
         <button class="btn sm" onclick={scanDuplicates} disabled={groupsLoading}>
-          {groupsLoading ? '扫描中…' : (groups.length || dupScanned ? '重新扫描' : '扫描重复封面')}
+          {groupsLoading ? '扫描中…' : groups.length || dupScanned ? '重新扫描' : '扫描重复封面'}
         </button>
       </div>
     </div>
@@ -185,12 +191,23 @@
     {#if groupsLoading}
       <p class="tiny scanning">正在扫描重复封面…</p>
     {:else if groups.length}
-      <p class="tiny">检测到 {groups.length} 组重复封面（内容相同、仅存多份），合并后仅保留一份。</p>
+      <p class="tiny">
+        检测到 {groups.length} 组重复封面（内容相同、仅存多份），合并后仅保留一份。
+      </p>
       <div class="glist">
-        {#each groups as g}
-          <label class="grow card">
-            <input type="checkbox" checked={selectedHashes.has(g.hash)} onchange={() => toggleHash(g.hash)} />
-            <button type="button" class="cover-th" onclick={() => openLightbox(coverUrl(g.records[0]?.cover_file))} aria-label="放大查看封面">
+        {#each groups as g (g.hash)}
+          <label class="card grow">
+            <input
+              type="checkbox"
+              checked={selectedHashes.has(g.hash)}
+              onchange={() => toggleHash(g.hash)}
+            />
+            <button
+              type="button"
+              class="cover-th"
+              onclick={() => openLightbox(coverUrl(g.records[0]?.cover_file))}
+              aria-label="放大查看封面"
+            >
               <img src={coverUrl(g.records[0]?.cover_file)} alt="" loading="lazy" />
             </button>
             <div class="ginfo">
@@ -217,9 +234,14 @@
     <div class="sec-head">
       <h3>② 未引用封面清理</h3>
       <div class="sec-actions">
-        {#if orphans.length}<button class="btn ghost sm" onclick={selectAllOrphans}>全选</button>{/if}
+        {#if orphans.length}<button class="btn ghost sm" onclick={selectAllOrphans}>全选</button
+          >{/if}
         <button class="btn sm" onclick={scanOrphans} disabled={orphansLoading}>
-          {orphansLoading ? '扫描中…' : (orphans.length || orphansScanned ? '重新扫描' : '扫描未引用封面')}
+          {orphansLoading
+            ? '扫描中…'
+            : orphans.length || orphansScanned
+              ? '重新扫描'
+              : '扫描未引用封面'}
         </button>
         <button class="btn danger sm" onclick={runPurge} disabled={purging}>清空封面回收站</button>
       </div>
@@ -228,12 +250,25 @@
     {#if orphansLoading}
       <p class="tiny scanning">正在扫描未引用封面…</p>
     {:else if orphans.length}
-      <p class="tiny">发现 {orphans.length} 张未被任何演出引用的封面，共 {fmtSize(orphans.reduce((a, o) => a + o.size, 0))}。清理前会移入回收站，可恢复。</p>
+      <p class="tiny">
+        发现 {orphans.length} 张未被任何演出引用的封面，共 {fmtSize(
+          orphans.reduce((a, o) => a + o.size, 0)
+        )}。清理前会移入回收站，可恢复。
+      </p>
       <div class="olist">
-        {#each orphans as o}
+        {#each orphans as o (o.file_name)}
           <label class="orow">
-            <input type="checkbox" checked={selectedOrphans.has(o.file_name)} onchange={() => toggleOrphan(o.file_name)} />
-            <button type="button" class="cover-th-sm" onclick={() => openLightbox(coverUrl(`covers/${o.file_name}`))} aria-label="放大查看封面">
+            <input
+              type="checkbox"
+              checked={selectedOrphans.has(o.file_name)}
+              onchange={() => toggleOrphan(o.file_name)}
+            />
+            <button
+              type="button"
+              class="cover-th-sm"
+              onclick={() => openLightbox(coverUrl(`covers/${o.file_name}`))}
+              aria-label="放大查看封面"
+            >
               <img src={coverUrl(`covers/${o.file_name}`)} alt="" loading="lazy" />
             </button>
             <span class="oname">{o.file_name}</span>
@@ -242,26 +277,39 @@
         {/each}
       </div>
       <div class="sec-actions">
-        <button class="btn primary" onclick={runCleanup} disabled={cleaning || !selectedOrphans.size}>
+        <button
+          class="btn primary"
+          onclick={runCleanup}
+          disabled={cleaning || !selectedOrphans.size}
+        >
           {cleaning ? '清理中…' : `移入回收站（${selectedOrphans.size} 张）`}
         </button>
       </div>
     {:else if orphansScanned}
       <p class="tiny ok-line">✓ 没有未引用的封面——所有封面文件仍被演出引用。</p>
     {:else}
-      <p class="tiny muted">不再被任何演出引用的封面文件会在这里列出；清理时先移入回收站，可恢复。</p>
+      <p class="tiny muted">
+        不再被任何演出引用的封面文件会在这里列出；清理时先移入回收站，可恢复。
+      </p>
     {/if}
   </div>
 
   <div class="card sec">
     <div class="sec-head">
       <h3>③ 统一缩略图</h3>
-      <button class="btn sm" onclick={runThumbs} disabled={thumbsBusy}>{thumbsBusy ? '生成中…' : '重新生成缩略图'}</button>
+      <button class="btn sm" onclick={runThumbs} disabled={thumbsBusy}
+        >{thumbsBusy ? '生成中…' : '重新生成缩略图'}</button
+      >
     </div>
     {#if thumbsBusy && thumbsProgress.total > 0}
-      <p class="tiny">⏳ 已处理 {thumbsProgress.processed}/{thumbsProgress.total} 个封面，更新 {thumbsProgress.updated} 条记录</p>
+      <p class="tiny">
+        ⏳ 已处理 {thumbsProgress.processed}/{thumbsProgress.total} 个封面，更新 {thumbsProgress.updated}
+        条记录
+      </p>
     {/if}
-    <p class="tiny">为所有有封面的演出按当前编码格式重新生成缩略图（宽 ≤400px），并清理旧格式缩略图文件。</p>
+    <p class="tiny">
+      为所有有封面的演出按当前编码格式重新生成缩略图（宽 ≤400px），并清理旧格式缩略图文件。
+    </p>
   </div>
 </section>
 
@@ -281,30 +329,65 @@
     padding-top: 18px;
     border-top: 1px solid var(--border);
   }
-  .cover-section-head { margin-bottom: 14px; }
+  .cover-section-head {
+    margin-bottom: 14px;
+  }
   .cover-section-head h2 {
     margin: 0 0 4px;
     font-size: 16px;
     font-weight: 600;
     color: var(--text);
   }
-  .cover-section-head p { margin: 0; }
+  .cover-section-head p {
+    margin: 0;
+  }
 
   /* .sec 是页面级样式，不跨组件生效，故组件内自带卡片内边距。 */
-  .sec { padding: 18px 20px; }
+  .sec {
+    padding: 18px 20px;
+  }
   /* 卡片间距与数据页的 16px 统一（此处原为 14px，与页面其它分区不一致）。 */
-  .sec + .sec { margin-top: 16px; }
+  .sec + .sec {
+    margin-top: 16px;
+  }
   /* flex-wrap：窄屏下按钮组换行，而不是把标题挤成两行 */
-  .sec-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 10px; }
-  .sec-head h3 { margin: 0; font-size: 15.5px; }
-  .sec-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .sec-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 10px;
+  }
+  .sec-head h3 {
+    margin: 0;
+    font-size: 15.5px;
+  }
+  .sec-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
 
   /* 空态一律单行，避免事先预留大块空白 */
-  .scanning { margin: 6px 0 0; color: var(--text-3); }
-  .ok-line { margin: 6px 0 0; color: var(--success); }
-  .sec > p.tiny { margin: 8px 0; }
+  .scanning {
+    margin: 6px 0 0;
+    color: var(--text-3);
+  }
+  .ok-line {
+    margin: 6px 0 0;
+    color: var(--success);
+  }
+  .sec > p.tiny {
+    margin: 8px 0;
+  }
 
-  .glist { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 12px; }
+  .glist {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 10px 0 12px;
+  }
   .grow {
     display: flex;
     align-items: center;
@@ -313,15 +396,47 @@
     cursor: pointer;
     transition: border-color var(--t-fast) var(--ease);
   }
-  .grow:hover { border-color: var(--accent); }
-  .grow input, .orow input { accent-color: var(--accent); width: 16px; height: 16px; flex: 0 0 auto; }
-  .grow img { width: 44px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 6px; flex: 0 0 auto; }
-  .ginfo { min-width: 0; }
-  .gname { font-weight: 600; font-size: 14px; }
-  .grecs { font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ghash { color: var(--text-3); }
+  .grow:hover {
+    border-color: var(--accent);
+  }
+  .grow input,
+  .orow input {
+    accent-color: var(--accent);
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+  }
+  .grow img {
+    width: 44px;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    border-radius: 6px;
+    flex: 0 0 auto;
+  }
+  .ginfo {
+    min-width: 0;
+  }
+  .gname {
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .grecs {
+    font-size: 12.5px;
+    color: var(--text-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ghash {
+    color: var(--text-3);
+  }
 
-  .olist { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 12px; }
+  .olist {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 10px 0 12px;
+  }
   .orow {
     display: flex;
     align-items: center;
@@ -331,21 +446,51 @@
     cursor: pointer;
     transition: background var(--t-fast) var(--ease);
   }
-  .orow:hover { background: var(--surface-2); }
-  .orow img { width: 30px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 5px; flex: 0 0 auto; }
-  .oname { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono, monospace); }
-  .osize { flex: 0 0 auto; }
+  .orow:hover {
+    background: var(--surface-2);
+  }
+  .orow img {
+    width: 30px;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    border-radius: 5px;
+    flex: 0 0 auto;
+  }
+  .oname {
+    flex: 1;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono, monospace);
+  }
+  .osize {
+    flex: 0 0 auto;
+  }
 
   /* 封面图可点击放大 */
-  .cover-th, .cover-th-sm {
+  .cover-th,
+  .cover-th-sm {
     flex: 0 0 auto;
     padding: 0;
     border: none;
     background: transparent;
     cursor: zoom-in;
   }
-  .cover-th img { width: 44px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 6px; display: block; }
-  .cover-th-sm img { width: 30px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 5px; display: block; }
+  .cover-th img {
+    width: 44px;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    border-radius: 6px;
+    display: block;
+  }
+  .cover-th-sm img {
+    width: 30px;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    border-radius: 5px;
+    display: block;
+  }
 
   /* 灯箱 */
   .lightbox {

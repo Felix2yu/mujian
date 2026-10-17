@@ -66,50 +66,114 @@
 
 <div class="line-wrap">
   <div class="legend">
-    {#each series as s}
+    {#each series as s (s.name)}
       <span class="lg"><span class="sw" style="background:{s.color}"></span>{s.name}</span>
     {/each}
   </div>
-  <div bind:this={wrap} class="chart-wrap"><svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="none" aria-label="趋势折线图表">
-    <!-- y gridlines + labels -->
-    {#each ticks as t, i}
-      <line x1={padL} y1={y(t)} x2={W - padR} y2={y(t)} stroke="var(--border)" stroke-width="1" stroke-dasharray={i === 1 ? '0' : '3 3'} opacity="0.7" />
-      <text x={padL - 6} y={y(t) + 3} text-anchor="end" class="y-label">{t}{unit}</text>
-    {/each}
-    <!-- x labels -->
-    {#each labels as lbl, i}
-      {#if i % labelEvery === 0}
-        <text x={x(i)} y={height - 8} text-anchor="middle" class="x-label">{lbl}</text>
-      {/if}
-    {/each}
-    <!-- series -->
-    {#each series as s}
-      <path d={path(s.values)} fill="none" stroke={s.color} stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" />
-      {#each s.values as v, i}
-        <circle cx={x(i)} cy={y(v)} r="2.4" fill={s.color} pointer-events="none" />
-        <!-- transparent larger hit circle for reliable hover -->
-        <circle
-          cx={x(i)} cy={y(v)} r="9" fill="transparent" style="pointer-events:all;cursor:pointer"
-          role="img" aria-label={`${labels[i]}: ${s.name} ${v}${unit}`}
-          onmouseenter={(e) => showTip(e, labels[i], [`${s.name}: ${v}${unit}`])}
-          onmousemove={(e) => showTip(e, labels[i], [`${s.name}: ${v}${unit}`])}
-          onmouseleave={hideTip}
+  <div bind:this={wrap} class="chart-wrap">
+    <svg
+      viewBox="0 0 {W} {height}"
+      width="100%"
+      preserveAspectRatio="none"
+      aria-label="趋势折线图表"
+    >
+      <!-- y gridlines + labels -->
+      {#each ticks as t, i (t)}
+        <line
+          x1={padL}
+          y1={y(t)}
+          x2={W - padR}
+          y2={y(t)}
+          stroke="var(--border)"
+          stroke-width="1"
+          stroke-dasharray={i === 1 ? '0' : '3 3'}
+          opacity="0.7"
         />
+        <text x={padL - 6} y={y(t) + 3} text-anchor="end" class="y-label">{t}{unit}</text>
       {/each}
-    {/each}
-  </svg>
+      <!-- x labels -->
+      {#each labels as lbl, i (i)}
+        {#if i % labelEvery === 0}
+          <text x={x(i)} y={height - 8} text-anchor="middle" class="x-label">{lbl}</text>
+        {/if}
+      {/each}
+      <!-- series -->
+      {#each series as s (s.name)}
+        <path
+          d={path(s.values)}
+          fill="none"
+          stroke={s.color}
+          stroke-width="2.2"
+          stroke-linejoin="round"
+          stroke-linecap="round"
+        />
+        {#each s.values as v, i (i)}
+          <circle cx={x(i)} cy={y(v)} r="2.4" fill={s.color} pointer-events="none" />
+          <!-- transparent larger hit circle for reliable hover -->
+          <circle
+            cx={x(i)}
+            cy={y(v)}
+            r="9"
+            fill="transparent"
+            style="pointer-events:all;cursor:pointer"
+            role="img"
+            aria-label={`${labels[i]}: ${s.name} ${v}${unit}`}
+            onmouseenter={(e) => showTip(e, labels[i], [`${s.name}: ${v}${unit}`])}
+            onmousemove={(e) => showTip(e, labels[i], [`${s.name}: ${v}${unit}`])}
+            onmouseleave={hideTip}
+          />
+        {/each}
+      {/each}
+    </svg>
   </div>
   <ChartTip {tip} />
 </div>
 
 <style>
-  .line-wrap { width: 100%; }
-  .chart-wrap { width: 100%; overflow-x: auto; }
-  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
-  .legend .lg { font-size: 12px; color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; }
-  .legend .sw { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
-  svg { display: block; width: 100%; height: auto; }
-  .y-label { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
-  .x-label { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
-  svg circle[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-radius: 999px; }
+  .line-wrap {
+    width: 100%;
+  }
+  .chart-wrap {
+    width: 100%;
+    overflow-x: auto;
+  }
+  .legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+  }
+  .legend .lg {
+    font-size: 12px;
+    color: var(--text-2);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend .sw {
+    width: 12px;
+    height: 3px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .y-label {
+    font-size: 11px;
+    fill: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .x-label {
+    font-size: 11px;
+    fill: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  svg circle[tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 0;
+    border-radius: 999px;
+  }
 </style>

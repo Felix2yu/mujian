@@ -27,7 +27,9 @@ function ensureAMap(key) {
     try {
       const sec = localStorage.getItem('mujian:amap_security') || '';
       if (sec) window._AMapSecurityConfig = { securityJsCode: sec };
-    } catch (e) { /* 忽略 */ }
+    } catch (e) {
+      /* 忽略 */
+    }
 
     const s = document.createElement('script');
     s.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(key)}&plugin=AMap.Geocoder`;
@@ -40,7 +42,9 @@ function ensureAMap(key) {
     document.head.appendChild(s);
   });
   // 失败时清空，允许下次重试
-  amapPromise.catch(() => { amapPromise = null; });
+  amapPromise.catch(() => {
+    amapPromise = null;
+  });
   return amapPromise;
 }
 
@@ -75,7 +79,13 @@ export async function geocodeAddress(query, city) {
       reject(e);
       return;
     }
-    if (city) { try { g.setCity(city); } catch (e) { /* 忽略 */ } }
+    if (city) {
+      try {
+        g.setCity(city);
+      } catch (e) {
+        /* 忽略 */
+      }
+    }
     g.getLocation(q, (status, res) => {
       if (status === 'complete' && res && res.geocodes && res.geocodes.length > 0) {
         const loc = res.geocodes[0].location;

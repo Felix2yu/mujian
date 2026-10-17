@@ -18,12 +18,16 @@ export function loadStatusFilter() {
       const valid = raw.filter((n) => ALL_STATUSES.includes(n));
       if (valid.length) return valid;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return [...ALL_STATUSES];
 }
 
 export function saveStatusFilter(list) {
   try {
     localStorage.setItem(KEY, JSON.stringify([...list]));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }

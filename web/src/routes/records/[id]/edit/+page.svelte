@@ -1,4 +1,5 @@
 <script>
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { api } from '#lib/api.js';
@@ -14,7 +15,7 @@
   async function onSubmit(payload) {
     try {
       await api.updateRecord(id, payload);
-      goto(`/records/${id}`, { replaceState: true });
+      goto(resolve(`/records/${id}`));
     } catch (e) {
       error = e.message;
       throw e;
@@ -33,10 +34,13 @@
     }
   }
 
-  $effect(() => { if (id) load(); });
+  $effect(() => {
+    if (id) load();
+  });
 </script>
-<svelte:head><title>{record ? `编辑 ${record.name} - 幕间` : "编辑演出 - 幕间"}</title></svelte:head>
 
+<svelte:head><title>{record ? `编辑 ${record.name} - 幕间` : '编辑演出 - 幕间'}</title></svelte:head
+>
 
 <div class="fade-up">
   <BackLink fallback={`/records/${id}`} label="← 返回详情" />
@@ -48,12 +52,27 @@
   {:else if error}
     <div class="banner error">⚠ {error}</div>
   {:else if record}
-    <RecordForm {record} {categories} onSubmit={onSubmit} onCancel={() => (location.href = `/records/${id}`)} />
+    <RecordForm
+      {record}
+      {categories}
+      {onSubmit}
+      onCancel={() => (location.href = `/records/${id}`)}
+    />
   {/if}
 </div>
 
 <style>
-  .fade-up { max-width: 1200px; margin: 0 auto; }
-  .back { display: inline-flex; color: var(--text-muted); font-size: 13.5px; margin-bottom: 10px; }
-  .back:hover { color: var(--accent); }
+  .fade-up {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .back {
+    display: inline-flex;
+    color: var(--text-muted);
+    font-size: 13.5px;
+    margin-bottom: 10px;
+  }
+  .back:hover {
+    color: var(--accent);
+  }
 </style>

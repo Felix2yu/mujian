@@ -17,8 +17,8 @@
   let loading = $state(false);
   let error = $state('');
   let selectedIds = $state([]); // 选中的参与者（含规范名）
-  let targetID = $state('');    // 合并目标（规范名）
-  let preview = $state(null);   // 预览（dry_run=true 的返回）
+  let targetID = $state(''); // 合并目标（规范名）
+  let preview = $state(null); // 预览（dry_run=true 的返回）
   let mergeBusy = $state(false);
 
   function isSel(id) {
@@ -121,14 +121,18 @@
 <section class="venue-section">
   <div class="venue-head">
     <h2>场馆治理</h2>
-    <p class="tiny muted">同一物理场馆的多种写法（如「开明大戏院」与「开明大戏院（观前街店）」）会归并到一个规范名；合并会改写对应记录的地址并合并别名。</p>
+    <p class="tiny muted">
+      同一物理场馆的多种写法（如「开明大戏院」与「开明大戏院（观前街店）」）会归并到一个规范名；合并会改写对应记录的地址并合并别名。
+    </p>
   </div>
 
   <div class="btn-row">
     <button class="btn" onclick={refresh} disabled={loading}>
       {loading ? '加载中…' : '重新同步 / 刷新'}
     </button>
-    <span class="tiny muted">已识别 {venues.length} 个场馆，{venues.filter((v) => v.dup_group).length} 个疑似重复</span>
+    <span class="tiny muted"
+      >已识别 {venues.length} 个场馆，{venues.filter((v) => v.dup_group).length} 个疑似重复</span
+    >
   </div>
 
   {#if error}<div class="banner error">⚠ {error}</div>{/if}
@@ -140,13 +144,24 @@
       <div class="vlist">
         {#each venues as v (v.id)}
           <div class="vrow" class:dup={v.dup_group}>
-            <input type="checkbox" checked={isSel(v.id)} onchange={() => toggle(v.id)} aria-label="选择 {v.name}" />
+            <input
+              type="checkbox"
+              checked={isSel(v.id)}
+              onchange={() => toggle(v.id)}
+              aria-label="选择 {v.name}"
+            />
             <span class="vname">{v.name}</span>
             <span class="vcity">{v.city || '—'}</span>
             <span class="vcnt">{v.record_count} 条</span>
             {#if v.dup_group}<span class="vtag">疑似重复</span>{/if}
             <label class="vtarget" class:on={targetID === v.id}>
-              <input type="radio" name="vtarget" checked={targetID === v.id} onchange={() => setTarget(v.id)} disabled={!isSel(v.id)} />
+              <input
+                type="radio"
+                name="vtarget"
+                checked={targetID === v.id}
+                onchange={() => setTarget(v.id)}
+                disabled={!isSel(v.id)}
+              />
               规范名
             </label>
           </div>
@@ -166,7 +181,15 @@
         <button class="btn primary" onclick={showPreview} disabled={!canMerge || mergeBusy}>
           预览合并
         </button>
-        <button class="btn" onclick={() => { selectedIds = []; targetID = ''; preview = null; }} disabled={mergeBusy}>
+        <button
+          class="btn"
+          onclick={() => {
+            selectedIds = [];
+            targetID = '';
+            preview = null;
+          }}
+          disabled={mergeBusy}
+        >
           清除选择
         </button>
       </div>
@@ -183,7 +206,7 @@
           </div>
           {#if preview.sources?.length}
             <ul class="plist">
-              {#each preview.sources as s}<li>{s.name}（{s.record_count} 条）</li>{/each}
+              {#each preview.sources as s (s.name)}<li>{s.name}（{s.record_count} 条）</li>{/each}
             </ul>
           {/if}
           {#if preview.aliases_added?.length}
@@ -209,19 +232,43 @@
     padding-top: 18px;
     border-top: 1px solid var(--border);
   }
-  .venue-head { margin-bottom: 14px; }
+  .venue-head {
+    margin-bottom: 14px;
+  }
   .venue-head h2 {
     margin: 0 0 4px;
     font-size: 16px;
     font-weight: 600;
     color: var(--text);
   }
-  .venue-head p { margin: 0; }
-  .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; align-items: center; }
-  .sec { padding: 18px 20px; margin-top: 16px; }
-  .banner.error { margin-top: 12px; padding: 10px 14px; border-radius: var(--radius, 10px); background: rgba(220, 38, 38, 0.08); color: #b91c1c; font-size: 13px; }
+  .venue-head p {
+    margin: 0;
+  }
+  .btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+    align-items: center;
+  }
+  .sec {
+    padding: 18px 20px;
+    margin-top: 16px;
+  }
+  .banner.error {
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-radius: var(--radius, 10px);
+    background: rgba(220, 38, 38, 0.08);
+    color: #b91c1c;
+    font-size: 13px;
+  }
 
-  .vlist { display: flex; flex-direction: column; gap: 2px; }
+  .vlist {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
   .vrow {
     display: flex;
     align-items: center;
@@ -232,10 +279,28 @@
     background: var(--surface);
     font-size: 13.5px;
   }
-  .vrow.dup { border-left: 3px solid var(--accent); background: var(--accent-softer, rgba(99, 102, 241, 0.06)); }
-  .vname { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .vcity { color: var(--text-3); font-size: 12px; flex: none; }
-  .vcnt { color: var(--text-2); font-size: 12px; flex: none; }
+  .vrow.dup {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-softer, rgba(99, 102, 241, 0.06));
+  }
+  .vname {
+    font-weight: 500;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .vcity {
+    color: var(--text-3);
+    font-size: 12px;
+    flex: none;
+  }
+  .vcnt {
+    color: var(--text-2);
+    font-size: 12px;
+    flex: none;
+  }
   .vtag {
     font-size: 11px;
     color: var(--accent);
@@ -244,15 +309,47 @@
     padding: 1px 8px;
     flex: none;
   }
-  .vtarget { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: 12px; color: var(--text-2); cursor: pointer; }
-  .vtarget.on { color: var(--accent); font-weight: 600; }
-  .vtarget input:disabled { opacity: 0.4; }
+  .vtarget {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: none;
+    font-size: 12px;
+    color: var(--text-2);
+    cursor: pointer;
+  }
+  .vtarget.on {
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .vtarget input:disabled {
+    opacity: 0.4;
+  }
 
-  .merge-bar { background: var(--surface-2); }
-  .warn { color: var(--warn, #b45309); }
-  .preview { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
-  .preview h3 { margin: 0 0 10px; font-size: 15px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .pstats { display: flex; flex-wrap: wrap; gap: 8px; }
+  .merge-bar {
+    background: var(--surface-2);
+  }
+  .warn {
+    color: var(--warn, #b45309);
+  }
+  .preview {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border);
+  }
+  .preview h3 {
+    margin: 0 0 10px;
+    font-size: 15px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .pstats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
   .pstat {
     display: inline-flex;
     align-items: baseline;
@@ -267,7 +364,22 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .pstat b { font-size: 14px; color: var(--text); }
-  .plist { margin: 10px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-2); }
-  .btn.primary.danger { background: var(--danger, #b91c1c); border-color: var(--danger, #b91c1c); color: #fff; }
+  .pstat b {
+    font-size: 14px;
+    color: var(--text);
+  }
+  .plist {
+    margin: 10px 0 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--text-2);
+  }
+  .btn.primary.danger {
+    background: var(--danger, #b91c1c);
+    border-color: var(--danger, #b91c1c);
+    color: #fff;
+  }
 </style>

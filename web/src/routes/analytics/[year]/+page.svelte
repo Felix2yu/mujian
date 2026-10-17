@@ -1,4 +1,5 @@
 <script>
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api, formatCurrency } from '#lib/api.js';
   import KpiCard from '#lib/components/analytics/KpiCard.svelte';
@@ -40,36 +41,55 @@
     return (v > 0 ? '+' : '−') + Math.abs(v).toFixed(1);
   }
 
-  let monthBars = $derived((report?.monthly ?? []).map((t) => ({ label: t.period.slice(5) + '月', value: t.count })));
+  let monthBars = $derived(
+    (report?.monthly ?? []).map((t) => ({ label: t.period.slice(5) + '月', value: t.count }))
+  );
   let monthLabels = $derived((report?.monthly ?? []).map((t) => t.period.slice(5) + '月'));
   let costSeries = $derived([
-    { name: '月度花费', color: 'var(--gold)', values: (report?.monthly ?? []).map((t) => Math.round(t.cost)) }
+    {
+      name: '月度花费',
+      color: 'var(--gold)',
+      values: (report?.monthly ?? []).map((t) => Math.round(t.cost))
+    }
   ]);
   let ratingSeries = $derived([
     { name: '平均评分', color: '#0e7490', values: (report?.monthly ?? []).map((t) => t.avg_rating) }
   ]);
-  let ratingBars = $derived((report?.rating_dist ?? []).map((d) => ({ label: d.name, value: d.count })));
-  let weekdayBars = $derived((report?.weekday_dist ?? []).map((w) => ({ label: w.name, value: w.count })));
-  let priceBars = $derived((report?.price_buckets ?? []).map((d) => ({ label: d.name, value: d.count })));
+  let ratingBars = $derived(
+    (report?.rating_dist ?? []).map((d) => ({ label: d.name, value: d.count }))
+  );
+  let weekdayBars = $derived(
+    (report?.weekday_dist ?? []).map((w) => ({ label: w.name, value: w.count }))
+  );
+  let priceBars = $derived(
+    (report?.price_buckets ?? []).map((d) => ({ label: d.name, value: d.count }))
+  );
 
-  let venueHref = (it) => `/?address=${encodeURIComponent(it.name)}`;
-  let artistHref = (it) => `/artists/${it.id}`;
-  let dramaHref = (it) => `/dramas/${it.id}`;
-  let zheziHref = (it) => `/?zhezi=${encodeURIComponent(it.id)}`;
-  let showHref = (ref) => (ref ? `/records/${ref.id}` : '#');
+  let venueHref = (it) => resolve(`/?address=${encodeURIComponent(it.name)}`);
+  let artistHref = (it) => resolve(`/artists/${it.id}`);
+  let dramaHref = (it) => resolve(`/dramas/${it.id}`);
+  let zheziHref = (it) => resolve(`/?zhezi=${encodeURIComponent(it.id)}`);
+  // highlights 卡片链接。4 个调用点均在 {#if report.highlights.xxx} 守卫内，
+  // ref 恒非 null，故无需 '#' 兜底分支。
+  let showHref = (ref) => `/records/${ref.id}`;
 
   // 年度总结文案：只由已有数据拼出，缺项自动跳过。
   let summary = $derived.by(() => {
     if (!report || !report.overview.total_records) return '';
     const o = report.overview;
     const parts = [`这一年你看了 ${o.total_records} 场演出，`];
-    parts.push(`在路上花了 ${formatCurrency(o.total_cost, 'CNY')}${o.cost_delta_pct ? `（${o.cost_delta_pct > 0 ? '多花' : '少花'} ${Math.abs(o.cost_delta_pct)}%）` : ''}，`);
+    parts.push(
+      `在路上花了 ${formatCurrency(o.total_cost, 'CNY')}${o.cost_delta_pct ? `（${o.cost_delta_pct > 0 ? '多花' : '少花'} ${Math.abs(o.cost_delta_pct)}%）` : ''}，`
+    );
     if (report.highlights.peak_month) {
-      parts.push(`最忙的是 ${Number(report.highlights.peak_month.slice(5))} 月（${report.highlights.peak_month_count} 场），`);
+      parts.push(
+        `最忙的是 ${Number(report.highlights.peak_month.slice(5))} 月（${report.highlights.peak_month_count} 场），`
+      );
     }
     const topDrama = (report.top_dramas ?? [])[0];
     if (topDrama) parts.push(`看得最多的剧目是《${topDrama.name}》（${topDrama.count} 场），`);
-    if (o.new_artists || o.new_dramas) parts.push(`还初遇了 ${o.new_artists} 位演员、${o.new_dramas} 部剧目，`);
+    if (o.new_artists || o.new_dramas)
+      parts.push(`还初遇了 ${o.new_artists} 位演员、${o.new_dramas} 部剧目，`);
     if (report.holiday.shows) parts.push(`其中 ${report.holiday.shows} 场是在假期里度过的，`);
     parts.push(o.avg_rating ? `年平均评分 ${o.avg_rating.toFixed(1)}★。` : '期待明年继续。');
     return parts.join('');
@@ -84,7 +104,7 @@
       <h1>📄 {year} 年度观演报告</h1>
       <p class="sub">自然年视角回顾你的观演一年</p>
     </div>
-    <a class="back" href="/analytics">← 返回分析</a>
+    <a class="back" href={resolve('/analytics')}>← 返回分析</a>
   </div>
 
   {#if loading}
@@ -95,8 +115,9 @@
   {:else if report}
     {#if report.available_years.length > 1}
       <div class="years">
-        {#each report.available_years as y}
-          <a class="year-chip" class:cur={y === report.year} href="/analytics/{y}">{y}</a>
+        {#each report.available_years as y (y)}
+          <a class="year-chip" class:cur={y === report.year} href={resolve('/analytics/{y}')}>{y}</a
+          >
         {/each}
       </div>
     {/if}
@@ -110,12 +131,41 @@
     {:else}
       <!-- ============ KPI ============ -->
       <div class="kpis stagger">
-        <KpiCard icon="🎫" label="观演场次" value={report.overview.total_records} deltaText={fmtPct(report.overview.records_delta_pct)} deltaTone={report.overview.records_delta_pct >= 0 ? 'pos' : 'neg'} sub="同比上年" />
-        <KpiCard icon="💰" label="总花费" value={formatCurrency(report.overview.total_cost, 'CNY')} deltaText={fmtPct(report.overview.cost_delta_pct)} deltaTone={report.overview.cost_delta_pct >= 0 ? 'pos' : 'neg'} sub="同比上年" />
-        <KpiCard icon="★" label="平均评分" value={report.overview.avg_rating ? report.overview.avg_rating.toFixed(1) : '—'} deltaText={fmtDelta(report.overview.rating_delta)} deltaTone={report.overview.rating_delta >= 0 ? 'pos' : 'neg'} />
+        <KpiCard
+          icon="🎫"
+          label="观演场次"
+          value={report.overview.total_records}
+          deltaText={fmtPct(report.overview.records_delta_pct)}
+          deltaTone={report.overview.records_delta_pct >= 0 ? 'pos' : 'neg'}
+          sub="同比上年"
+        />
+        <KpiCard
+          icon="💰"
+          label="总花费"
+          value={formatCurrency(report.overview.total_cost, 'CNY')}
+          deltaText={fmtPct(report.overview.cost_delta_pct)}
+          deltaTone={report.overview.cost_delta_pct >= 0 ? 'pos' : 'neg'}
+          sub="同比上年"
+        />
+        <KpiCard
+          icon="★"
+          label="平均评分"
+          value={report.overview.avg_rating ? report.overview.avg_rating.toFixed(1) : '—'}
+          deltaText={fmtDelta(report.overview.rating_delta)}
+          deltaTone={report.overview.rating_delta >= 0 ? 'pos' : 'neg'}
+        />
         <KpiCard icon="📍" label="走过城市" value={report.overview.total_cities} />
-        <KpiCard icon="⏱" label="观演时长" value={report.overview.total_hours ? `${report.overview.total_hours} h` : '—'} />
-        <KpiCard icon="🔭" label="新发现" value={`${report.overview.new_artists}+${report.overview.new_dramas}`} sub="演员 + 剧目首遇" />
+        <KpiCard
+          icon="⏱"
+          label="观演时长"
+          value={report.overview.total_hours ? `${report.overview.total_hours} h` : '—'}
+        />
+        <KpiCard
+          icon="🔭"
+          label="新发现"
+          value={`${report.overview.new_artists}+${report.overview.new_dramas}`}
+          sub="演员 + 剧目首遇"
+        />
       </div>
 
       <!-- ============ 年度亮点 ============ -->
@@ -130,28 +180,33 @@
             </div>
           {/if}
           {#if report.highlights.best_rated}
-            <a class="card hl" href={showHref(report.highlights.best_rated)}>
+            <a class="card hl" href={resolve(showHref(report.highlights.best_rated))}>
               <div class="hl-k">最高分一场</div>
               <div class="hl-v">{report.highlights.best_rated.name}</div>
-              <div class="hl-s">{report.highlights.best_rated.value}★ · {report.highlights.best_rated.date_text}</div>
+              <div class="hl-s">
+                {report.highlights.best_rated.value}★ · {report.highlights.best_rated.date_text}
+              </div>
             </a>
           {/if}
           {#if report.highlights.most_expensive}
-            <a class="card hl" href={showHref(report.highlights.most_expensive)}>
+            <a class="card hl" href={resolve(showHref(report.highlights.most_expensive))}>
               <div class="hl-k">最贵一票</div>
               <div class="hl-v">{report.highlights.most_expensive.name}</div>
-              <div class="hl-s">{formatCurrency(report.highlights.most_expensive.value, 'CNY')} · {report.highlights.most_expensive.date_text}</div>
+              <div class="hl-s">
+                {formatCurrency(report.highlights.most_expensive.value, 'CNY')} · {report.highlights
+                  .most_expensive.date_text}
+              </div>
             </a>
           {/if}
           {#if report.highlights.first_show}
-            <a class="card hl" href={showHref(report.highlights.first_show)}>
+            <a class="card hl" href={resolve(showHref(report.highlights.first_show))}>
               <div class="hl-k">年度开幕</div>
               <div class="hl-v">{report.highlights.first_show.name}</div>
               <div class="hl-s">{report.highlights.first_show.date_text}</div>
             </a>
           {/if}
           {#if report.highlights.last_show}
-            <a class="card hl" href={showHref(report.highlights.last_show)}>
+            <a class="card hl" href={resolve(showHref(report.highlights.last_show))}>
               <div class="hl-k">年度收官</div>
               <div class="hl-v">{report.highlights.last_show.name}</div>
               <div class="hl-s">{report.highlights.last_show.date_text}</div>
@@ -181,14 +236,25 @@
               <div class="l">花费历年排名</div>
             </div>
             {#if report.rank.is_record_count}
-              <div class="stat"><div class="v">🎉</div><div class="l">场次创历史新高</div></div>
+              <div class="stat">
+                <div class="v">🎉</div>
+                <div class="l">场次创历史新高</div>
+              </div>
             {/if}
             {#if report.rank.is_record_cost}
-              <div class="stat"><div class="v">💸</div><div class="l">花费创历史新高</div></div>
+              <div class="stat">
+                <div class="v">💸</div>
+                <div class="l">花费创历史新高</div>
+              </div>
             {/if}
           </div>
-          <div class="pct-track"><div class="pct-fill" style="width:{report.rank.count_percentile}%"></div></div>
-          <p class="tiny">活跃度百分位 {report.rank.count_percentile}% —— 超过你 {report.rank.years_with_shows} 年观演史中的 {report.rank.count_percentile}% 年份。</p>
+          <div class="pct-track">
+            <div class="pct-fill" style="width:{report.rank.count_percentile}%"></div>
+          </div>
+          <p class="tiny">
+            活跃度百分位 {report.rank.count_percentile}% —— 超过你 {report.rank.years_with_shows} 年观演史中的
+            {report.rank.count_percentile}% 年份。
+          </p>
         </div>
       </section>
 
@@ -202,11 +268,26 @@
         <div class="grid-2">
           <div class="card sec">
             <h3>月度花费</h3>
-            <LineChart labels={monthLabels} series={costSeries} height={190} yMin={0} labelEvery={1} unit="元" />
+            <LineChart
+              labels={monthLabels}
+              series={costSeries}
+              height={190}
+              yMin={0}
+              labelEvery={1}
+              unit="元"
+            />
           </div>
           <div class="card sec">
             <h3>月度平均评分</h3>
-            <LineChart labels={monthLabels} series={ratingSeries} height={190} yMin={0} yMax={5} labelEvery={1} unit="★" />
+            <LineChart
+              labels={monthLabels}
+              series={ratingSeries}
+              height={190}
+              yMin={0}
+              yMax={5}
+              labelEvery={1}
+              unit="★"
+            />
           </div>
         </div>
       </section>
@@ -225,7 +306,13 @@
           </div>
           <div class="card sec">
             <h3>评分分布</h3>
-            <VBarChart data={ratingBars} height={170} labelEvery={1} unit=" 场" color="var(--gold)" />
+            <VBarChart
+              data={ratingBars}
+              height={170}
+              labelEvery={1}
+              unit=" 场"
+              color="var(--gold)"
+            />
           </div>
           <div class="card sec">
             <h3>观演星期分布</h3>
@@ -243,10 +330,13 @@
             <div class="card sec">
               <h3>假期观演</h3>
               <div class="stat-row">
-                <div class="stat"><div class="v">{report.holiday.shows} 场</div><div class="l">占全年 {report.holiday.pct}%</div></div>
+                <div class="stat">
+                  <div class="v">{report.holiday.shows} 场</div>
+                  <div class="l">占全年 {report.holiday.pct}%</div>
+                </div>
               </div>
               <ul class="hol">
-                {#each report.holiday.by_holiday as h}
+                {#each report.holiday.by_holiday as h (h.name)}
                   <li><span>{h.name}</span><b>{h.count} 场</b></li>
                 {/each}
               </ul>
@@ -297,7 +387,7 @@
               <p class="tiny">今年没有初遇新演员</p>
             {:else}
               <div class="first">
-                {#each report.highlights.first_artists as f}
+                {#each report.highlights.first_artists as f (f.name + f.date_text)}
                   <span class="chip"><span class="fd">{f.date_text.slice(5)}</span>{f.name}</span>
                 {/each}
               </div>
@@ -309,7 +399,7 @@
               <p class="tiny">今年没有初遇新剧目</p>
             {:else}
               <div class="first">
-                {#each report.highlights.first_dramas as f}
+                {#each report.highlights.first_dramas as f (f.name + f.date_text)}
                   <span class="chip"><span class="fd">{f.date_text.slice(5)}</span>{f.name}</span>
                 {/each}
               </div>
@@ -322,52 +412,207 @@
 </div>
 
 <style>
-  .page-head { margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
-  .page-head h1 { margin: 0; font-size: 26px; }
-  .sub { color: var(--text-muted); font-size: 13.5px; margin: 4px 0 0; }
-  .back { font-size: 13px; color: var(--accent); text-decoration: none; white-space: nowrap; }
+  .page-head {
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;
+  }
+  .page-head h1 {
+    margin: 0;
+    font-size: 26px;
+  }
+  .sub {
+    color: var(--text-muted);
+    font-size: 13.5px;
+    margin: 4px 0 0;
+  }
+  .back {
+    font-size: 13px;
+    color: var(--accent);
+    text-decoration: none;
+    white-space: nowrap;
+  }
 
-  .years { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-  .year-chip { padding: 4px 14px; border-radius: 99px; border: 1px solid var(--border); font-size: 13px; text-decoration: none; color: var(--text-2); background: var(--surface); }
-  .year-chip.cur { background: var(--accent); border-color: var(--accent); color: #fff; }
-  :global(.dark) .year-chip.cur { color: #1a1a1a; }
+  .years {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .year-chip {
+    padding: 4px 14px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+    font-size: 13px;
+    text-decoration: none;
+    color: var(--text-2);
+    background: var(--surface);
+  }
+  .year-chip.cur {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  :global(.dark) .year-chip.cur {
+    color: #1a1a1a;
+  }
 
-  .summary { font-size: 14.5px; line-height: 1.9; color: var(--text-2); margin-bottom: 14px; }
+  .summary {
+    font-size: 14.5px;
+    line-height: 1.9;
+    color: var(--text-2);
+    margin-bottom: 14px;
+  }
 
-  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+  }
 
-  .block { margin-top: 22px; }
-  .sec-title { font-size: 17px; margin: 0 0 12px; display: flex; align-items: baseline; gap: 10px; }
-  .card.sec { padding: 18px 20px; transition: box-shadow 0.2s ease, transform 0.2s ease; }
-  .card.sec:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
-  .card.sec h3 { margin: 0 0 14px; font-size: 15px; }
+  .block {
+    margin-top: 22px;
+  }
+  .sec-title {
+    font-size: 17px;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .card.sec {
+    padding: 18px 20px;
+    transition:
+      box-shadow 0.2s ease,
+      transform 0.2s ease;
+  }
+  .card.sec:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+  }
+  .card.sec h3 {
+    margin: 0 0 14px;
+    font-size: 15px;
+  }
 
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
-  .grid-2:first-of-type { margin-top: 0; }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .grid-2:first-of-type {
+    margin-top: 0;
+  }
 
-  .tiny { color: var(--text-muted); font-size: 13px; margin: 0; }
+  .tiny {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin: 0;
+  }
 
-  .hl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
-  .card.hl { padding: 14px 16px; text-decoration: none; display: block; }
-  .hl-k { font-size: 12px; color: var(--text-muted); }
-  .hl-v { font-size: 15.5px; font-weight: 700; color: var(--text); margin: 6px 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .hl-s { font-size: 12px; color: var(--text-2); }
+  .hl-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  .card.hl {
+    padding: 14px 16px;
+    text-decoration: none;
+    display: block;
+  }
+  .hl-k {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .hl-v {
+    font-size: 15.5px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 6px 0 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hl-s {
+    font-size: 12px;
+    color: var(--text-2);
+  }
 
-  .stat-row { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 10px; }
-  .stat .v { font-size: 20px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
-  .stat .l { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .stat-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-bottom: 10px;
+  }
+  .stat .v {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .l {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
 
-  .pct-track { height: 8px; border-radius: 99px; background: var(--surface-3); overflow: hidden; margin: 6px 0 8px; }
-  .pct-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--gold)); }
+  .pct-track {
+    height: 8px;
+    border-radius: 99px;
+    background: var(--surface-3);
+    overflow: hidden;
+    margin: 6px 0 8px;
+  }
+  .pct-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--accent), var(--gold));
+  }
 
-  .hol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
-  .hol li { display: flex; justify-content: space-between; color: var(--text-2); }
+  .hol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .hol li {
+    display: flex;
+    justify-content: space-between;
+    color: var(--text-2);
+  }
 
-  .first { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip { display: inline-flex; align-items: baseline; gap: 5px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-2); font-size: 12.5px; color: var(--text); white-space: nowrap; }
-  .fd { color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .first {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    font-size: 12.5px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .fd {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
 
   @media (max-width: 860px) {
-    .grid-2 { grid-template-columns: 1fr; }
+    .grid-2 {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
