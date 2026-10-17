@@ -57,3 +57,17 @@ recordlive_export/
 web/static/sw.js
 outputs/
 .zcode/
+
+# ---- AI Agent 生成目录（不进版本库，本地保留）----
+.workbuddy/
+.trae/
+.trea/
+.qoder/
+.opencode/
+.cursor/
+.claude/
+.codex/
+.gemini/
+.continue/
+.windsurf/
+.aider*
