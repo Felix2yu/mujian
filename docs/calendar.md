@@ -73,6 +73,6 @@ curl -su ":<令牌>" -X PROPFIND -H "Depth: 0" https://<域名>/caldav/user/cale
 
 ## 实现位置
 
-- 协议栈：[`backend/internal/caldav/`](../backend/internal/caldav/)（基于 `emersion/go-webdav`，只读 `caldav.Backend`）
-- 事件渲染：[`backend/internal/ics/ics.go`](../backend/internal/ics/ics.go) 的 `EventCalendar`，与 ICS 订阅共用同一套格式（`GEO`、`X-APPLE-STRUCTURED-LOCATION` 等）
-- 路由与鉴权：`backend/main.go`（Basic 认证，密码即访问令牌；兼容 Bearer / X-Auth-Token / `?token=`）
+- 协议栈：[`internal/caldav/`](../internal/caldav/)（基于 `emersion/go-webdav`，只读 `caldav.Backend`）
+- 事件渲染：[`internal/ics/ics.go`](../internal/ics/ics.go) 的 `EventCalendar`，与 ICS 订阅共用同一套格式（`GEO`、`X-APPLE-STRUCTURED-LOCATION` 等）
+- 路由与鉴权：`cmd/mujian/main.go`（Basic 认证，密码即访问令牌；兼容 Bearer / X-Auth-Token / `?token=`）

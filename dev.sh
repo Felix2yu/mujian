@@ -2,8 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-BACKEND_DIR="$ROOT/backend"
-FRONTEND_DIR="$ROOT/frontend"
+# 结构规范迁移后：Go 模块根 = 仓库根，入口在 cmd/mujian/，前端在 web/
+BACKEND_DIR="$ROOT"
+FRONTEND_DIR="$ROOT/web"
 BE_PORT=8080
 FE_PORT=5173
 BE_PID_FILE="/tmp/mujian-be.pid"
@@ -36,11 +37,12 @@ trap cleanup SIGINT SIGTERM
 
 # ---------- 编译 Go ----------
 echo "[dev] 编译 Go 后端..."
-( cd "$BACKEND_DIR" && CGO_ENABLED=1 go build -o mujian . ) || { echo "[dev] Go build 失败"; exit 1; }
+mkdir -p "$BACKEND_DIR/bin"
+( cd "$BACKEND_DIR" && CGO_ENABLED=1 go build -o bin/mujian ./cmd/mujian ) || { echo "[dev] Go build 失败"; exit 1; }
 
 # ---------- 启动 Go ----------
 echo "[dev] 启动后端 (port=$BE_PORT)..."
-( cd "$BACKEND_DIR" && ./mujian > /tmp/mujian-backend.log 2>&1 & echo $! > "$BE_PID_FILE" )
+( cd "$BACKEND_DIR" && ./bin/mujian > /tmp/mujian-backend.log 2>&1 & echo $! > "$BE_PID_FILE" )
 for i in $(seq 1 20); do
   curl -s -o /dev/null "http://localhost:$BE_PORT/healthz" && echo "[dev] 后端就绪 ✓" && break
   sleep 0.5
@@ -63,17 +65,17 @@ done
 if command -v fswatch &>/dev/null; then
   echo "[dev] fswatch 监听 .go 文件..."
   (
-    fswatch -0 --event Updated "$BACKEND_DIR" 2>/dev/null | while IFS= read -r -d "" file; do
+    fswatch -0 --event Updated "$BACKEND_DIR/cmd" "$BACKEND_DIR/internal" 2>/dev/null | while IFS= read -r -d "" file; do
       case "$file" in
         *.go)
           echo "[dev] .go 变更 → 重建后端..."
           (
             cd "$BACKEND_DIR"
-            CGO_ENABLED=1 go build -o mujian . 2>&1 && {
+            CGO_ENABLED=1 go build -o bin/mujian ./cmd/mujian 2>&1 && {
               old_pid=$(cat "$BE_PID_FILE" 2>/dev/null || true)
               [ -n "$old_pid" ] && kill "$old_pid" 2>/dev/null || true
               sleep 0.3
-              ./mujian >> /tmp/mujian-backend.log 2>&1 &
+              ./bin/mujian >> /tmp/mujian-backend.log 2>&1 &
               echo $! > "$BE_PID_FILE"
               echo "[dev] 后端已重启"
             } || echo "[dev] build 失败，等下次保存"

@@ -1,21 +1,25 @@
+# 装配式镜像：Dockerfile 只 COPY 预编译产物（bin/mujian）与前端产物（根 dist/）。
+# 下列排除项都不得命中这两者 —— 否则 COPY 报的是「file not found」这种误导性错误。
+
 # VCS / CI metadata
 .git
 .github
+.gitignore
+.dockerignore
 
 # Frontend source + tooling — assets are prebuilt and supplied as the
 # `frontend-dist` artifact (extracted to ./dist at build context root).
-frontend
+web
 node_modules
 
 # Backend source is compiled by the CI `build` job; only the resulting
 # binary is shipped into the image. The build context only needs `dist/`
 # and `bin/`.
-backend
-backend/node_modules
-backend/mujian
-backend/data
+internal
+cmd
 
 # Large media / output dirs unrelated to the image
+data
 outputs
 recordlive_export
 
@@ -23,9 +27,6 @@ recordlive_export
 docs
 *.md
 Makefile
+opencode.json
 pnpm-lock.yaml
 package-lock.json
-
-# Keep the prebuilt artifacts at the context root
-!dist
-!bin

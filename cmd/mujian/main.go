@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/subtle"
-	"embed"
 	"encoding/xml"
 	"fmt"
 	"io"
-	"io/fs"
 	"log/slog"
 	mujianmcp "mujian/internal/mcp"
 	"net/http"
@@ -25,6 +23,7 @@ import (
 	"mujian/internal/holiday"
 	"mujian/internal/metrics"
 	"mujian/internal/storage"
+	"mujian/internal/web"
 
 	emcaldav "github.com/emersion/go-webdav/caldav"
 	"github.com/go-chi/chi/v5"
@@ -96,9 +95,6 @@ func (r rootFileSystem) Open(name string) (http.File, error) {
 	// os.Root still rejects ".." segments, keeping traversal protection.
 	return r.root.Open(strings.TrimPrefix(name, "/"))
 }
-
-//go:embed all:dist
-var frontend embed.FS
 
 // compressibleTypes is chi's default list plus text/calendar. Passing types
 // to NewCompressor replaces the default list, so this must stay a superset.
@@ -507,10 +503,10 @@ func main() {
 		uploadCache.ServeHTTP(w, r)
 	}))
 
-	sub, err := fs.Sub(frontend, "dist")
-	if err != nil {
-		fatal("failed to get frontend dist: %v", err)
+	if !web.HasBuild() {
+		fatal("frontend dist is empty: build the frontend (web/dist) and re-copy it to internal/web/dist before compiling")
 	}
+	sub := web.FS()
 
 	fileServer := http.FileServer(http.FS(sub))
 	r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
