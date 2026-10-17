@@ -15,13 +15,13 @@ import (
 // 一个规范名，并在合并时把这些记录的 address 改写为规范名。records 不新增
 // venue_id 列——保持 address 自包含，避免污染写入热路径与全站 address 展示逻辑。
 type Venue struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	City        string   `json:"city"`
-	Lat         float64  `json:"lat"`
-	Lng         float64  `json:"lng"`
-	Aliases     []string `json:"aliases"`
-	SortOrder   int      `json:"sort_order"`
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	City      string   `json:"city"`
+	Lat       float64  `json:"lat"`
+	Lng       float64  `json:"lng"`
+	Aliases   []string `json:"aliases"`
+	SortOrder int      `json:"sort_order"`
 	// RecordCount 是派生值（非持久化的实时演出数）。
 	RecordCount int `json:"record_count"`
 	// DupGroup 由服务端按「同城 + 去后缀/去括号/去城市前缀 + 坐标<300m」聚合，
@@ -30,8 +30,8 @@ type Venue struct {
 }
 
 var (
-	venueParenRe = regexp.MustCompile(`[（(][^（）()]*[）)]`)
-	venueWSRe    = regexp.MustCompile(`\s+`)
+	venueParenRe  = regexp.MustCompile(`[（(][^（）()]*[）)]`)
+	venueWSRe     = regexp.MustCompile(`\s+`)
 	venueSuffixes = []string{"大戏院", "大剧院", "戏院", "剧院", "剧场", "艺术中心", "会堂", "中心", "大会堂", "体育馆", "博物馆", "文化馆"}
 )
 
@@ -96,11 +96,11 @@ func (db *DB) BackfillVenuesFromRecords() error {
 	defer rows.Close()
 
 	type acc struct {
-		city    string
-		spell   map[string]int // 不同写法计数
-		latSum  float64
-		lngSum  float64
-		coordN  int
+		city   string
+		spell  map[string]int // 不同写法计数
+		latSum float64
+		lngSum float64
+		coordN int
 	}
 	byNorm := map[string]*acc{}
 	for rows.Next() {

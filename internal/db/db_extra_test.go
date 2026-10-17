@@ -41,14 +41,14 @@ func TestNormalizeEntityName(t *testing.T) {
 	}{
 		{"张三", "张三"},
 		{"  张三  ", "张三"},
-		{"张 三", "张三"},           // ideographic space
-		{"ABC", "abc"},              // lowercase
-		{"ＡＢＣ", "abc"},           // full-width → ASCII
-		{"abc  123", "abc123"},     // spaces removed
+		{"张 三", "张三"},          // ideographic space
+		{"ABC", "abc"},         // lowercase
+		{"ＡＢＣ", "abc"},         // full-width → ASCII
+		{"abc  123", "abc123"}, // spaces removed
 		{"", ""},
 		{"  ", ""},
-		{"张三 ABC", "张三abc"},     // mixed
-		{"\t\n", ""},               // whitespace
+		{"张三 ABC", "张三abc"}, // mixed
+		{"\t\n", ""},        // whitespace
 	}
 	for _, tc := range tests {
 		if got := NormalizeEntityName(tc.in); got != tc.want {

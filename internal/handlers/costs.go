@@ -44,8 +44,8 @@ func (h *Handler) getCostPending(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResp(w, 200, map[string]interface{}{
-		"records":       records,
-		"summary":       summary,
+		"records":        records,
+		"summary":        summary,
 		"enabled_fields": enabled,
 	})
 }

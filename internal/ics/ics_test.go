@@ -86,11 +86,11 @@ func TestGenerateCalendarMinimalRecord(t *testing.T) {
 func TestGenerateCalendarGeo(t *testing.T) {
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	rec := models.Record{
-		ID:        "rec-geo",
-		Name:      "地理测试",
-		Address:   "上海大剧院",
+		ID:         "rec-geo",
+		Name:       "地理测试",
+		Address:    "上海大剧院",
 		Coordinate: &models.Coordinate{Latitude: 31.2304, Longitude: 121.4737},
-		Date:      time.Date(2026, 9, 1, 19, 30, 0, 0, loc).Unix(),
+		Date:       time.Date(2026, 9, 1, 19, 30, 0, 0, loc).Unix(),
 	}
 	out := GenerateCalendar([]models.Record{rec}, loc, nil)
 	if !strings.Contains(out, "LOCATION:上海大剧院\r\n") {

@@ -37,14 +37,14 @@ type BatchUpdateRecordsInput struct {
 	Rating        *int     `json:"rating,omitempty"`
 	ActiveStatus  *int     `json:"active_status,omitempty"`
 	// 已观看/已到场，即 CalDAV VTODO 完成态；nil=不改，true=完成，false=未完成
-	Watched *bool `json:"watched,omitempty"`
+	Watched *bool   `json:"watched,omitempty"`
 	City    *string `json:"city,omitempty"`
-	Address       *string  `json:"address,omitempty"`
-	Channel       *string  `json:"channel,omitempty"`
-	Company       *string  `json:"company,omitempty"`
-	Friends       *string  `json:"friends,omitempty"`
-	Remark        *string  `json:"remark,omitempty"`
-	Seat          *string  `json:"seat,omitempty"`
+	Address *string `json:"address,omitempty"`
+	Channel *string `json:"channel,omitempty"`
+	Company *string `json:"company,omitempty"`
+	Friends *string `json:"friends,omitempty"`
+	Remark  *string `json:"remark,omitempty"`
+	Seat    *string `json:"seat,omitempty"`
 	// 演出时间文本（如 "2026-08-23 19:30"），解析后联动 date；空串清空
 	DateText   *string            `json:"date_text,omitempty"`
 	Coordinate *models.Coordinate `json:"coordinate,omitempty"`

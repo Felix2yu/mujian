@@ -235,4 +235,3 @@ func validateImportRecord(r *models.Record, index int) (reject *ImportIssue, noD
 	}
 	return nil, r.Date == 0 && strings.TrimSpace(r.DateText) == ""
 }
-

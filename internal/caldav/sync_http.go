@@ -452,10 +452,10 @@ type multistatusXML struct {
 }
 
 type responseXML struct {
-	XMLName   xml.Name     `xml:"DAV: response"`
-	Href      string       `xml:"href"`
+	XMLName   xml.Name      `xml:"DAV: response"`
+	Href      string        `xml:"href"`
 	PropStats []propstatXML `xml:"propstat"`
-	Status    string       `xml:"status,omitempty"`
+	Status    string        `xml:"status,omitempty"`
 }
 
 type propstatXML struct {
@@ -465,7 +465,7 @@ type propstatXML struct {
 }
 
 type propXML struct {
-	XMLName  xml.Name  `xml:"DAV: prop"`
+	XMLName  xml.Name   `xml:"DAV: prop"`
 	Children []*xmlNode `xml:",any"`
 }
 

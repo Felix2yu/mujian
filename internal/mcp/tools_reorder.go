@@ -66,9 +66,9 @@ func (s *Server) handleReorderDramas(ctx context.Context, req *mcp.CallToolReque
 			return errResult("查询剧目失败：%v", err)
 		}
 		return jsonResult(map[string]any{
-			"dry_run":  true,
-			"ids":      in.IDs,
-			"dramas":   dramas,
+			"dry_run": true,
+			"ids":     in.IDs,
+			"dramas":  dramas,
 		})
 	}
 
@@ -93,11 +93,11 @@ func (s *Server) handleReorderZhezis(ctx context.Context, req *mcp.CallToolReque
 			return errResult("查询剧目失败：%v", err)
 		}
 		return jsonResult(map[string]any{
-			"dry_run":   true,
-			"drama_id":  in.DramaID,
+			"dry_run":    true,
+			"drama_id":   in.DramaID,
 			"drama_name": drama.Name,
-			"ids":       in.IDs,
-			"zhezis":    drama.Zhezis,
+			"ids":        in.IDs,
+			"zhezis":     drama.Zhezis,
 		})
 	}
 

@@ -18,8 +18,8 @@ package geo
 import "math"
 
 const (
-	a  = 6378245.0                // semi-major axis of the Krasovsky 1940 ellipsoid
-	ee = 0.00669342162296594323   // eccentricity squared
+	a  = 6378245.0              // semi-major axis of the Krasovsky 1940 ellipsoid
+	ee = 0.00669342162296594323 // eccentricity squared
 	pi = math.Pi
 )
 
@@ -57,8 +57,8 @@ func WGS84ToGCJ02(lat, lng float64) (float64, float64) {
 	magic := math.Sin(radLat)
 	magic = 1 - ee*magic*magic
 	sqrtMagic := math.Sqrt(magic)
-	dLat = (dLat * 180.0) / ((a*(1-ee))/(magic*sqrtMagic) * pi)
-	dLng = (dLng * 180.0) / (a/sqrtMagic*math.Cos(radLat) * pi)
+	dLat = (dLat * 180.0) / ((a * (1 - ee)) / (magic * sqrtMagic) * pi)
+	dLng = (dLng * 180.0) / (a / sqrtMagic * math.Cos(radLat) * pi)
 	return lat + dLat, lng + dLng
 }
 
@@ -90,7 +90,7 @@ func BD09ToGCJ02(lat, lng float64) (float64, float64) {
 
 // GCJ02ToBD09 converts a GCJ-02 coordinate to Baidu BD-09.
 func GCJ02ToBD09(lat, lng float64) (float64, float64) {
-	z := math.Sqrt(lng*lng + lat*lat) + 0.00002*math.Sin(lat*pi)
+	z := math.Sqrt(lng*lng+lat*lat) + 0.00002*math.Sin(lat*pi)
 	theta := math.Atan2(lat, lng) + 0.000003*math.Cos(lng*pi)
 	bdLng := z*math.Cos(theta) + 0.0065
 	bdLat := z*math.Sin(theta) + 0.006

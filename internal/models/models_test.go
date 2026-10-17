@@ -79,10 +79,10 @@ func TestStatusConstants(t *testing.T) {
 
 func TestExportDataJSON(t *testing.T) {
 	ed := ExportData{
-		Source:     "mujian",
+		Source:      "mujian",
 		RecordCount: 1,
-		Records:    []Record{{ID: "r1", Name: "test"}},
-		Categories: []Category{{Name: "昆曲"}},
+		Records:     []Record{{ID: "r1", Name: "test"}},
+		Categories:  []Category{{Name: "昆曲"}},
 	}
 	b, err := json.Marshal(ed)
 	if err != nil {

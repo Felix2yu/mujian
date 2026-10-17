@@ -24,21 +24,21 @@ type billGroupJSON struct {
 }
 
 type recordBillsJSON struct {
-	Enabled           bool                   `json:"enabled"`
-	Ready             bool                   `json:"ready"`
-	BillIDs           []int64                `json:"bill_ids"`
+	Enabled           bool                     `json:"enabled"`
+	Ready             bool                     `json:"ready"`
+	BillIDs           []int64                  `json:"bill_ids"`
 	Bills             []map[string]interface{} `json:"bills"`
-	Total             float64                `json:"total"`
-	Currency          string                 `json:"currency"`
-	MixedCurrency     bool                   `json:"mixed_currency"`
-	Breakdown         []billGroupJSON        `json:"breakdown"`
-	LocalTotal        float64                `json:"local_total"`
-	LocalCurrency     string                 `json:"local_currency"`
-	EffectiveTotal    float64                `json:"effective_total"`
-	EffectiveCurrency string                 `json:"effective_currency"`
-	EffectiveSource   string                 `json:"effective_source"`
-	Errors            map[string]string      `json:"errors"`
-	Error             string                 `json:"error"`
+	Total             float64                  `json:"total"`
+	Currency          string                   `json:"currency"`
+	MixedCurrency     bool                     `json:"mixed_currency"`
+	Breakdown         []billGroupJSON          `json:"breakdown"`
+	LocalTotal        float64                  `json:"local_total"`
+	LocalCurrency     string                   `json:"local_currency"`
+	EffectiveTotal    float64                  `json:"effective_total"`
+	EffectiveCurrency string                   `json:"effective_currency"`
+	EffectiveSource   string                   `json:"effective_source"`
+	Errors            map[string]string        `json:"errors"`
+	Error             string                   `json:"error"`
 }
 
 // huozhiMock stands up a fake 货殖 public-bills API. When forceStatus is non-zero

@@ -50,9 +50,9 @@ func (s *Server) handleListDeletedRecords(ctx context.Context, req *mcp.CallTool
 	}
 
 	return jsonResult(map[string]any{
-		"total":  total,
-		"limit":  limit,
-		"offset": offset,
+		"total":   total,
+		"limit":   limit,
+		"offset":  offset,
 		"records": records,
 	})
 }
@@ -119,9 +119,9 @@ func (s *Server) handlePurgeDeletedRecords(ctx context.Context, req *mcp.CallToo
 		}
 		total, _ := s.db.DeletedCount()
 		return jsonResult(map[string]any{
-			"dry_run":   true,
+			"dry_run":    true,
 			"will_purge": total,
-			"preview":   records,
+			"preview":    records,
 		})
 	}
 

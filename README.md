@@ -254,3 +254,7 @@ CI 每次推送/PR 自动运行测试并上传 Codecov（目标 ≥85%）。实�
 <img src="https://codecov.io/gh/Felix2yu/mujian/graphs/icicle.svg" alt="Codecov 覆盖率冰柱图" width="100%">
 
 > 另提供 [sunburst](https://codecov.io/gh/Felix2yu/mujian/graphs/sunburst.svg) 与 [tree](https://codecov.io/gh/Felix2yu/mujian/graphs/tree.svg) 两种视图。
+
+## 许可证
+
+本项目以 [MIT](LICENSE) 发布，© 2026 Felix2yu。

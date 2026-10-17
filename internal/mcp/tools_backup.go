@@ -3,8 +3,8 @@ package mcp
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"mujian/internal/models"
+	"path/filepath"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -83,10 +83,10 @@ func (s *Server) handleRestoreFromBackup(ctx context.Context, req *mcp.CallToolR
 
 		if dryRun(in.DryRun) {
 			return jsonResult(map[string]any{
-				"dry_run":        true,
-				"file":           in.File,
-				"records":        len(exportData.Records),
-				"categories":     len(exportData.Categories),
+				"dry_run":    true,
+				"file":       in.File,
+				"records":    len(exportData.Records),
+				"categories": len(exportData.Categories),
 			})
 		}
 

@@ -47,7 +47,7 @@ type Config struct {
 	// 纳入哪些字段，不影响这些列本身的存在与展示。M7：默认仅 "price"，
 	// 避免 pay_price/other_cost 全库为 0 时一次性涌入数百条无效待办。
 	CostEnabledFields string `json:"cost_enabled_fields"`
-	DefaultStartTime    string `json:"default_start_time"`
+	DefaultStartTime  string `json:"default_start_time"`
 	// CalDAV 任务提醒（VTODO VALARM）触发策略：
 	//   - ReminderMode = "hours_before"：演出开始前 ReminderBeforeHours 小时触发（默认 12）
 	//   - ReminderMode = "same_day"：演出当天统一在 ReminderDailyHour:ReminderDailyMinute 触发
@@ -73,7 +73,7 @@ type Config struct {
 	// HuozhiTicketCategories 是逗号分隔的分类关键词，匹配则归为「门票实付」，
 	// 否则（交通/酒店等）归为「其他开销」。默认取 huozhi.DefaultTicketCategories。
 	HuozhiTicketCategories string `json:"-"`
-	mu             sync.RWMutex
+	mu                     sync.RWMutex
 }
 
 var (
@@ -83,43 +83,43 @@ var (
 func Load() *Config {
 	loc := loadTimezone(getEnv("TZ", "Asia/Shanghai"))
 	global = &Config{
-		AllowLocalStorage:   os.Getenv("ALLOW_LOCAL_STORAGE") != "false",
-		DBPath:              getEnv("DB_PATH", "./data/mujian.db"),
-		UploadDir:           getEnv("UPLOAD_DIR", "./data/uploads"),
-		Port:                getEnv("PORT", "8080"),
-		Timezone:            loc.String(),
-		AuthToken:           os.Getenv("MJ_AUTH_TOKEN"),
-		BackupIntervalHours: getEnvInt("BACKUP_INTERVAL_HOURS", 0),
-		BackupKeep:          getEnvInt("BACKUP_KEEP", 10),
-		BackupFormat:        getEnv("BACKUP_FORMAT", "db"),
-		BackupRemote:        os.Getenv("BACKUP_REMOTE") == "true",
-		Theme:               getEnv("THEME", "auto"),
-		StorageType:         getEnv("STORAGE_TYPE", "local"),
-		ImageFormat:         getEnv("IMAGE_FORMAT", "avif"),
-		S3Endpoint:          os.Getenv("S3_ENDPOINT"),
-		S3Bucket:            os.Getenv("S3_BUCKET"),
-		S3Region:            getEnv("S3_REGION", "us-east-1"),
-		S3AccessKey:         os.Getenv("S3_ACCESS_KEY"),
-		S3SecretKey:         os.Getenv("S3_SECRET_KEY"),
-		S3PublicURL:         os.Getenv("S3_PUBLIC_URL"),
-		ShowFriends:         true,
-		ShowPayPrice:        true,
-		ShowOtherCost:       true,
-		MultiCurrency:       true,
-		CostEnabledFields:   "price",
-		DefaultStartTime:    "19:30",
-		ReminderMode:        getEnv("REMINDER_MODE", "hours_before"),
-		ReminderBeforeHours: getEnvInt("REMINDER_BEFORE_HOURS", 12),
-		ReminderDailyHour:   getEnvInt("REMINDER_DAILY_HOUR", 10),
-		ReminderDailyMinute: getEnvInt("REMINDER_DAILY_MINUTE", 0),
-		AIEnabled:           false,
-		AIBaseURL:           "https://api.openai.com/v1",
-		AIAPIKey:            "",
-		AIModel:             "",
-		HuozhiEnabled:       os.Getenv("HUOZHI_ENABLED") == "true",
-		HuozhiDomain:        os.Getenv("HUOZHI_DOMAIN"),
-		HuozhiAPIKey:        os.Getenv("HUOZHI_API_KEY"),
-		HuozhiBillPath:      getEnv("HUOZHI_BILL_PATH", "/bills/{id}"),
+		AllowLocalStorage:      os.Getenv("ALLOW_LOCAL_STORAGE") != "false",
+		DBPath:                 getEnv("DB_PATH", "./data/mujian.db"),
+		UploadDir:              getEnv("UPLOAD_DIR", "./data/uploads"),
+		Port:                   getEnv("PORT", "8080"),
+		Timezone:               loc.String(),
+		AuthToken:              os.Getenv("MJ_AUTH_TOKEN"),
+		BackupIntervalHours:    getEnvInt("BACKUP_INTERVAL_HOURS", 0),
+		BackupKeep:             getEnvInt("BACKUP_KEEP", 10),
+		BackupFormat:           getEnv("BACKUP_FORMAT", "db"),
+		BackupRemote:           os.Getenv("BACKUP_REMOTE") == "true",
+		Theme:                  getEnv("THEME", "auto"),
+		StorageType:            getEnv("STORAGE_TYPE", "local"),
+		ImageFormat:            getEnv("IMAGE_FORMAT", "avif"),
+		S3Endpoint:             os.Getenv("S3_ENDPOINT"),
+		S3Bucket:               os.Getenv("S3_BUCKET"),
+		S3Region:               getEnv("S3_REGION", "us-east-1"),
+		S3AccessKey:            os.Getenv("S3_ACCESS_KEY"),
+		S3SecretKey:            os.Getenv("S3_SECRET_KEY"),
+		S3PublicURL:            os.Getenv("S3_PUBLIC_URL"),
+		ShowFriends:            true,
+		ShowPayPrice:           true,
+		ShowOtherCost:          true,
+		MultiCurrency:          true,
+		CostEnabledFields:      "price",
+		DefaultStartTime:       "19:30",
+		ReminderMode:           getEnv("REMINDER_MODE", "hours_before"),
+		ReminderBeforeHours:    getEnvInt("REMINDER_BEFORE_HOURS", 12),
+		ReminderDailyHour:      getEnvInt("REMINDER_DAILY_HOUR", 10),
+		ReminderDailyMinute:    getEnvInt("REMINDER_DAILY_MINUTE", 0),
+		AIEnabled:              false,
+		AIBaseURL:              "https://api.openai.com/v1",
+		AIAPIKey:               "",
+		AIModel:                "",
+		HuozhiEnabled:          os.Getenv("HUOZHI_ENABLED") == "true",
+		HuozhiDomain:           os.Getenv("HUOZHI_DOMAIN"),
+		HuozhiAPIKey:           os.Getenv("HUOZHI_API_KEY"),
+		HuozhiBillPath:         getEnv("HUOZHI_BILL_PATH", "/bills/{id}"),
 		HuozhiTicketCategories: getEnv("HUOZHI_TICKET_CATEGORIES", huozhi.DefaultTicketCategories),
 	}
 	return global
@@ -300,22 +300,22 @@ func (c *Config) Update(s *SettingsUpdate) {
 }
 
 type SettingsUpdate struct {
-	Theme            *string `json:"theme"`
-	StorageType      *string `json:"storage_type"`
-	ImageFormat      *string `json:"image_format"`
-	S3Endpoint       *string `json:"s3_endpoint"`
-	S3Bucket         *string `json:"s3_bucket"`
-	S3Region         *string `json:"s3_region"`
-	S3AccessKey      *string `json:"s3_access_key"`
-	S3SecretKey      *string `json:"s3_secret_key"`
-	S3PublicURL      *string `json:"s3_public_url"`
-	ShowFriends      *bool   `json:"show_friends"`
-	ShowPayPrice     *bool   `json:"show_pay_price"`
-	ShowOtherCost    *bool   `json:"show_other_cost"`
-	MultiCurrency    *bool   `json:"multi_currency"`
+	Theme         *string `json:"theme"`
+	StorageType   *string `json:"storage_type"`
+	ImageFormat   *string `json:"image_format"`
+	S3Endpoint    *string `json:"s3_endpoint"`
+	S3Bucket      *string `json:"s3_bucket"`
+	S3Region      *string `json:"s3_region"`
+	S3AccessKey   *string `json:"s3_access_key"`
+	S3SecretKey   *string `json:"s3_secret_key"`
+	S3PublicURL   *string `json:"s3_public_url"`
+	ShowFriends   *bool   `json:"show_friends"`
+	ShowPayPrice  *bool   `json:"show_pay_price"`
+	ShowOtherCost *bool   `json:"show_other_cost"`
+	MultiCurrency *bool   `json:"multi_currency"`
 	// 费用补全参与字段（逗号分隔）：仅这些字段进入待确认清单。
 	CostEnabledFields *string `json:"cost_enabled_fields,omitempty"`
-	DefaultStartTime *string `json:"default_start_time"`
+	DefaultStartTime  *string `json:"default_start_time"`
 	// CalDAV 提醒时机：hours_before=演出开始前 N 小时；same_day=当天统一时刻。
 	ReminderMode        *string `json:"reminder_mode,omitempty"`
 	ReminderBeforeHours *int    `json:"reminder_before_hours,omitempty"`
@@ -327,12 +327,12 @@ type SettingsUpdate struct {
 	AIAPIKey  *string `json:"ai_api_key"`
 	AIModel   *string `json:"ai_model"`
 	// 货殖账单关联
-	HuozhiEnabled  *bool   `json:"huozhi_enabled"`
-	HuozhiDomain   *string `json:"huozhi_domain"`
-	HuozhiAPIKey   *string `json:"huozhi_api_key"`
-	HuozhiBillPath *string `json:"huozhi_bill_path"`
+	HuozhiEnabled          *bool   `json:"huozhi_enabled"`
+	HuozhiDomain           *string `json:"huozhi_domain"`
+	HuozhiAPIKey           *string `json:"huozhi_api_key"`
+	HuozhiBillPath         *string `json:"huozhi_bill_path"`
 	HuozhiTicketCategories *string `json:"huozhi_ticket_categories"`
-	AuthToken      *string `json:"auth_token"`
+	AuthToken              *string `json:"auth_token"`
 	// 自动备份：0 = 关闭，单位小时；Keep 为快照保留份数（>=1）。
 	BackupIntervalHours *int    `json:"backup_interval_hours,omitempty"`
 	BackupKeep          *int    `json:"backup_keep,omitempty"`
@@ -358,40 +358,40 @@ func (c *Config) GetSettingsResponse() map[string]interface{} {
 	defer c.mu.RUnlock()
 
 	return map[string]interface{}{
-		"theme":                 c.Theme,
-		"storage_type":          c.StorageType,
-		"image_format":          c.ImageFormat,
-		"allow_local_storage":   c.AllowLocalStorage,
-		"s3_endpoint":           c.S3Endpoint,
-		"s3_bucket":             c.S3Bucket,
-		"s3_region":             c.S3Region,
-		"s3_access_key":         maskSecret(c.S3AccessKey),
-		"s3_secret_key":         maskSecret(c.S3SecretKey),
-		"s3_public_url":         c.S3PublicURL,
-		"show_friends":          c.ShowFriends,
-		"show_pay_price":        c.ShowPayPrice,
-		"show_other_cost":       c.ShowOtherCost,
-		"multi_currency":        c.MultiCurrency,
-		"cost_enabled_fields":   c.CostEnabledFields,
-		"default_start_time":    c.DefaultStartTime,
-		"reminder_mode":         c.ReminderMode,
-		"reminder_before_hours": c.ReminderBeforeHours,
-		"reminder_daily_hour":   c.ReminderDailyHour,
-		"reminder_daily_minute": c.ReminderDailyMinute,
-		"ai_enabled":            c.AIEnabled,
-		"ai_base_url":           c.AIBaseURL,
-		"ai_model":              c.AIModel,
-		"ai_api_key":            maskSecret(c.AIAPIKey),
-		"huozhi_enabled":        c.HuozhiEnabled,
-		"huozhi_domain":         c.HuozhiDomain,
-		"huozhi_api_key":        maskSecret(c.HuozhiAPIKey),
-		"huozhi_bill_path":      c.HuozhiBillPath,
+		"theme":                    c.Theme,
+		"storage_type":             c.StorageType,
+		"image_format":             c.ImageFormat,
+		"allow_local_storage":      c.AllowLocalStorage,
+		"s3_endpoint":              c.S3Endpoint,
+		"s3_bucket":                c.S3Bucket,
+		"s3_region":                c.S3Region,
+		"s3_access_key":            maskSecret(c.S3AccessKey),
+		"s3_secret_key":            maskSecret(c.S3SecretKey),
+		"s3_public_url":            c.S3PublicURL,
+		"show_friends":             c.ShowFriends,
+		"show_pay_price":           c.ShowPayPrice,
+		"show_other_cost":          c.ShowOtherCost,
+		"multi_currency":           c.MultiCurrency,
+		"cost_enabled_fields":      c.CostEnabledFields,
+		"default_start_time":       c.DefaultStartTime,
+		"reminder_mode":            c.ReminderMode,
+		"reminder_before_hours":    c.ReminderBeforeHours,
+		"reminder_daily_hour":      c.ReminderDailyHour,
+		"reminder_daily_minute":    c.ReminderDailyMinute,
+		"ai_enabled":               c.AIEnabled,
+		"ai_base_url":              c.AIBaseURL,
+		"ai_model":                 c.AIModel,
+		"ai_api_key":               maskSecret(c.AIAPIKey),
+		"huozhi_enabled":           c.HuozhiEnabled,
+		"huozhi_domain":            c.HuozhiDomain,
+		"huozhi_api_key":           maskSecret(c.HuozhiAPIKey),
+		"huozhi_bill_path":         c.HuozhiBillPath,
 		"huozhi_ticket_categories": c.HuozhiTicketCategories,
-		"auth_required":         c.AuthToken != "",
-		"backup_interval_hours": c.BackupIntervalHours,
-		"backup_keep":           c.BackupKeep,
-		"backup_format":         c.BackupFormat,
-		"backup_remote":         c.BackupRemote,
+		"auth_required":            c.AuthToken != "",
+		"backup_interval_hours":    c.BackupIntervalHours,
+		"backup_keep":              c.BackupKeep,
+		"backup_format":            c.BackupFormat,
+		"backup_remote":            c.BackupRemote,
 	}
 }
 
@@ -533,11 +533,11 @@ func (c *Config) GetHuozhiSettings() HuozhiSettings {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return HuozhiSettings{
-		Enabled:           c.HuozhiEnabled,
-		Domain:            c.HuozhiDomain,
-		APIKey:            c.HuozhiAPIKey,
-		BillPath:          c.HuozhiBillPath,
-		TicketCategories:  c.HuozhiTicketCategories,
+		Enabled:          c.HuozhiEnabled,
+		Domain:           c.HuozhiDomain,
+		APIKey:           c.HuozhiAPIKey,
+		BillPath:         c.HuozhiBillPath,
+		TicketCategories: c.HuozhiTicketCategories,
 	}
 }
 
@@ -639,38 +639,38 @@ func (c *Config) SaveToFile(path string) error {
 	defer c.mu.RUnlock()
 
 	data := map[string]string{
-		"theme":                 c.Theme,
-		"storage_type":          c.StorageType,
-		"image_format":          c.ImageFormat,
-		"s3_endpoint":           c.S3Endpoint,
-		"s3_bucket":             c.S3Bucket,
-		"s3_region":             c.S3Region,
-		"s3_access_key":         c.S3AccessKey,
-		"s3_secret_key":         c.S3SecretKey,
-		"s3_public_url":         c.S3PublicURL,
-		"show_friends":          b2s(c.ShowFriends),
-		"show_pay_price":        b2s(c.ShowPayPrice),
-		"show_other_cost":       b2s(c.ShowOtherCost),
-		"multi_currency":        b2s(c.MultiCurrency),
-		"cost_enabled_fields":   c.CostEnabledFields,
-		"reminder_mode":         c.ReminderMode,
-		"reminder_before_hours": strconv.Itoa(c.ReminderBeforeHours),
-		"reminder_daily_hour":   strconv.Itoa(c.ReminderDailyHour),
-		"reminder_daily_minute": strconv.Itoa(c.ReminderDailyMinute),
-		"ai_enabled":            b2s(c.AIEnabled),
-		"ai_base_url":           c.AIBaseURL,
-		"ai_model":              c.AIModel,
-		"ai_api_key":            c.AIAPIKey,
-		"auth_token":            c.AuthToken,
-		"huozhi_enabled":        b2s(c.HuozhiEnabled),
-		"huozhi_domain":         c.HuozhiDomain,
-		"huozhi_api_key":        c.HuozhiAPIKey,
-		"huozhi_bill_path":      c.HuozhiBillPath,
+		"theme":                    c.Theme,
+		"storage_type":             c.StorageType,
+		"image_format":             c.ImageFormat,
+		"s3_endpoint":              c.S3Endpoint,
+		"s3_bucket":                c.S3Bucket,
+		"s3_region":                c.S3Region,
+		"s3_access_key":            c.S3AccessKey,
+		"s3_secret_key":            c.S3SecretKey,
+		"s3_public_url":            c.S3PublicURL,
+		"show_friends":             b2s(c.ShowFriends),
+		"show_pay_price":           b2s(c.ShowPayPrice),
+		"show_other_cost":          b2s(c.ShowOtherCost),
+		"multi_currency":           b2s(c.MultiCurrency),
+		"cost_enabled_fields":      c.CostEnabledFields,
+		"reminder_mode":            c.ReminderMode,
+		"reminder_before_hours":    strconv.Itoa(c.ReminderBeforeHours),
+		"reminder_daily_hour":      strconv.Itoa(c.ReminderDailyHour),
+		"reminder_daily_minute":    strconv.Itoa(c.ReminderDailyMinute),
+		"ai_enabled":               b2s(c.AIEnabled),
+		"ai_base_url":              c.AIBaseURL,
+		"ai_model":                 c.AIModel,
+		"ai_api_key":               c.AIAPIKey,
+		"auth_token":               c.AuthToken,
+		"huozhi_enabled":           b2s(c.HuozhiEnabled),
+		"huozhi_domain":            c.HuozhiDomain,
+		"huozhi_api_key":           c.HuozhiAPIKey,
+		"huozhi_bill_path":         c.HuozhiBillPath,
 		"huozhi_ticket_categories": c.HuozhiTicketCategories,
-		"backup_interval_hours": strconv.Itoa(c.BackupIntervalHours),
-		"backup_keep":           strconv.Itoa(c.BackupKeep),
-		"backup_format":         c.BackupFormat,
-		"backup_remote":         b2s(c.BackupRemote),
+		"backup_interval_hours":    strconv.Itoa(c.BackupIntervalHours),
+		"backup_keep":              strconv.Itoa(c.BackupKeep),
+		"backup_format":            c.BackupFormat,
+		"backup_remote":            b2s(c.BackupRemote),
 	}
 
 	b, err := json.MarshalIndent(data, "", "  ")
