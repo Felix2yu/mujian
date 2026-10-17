@@ -14,17 +14,33 @@
 
   function emptyForm() {
     return {
-      name: '', channel: '', city: '', address: '', categoryNames: [],
-      rating: 0, seat: '', friends: '', company: '', remark: '',
+      name: '',
+      channel: '',
+      city: '',
+      address: '',
+      categoryNames: [],
+      rating: 0,
+      seat: '',
+      friends: '',
+      company: '',
+      remark: '',
       duration: 120,
-      price: '', price_currency: 'CNY',
-      pay_price: '', pay_price_currency: 'CNY',
-      other_cost: '', other_cost_currency: 'CNY',
+      price: '',
+      price_currency: 'CNY',
+      pay_price: '',
+      pay_price_currency: 'CNY',
+      other_cost: '',
+      other_cost_currency: 'CNY',
       play: '',
       active_status: 0,
-      date_local: '', coverFile: '', coverThumb: '',
-      lat: '', lng: '',
-      drama_ids: [], zhezi_ids: [], artist_ids: [],
+      date_local: '',
+      coverFile: '',
+      coverThumb: '',
+      lat: '',
+      lng: '',
+      drama_ids: [],
+      zhezi_ids: [],
+      artist_ids: [],
       // 货殖账单 ID 以文本形式编辑（逗号分隔），提交前解析成数字数组
       huozhiBillIdsText: ''
     };
@@ -40,7 +56,13 @@
     f.channel = r.channel || '';
     f.city = r.city || '';
     f.address = r.address || '';
-    f.categoryNames = (r.categoryNames && r.categoryNames.length ? r.categoryNames : r.categoryName ? [r.categoryName] : []).slice();
+    f.categoryNames = (
+      r.categoryNames && r.categoryNames.length
+        ? r.categoryNames
+        : r.categoryName
+          ? [r.categoryName]
+          : []
+    ).slice();
     f.rating = r.rating || 0;
     f.duration = r.duration || 0;
     f.seat = r.seat || '';
@@ -83,7 +105,13 @@
   // 字段显隐由「设置」控制（同行人 / 实付 / 其他花费），默认全部显示。
   // 必须在 form 之前声明：form 初始化经 fromRecord() 读取 settings.default_start_time，
   // 否则带 initialDate 进入新建页时会触发 TDZ（Cannot access 'settings' before initialization）。
-  let settings = $state({ show_friends: true, show_pay_price: true, show_other_cost: true, multi_currency: true, default_start_time: '19:30' });
+  let settings = $state({
+    show_friends: true,
+    show_pay_price: true,
+    show_other_cost: true,
+    multi_currency: true,
+    default_start_time: '19:30'
+  });
 
   let form = $state(fromRecord(record));
   let error = $state('');
@@ -207,9 +235,7 @@
   let newDrama = $state({ name: '' });
   let creatingDrama = $state(false);
 
-  const chosenDramas = $derived(
-    dramaTree.filter((d) => form.drama_ids.includes(d.id))
-  );
+  const chosenDramas = $derived(dramaTree.filter((d) => form.drama_ids.includes(d.id)));
 
   // 已选剧目按 form.drama_ids 顺序渲染（拖拽排序即重排该数组），
   // 提交时 play 数组也按此顺序生成，保证与详情页展示一致。
@@ -265,6 +291,9 @@
   // 创建后自动选中该折子。
   let addZheziFor = $state('');
   let newZheziName = $state('');
+  // 内联新增折子输入框的 DOM 引用：创建成功后聚焦回该输入框。
+  // bind:this 的目标必须先声明，否则 Svelte 编译期无法绑定。
+  let zheziInput = $state();
   let savingZhezi = $state(false);
 
   async function createZheziFor(did) {
@@ -299,9 +328,7 @@
     dramaOverIdx = -1;
   }
 
-  const addableDramas = $derived(
-    dramaTree.filter((d) => !form.drama_ids.includes(d.id))
-  );
+  const addableDramas = $derived(dramaTree.filter((d) => !form.drama_ids.includes(d.id)));
 
   // 关联剧目下拉的可搜索过滤结果（按名称 / 剧种）；组词中暂停过滤
   const filteredDramas = $derived(
@@ -310,7 +337,9 @@
           (d) =>
             (d.name || '').toLowerCase().includes(dramaQuery.trim().toLowerCase()) ||
             (d.categoryName || '').toLowerCase().includes(dramaQuery.trim().toLowerCase()) ||
-            (d.categoryNames || []).some((c) => c.toLowerCase().includes(dramaQuery.trim().toLowerCase()))
+            (d.categoryNames || []).some((c) =>
+              c.toLowerCase().includes(dramaQuery.trim().toLowerCase())
+            )
         )
       : addableDramas
   );
@@ -381,7 +410,9 @@
   async function loadDramaTree() {
     try {
       dramaTree = await api.getDramaTree();
-    } catch (e) { /* 非关键，忽略 */ }
+    } catch (e) {
+      /* 非关键，忽略 */
+    }
   }
 
   // 演员 picker state（胶囊 tag 输入）
@@ -428,13 +459,9 @@
   // 顺序跟随 form.artist_ids（即用户添加/拖拽的顺序），而不是档案全局排序，
   // 否则新添加的演员会按档案 sort_order 跳到前面，退格删除的也不是末位胶囊
   const chosenArtists = $derived(
-    form.artist_ids
-      .map((id) => artistList.find((a) => a.id === id))
-      .filter(Boolean)
+    form.artist_ids.map((id) => artistList.find((a) => a.id === id)).filter(Boolean)
   );
-  const addableArtists = $derived(
-    artistList.filter((a) => !form.artist_ids.includes(a.id))
-  );
+  const addableArtists = $derived(artistList.filter((a) => !form.artist_ids.includes(a.id)));
   // 按归一化名称在全部档案里找既有演员（含已选中的），用于「写法不同但是同一个人」的
   // 自动关联，避免为「张三」「张 三」各建一份档案。
   function findArtistByName(name) {
@@ -475,16 +502,19 @@
   // 把输入框文本（可含中英文逗号分隔的多个名字）解析为胶囊：
   // 与档案精确同名 → 关联档案；否则 → 自由文本胶囊
   function commitArtistInput() {
-    const names = (artistQuery || '').split(SEP).map((x) => x.trim()).filter(Boolean);
-    if (!names.length) { artistQuery = ''; return; }
+    const names = (artistQuery || '')
+      .split(SEP)
+      .map((x) => x.trim())
+      .filter(Boolean);
+    if (!names.length) {
+      artistQuery = '';
+      return;
+    }
     for (const n of names) {
       const hit = findArtistByName(n);
       if (hit) {
         if (!form.artist_ids.includes(hit.id)) form.artist_ids = [...form.artist_ids, hit.id];
-      } else if (
-        !freeNames.includes(n) &&
-        !chosenArtists.some((a) => a.name === n)
-      ) {
+      } else if (!freeNames.includes(n) && !chosenArtists.some((a) => a.name === n)) {
         freeNames = [...freeNames, n];
       }
     }
@@ -521,14 +551,20 @@
   // 剧团：一场演出可能隶属多个演出团体，支持逗号分隔一次添加多个
   let companyQuery = $state('');
   const companyTags = $derived(
-    (form.company || '').split(SEP).map((s) => s.trim()).filter(Boolean)
+    (form.company || '')
+      .split(SEP)
+      .map((s) => s.trim())
+      .filter(Boolean)
   );
   // 胶囊配色：红＝既往演出用过该写法，灰＝全新剧团名（后端已按 SEP 切分复合历史值）
   const knownCompanies = $derived(new Set(ac.company.map((v) => v.toLowerCase())));
   function addCompany(name) {
     name = (name || '').trim();
     if (!name) return;
-    const cur = (form.company || '').split(SEP).map((s) => s.trim()).filter(Boolean);
+    const cur = (form.company || '')
+      .split(SEP)
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (!cur.includes(name)) cur.push(name);
     form.company = cur.join(', ');
   }
@@ -541,7 +577,10 @@
     form.company = cur.join(', ');
   }
   function commitCompanyInput() {
-    const names = (companyQuery || '').split(SEP).map((x) => x.trim()).filter(Boolean);
+    const names = (companyQuery || '')
+      .split(SEP)
+      .map((x) => x.trim())
+      .filter(Boolean);
     if (!names.length) {
       companyQuery = '';
       return;
@@ -610,10 +649,17 @@
     const n = companyQuery.trim();
     if (n && ac.company.includes(n)) commitCompanyInput();
     if (companyBlurTimer) clearTimeout(companyBlurTimer);
-    companyBlurTimer = setTimeout(() => { companyBlurTimer = null; showCompanyList = false; companyActive = -1; }, 120);
+    companyBlurTimer = setTimeout(() => {
+      companyBlurTimer = null;
+      showCompanyList = false;
+      companyActive = -1;
+    }, 120);
   }
   function openCompanyList() {
-    if (companyBlurTimer) { clearTimeout(companyBlurTimer); companyBlurTimer = null; }
+    if (companyBlurTimer) {
+      clearTimeout(companyBlurTimer);
+      companyBlurTimer = null;
+    }
     showCompanyList = true;
     companyActive = -1;
   }
@@ -630,7 +676,10 @@
       return;
     }
     if (e.key === 'Backspace' && !companyQuery) {
-      const cur = (form.company || '').split(SEP).map((s) => s.trim()).filter(Boolean);
+      const cur = (form.company || '')
+        .split(SEP)
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (cur.length) form.company = cur.slice(0, -1).join(', ');
       return;
     }
@@ -649,13 +698,20 @@
     showChannelList = false;
   }
   function openChannelList() {
-    if (channelBlurTimer) { clearTimeout(channelBlurTimer); channelBlurTimer = null; }
+    if (channelBlurTimer) {
+      clearTimeout(channelBlurTimer);
+      channelBlurTimer = null;
+    }
     showChannelList = true;
     channelActive = -1;
   }
   function closeChannelListSoon() {
     if (channelBlurTimer) clearTimeout(channelBlurTimer);
-    channelBlurTimer = setTimeout(() => { channelBlurTimer = null; showChannelList = false; channelActive = -1; }, 120);
+    channelBlurTimer = setTimeout(() => {
+      channelBlurTimer = null;
+      showChannelList = false;
+      channelActive = -1;
+    }, 120);
   }
   function onChannelKeydown(e) {
     comboNav(e, {
@@ -696,13 +752,20 @@
   }
 
   function openCityList() {
-    if (cityBlurTimer) { clearTimeout(cityBlurTimer); cityBlurTimer = null; }
+    if (cityBlurTimer) {
+      clearTimeout(cityBlurTimer);
+      cityBlurTimer = null;
+    }
     showCityList = true;
     cityActive = -1;
   }
   function closeCityListSoon() {
     if (cityBlurTimer) clearTimeout(cityBlurTimer);
-    cityBlurTimer = setTimeout(() => { cityBlurTimer = null; showCityList = false; cityActive = -1; }, 120);
+    cityBlurTimer = setTimeout(() => {
+      cityBlurTimer = null;
+      showCityList = false;
+      cityActive = -1;
+    }, 120);
   }
   function onCityKeydown(e) {
     comboNav(e, {
@@ -715,13 +778,20 @@
     });
   }
   function openAddrList() {
-    if (addrBlurTimer) { clearTimeout(addrBlurTimer); addrBlurTimer = null; }
+    if (addrBlurTimer) {
+      clearTimeout(addrBlurTimer);
+      addrBlurTimer = null;
+    }
     showAddrList = true;
     addrActive = -1;
   }
   function closeAddrListSoon() {
     if (addrBlurTimer) clearTimeout(addrBlurTimer);
-    addrBlurTimer = setTimeout(() => { addrBlurTimer = null; showAddrList = false; addrActive = -1; }, 120);
+    addrBlurTimer = setTimeout(() => {
+      addrBlurTimer = null;
+      showAddrList = false;
+      addrActive = -1;
+    }, 120);
   }
   function onAddrKeydown(e) {
     comboNav(e, {
@@ -745,16 +815,26 @@
     return ac.friends.filter((v) => v.toLowerCase().includes(q)).slice(0, 30);
   });
   function openFriendsList() {
-    if (friendsBlurTimer) { clearTimeout(friendsBlurTimer); friendsBlurTimer = null; }
+    if (friendsBlurTimer) {
+      clearTimeout(friendsBlurTimer);
+      friendsBlurTimer = null;
+    }
     showFriendsList = true;
     friendsActive = -1;
   }
   function closeFriendsListSoon() {
     if (friendsBlurTimer) clearTimeout(friendsBlurTimer);
-    friendsBlurTimer = setTimeout(() => { friendsBlurTimer = null; showFriendsList = false; friendsActive = -1; }, 120);
+    friendsBlurTimer = setTimeout(() => {
+      friendsBlurTimer = null;
+      showFriendsList = false;
+      friendsActive = -1;
+    }, 120);
   }
   function pickFriends(v) {
-    const cur = (form.friends || '').split(SEP).map((s) => s.trim()).filter(Boolean);
+    const cur = (form.friends || '')
+      .split(SEP)
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (!cur.includes(v)) cur.push(v);
     form.friends = cur.join(', ');
     friendsActive = -1;
@@ -828,7 +908,9 @@
   async function loadArtistList() {
     try {
       artistList = await api.listArtists();
-    } catch (e) { /* 非关键，忽略 */ }
+    } catch (e) {
+      /* 非关键，忽略 */
+    }
   }
 
   onMount(loadDramaTree);
@@ -890,17 +972,12 @@
   }
 
   function splitList(s) {
-    return (s || '').split(SEP).map((x) => x.trim()).filter(Boolean);
+    return (s || '')
+      .split(SEP)
+      .map((x) => x.trim())
+      .filter(Boolean);
   }
 
-  // 金额校验：空 / 非法 → null（未填写）；负数钳为 0；超过 2 位小数四舍五入到 2 位。
-  function sanitizeMoney(v) {
-    if (v === '' || v == null) return null;
-    let n = Number(v);
-    if (!isFinite(n)) return null;
-    if (n < 0) n = 0;
-    return Math.round(n * 100) / 100;
-  }
   // 时长（分钟）校验：空 / 非法 → 0；负数钳为 0；小数取整。
   function sanitizeDuration(v) {
     if (v === '' || v == null) return 0;
@@ -922,7 +999,10 @@
     const v = form[field];
     if (v === '' || v == null) return;
     let n = Number(v);
-    if (!isFinite(n)) { form[field] = ''; return; }
+    if (!isFinite(n)) {
+      form[field] = '';
+      return;
+    }
     if (n < 0) n = 0;
     form[field] = Math.round(n * 100) / 100;
   }
@@ -930,7 +1010,10 @@
     const v = form.duration;
     if (v === '' || v == null) return;
     let n = Number(v);
-    if (!isFinite(n)) { form.duration = 0; return; }
+    if (!isFinite(n)) {
+      form.duration = 0;
+      return;
+    }
     if (n < 0) n = 0;
     form.duration = Math.round(n);
   }
@@ -1045,7 +1128,9 @@
       other_cost: form.other_cost === '' ? null : Number(form.other_cost),
       other_cost_currency: form.other_cost_currency || 'CNY',
       // 货殖账单关联：解析文本输入；功能关闭时保留原有值，避免误清空
-      huozhi_bill_ids: huozhiEnabled ? parseHuozhiIds(form.huozhiBillIdsText) : (record?.huozhi_bill_ids || []),
+      huozhi_bill_ids: huozhiEnabled
+        ? parseHuozhiIds(form.huozhiBillIdsText)
+        : record?.huozhi_bill_ids || [],
       // 演员以关联实体为准：已选演员的名称 + 自由文本胶囊中未匹配档案的名字
       artist_names: [
         ...chosenArtists.map((a) => a.name),
@@ -1070,7 +1155,10 @@
       }
     }
     if (form.lat !== '' || form.lng !== '') {
-      payload.coordinate = { latitude: parseFloat(form.lat) || 0, longitude: parseFloat(form.lng) || 0 };
+      payload.coordinate = {
+        latitude: parseFloat(form.lat) || 0,
+        longitude: parseFloat(form.lng) || 0
+      };
     }
     saving = true;
     try {
@@ -1125,7 +1213,8 @@
       }
       if (typeof data.price === 'number' && data.price > 0) form.price = data.price;
       if (typeof data.pay_price === 'number' && data.pay_price > 0) form.pay_price = data.pay_price;
-      if (typeof data.other_cost === 'number' && data.other_cost > 0) form.other_cost = data.other_cost;
+      if (typeof data.other_cost === 'number' && data.other_cost > 0)
+        form.other_cost = data.other_cost;
       // 剧目/折子：AI 只给名字，best-effort 在剧目树上按名称（含别名）匹配并
       // 勾选档案——提交时 play 由 drama_ids 推导，必须挂上档案才真正生效。
       // 匹配不上的名字静默跳过，由用户在剧目选择器里手动补。
@@ -1163,7 +1252,10 @@
         form.active_status = Math.max(0, Math.min(3, Math.round(data.active_status)));
       }
       // 时间：优先 date_local "YYYY-MM-DDTHH:MM"
-      if (typeof data.date_local === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(asStr(data.date_local))) {
+      if (
+        typeof data.date_local === 'string' &&
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(asStr(data.date_local))
+      ) {
         form.date_local = asStr(data.date_local);
       }
       if (typeof data.lat === 'number') form.lat = String(data.lat);
@@ -1181,7 +1273,9 @@
       const src = data._source || {};
       if (src.url) {
         // 链接场景保留面板，让用户确认抓取来源；纯文本场景仍自动收起
-        aiDone = src.title ? `已读取网页《${src.title}》并填充识别出的字段` : '已读取链接网页并填充识别出的字段';
+        aiDone = src.title
+          ? `已读取网页《${src.title}》并填充识别出的字段`
+          : '已读取链接网页并填充识别出的字段';
       } else {
         aiOpen = false; // 填充完成后收起面板
       }
@@ -1200,7 +1294,6 @@
     for (const c of commonCurrencies) if (c !== v) out.push(c);
     return out;
   }
-
 
   // ---------- 从既往演出复制（仅新建模式显示） ----------
   // 搜索历史演出 → 勾选要复制的字段 → 应用到当前表单。日期/状态默认不勾
@@ -1229,7 +1322,14 @@
   ];
   // 座位/同行与时间/状态/评分同属「每场大概率不同」的个人信息，默认不勾。
   // 封面（海报）常随同一剧目复用，故默认勾选。
-  const COPY_DEFAULT_OFF = new Set(['date', 'active_status', 'rating', 'seat', 'duration', 'friends']);
+  const COPY_DEFAULT_OFF = new Set([
+    'date',
+    'active_status',
+    'rating',
+    'seat',
+    'duration',
+    'friends'
+  ]);
 
   const COPY_SEARCH_PAGE = 20; // 每页搜索结果数
   let copySearch = $state('');
@@ -1252,39 +1352,58 @@
   function copyFieldPreview(key, src) {
     const money = (v, c) => (v ? `${v} ${c || 'CNY'}` : '');
     switch (key) {
-      case 'name': return src.name || '';
+      case 'name':
+        return src.name || '';
       case 'categoryNames':
-        return (src.categoryNames && src.categoryNames.length
-          ? src.categoryNames
-          : src.categoryName
-            ? [src.categoryName]
-            : []
+        return (
+          src.categoryNames && src.categoryNames.length
+            ? src.categoryNames
+            : src.categoryName
+              ? [src.categoryName]
+              : []
         ).join('、');
-      case 'city': return src.city || '';
-      case 'address': return src.address || '';
+      case 'city':
+        return src.city || '';
+      case 'address':
+        return src.address || '';
       case 'coord':
         return src.coordinate ? `${src.coordinate.latitude}, ${src.coordinate.longitude}` : '';
-      case 'company': return src.company || '';
-      case 'channel': return src.channel || '';
-      case 'artists': return (src.artist_names || []).join('、');
-      case 'dramas': return (src.play || []).filter(Boolean).join('、');
-      case 'price': return money(src.price, src.price_currency);
-      case 'pay_price': return money(src.pay_price, src.pay_price_currency);
-      case 'other_cost': return money(src.other_cost, src.other_cost_currency);
-      case 'seat': return src.seat || '';
-      case 'duration': return src.duration ? `${src.duration} 分钟` : '';
-      case 'friends': return src.friends || '';
-      case 'remark': return src.remark || '';
-      case 'rating': return src.rating ? `${src.rating} 分` : '';
+      case 'company':
+        return src.company || '';
+      case 'channel':
+        return src.channel || '';
+      case 'artists':
+        return (src.artist_names || []).join('、');
+      case 'dramas':
+        return (src.play || []).filter(Boolean).join('、');
+      case 'price':
+        return money(src.price, src.price_currency);
+      case 'pay_price':
+        return money(src.pay_price, src.pay_price_currency);
+      case 'other_cost':
+        return money(src.other_cost, src.other_cost_currency);
+      case 'seat':
+        return src.seat || '';
+      case 'duration':
+        return src.duration ? `${src.duration} 分钟` : '';
+      case 'friends':
+        return src.friends || '';
+      case 'remark':
+        return src.remark || '';
+      case 'rating':
+        return src.rating ? `${src.rating} 分` : '';
       case 'date':
         return src.dateText
           ? src.dateText.slice(0, 16)
           : src.date
             ? fmtDateLocal(src.date).replace('T', ' ')
             : '';
-      case 'cover': return src.coverFile ? '有封面' : '';
-      case 'active_status': return src.active_status ? STATUS_LABELS[src.active_status] || '' : '';
-      default: return '';
+      case 'cover':
+        return src.coverFile ? '有封面' : '';
+      case 'active_status':
+        return src.active_status ? STATUS_LABELS[src.active_status] || '' : '';
+      default:
+        return '';
     }
   }
 
@@ -1293,8 +1412,9 @@
   // 只展示源记录里有值的字段，每项带取值预览，方便决定是否勾选。
   let copyFieldRows = $derived(
     copySource
-      ? COPY_FIELD_DEFS.map((f) => ({ ...f, preview: copyFieldPreview(f.key, copySource) }))
-          .filter((r) => r.preview)
+      ? COPY_FIELD_DEFS.map((f) => ({ ...f, preview: copyFieldPreview(f.key, copySource) })).filter(
+          (r) => r.preview
+        )
       : []
   );
 
@@ -1370,11 +1490,12 @@
 
     if (on('name')) form.name = src.name || '';
     if (on('categoryNames')) {
-      form.categoryNames = (src.categoryNames && src.categoryNames.length
-        ? src.categoryNames
-        : src.categoryName
-          ? [src.categoryName]
-          : []
+      form.categoryNames = (
+        src.categoryNames && src.categoryNames.length
+          ? src.categoryNames
+          : src.categoryName
+            ? [src.categoryName]
+            : []
       ).slice();
     }
     if (on('city')) form.city = src.city || '';
@@ -1410,7 +1531,8 @@
       form.pay_price_currency = src.pay_price_currency || 'CNY';
     }
     if (on('other_cost')) {
-      form.other_cost = src.other_cost === null || src.other_cost === undefined ? '' : src.other_cost;
+      form.other_cost =
+        src.other_cost === null || src.other_cost === undefined ? '' : src.other_cost;
       form.other_cost_currency = src.other_cost_currency || 'CNY';
     }
     if (on('seat')) form.seat = src.seat || '';
@@ -1439,327 +1561,494 @@
   let lightboxSrc = $state('');
   function openLightbox() {
     const src = form.coverFile ? coverUrl(form.coverFile) : '';
-    if (src) { lightboxSrc = src; lightbox = true; }
+    if (src) {
+      lightboxSrc = src;
+      lightbox = true;
+    }
   }
-  function closeLightbox() { lightbox = false; lightboxSrc = ''; }
+  function closeLightbox() {
+    lightbox = false;
+    lightboxSrc = '';
+  }
 
   // fixed 浮层必须是 body 的直接子节点：本组件挂在 .fade-up 内，而 fadeUp 动画
   // fill-mode:both 残留的 transform 会让 .fade-up 成为 fixed 的包含块，
   // 灯箱就会按列宽/容器高度定位而不是视口（尺寸错位、盖不住全屏）。
   function portal(node) {
     if (typeof document !== 'undefined') document.body.appendChild(node);
-    return { destroy() { node.remove(); } };
+    return {
+      destroy() {
+        node.remove();
+      }
+    };
   }
   function onFormKeydown(e) {
     if (e.key === 'Escape') closeLightbox();
   }
 </script>
+
 <svelte:window onkeydown={onFormKeydown} />
 
-<form class="form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} onkeydown={(e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault(); }}>
-<div class="two-col">
-  <div class="col-left">
-  {#if !record}
-  <!-- ============ AI 填写 ============ -->
-  {#if aiEnabled}
-  <div class="card section ai-card">
-    <div class="ai-head">
-      <h3>AI 填写</h3>
-      {#if !aiOpen}
-        <button type="button" class="btn sm" onclick={() => (aiOpen = true)}>粘贴信息并解析</button>
-      {/if}
-    </div>
-    {#if aiOpen}
-      <p class="ai-hint muted">把购票短信 / 宣传文案 / 观演记录等文本粘贴到下方，也可以直接粘贴演出推文链接（微信公众号文章等），AI 会先抓取网页正文，再从内容中提取时间、演员、剧目、折子等字段批量填入（只覆盖识别出的字段，未提及的保持不变）。</p>
-      <textarea
-        class="input ai-text"
-        rows="5"
-        bind:value={aiText}
-        placeholder="支持购票短信、演出推文链接（如 https://mp.weixin.qq.com/s/…）或宣传文案，例如：大麦网 您已购票 昆剧《牡丹亭》 2026-05-01 19:30 上海大剧院 票价 580 实付 580 主演 张军、沈昳丽 江苏昆山当代昆剧院…"
-        spellcheck="false"
-      ></textarea>
-      <div class="ai-actions">
-        <button type="button" class="btn" disabled={aiBusy} onclick={applyAi}>
-          {aiBusy ? '解析中…' : '用 AI 解析并填充'}
-        </button>
-        <button type="button" class="btn ghost" disabled={aiBusy} onclick={closeAi}>收起</button>
-      </div>
-      {#if aiErr}<div class="banner error">⚠ {aiErr}</div>{/if}
-      {#if aiDone}<div class="banner success">✓ {aiDone}</div>{/if}
-    {/if}
-  </div>
-  {/if}
-  <!-- ============ 从既往演出复制 ============ -->
-  <div class="card section copy-card">
-    <h3>从既往演出复制</h3>
-    {#if !form.date_local}
-      <p class="copy-hint warn">「演出时间」尚未填写：默认不复制时间，保存前请在上方「观演信息」补填，否则无法保存。</p>
-    {/if}
-    {#if !copySource}
-      <input
-        class="input"
-        spellcheck="false"
-        bind:value={copySearch}
-        oninput={onCopySearchInput}
-        placeholder="搜索演出名称、演员、城市、剧团…"
-      />
-      <p class="copy-hint muted">支持空格分隔多关键词，如「牡丹亭 上海」（每个词命中任意字段即可，需同时满足）；每次显示 20 条，超出可点「显示更多」。勾选项只列出这条演出有值的字段。</p>
-      {#if copySearching && copyResults.length === 0}
-        <div class="copy-hint muted">搜索中…</div>
-      {:else if copySearch.trim() && !copySearching && copyResults.length === 0}
-        <div class="copy-hint muted">没有匹配的演出</div>
-      {:else if copyResults.length}
-        <div class="copy-results">
-          {#each copyResults as r (r.id)}
-            <button type="button" class="copy-item" onclick={() => pickCopySource(r)}>
-              <span class="copy-name">{r.name}</span>
-              <span class="copy-meta">
-                {r.dateText ? r.dateText.slice(0, 10) : '无日期'}{r.city ? ' · ' + r.city : ''}{r.address ? ' · ' + r.address : ''}{artistPreview(r) ? ' · ' + artistPreview(r) : ''}
-              </span>
-            </button>
-          {/each}
-        </div>
-        {#if copyResults.length < copyTotal}
-          <button type="button" class="btn ghost copy-more" disabled={copySearching} onclick={loadMoreCopyResults}>
-            {copySearching ? '加载中…' : `显示更多（已显示 ${copyResults.length} / 共 ${copyTotal} 场）`}
-          </button>
-        {/if}
-      {/if}
-    {:else}
-      <div class="copy-source">
-        <div class="copy-src-info">
-          <span class="copy-name">{copySource.name}</span>
-          <span class="copy-meta">
-            {copySource.dateText ? copySource.dateText.slice(0, 10) : '无日期'}{copySource.city ? ' · ' + copySource.city : ''}
-          </span>
-        </div>
-        <button type="button" class="btn ghost" onclick={resetCopySource}>重选</button>
-      </div>
-      <div class="copy-fields">
-        {#each copyFieldRows as f (f.key)}
-          <label class="copy-field" title={f.preview}>
-            <input type="checkbox" bind:checked={copyFields[f.key]} />
-            <span class="copy-field-body">
-              <span class="copy-field-label">{f.label}</span>
-              <span class="copy-field-val">
-                {#if f.key === 'cover'}
-                  <img class="copy-cover-thumb" src={coverUrl(copySource.coverThumb || copySource.coverFile)} alt="" />
-                {/if}
-                {truncPreview(f.preview)}
-              </span>
-            </span>
-          </label>
-        {/each}
-        {#if copyFieldRows.length === 0}
-          <div class="copy-hint muted">这条演出没有可复制的内容</div>
-        {/if}
-      </div>
-      <div class="copy-actions">
-        <button type="button" class="btn" onclick={applyCopy}>复制所选字段</button>
-        {#if copyApplied}<span class="copy-ok">已复制 ✓ 可继续修改</span>{/if}
-      </div>
-    {/if}
-  </div>
-  {/if}
-  <!-- ============ 基本信息 ============ -->
-  <div class="card section">
-    <h3>基本信息</h3>
-    <div class="row two-flex">
-      <div>
-        <label>名称 <span class="req">*</span></label>
-        <input class="input" spellcheck="false" bind:value={form.name} placeholder="演出名称" />
-      </div>
-      <div>
-        <label>剧种（可多个）<span class="hint">红＝已有剧种档案，灰＝尚未建档（保存只记录文字，需到「剧种」页新建）</span></label>
-        <CategoryTags bind:values={form.categoryNames} {categories} placeholder="如：昆剧，回车添加" />
-      </div>
-    </div>
-    <div class="row two-flex-reverse">
-      <div>
-        <label>城市</label>
-        <div class="combo">
-          <input
-            class="input"
-            spellcheck="false"
-            bind:value={form.city}
-            placeholder="如：上海"
-            onfocus={openCityList}
-            onblur={closeCityListSoon}
-            onkeydown={onCityKeydown}
-          />
-          {#if showCityList && filteredCities.length}
-            <div class="combo-list">
-              {#each filteredCities as v, ci (v)}
-                <button type="button" class="combo-item" class:active={ci === cityActive} onmousedown={(e) => e.preventDefault()} onclick={() => pickCity(v)}>{v}</button>
-              {/each}
-            </div>
-          {/if}
-        </div>
-      </div>
-      <div>
-        <label>场馆 / 地址</label>
-        <div class="addr-row">
-          <div class="combo addr-combo">
-            <input
-            class="input"
-            spellcheck="false"
-            bind:value={form.address}
-            placeholder="如：上海大剧院"
-            onfocus={openAddrList}
-            onblur={closeAddrListSoon}
-            onkeydown={onAddrKeydown}
-          />
-          {#if showAddrList && filteredAddresses.length}
-            <div class="combo-list">
-              {#each filteredAddresses as v, ai (v)}
-                <button type="button" class="combo-item" class:active={ai === addrActive} onmousedown={(e) => e.preventDefault()} onclick={() => pickAddress(v)}>{v}</button>
-              {/each}
-            </div>
-          {/if}
-          </div>
-          <button
-            type="button"
-            class="loc-btn"
-            class:active={geoStatus === 'ok' && !!form.lat && !!form.lng}
-            class:open={showCoord}
-            onclick={() => (showCoord = !showCoord)}
-            title={showCoord ? '收起坐标' : '定位坐标（点击展开经纬度）'}
-            aria-label="定位坐标"
-            aria-expanded={showCoord}
-             ><svg class="loc-ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 21c4.5-4.6 7-8.1 7-12a7 7 0 1 0-14 0c0 3.9 2.5 7.4 7 12z" />
-              <circle cx="12" cy="9" r="2.4" fill="currentColor" stroke="none" />
-            </svg></button>
-        </div>
-        {#if showCoord}
-          <!-- 坐标：点击定位图标后才展开，平时不显示经纬度 -->
-          <div class="sub-field">
-            <div class="sub-head">
-              <span class="sub-title">坐标</span>
-              <span class="hint">地址自动定位，同场馆演出将同步该坐标 · 再次点击定位图标可收起</span>
-            </div>
-            {#if geoStatus === 'ok' && form.lat && form.lng}
-              <div class="geo-line"><svg class="geo-pin" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21c4.5-4.6 7-8.1 7-12a7 7 0 1 0-14 0c0 3.9 2.5 7.4 7 12z" /><circle cx="12" cy="9" r="2.4" fill="currentColor" stroke="none" /></svg> {form.lat}, {form.lng}</div>
-            {:else if geoStatus === 'loading'}
-              <div class="geo-line muted">定位中…</div>
-            {:else if geoStatus === 'nokey'}
-              <div class="geo-line muted">未配置高德 Key，请在「设置」填写后自动定位</div>
-            {:else if geoStatus === 'notfound'}
-              <div class="geo-line muted">未找到该地址，可手动校正</div>
-            {:else if geoStatus === 'error'}
-              <div class="geo-line muted">定位失败（网络/密钥），可手动校正</div>
-            {:else}
-              <div class="geo-line muted">填写地址后自动定位</div>
-            {/if}
-            <details class="geo-manual" open={geoStatus === 'nokey' || geoStatus === 'notfound' || geoStatus === 'error' || manualOverride}>
-              <summary class="small">手动校正</summary>
-              <div class="row" style="margin-top:6px;">
-                <input class="input" type="number" inputmode="decimal" step="0.000001" bind:value={form.lat} placeholder="纬度 31.230416" oninput={() => { manualOverride = true; geoStatus = 'ok'; }} />
-                <input class="input" type="number" inputmode="decimal" step="0.000001" bind:value={form.lng} placeholder="经度 121.473700" oninput={() => { manualOverride = true; geoStatus = 'ok'; }} />
-              </div>
-            </details>
-          </div>
-        {/if}
-      </div>
-    </div>
-  </div>
-
-  <!-- ============ 观演信息 ============ -->
-  <div class="card section">
-    <h3>观演信息</h3>
-    <div class="row four-equal">
-      <div>
-        <label>演出时间 <span class="req">*</span></label>
-        <input
-          class="input"
-          class:date-invalid={!!dateError}
-          type="datetime-local"
-          bind:value={form.date_local}
-          oninput={() => (dateError = '')}
-          autocomplete="off"
-        />
-        {#if dateError}<div class="date-err">⚠ {dateError}</div>{/if}
-      </div>
-      <div>
-        <label>状态</label>
-        <select class="input" bind:value={form.active_status}>
-          <option value={0}>正常</option>
-          <option value={2}>已取消</option>
-          <option value={1}>想看</option>
-          <option value={3}>未赴约</option>
-        </select>
-      </div>
-      <div>
-        <label>评分</label>
-        <div class="star-row">
-          {#each [1, 2, 3, 4, 5] as n}
-            <button type="button" class="star" class:on={form.rating >= n} onclick={() => setRating(n)} aria-label={`评分 ${n}`}>★</button>
-          {/each}
-          <span class="tiny rate-text">{form.rating ? `${form.rating} 分` : '未评分'}</span>
-        </div>
-      </div>
-      <div>
-        <label>时长</label>
-        <div class="money"><input class="input" type="number" inputmode="numeric" min="0" step="1" bind:value={form.duration} oninput={stripNegSign} onblur={normalizeDuration} placeholder="分钟" /><span class="unit">分钟</span></div>
-      </div>
-    </div>
-    {#if conflicts.length}
-      <!-- 时段重叠仅提示：列出撞车的场次，用户确认后仍可正常保存 -->
-      <div class="conflict-box" role="status">
-        <div class="cf-title">⚠ 该时段已有演出，注意购票时间冲突</div>
-        <ul class="cf-list">
-          {#each conflicts as c (c.id)}
-            <li>
-              <span class="cf-name">{formatEventTitle(c.name, c.categoryName, [])}</span>
-              <span class="cf-time">{c.dateText || fmtDateLocal(c.date).replace('T', ' ')}{c.duration > 0 ? ` · ${c.duration} 分钟` : ''}</span>
-              {#if c.city || c.address}
-                <span class="cf-loc">{[c.city, c.address].filter(Boolean).join(' · ')}</span>
+<form
+  class="form"
+  onsubmit={(e) => {
+    e.preventDefault();
+    handleSubmit();
+  }}
+  onkeydown={(e) => {
+    if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault();
+  }}
+>
+  <div class="two-col">
+    <div class="col-left">
+      {#if !record}
+        <!-- ============ AI 填写 ============ -->
+        {#if aiEnabled}
+          <div class="card section ai-card">
+            <div class="ai-head">
+              <h3>AI 填写</h3>
+              {#if !aiOpen}
+                <button type="button" class="btn sm" onclick={() => (aiOpen = true)}
+                  >粘贴信息并解析</button
+                >
               {/if}
-            </li>
-          {/each}
-        </ul>
-        <div class="cf-note">仅提醒，不影响保存。</div>
-      </div>
-    {/if}
-    <div class="row two-equal">
-      <div>
-        <label>座位</label>
-        <input class="input" spellcheck="false" bind:value={form.seat} placeholder="如：3排15座" />
-      </div>
-      {#if settings.show_friends}
-      <div>
-        <label>同行</label>
-        <div class="combo">
-          <input
-            class="input"
-            spellcheck="false"
-            bind:value={form.friends}
-            placeholder="同行人，多个用逗号分隔"
-            onfocus={openFriendsList}
-            onblur={closeFriendsListSoon}
-            onkeydown={onFriendsKeydown}
-          />
-          {#if showFriendsList && filteredFriends.length}
-            <div class="combo-list">
-              {#each filteredFriends as v, fi (v)}
-                <button type="button" class="combo-item" class:active={fi === friendsActive} onmousedown={(e) => e.preventDefault()} onclick={() => pickFriends(v)}>{v}</button>
+            </div>
+            {#if aiOpen}
+              <p class="ai-hint muted">
+                把购票短信 / 宣传文案 /
+                观演记录等文本粘贴到下方，也可以直接粘贴演出推文链接（微信公众号文章等），AI
+                会先抓取网页正文，再从内容中提取时间、演员、剧目、折子等字段批量填入（只覆盖识别出的字段，未提及的保持不变）。
+              </p>
+              <textarea
+                class="input ai-text"
+                rows="5"
+                bind:value={aiText}
+                placeholder="支持购票短信、演出推文链接（如 https://mp.weixin.qq.com/s/…）或宣传文案，例如：大麦网 您已购票 昆剧《牡丹亭》 2026-05-01 19:30 上海大剧院 票价 580 实付 580 主演 张军、沈昳丽 江苏昆山当代昆剧院…"
+                spellcheck="false"></textarea>
+              <div class="ai-actions">
+                <button type="button" class="btn" disabled={aiBusy} onclick={applyAi}>
+                  {aiBusy ? '解析中…' : '用 AI 解析并填充'}
+                </button>
+                <button type="button" class="btn ghost" disabled={aiBusy} onclick={closeAi}
+                  >收起</button
+                >
+              </div>
+              {#if aiErr}<div class="banner error">⚠ {aiErr}</div>{/if}
+              {#if aiDone}<div class="banner success">✓ {aiDone}</div>{/if}
+            {/if}
+          </div>
+        {/if}
+        <!-- ============ 从既往演出复制 ============ -->
+        <div class="card section copy-card">
+          <h3>从既往演出复制</h3>
+          {#if !form.date_local}
+            <p class="copy-hint warn">
+              「演出时间」尚未填写：默认不复制时间，保存前请在上方「观演信息」补填，否则无法保存。
+            </p>
+          {/if}
+          {#if !copySource}
+            <input
+              class="input"
+              spellcheck="false"
+              bind:value={copySearch}
+              oninput={onCopySearchInput}
+              placeholder="搜索演出名称、演员、城市、剧团…"
+            />
+            <p class="copy-hint muted">
+              支持空格分隔多关键词，如「牡丹亭
+              上海」（每个词命中任意字段即可，需同时满足）；每次显示 20
+              条，超出可点「显示更多」。勾选项只列出这条演出有值的字段。
+            </p>
+            {#if copySearching && copyResults.length === 0}
+              <div class="copy-hint muted">搜索中…</div>
+            {:else if copySearch.trim() && !copySearching && copyResults.length === 0}
+              <div class="copy-hint muted">没有匹配的演出</div>
+            {:else if copyResults.length}
+              <div class="copy-results">
+                {#each copyResults as r (r.id)}
+                  <button type="button" class="copy-item" onclick={() => pickCopySource(r)}>
+                    <span class="copy-name">{r.name}</span>
+                    <span class="copy-meta">
+                      {r.dateText ? r.dateText.slice(0, 10) : '无日期'}{r.city
+                        ? ' · ' + r.city
+                        : ''}{r.address ? ' · ' + r.address : ''}{artistPreview(r)
+                        ? ' · ' + artistPreview(r)
+                        : ''}
+                    </span>
+                  </button>
+                {/each}
+              </div>
+              {#if copyResults.length < copyTotal}
+                <button
+                  type="button"
+                  class="btn ghost copy-more"
+                  disabled={copySearching}
+                  onclick={loadMoreCopyResults}
+                >
+                  {copySearching
+                    ? '加载中…'
+                    : `显示更多（已显示 ${copyResults.length} / 共 ${copyTotal} 场）`}
+                </button>
+              {/if}
+            {/if}
+          {:else}
+            <div class="copy-source">
+              <div class="copy-src-info">
+                <span class="copy-name">{copySource.name}</span>
+                <span class="copy-meta">
+                  {copySource.dateText
+                    ? copySource.dateText.slice(0, 10)
+                    : '无日期'}{copySource.city ? ' · ' + copySource.city : ''}
+                </span>
+              </div>
+              <button type="button" class="btn ghost" onclick={resetCopySource}>重选</button>
+            </div>
+            <div class="copy-fields">
+              {#each copyFieldRows as f (f.key)}
+                <label class="copy-field" title={f.preview}>
+                  <input type="checkbox" bind:checked={copyFields[f.key]} />
+                  <span class="copy-field-body">
+                    <span class="copy-field-label">{f.label}</span>
+                    <span class="copy-field-val">
+                      {#if f.key === 'cover'}
+                        <img
+                          class="copy-cover-thumb"
+                          src={coverUrl(copySource.coverThumb || copySource.coverFile)}
+                          alt=""
+                        />
+                      {/if}
+                      {truncPreview(f.preview)}
+                    </span>
+                  </span>
+                </label>
               {/each}
+              {#if copyFieldRows.length === 0}
+                <div class="copy-hint muted">这条演出没有可复制的内容</div>
+              {/if}
+            </div>
+            <div class="copy-actions">
+              <button type="button" class="btn" onclick={applyCopy}>复制所选字段</button>
+              {#if copyApplied}<span class="copy-ok">已复制 ✓ 可继续修改</span>{/if}
+            </div>
+          {/if}
+        </div>
+      {/if}
+      <!-- ============ 基本信息 ============ -->
+      <div class="card section">
+        <h3>基本信息</h3>
+        <div class="row two-flex">
+          <div>
+            <label>名称 <span class="req">*</span></label>
+            <input class="input" spellcheck="false" bind:value={form.name} placeholder="演出名称" />
+          </div>
+          <div>
+            <label
+              >剧种（可多个）<span class="hint"
+                >红＝已有剧种档案，灰＝尚未建档（保存只记录文字，需到「剧种」页新建）</span
+              ></label
+            >
+            <CategoryTags
+              bind:values={form.categoryNames}
+              {categories}
+              placeholder="如：昆剧，回车添加"
+            />
+          </div>
+        </div>
+        <div class="row two-flex-reverse">
+          <div>
+            <label>城市</label>
+            <div class="combo">
+              <input
+                class="input"
+                spellcheck="false"
+                bind:value={form.city}
+                placeholder="如：上海"
+                onfocus={openCityList}
+                onblur={closeCityListSoon}
+                onkeydown={onCityKeydown}
+              />
+              {#if showCityList && filteredCities.length}
+                <div class="combo-list">
+                  {#each filteredCities as v, ci (v)}
+                    <button
+                      type="button"
+                      class="combo-item"
+                      class:active={ci === cityActive}
+                      onmousedown={(e) => e.preventDefault()}
+                      onclick={() => pickCity(v)}>{v}</button
+                    >
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          </div>
+          <div>
+            <label>场馆 / 地址</label>
+            <div class="addr-row">
+              <div class="combo addr-combo">
+                <input
+                  class="input"
+                  spellcheck="false"
+                  bind:value={form.address}
+                  placeholder="如：上海大剧院"
+                  onfocus={openAddrList}
+                  onblur={closeAddrListSoon}
+                  onkeydown={onAddrKeydown}
+                />
+                {#if showAddrList && filteredAddresses.length}
+                  <div class="combo-list">
+                    {#each filteredAddresses as v, ai (v)}
+                      <button
+                        type="button"
+                        class="combo-item"
+                        class:active={ai === addrActive}
+                        onmousedown={(e) => e.preventDefault()}
+                        onclick={() => pickAddress(v)}>{v}</button
+                      >
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+              <button
+                type="button"
+                class="loc-btn"
+                class:active={geoStatus === 'ok' && !!form.lat && !!form.lng}
+                class:open={showCoord}
+                onclick={() => (showCoord = !showCoord)}
+                title={showCoord ? '收起坐标' : '定位坐标（点击展开经纬度）'}
+                aria-label="定位坐标"
+                aria-expanded={showCoord}
+                ><svg
+                  class="loc-ico"
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 21c4.5-4.6 7-8.1 7-12a7 7 0 1 0-14 0c0 3.9 2.5 7.4 7 12z" />
+                  <circle cx="12" cy="9" r="2.4" fill="currentColor" stroke="none" />
+                </svg></button
+              >
+            </div>
+            {#if showCoord}
+              <!-- 坐标：点击定位图标后才展开，平时不显示经纬度 -->
+              <div class="sub-field">
+                <div class="sub-head">
+                  <span class="sub-title">坐标</span>
+                  <span class="hint"
+                    >地址自动定位，同场馆演出将同步该坐标 · 再次点击定位图标可收起</span
+                  >
+                </div>
+                {#if geoStatus === 'ok' && form.lat && form.lng}
+                  <div class="geo-line">
+                    <svg
+                      class="geo-pin"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                      ><path
+                        d="M12 21c4.5-4.6 7-8.1 7-12a7 7 0 1 0-14 0c0 3.9 2.5 7.4 7 12z"
+                      /><circle cx="12" cy="9" r="2.4" fill="currentColor" stroke="none" /></svg
+                    >
+                    {form.lat}, {form.lng}
+                  </div>
+                {:else if geoStatus === 'loading'}
+                  <div class="geo-line muted">定位中…</div>
+                {:else if geoStatus === 'nokey'}
+                  <div class="geo-line muted">未配置高德 Key，请在「设置」填写后自动定位</div>
+                {:else if geoStatus === 'notfound'}
+                  <div class="geo-line muted">未找到该地址，可手动校正</div>
+                {:else if geoStatus === 'error'}
+                  <div class="geo-line muted">定位失败（网络/密钥），可手动校正</div>
+                {:else}
+                  <div class="geo-line muted">填写地址后自动定位</div>
+                {/if}
+                <details
+                  class="geo-manual"
+                  open={geoStatus === 'nokey' ||
+                    geoStatus === 'notfound' ||
+                    geoStatus === 'error' ||
+                    manualOverride}
+                >
+                  <summary class="small">手动校正</summary>
+                  <div class="row" style="margin-top:6px;">
+                    <input
+                      class="input"
+                      type="number"
+                      inputmode="decimal"
+                      step="0.000001"
+                      bind:value={form.lat}
+                      placeholder="纬度 31.230416"
+                      oninput={() => {
+                        manualOverride = true;
+                        geoStatus = 'ok';
+                      }}
+                    />
+                    <input
+                      class="input"
+                      type="number"
+                      inputmode="decimal"
+                      step="0.000001"
+                      bind:value={form.lng}
+                      placeholder="经度 121.473700"
+                      oninput={() => {
+                        manualOverride = true;
+                        geoStatus = 'ok';
+                      }}
+                    />
+                  </div>
+                </details>
+              </div>
+            {/if}
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ 观演信息 ============ -->
+      <div class="card section">
+        <h3>观演信息</h3>
+        <div class="row four-equal">
+          <div>
+            <label>演出时间 <span class="req">*</span></label>
+            <input
+              class="input"
+              class:date-invalid={!!dateError}
+              type="datetime-local"
+              bind:value={form.date_local}
+              oninput={() => (dateError = '')}
+              autocomplete="off"
+            />
+            {#if dateError}<div class="date-err">⚠ {dateError}</div>{/if}
+          </div>
+          <div>
+            <label>状态</label>
+            <select class="input" bind:value={form.active_status}>
+              <option value={0}>正常</option>
+              <option value={2}>已取消</option>
+              <option value={1}>想看</option>
+              <option value={3}>未赴约</option>
+            </select>
+          </div>
+          <div>
+            <label>评分</label>
+            <div class="star-row">
+              {#each [1, 2, 3, 4, 5] as n (n)}
+                <button
+                  type="button"
+                  class="star"
+                  class:on={form.rating >= n}
+                  onclick={() => setRating(n)}
+                  aria-label={`评分 ${n}`}>★</button
+                >
+              {/each}
+              <span class="tiny rate-text">{form.rating ? `${form.rating} 分` : '未评分'}</span>
+            </div>
+          </div>
+          <div>
+            <label>时长</label>
+            <div class="money">
+              <input
+                class="input"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                step="1"
+                bind:value={form.duration}
+                oninput={stripNegSign}
+                onblur={normalizeDuration}
+                placeholder="分钟"
+              /><span class="unit">分钟</span>
+            </div>
+          </div>
+        </div>
+        {#if conflicts.length}
+          <!-- 时段重叠仅提示：列出撞车的场次，用户确认后仍可正常保存 -->
+          <div class="conflict-box" role="status">
+            <div class="cf-title">⚠ 该时段已有演出，注意购票时间冲突</div>
+            <ul class="cf-list">
+              {#each conflicts as c (c.id)}
+                <li>
+                  <span class="cf-name">{formatEventTitle(c.name, c.categoryName, [])}</span>
+                  <span class="cf-time"
+                    >{c.dateText || fmtDateLocal(c.date).replace('T', ' ')}{c.duration > 0
+                      ? ` · ${c.duration} 分钟`
+                      : ''}</span
+                  >
+                  {#if c.city || c.address}
+                    <span class="cf-loc">{[c.city, c.address].filter(Boolean).join(' · ')}</span>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+            <div class="cf-note">仅提醒，不影响保存。</div>
+          </div>
+        {/if}
+        <div class="row two-equal">
+          <div>
+            <label>座位</label>
+            <input
+              class="input"
+              spellcheck="false"
+              bind:value={form.seat}
+              placeholder="如：3排15座"
+            />
+          </div>
+          {#if settings.show_friends}
+            <div>
+              <label>同行</label>
+              <div class="combo">
+                <input
+                  class="input"
+                  spellcheck="false"
+                  bind:value={form.friends}
+                  placeholder="同行人，多个用逗号分隔"
+                  onfocus={openFriendsList}
+                  onblur={closeFriendsListSoon}
+                  onkeydown={onFriendsKeydown}
+                />
+                {#if showFriendsList && filteredFriends.length}
+                  <div class="combo-list">
+                    {#each filteredFriends as v, fi (v)}
+                      <button
+                        type="button"
+                        class="combo-item"
+                        class:active={fi === friendsActive}
+                        onmousedown={(e) => e.preventDefault()}
+                        onclick={() => pickFriends(v)}>{v}</button
+                      >
+                    {/each}
+                  </div>
+                {/if}
+              </div>
             </div>
           {/if}
         </div>
       </div>
-      {/if}
-    </div>
-  </div>
 
-  <!-- ============ 阵容 ============ -->
-  <div class="card section">
-    <h3>阵容</h3>
-    <label>演员 <span class="hint">胶囊红＝已关联演员档案，灰＝<b>保存时会自动创建演员档案</b>；回车生成胶囊，逗号分隔可一次添加多个；与既有档案同名（含空格/全半角差异）自动关联，若只是临时写法请在上方下拉里改选既有档案</span></label>
-    <div class="combo">
-      <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
-        {#each artistItems as item, i (item.key)}
-          <span
+      <!-- ============ 阵容 ============ -->
+      <div class="card section">
+        <h3>阵容</h3>
+        <label
+          >演员 <span class="hint"
+            >胶囊红＝已关联演员档案，灰＝<b>保存时会自动创建演员档案</b
+            >；回车生成胶囊，逗号分隔可一次添加多个；与既有档案同名（含空格/全半角差异）自动关联，若只是临时写法请在上方下拉里改选既有档案</span
+          ></label
+        >
+        <div class="combo">
+          <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
+            {#each artistItems as item, i (item.key)}
+              <span
                 class="capsule"
                 class:known={item.kind === 'linked'}
                 class:new={item.kind === 'free'}
@@ -1768,348 +2057,608 @@
                 class:drop-after={artistOverIdx === i && artistDragIdx !== i && !artistOverBefore}
                 draggable="true"
                 title="拖动调整顺序"
-                ondragstart={(e) => { artistDragIdx = i; e.dataTransfer.effectAllowed = 'move'; }}
+                ondragstart={(e) => {
+                  artistDragIdx = i;
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
                 ondragover={(e) => onArtistDragOver(e, i)}
-                ondragleave={() => { if (artistOverIdx === i) artistOverIdx = -1; }}
-                ondrop={(e) => { e.preventDefault(); onArtistDropAt(i, artistOverBefore); }}
-                ondragend={() => { artistDragIdx = -1; artistOverIdx = -1; }}
-          >
-            <span class="cap-grip" aria-hidden="true">⠿</span>
-            <span class="cap-text">{item.label}</span>
-            <button type="button" class="cap-x" onclick={item.kind === 'linked' ? () => removeArtist(item.id) : () => removeFreeName(item.label)} title={item.kind === 'linked' ? '移除该演员' : '移除'} aria-label={`移除 ${item.label}`}>✕</button>
-          </span>
-        {/each}
-        <input
-          spellcheck="false"
-          placeholder={chosenArtists.length || freeNames.length ? '' : '输入演员姓名，回车确认…'}
-          bind:value={artistQuery}
-          onfocus={() => (showArtistList = true)}
-          onblur={onArtistBlur}
-          onkeydown={onArtistKeydown}
-          oninput={onArtistInput}
-          oncompositionstart={() => (artistComposing = true)}
-          oncompositionend={() => (artistComposing = false)}
-        />
-      </div>
-      {#if showArtistList && (filteredArtists.length || artistQuery.trim())}
-        <div class="combo-list">
-          {#each filteredArtists as a (a.id)}
-            <button type="button" class="combo-item" onmousedown={(e) => e.preventDefault()} onclick={() => addArtist(a.id)}>{a.name}</button>
-          {/each}
-          {#if artistDupHint}
-            <div class="combo-note">
-              已有写法相近的演员「{artistDupHint.name}」（{artistDupHint.recordCount || 0} 场），将关联该档案而不新建
-            </div>
-          {/if}
-          {#if artistQuery.trim() && !findArtistByName(artistQuery)}
-            <button type="button" class="combo-item create" disabled={creatingArtist} onmousedown={(e) => e.preventDefault()} onclick={() => createNewArtist(artistQuery)}>
-              {creatingArtist ? '创建中…' : `＋ 新建演员档案「${artistQuery.trim()}」`}
-            </button>
-          {:else if !filteredArtists.length}
-            <div class="combo-empty">无匹配演员</div>
-          {/if}
-        </div>
-      {/if}
-    </div>
-    <label>剧团 <span class="hint">胶囊红＝既往演出用过该写法，灰＝全新剧团名；已有团体失焦自动添加，新名称回车生成胶囊，逗号分隔可一次添加多个</span></label>
-    <div class="combo">
-      <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
-        {#each companyTags as t, ti (t)}
-          {@const capKnown = knownCompanies.has(t.toLowerCase())}
-          <span
-            class="capsule"
-            class:known={capKnown}
-            class:new={!capKnown}
-            class:cap-dragging={companyDragIdx === ti}
-            class:drop-before={companyOverIdx === ti && companyDragIdx !== ti && companyOverBefore}
-            class:drop-after={companyOverIdx === ti && companyDragIdx !== ti && !companyOverBefore}
-            draggable="true"
-            title="拖动调整顺序"
-            ondragstart={(e) => { companyDragIdx = ti; e.dataTransfer.effectAllowed = 'move'; }}
-            ondragover={(e) => onCompanyDragOver(e, ti)}
-            ondragleave={() => { if (companyOverIdx === ti) companyOverIdx = -1; }}
-            ondrop={(e) => { e.preventDefault(); onCompanyDropAt(ti, companyOverBefore); }}
-            ondragend={() => { companyDragIdx = -1; companyOverIdx = -1; }}
-          >
-            <span class="cap-grip" aria-hidden="true">⠿</span>
-            <span class="cap-text">{t}</span>
-            <button type="button" class="cap-x" onclick={() => removeCompany(t)} title="移除该团体" aria-label={`移除 ${t}`}>✕</button>
-          </span>
-        {/each}
-        <input
-          spellcheck="false"
-          placeholder={companyTags.length ? '' : '如：上海昆剧团'}
-          bind:value={companyQuery}
-          onfocus={openCompanyList}
-          onblur={onCompanyBlur}
-          onkeydown={onCompanyKeydown}
-          oninput={onCompanyInput}
-        />
-      </div>
-      {#if showCompanyList && (filteredCompanies.length || companyQuery.trim())}
-        <div class="combo-list">
-          {#each filteredCompanies as v, coi (v)}
-            <button type="button" class="combo-item" class:active={coi === companyActive} onmousedown={(e) => e.preventDefault()} onclick={() => pickCompany(v)}>{v}</button>
-          {/each}
-          {#if companyQuery.trim() && !filteredCompanies.length}
-            <div class="combo-empty">无匹配团体，回车添加新团体</div>
-          {/if}
-        </div>
-      {/if}
-    </div>
-    <label>剧目</label>
-    <div class="ply">
-      {#if chosenDramas.length === 0}
-        <div class="ply-empty muted tiny">尚未关联剧目。从下方选择或新建一个剧目。</div>
-      {/if}
-      {#each orderedChosenDramas as d, di (d.id)}
-        <div
-          class="ply-item"
-          draggable={editingDramaId !== d.id ? 'true' : 'false'}
-          class:dragging={dramaDragIdx === di}
-          class:drop-before={dramaOverIdx === di && dramaDragIdx !== di && dramaOverBefore}
-          class:drop-after={dramaOverIdx === di && dramaDragIdx !== di && !dramaOverBefore}
-          ondragstart={(e) => { dramaDragIdx = di; e.dataTransfer.effectAllowed = 'move'; }}
-          ondragover={(e) => onDramaDragOver(e, di)}
-          ondragleave={() => { if (dramaOverIdx === di) dramaOverIdx = -1; }}
-          ondrop={(e) => { e.preventDefault(); onDramaDropAt(di); }}
-          ondragend={() => { dramaDragIdx = -1; dramaOverIdx = -1; }}
-        >
-          {#if editingDramaId === d.id}
-            <div class="ply-edit">
-              <input class="input" spellcheck="false" placeholder="剧目名称" bind:value={dramaEdit.name} />
-              <div class="ply-edit-actions">
-                <button type="button" class="btn primary sm" onclick={saveDramaEdit} disabled={savingDramaEdit || !dramaEdit.name.trim()}>
-                  {savingDramaEdit ? '保存中…' : '保存'}
-                </button>
-                <button type="button" class="btn ghost sm" onclick={cancelDramaEdit}>取消</button>
-              </div>
-            </div>
-          {:else}
-          <div class="ply-head">
-            <span class="ply-name" title="拖动调整顺序">
-              <span class="cap-grip" aria-hidden="true">⠿</span>
-              {d.name}{#if d.categoryNames?.length}<em class="ply-cat">{d.categoryNames.join(' / ')}</em>{/if}
-            </span>
-            <span class="ply-ops">
-              <button type="button" class="ply-edit-btn" onclick={() => startDramaEdit(d)} title="编辑该剧目名称">✎</button>
-              <button type="button" class="ply-x" onclick={() => removeDrama(d.id)} title="移除该剧目">✕</button>
-            </span>
+                ondragleave={() => {
+                  if (artistOverIdx === i) artistOverIdx = -1;
+                }}
+                ondrop={(e) => {
+                  e.preventDefault();
+                  onArtistDropAt(i, artistOverBefore);
+                }}
+                ondragend={() => {
+                  artistDragIdx = -1;
+                  artistOverIdx = -1;
+                }}
+              >
+                <span class="cap-grip" aria-hidden="true">⠿</span>
+                <span class="cap-text">{item.label}</span>
+                <button
+                  type="button"
+                  class="cap-x"
+                  onclick={item.kind === 'linked'
+                    ? () => removeArtist(item.id)
+                    : () => removeFreeName(item.label)}
+                  title={item.kind === 'linked' ? '移除该演员' : '移除'}
+                  aria-label={`移除 ${item.label}`}>✕</button
+                >
+              </span>
+            {/each}
+            <input
+              spellcheck="false"
+              placeholder={chosenArtists.length || freeNames.length
+                ? ''
+                : '输入演员姓名，回车确认…'}
+              bind:value={artistQuery}
+              onfocus={() => (showArtistList = true)}
+              onblur={onArtistBlur}
+              onkeydown={onArtistKeydown}
+              oninput={onArtistInput}
+              oncompositionstart={() => (artistComposing = true)}
+              oncompositionend={() => (artistComposing = false)}
+            />
           </div>
-          {#if d.zhezis && d.zhezis.length}
-            <div class="ply-zhezis">
-              <span class="small muted">折子（选中表示本次演出了该折戏）</span>
-              <div class="zhezi-grid">
-                {#each d.zhezis as z (z.id)}
-                  <label class="zhezi">
-                    <input type="checkbox" checked={isZheziSelected(z.id)} onchange={() => toggleZhezi(z.id)} />
-                    <span>{z.name}</span>
-                  </label>
+          {#if showArtistList && (filteredArtists.length || artistQuery.trim())}
+            <div class="combo-list">
+              {#each filteredArtists as a (a.id)}
+                <button
+                  type="button"
+                  class="combo-item"
+                  onmousedown={(e) => e.preventDefault()}
+                  onclick={() => addArtist(a.id)}>{a.name}</button
+                >
+              {/each}
+              {#if artistDupHint}
+                <div class="combo-note">
+                  已有写法相近的演员「{artistDupHint.name}」（{artistDupHint.recordCount || 0} 场），将关联该档案而不新建
+                </div>
+              {/if}
+              {#if artistQuery.trim() && !findArtistByName(artistQuery)}
+                <button
+                  type="button"
+                  class="combo-item create"
+                  disabled={creatingArtist}
+                  onmousedown={(e) => e.preventDefault()}
+                  onclick={() => createNewArtist(artistQuery)}
+                >
+                  {creatingArtist ? '创建中…' : `＋ 新建演员档案「${artistQuery.trim()}」`}
+                </button>
+              {:else if !filteredArtists.length}
+                <div class="combo-empty">无匹配演员</div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+        <label
+          >剧团 <span class="hint"
+            >胶囊红＝既往演出用过该写法，灰＝全新剧团名；已有团体失焦自动添加，新名称回车生成胶囊，逗号分隔可一次添加多个</span
+          ></label
+        >
+        <div class="combo">
+          <div class="tagbox" onclick={(e) => e.currentTarget.querySelector('input')?.focus()}>
+            {#each companyTags as t, ti (t)}
+              {@const capKnown = knownCompanies.has(t.toLowerCase())}
+              <span
+                class="capsule"
+                class:known={capKnown}
+                class:new={!capKnown}
+                class:cap-dragging={companyDragIdx === ti}
+                class:drop-before={companyOverIdx === ti &&
+                  companyDragIdx !== ti &&
+                  companyOverBefore}
+                class:drop-after={companyOverIdx === ti &&
+                  companyDragIdx !== ti &&
+                  !companyOverBefore}
+                draggable="true"
+                title="拖动调整顺序"
+                ondragstart={(e) => {
+                  companyDragIdx = ti;
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                ondragover={(e) => onCompanyDragOver(e, ti)}
+                ondragleave={() => {
+                  if (companyOverIdx === ti) companyOverIdx = -1;
+                }}
+                ondrop={(e) => {
+                  e.preventDefault();
+                  onCompanyDropAt(ti, companyOverBefore);
+                }}
+                ondragend={() => {
+                  companyDragIdx = -1;
+                  companyOverIdx = -1;
+                }}
+              >
+                <span class="cap-grip" aria-hidden="true">⠿</span>
+                <span class="cap-text">{t}</span>
+                <button
+                  type="button"
+                  class="cap-x"
+                  onclick={() => removeCompany(t)}
+                  title="移除该团体"
+                  aria-label={`移除 ${t}`}>✕</button
+                >
+              </span>
+            {/each}
+            <input
+              spellcheck="false"
+              placeholder={companyTags.length ? '' : '如：上海昆剧团'}
+              bind:value={companyQuery}
+              onfocus={openCompanyList}
+              onblur={onCompanyBlur}
+              onkeydown={onCompanyKeydown}
+              oninput={onCompanyInput}
+            />
+          </div>
+          {#if showCompanyList && (filteredCompanies.length || companyQuery.trim())}
+            <div class="combo-list">
+              {#each filteredCompanies as v, coi (v)}
+                <button
+                  type="button"
+                  class="combo-item"
+                  class:active={coi === companyActive}
+                  onmousedown={(e) => e.preventDefault()}
+                  onclick={() => pickCompany(v)}>{v}</button
+                >
+              {/each}
+              {#if companyQuery.trim() && !filteredCompanies.length}
+                <div class="combo-empty">无匹配团体，回车添加新团体</div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+        <label>剧目</label>
+        <div class="ply">
+          {#if chosenDramas.length === 0}
+            <div class="ply-empty muted tiny">尚未关联剧目。从下方选择或新建一个剧目。</div>
+          {/if}
+          {#each orderedChosenDramas as d, di (d.id)}
+            <div
+              class="ply-item"
+              draggable={editingDramaId !== d.id ? 'true' : 'false'}
+              class:dragging={dramaDragIdx === di}
+              class:drop-before={dramaOverIdx === di && dramaDragIdx !== di && dramaOverBefore}
+              class:drop-after={dramaOverIdx === di && dramaDragIdx !== di && !dramaOverBefore}
+              ondragstart={(e) => {
+                dramaDragIdx = di;
+                e.dataTransfer.effectAllowed = 'move';
+              }}
+              ondragover={(e) => onDramaDragOver(e, di)}
+              ondragleave={() => {
+                if (dramaOverIdx === di) dramaOverIdx = -1;
+              }}
+              ondrop={(e) => {
+                e.preventDefault();
+                onDramaDropAt(di);
+              }}
+              ondragend={() => {
+                dramaDragIdx = -1;
+                dramaOverIdx = -1;
+              }}
+            >
+              {#if editingDramaId === d.id}
+                <div class="ply-edit">
+                  <input
+                    class="input"
+                    spellcheck="false"
+                    placeholder="剧目名称"
+                    bind:value={dramaEdit.name}
+                  />
+                  <div class="ply-edit-actions">
+                    <button
+                      type="button"
+                      class="btn primary sm"
+                      onclick={saveDramaEdit}
+                      disabled={savingDramaEdit || !dramaEdit.name.trim()}
+                    >
+                      {savingDramaEdit ? '保存中…' : '保存'}
+                    </button>
+                    <button type="button" class="btn ghost sm" onclick={cancelDramaEdit}
+                      >取消</button
+                    >
+                  </div>
+                </div>
+              {:else}
+                <div class="ply-head">
+                  <span class="ply-name" title="拖动调整顺序">
+                    <span class="cap-grip" aria-hidden="true">⠿</span>
+                    {d.name}{#if d.categoryNames?.length}<em class="ply-cat"
+                        >{d.categoryNames.join(' / ')}</em
+                      >{/if}
+                  </span>
+                  <span class="ply-ops">
+                    <button
+                      type="button"
+                      class="ply-edit-btn"
+                      onclick={() => startDramaEdit(d)}
+                      title="编辑该剧目名称">✎</button
+                    >
+                    <button
+                      type="button"
+                      class="ply-x"
+                      onclick={() => removeDrama(d.id)}
+                      title="移除该剧目">✕</button
+                    >
+                  </span>
+                </div>
+                {#if d.zhezis && d.zhezis.length}
+                  <div class="ply-zhezis">
+                    <span class="small muted">折子（选中表示本次演出了该折戏）</span>
+                    <div class="zhezi-grid">
+                      {#each d.zhezis as z (z.id)}
+                        <label class="zhezi">
+                          <input
+                            type="checkbox"
+                            checked={isZheziSelected(z.id)}
+                            onchange={() => toggleZhezi(z.id)}
+                          />
+                          <span>{z.name}</span>
+                        </label>
+                      {/each}
+                    </div>
+                  </div>
+                {:else}
+                  <div class="small muted">该剧目暂无折子</div>
+                {/if}
+                <!-- 内联新增折子：无需跳到剧目详情页 -->
+                {#if addZheziFor === d.id}
+                  <div class="zhezi-add">
+                    <input
+                      spellcheck="false"
+                      bind:this={zheziInput}
+                      class="input"
+                      placeholder="新折子名称"
+                      bind:value={newZheziName}
+                      onkeydown={(e) => e.key === 'Enter' && createZheziFor(d.id)}
+                    />
+                    <button
+                      type="button"
+                      class="btn primary sm"
+                      onclick={() => createZheziFor(d.id)}
+                      disabled={savingZhezi || !newZheziName.trim()}
+                      >{savingZhezi ? '添加中…' : '添加'}</button
+                    >
+                    <button
+                      type="button"
+                      class="btn ghost sm"
+                      onclick={() => {
+                        addZheziFor = '';
+                        newZheziName = '';
+                      }}>取消</button
+                    >
+                  </div>
+                {:else}
+                  <button
+                    type="button"
+                    class="zhezi-add-btn"
+                    onclick={() => {
+                      addZheziFor = d.id;
+                      newZheziName = '';
+                      tick().then(() => zheziInput?.focus());
+                    }}>＋ 添加折子</button
+                  >
+                {/if}
+              {/if}
+            </div>
+          {/each}
+        </div>
+        <div class="ply-add">
+          <div class="combo">
+            <input
+              class="input"
+              spellcheck="false"
+              placeholder="🔍 搜索并关联已有剧目…"
+              bind:value={dramaQuery}
+              onfocus={() => (showDramaList = true)}
+              onblur={() => setTimeout(() => (showDramaList = false), 120)}
+              oncompositionstart={() => (dramaComposing = true)}
+              oncompositionend={() => (dramaComposing = false)}
+              onkeydown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const first = filteredDramas[0];
+                  if (first) addDrama(first.id);
+                }
+              }}
+            />
+            {#if showDramaList}
+              <div class="combo-list">
+                {#each filteredDramas as d (d.id)}
+                  <button
+                    type="button"
+                    class="combo-item"
+                    onmousedown={(e) => e.preventDefault()}
+                    onclick={() => addDrama(d.id)}
+                    >{d.name}{d.categoryNames?.length
+                      ? `（${d.categoryNames.join('/')}）`
+                      : ''}</button
+                  >
+                {:else}
+                  <div class="combo-empty">无匹配剧目，可改用右侧新建</div>
                 {/each}
               </div>
-            </div>
-          {:else}
-            <div class="small muted">该剧目暂无折子</div>
-          {/if}
-          <!-- 内联新增折子：无需跳到剧目详情页 -->
-          {#if addZheziFor === d.id}
-            <div class="zhezi-add">
-              <input spellcheck="false" bind:this={zheziInput} class="input" placeholder="新折子名称" bind:value={newZheziName} onkeydown={(e) => e.key === 'Enter' && createZheziFor(d.id)} />
-              <button type="button" class="btn primary sm" onclick={() => createZheziFor(d.id)} disabled={savingZhezi || !newZheziName.trim()}>{savingZhezi ? '添加中…' : '添加'}</button>
-              <button type="button" class="btn ghost sm" onclick={() => { addZheziFor = ''; newZheziName = ''; }}>取消</button>
-            </div>
-          {:else}
-            <button type="button" class="zhezi-add-btn" onclick={() => { addZheziFor = d.id; newZheziName = ''; tick().then(() => zheziInput?.focus()); }}>＋ 添加折子</button>
-          {/if}
-          {/if}
-        </div>
-      {/each}
-    </div>
-    <div class="ply-add">
-      <div class="combo">
-        <input
-          class="input"
-          spellcheck="false"
-          placeholder="🔍 搜索并关联已有剧目…"
-          bind:value={dramaQuery}
-          onfocus={() => (showDramaList = true)}
-          onblur={() => setTimeout(() => (showDramaList = false), 120)}
-          oncompositionstart={() => (dramaComposing = true)}
-          oncompositionend={() => (dramaComposing = false)}
-          onkeydown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              const first = filteredDramas[0];
-              if (first) addDrama(first.id);
-            }
-          }}
-        />
-        {#if showDramaList}
-          <div class="combo-list">
-            {#each filteredDramas as d (d.id)}
-              <button type="button" class="combo-item" onmousedown={(e) => e.preventDefault()} onclick={() => addDrama(d.id)}>{d.name}{d.categoryNames?.length ? `（${d.categoryNames.join('/')}）` : ''}</button>
-            {:else}
-              <div class="combo-empty">无匹配剧目，可改用右侧新建</div>
-            {/each}
+            {/if}
           </div>
-        {/if}
+          <details class="ply-new">
+            <summary class="small">＋ 新建剧目</summary>
+            <div class="ply-new-body">
+              <div class="row">
+                <input
+                  class="input"
+                  spellcheck="false"
+                  placeholder="剧目，如：牡丹亭"
+                  bind:value={newDrama.name}
+                  onkeydown={(e) => e.key === 'Enter' && createNewDrama()}
+                />
+                <button
+                  type="button"
+                  class="btn sm"
+                  onclick={createNewDrama}
+                  disabled={creatingDrama || !newDrama.name.trim()}
+                  >{creatingDrama ? '创建中…' : '创建并关联'}</button
+                >
+              </div>
+              {#if newDramaCandidates.length}
+                <div class="dup-list">
+                  <div class="dup-title">已有相近剧目，先确认是否要新建：</div>
+                  {#each newDramaCandidates as d (d.id)}
+                    <button
+                      type="button"
+                      class="dup-item"
+                      onclick={() => {
+                        addDrama(d.id);
+                        newDrama = { name: '' };
+                      }}
+                    >
+                      {d.name}{#if d.recordCount != null}<span class="dup-cnt"
+                          >{d.recordCount} 场</span
+                        >{/if}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          </details>
+        </div>
       </div>
-      <details class="ply-new">
-        <summary class="small">＋ 新建剧目</summary>
-        <div class="ply-new-body">
-          <div class="row">
-            <input class="input" spellcheck="false" placeholder="剧目，如：牡丹亭" bind:value={newDrama.name} onkeydown={(e) => e.key === 'Enter' && createNewDrama()} />
-            <button type="button" class="btn sm" onclick={createNewDrama} disabled={creatingDrama || !newDrama.name.trim()}>{creatingDrama ? '创建中…' : '创建并关联'}</button>
-          </div>
-          {#if newDramaCandidates.length}
-            <div class="dup-list">
-              <div class="dup-title">已有相近剧目，先确认是否要新建：</div>
-              {#each newDramaCandidates as d (d.id)}
-                <button type="button" class="dup-item" onclick={() => { addDrama(d.id); newDrama = { name: '' }; }}>
-                  {d.name}{#if d.recordCount != null}<span class="dup-cnt">{d.recordCount} 场</span>{/if}
-                </button>
-              {/each}
-            </div>
-          {/if}
-        </div>
-      </details>
-    </div>
-  </div>
 
-  <!-- ============ 费用与渠道 ============ -->
-  <div class="card section fee-card">
-    <h3>费用与渠道</h3>
-    <!-- 金额列要同时容纳「数字框 + 币种下拉」（多币种开启时约 55px 被币种框占用）。
+      <!-- ============ 费用与渠道 ============ -->
+      <div class="card section fee-card">
+        <h3>费用与渠道</h3>
+        <!-- 金额列要同时容纳「数字框 + 币种下拉」（多币种开启时约 55px 被币种框占用）。
          编辑页在宽屏是双栏、卡片本身可能很窄，若用固定 fr 或按「视口」的媒体查询，
          4 列会被挤扁（票价只剩一位）。故以本卡片为容器查询上下文，见 .fee-row 样式：
          宽度足够 4 列一行，不足直接退为 2 列（2×2），不做 3+1 的孤行换行。 -->
-    <div class="row fee-row">
-      <div>
-        <label>购买渠道</label>
-        <div class="combo">
-          <input
-            class="input"
-            spellcheck="false"
-            bind:value={form.channel}
-            placeholder="如：大麦"
-            onfocus={openChannelList}
-            onblur={closeChannelListSoon}
-            onkeydown={onChannelKeydown}
-          />
-          {#if showChannelList && filteredChannels.length}
-            <div class="combo-list">
-              {#each filteredChannels as v, chi (v)}
-                <button type="button" class="combo-item" class:active={chi === channelActive} onmousedown={(e) => e.preventDefault()} onclick={() => pickChannel(v)}>{v}</button>
-              {/each}
+        <div class="row fee-row">
+          <div>
+            <label>购买渠道</label>
+            <div class="combo">
+              <input
+                class="input"
+                spellcheck="false"
+                bind:value={form.channel}
+                placeholder="如：大麦"
+                onfocus={openChannelList}
+                onblur={closeChannelListSoon}
+                onkeydown={onChannelKeydown}
+              />
+              {#if showChannelList && filteredChannels.length}
+                <div class="combo-list">
+                  {#each filteredChannels as v, chi (v)}
+                    <button
+                      type="button"
+                      class="combo-item"
+                      class:active={chi === channelActive}
+                      onmousedown={(e) => e.preventDefault()}
+                      onclick={() => pickChannel(v)}>{v}</button
+                    >
+                  {/each}
+                </div>
+              {/if}
             </div>
-          {/if}
-        </div>
-      </div>
-      <div>
-        <label>票价</label>
-        <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.price} oninput={stripNegSign} onblur={() => normalizeMoney('price')} />{#if settings.multi_currency}<select class="input cur" bind:value={form.price_currency}>{#each currencyOptions(form.price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
-      </div>
-      {#if settings.show_pay_price}
-        <div>
-          <label>实付</label>
-          <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.pay_price} oninput={stripNegSign} onblur={() => normalizeMoney('pay_price')} />{#if settings.multi_currency}<select class="input cur" bind:value={form.pay_price_currency}>{#each currencyOptions(form.pay_price_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
-        </div>
-      {/if}
-      {#if settings.show_other_cost}
-        <div>
-          <label>其他花费</label>
-          <div class="money"><input class="input" type="number" inputmode="decimal" step="0.01" min="0" bind:value={form.other_cost} oninput={stripNegSign} onblur={() => normalizeMoney('other_cost')} />{#if settings.multi_currency}<select class="input cur" bind:value={form.other_cost_currency}>{#each currencyOptions(form.other_cost_currency) as c}<option value={c}>{c}</option>{/each}</select>{/if}</div>
-        </div>
-      {/if}
-    </div>
-
-    {#if huozhiEnabled}
-      <div class="huozhi-box">
-        <label>货殖账单 ID <span class="hint">多个用逗号分隔，如 123,124；保存前可点「校验」确认账单存在</span></label>
-        <div class="huozhi-row">
-          <input
-            class="input"
-            type="text"
-            bind:value={form.huozhiBillIdsText}
-            placeholder="123"
-            spellcheck="false"
-            autocomplete="off"
-          />
-          <button type="button" class="btn sm" onclick={verifyHuozhiBills} disabled={huozhiBusy || !form.huozhiBillIdsText.trim()}>
-            {huozhiBusy ? '校验中…' : '校验'}
-          </button>
-        </div>
-        {#if huozhiError}
-          <div class="huozhi-msg err">⚠ {huozhiError}</div>
-        {:else if huozhiPreview}
-          <div class="huozhi-msg ok">
-            ✓ 共 {huozhiPreview.bills.length} 笔，合计 {formatHuozhiMoney(huozhiPreview.total, huozhiPreview.currency)}{#if huozhiPreview.mixed_currency}（币种不一致，已直接相加）{/if}
           </div>
-          {#if huozhiPreview.breakdown && huozhiPreview.breakdown.length}
-            <div class="huozhi-breakdown">
-              {#each huozhiPreview.breakdown as g (g.role)}
-                <span class="hz-bd-item">
-                  <span class="hz-bd-label">{g.label}</span>
-                  <span class="hz-bd-amt">{formatHuozhiMoney(g.total, g.currency)}</span>
-                  {#if g.mixed}<span class="hz-bd-mixed">混合币种</span>{/if}
-                </span>
-              {/each}
+          <div>
+            <label>票价</label>
+            <div class="money">
+              <input
+                class="input"
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                min="0"
+                bind:value={form.price}
+                oninput={stripNegSign}
+                onblur={() => normalizeMoney('price')}
+              />{#if settings.multi_currency}<select
+                  class="input cur"
+                  bind:value={form.price_currency}
+                  >{#each currencyOptions(form.price_currency) as c (c)}<option value={c}
+                      >{c}</option
+                    >{/each}</select
+                >{/if}
+            </div>
+          </div>
+          {#if settings.show_pay_price}
+            <div>
+              <label>实付</label>
+              <div class="money">
+                <input
+                  class="input"
+                  type="number"
+                  inputmode="decimal"
+                  step="0.01"
+                  min="0"
+                  bind:value={form.pay_price}
+                  oninput={stripNegSign}
+                  onblur={() => normalizeMoney('pay_price')}
+                />{#if settings.multi_currency}<select
+                    class="input cur"
+                    bind:value={form.pay_price_currency}
+                    >{#each currencyOptions(form.pay_price_currency) as c (c)}<option value={c}
+                        >{c}</option
+                      >{/each}</select
+                  >{/if}
+              </div>
             </div>
           {/if}
-          <ul class="huozhi-list">
-            {#each huozhiPreview.bills as b (b.id)}
-              <li>
-                <span class="hz-id">#{b.id}</span>
-                <span class="hz-desc">{b.description || b.remark || '（无描述）'}</span>
-                {#if b.account}<span class="hz-acct">{b.account}</span>{/if}
-                {#if b.tx_date}<span class="hz-date">{b.tx_date.slice(0, 10)}</span>{/if}
-                <span class="hz-amt">{formatHuozhiMoney(b.amount, b.currency)}</span>
-              </li>
-            {/each}
-            {#each Object.entries(huozhiPreview.errors || {}) as [bid, msg] (bid)}
-              <li class="hz-fail">#{bid} 拉取失败：{msg}</li>
-            {/each}
-          </ul>
+          {#if settings.show_other_cost}
+            <div>
+              <label>其他花费</label>
+              <div class="money">
+                <input
+                  class="input"
+                  type="number"
+                  inputmode="decimal"
+                  step="0.01"
+                  min="0"
+                  bind:value={form.other_cost}
+                  oninput={stripNegSign}
+                  onblur={() => normalizeMoney('other_cost')}
+                />{#if settings.multi_currency}<select
+                    class="input cur"
+                    bind:value={form.other_cost_currency}
+                    >{#each currencyOptions(form.other_cost_currency) as c (c)}<option value={c}
+                        >{c}</option
+                      >{/each}</select
+                  >{/if}
+              </div>
+            </div>
+          {/if}
+        </div>
+
+        {#if huozhiEnabled}
+          <div class="huozhi-box">
+            <label
+              >货殖账单 ID <span class="hint"
+                >多个用逗号分隔，如 123,124；保存前可点「校验」确认账单存在</span
+              ></label
+            >
+            <div class="huozhi-row">
+              <input
+                class="input"
+                type="text"
+                bind:value={form.huozhiBillIdsText}
+                placeholder="123"
+                spellcheck="false"
+                autocomplete="off"
+              />
+              <button
+                type="button"
+                class="btn sm"
+                onclick={verifyHuozhiBills}
+                disabled={huozhiBusy || !form.huozhiBillIdsText.trim()}
+              >
+                {huozhiBusy ? '校验中…' : '校验'}
+              </button>
+            </div>
+            {#if huozhiError}
+              <div class="huozhi-msg err">⚠ {huozhiError}</div>
+            {:else if huozhiPreview}
+              <div class="huozhi-msg ok">
+                ✓ 共 {huozhiPreview.bills.length} 笔，合计 {formatHuozhiMoney(
+                  huozhiPreview.total,
+                  huozhiPreview.currency
+                )}{#if huozhiPreview.mixed_currency}（币种不一致，已直接相加）{/if}
+              </div>
+              {#if huozhiPreview.breakdown && huozhiPreview.breakdown.length}
+                <div class="huozhi-breakdown">
+                  {#each huozhiPreview.breakdown as g (g.role)}
+                    <span class="hz-bd-item">
+                      <span class="hz-bd-label">{g.label}</span>
+                      <span class="hz-bd-amt">{formatHuozhiMoney(g.total, g.currency)}</span>
+                      {#if g.mixed}<span class="hz-bd-mixed">混合币种</span>{/if}
+                    </span>
+                  {/each}
+                </div>
+              {/if}
+              <ul class="huozhi-list">
+                {#each huozhiPreview.bills as b (b.id)}
+                  <li>
+                    <span class="hz-id">#{b.id}</span>
+                    <span class="hz-desc">{b.description || b.remark || '（无描述）'}</span>
+                    {#if b.account}<span class="hz-acct">{b.account}</span>{/if}
+                    {#if b.tx_date}<span class="hz-date">{b.tx_date.slice(0, 10)}</span>{/if}
+                    <span class="hz-amt">{formatHuozhiMoney(b.amount, b.currency)}</span>
+                  </li>
+                {/each}
+                {#each Object.entries(huozhiPreview.errors || {}) as [bid, msg] (bid)}
+                  <li class="hz-fail">#{bid} 拉取失败：{msg}</li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
         {/if}
       </div>
-    {/if}
-  </div>
+    </div>
+    <!-- .col-left -->
+    <div class="col-right">
+      <!-- ============ 封面 ============ -->
+      <div class="card section">
+        <h3>封面</h3>
+        <div class="cover-layout">
+          {#if form.coverFile}
+            <img
+              class="preview zoomable"
+              src={coverUrl(form.coverThumb || form.coverFile)}
+              alt="封面预览"
+              onclick={openLightbox}
+              role="button"
+              tabindex={0}
+              aria-label="点击放大查看封面"
+              onkeydown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  openLightbox();
+                }
+              }}
+            />
+          {/if}
+          <div class="cover-main">
+            <div class="upload-row">
+              <button type="button" class="btn sm" onclick={triggerUpload} disabled={uploading}>
+                {uploading ? '上传中…' : '⇪ 上传图片'}
+              </button>
+              <input
+                type="file"
+                accept="image/*"
+                onchange={handleUpload}
+                disabled={uploading}
+                hidden
+                bind:this={fileInput}
+              />
+              <button type="button" class="btn sm" onclick={() => (pickerOpen = true)}
+                >▦ 从已有演出引用</button
+              >
+            </div>
+          </div>
+        </div>
+      </div>
 
-  </div><!-- .col-left -->
-  <div class="col-right">
-  <!-- ============ 封面 ============ -->
-  <div class="card section">
-    <h3>封面</h3>
-    <div class="cover-layout">
-      {#if form.coverFile}
-        <img class="preview zoomable" src={coverUrl(form.coverThumb || form.coverFile)} alt="封面预览" onclick={openLightbox} role="button" tabindex={0} aria-label="点击放大查看封面" onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLightbox(); } }} />
-      {/if}
-      <div class="cover-main">
-        <div class="upload-row">
-          <button type="button" class="btn sm" onclick={triggerUpload} disabled={uploading}>
-            {uploading ? '上传中…' : '⇪ 上传图片'}
-          </button>
-          <input type="file" accept="image/*" onchange={handleUpload} disabled={uploading} hidden bind:this={fileInput} />
-          <button type="button" class="btn sm" onclick={() => (pickerOpen = true)}>▦ 从已有演出引用</button>
+      <!-- ============ 备注（sticky 浮动） ============ -->
+      <div class="remark-sticky">
+        <div class="card section remark-card">
+          <h3>备注</h3>
+          <textarea
+            class="input"
+            spellcheck="false"
+            rows="8"
+            bind:value={form.remark}
+            placeholder="剧评、观感、备忘…"></textarea>
         </div>
       </div>
     </div>
+    <!-- .col-right -->
   </div>
-
-  <!-- ============ 备注（sticky 浮动） ============ -->
-  <div class="remark-sticky">
-    <div class="card section remark-card">
-      <h3>备注</h3>
-      <textarea class="input" spellcheck="false" rows="8" bind:value={form.remark} placeholder="剧评、观感、备忘…"></textarea>
-    </div>
-  </div>
-  </div><!-- .col-right -->
-</div><!-- .two-col -->
+  <!-- .two-col -->
 
   {#if error}<div class="banner error">⚠ {error}</div>{/if}
 
   <div class="actions">
-    <button type="submit" class="btn primary lg" disabled={saving}>{saving ? '保存中…' : '保存'}</button>
+    <button type="submit" class="btn primary lg" disabled={saving}
+      >{saving ? '保存中…' : '保存'}</button
+    >
     <button type="button" class="btn lg" onclick={onCancel}>取消</button>
   </div>
 </form>
@@ -2123,21 +2672,69 @@
 {/if}
 
 <style>
-  .form { display: flex; flex-direction: column; gap: 14px; max-width: 1200px; margin: 0 auto; }
-  /* 桌面端双列：左列放表单主体，右列放封面+备注 */
-  .two-col { display: flex; flex-direction: column; gap: 14px; }
-  @media (min-width: 860px) {
-    .two-col { display: grid; grid-template-columns: 1fr 400px; gap: 16px; }
-    .col-left { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
-    .col-right { min-width: 300px; display: flex; flex-direction: column; gap: 14px; }
-    .remark-sticky { flex: 1; display: flex; flex-direction: column; }
-    .remark-card { flex: 1; display: flex; flex-direction: column; }
-    .remark-card textarea { flex: 1; resize: none; min-height: 80px; }
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 1200px;
+    margin: 0 auto;
   }
-  .section { padding: 18px 20px; }
-  .section h3 { margin: 0 0 6px; font-size: 15.5px; color: var(--text-2); }
-  .req { color: var(--accent); }
-  .hint { font-weight: 400; color: var(--text-3); font-size: 12px; }
+  /* 桌面端双列：左列放表单主体，右列放封面+备注 */
+  .two-col {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  @media (min-width: 860px) {
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 400px;
+      gap: 16px;
+    }
+    .col-left {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .col-right {
+      min-width: 300px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .remark-sticky {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .remark-card {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .remark-card textarea {
+      flex: 1;
+      resize: none;
+      min-height: 80px;
+    }
+  }
+  .section {
+    padding: 18px 20px;
+  }
+  .section h3 {
+    margin: 0 0 6px;
+    font-size: 15.5px;
+    color: var(--text-2);
+  }
+  .req {
+    color: var(--accent);
+  }
+  .hint {
+    font-weight: 400;
+    color: var(--text-3);
+    font-size: 12px;
+  }
 
   /* ---- 货殖账单关联 ---- */
   .huozhi-box {
@@ -2145,15 +2742,35 @@
     padding-top: 12px;
     border-top: 1px dashed var(--border);
   }
-  .huozhi-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
-  .huozhi-row .input { max-width: 260px; }
-  .huozhi-msg { font-size: 12.5px; margin-top: 6px; }
-  .huozhi-msg.ok { color: var(--text-2); }
-  .huozhi-msg.err { color: #e5484d; }
+  .huozhi-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 6px;
+  }
+  .huozhi-row .input {
+    max-width: 260px;
+  }
+  .huozhi-msg {
+    font-size: 12.5px;
+    margin-top: 6px;
+  }
+  .huozhi-msg.ok {
+    color: var(--text-2);
+  }
+  .huozhi-msg.err {
+    color: #e5484d;
+  }
 
   /* ============ 演出时间必填 ============ */
-  .date-invalid { border-color: #e5484d; }
-  .date-err { margin-top: 5px; font-size: 12px; color: #e5484d; }
+  .date-invalid {
+    border-color: #e5484d;
+  }
+  .date-err {
+    margin-top: 5px;
+    font-size: 12px;
+    color: #e5484d;
+  }
 
   /* ============ 时间冲突提示 ============ */
   .conflict-box {
@@ -2191,8 +2808,14 @@
     border-radius: 6px;
     border: 1px solid var(--border);
   }
-  .cf-name { font-weight: 600; color: var(--text); }
-  .cf-time { color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .cf-name {
+    font-weight: 600;
+    color: var(--text);
+  }
+  .cf-time {
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+  }
   .cf-loc {
     color: var(--text-3);
     font-size: 12px;
@@ -2201,7 +2824,10 @@
     white-space: nowrap;
     max-width: 100%;
   }
-  .cf-note { font-size: 11.5px; color: var(--text-3); }
+  .cf-note {
+    font-size: 11.5px;
+    color: var(--text-3);
+  }
   .huozhi-list {
     list-style: none;
     margin: 6px 0 0;
@@ -2217,11 +2843,28 @@
     font-size: 12.5px;
     color: var(--text-2);
   }
-  .hz-id { color: var(--text-3); font-variant-numeric: tabular-nums; }
-  .hz-desc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .hz-acct, .hz-date { color: var(--text-3); font-size: 12px; }
-  .hz-amt { font-variant-numeric: tabular-nums; }
-  .hz-fail { color: #e5484d; }
+  .hz-id {
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .hz-desc {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hz-acct,
+  .hz-date {
+    color: var(--text-3);
+    font-size: 12px;
+  }
+  .hz-amt {
+    font-variant-numeric: tabular-nums;
+  }
+  .hz-fail {
+    color: #e5484d;
+  }
   /* 表单预览的「实付 / 其他开销」分项小计 */
   .huozhi-breakdown {
     display: flex;
@@ -2240,9 +2883,18 @@
     font-size: 12.5px;
     color: var(--text-2);
   }
-  .hz-bd-label { color: var(--text-3); }
-  .hz-bd-amt { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
-  .hz-bd-mixed { font-size: 11px; color: var(--text-3); }
+  .hz-bd-label {
+    color: var(--text-3);
+  }
+  .hz-bd-amt {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .hz-bd-mixed {
+    font-size: 11px;
+    color: var(--text-3);
+  }
 
   /* 费用与渠道：以卡片为容器查询上下文（宽度按卡片算，而非视口）。
      - 卡片 ≥600px：4 列一行，渠道 1.1fr、金额各 1fr（金额列需容纳数字框 + 币种框）。
@@ -2250,30 +2902,62 @@
      - 小屏（视口 <640px）由全局 .row 的 1 列 !important 兜底。
      另：输入框默认 min-width:auto 会取「固有宽度」（文本输入约 198px）把网格轨道
      撑宽、抢走金额列空间，故给列容器 min-width:0 让它可正常收缩。 */
-  .fee-card { container-type: inline-size; }
-  .fee-row { grid-template-columns: 1.1fr 1fr 1fr 1fr; }
-  .fee-row > div { min-width: 0; }
+  .fee-card {
+    container-type: inline-size;
+  }
+  .fee-row {
+    grid-template-columns: 1.1fr 1fr 1fr 1fr;
+  }
+  .fee-row > div {
+    min-width: 0;
+  }
   /* .combo 默认 min-width:200px（为剧目/演员等较宽场景而设），在费用行的窄列里
      会撑破列边界、压住相邻的金额框；此处放开收缩。 */
-  .fee-row .combo { min-width: 0; }
+  .fee-row .combo {
+    min-width: 0;
+  }
   @container (max-width: 619px) {
-    .fee-row { grid-template-columns: 1fr 1fr; }
+    .fee-row {
+      grid-template-columns: 1fr 1fr;
+    }
   }
 
-  .money { display: flex; gap: 6px; }
-  .money .unit { align-self: center; color: var(--text-3); font-size: 13px; white-space: nowrap; }
+  .money {
+    display: flex;
+    gap: 6px;
+  }
+  .money .unit {
+    align-self: center;
+    color: var(--text-3);
+    font-size: 13px;
+    white-space: nowrap;
+  }
   /* 货币框收窄并让文字居中：默认左对齐 + 34px 箭头预留位会让 CNY 右侧
      剩下一截空白。select 右侧仍留箭头位，只是收窄并居中文字。 */
   /* 货币框宽度自适应最宽选项（币种都是 3 字母代码，约 30px），文字之后
      只剩紧贴箭头的一点间隙。不依赖 select 的文字居中：Chromium 渲染
      <select> 闭合文本既不理 text-align 也不理 text-align-last。 */
-  .money .cur { width: auto; max-width: none; min-width: 0; flex: 0 0 auto; }
+  .money .cur {
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    flex: 0 0 auto;
+  }
   /* 币种框再收窄一档：文字（如 CNY）后只留紧贴箭头的最小间隙，把宽度让给数字框，
      使 4 列布局在更窄的卡片下也能容纳 6 位金额。箭头相应贴右。 */
-  .money select.cur { font-size: 12px; padding-left: 6px; padding-right: 15px; background-position: right 5px center; }
+  .money select.cur {
+    font-size: 12px;
+    padding-left: 6px;
+    padding-right: 15px;
+    background-position: right 5px center;
+  }
   /* 金额输入框：收紧左右内边距并降一档字号，为「整数 + 小数」多留约 10px 内容宽，
      使 4 列布局在 600~660px 卡片下也能完整显示 6 字符金额（如 960.00）。 */
-  .money input.input { padding-left: 10px; padding-right: 10px; font-size: 15px; }
+  .money input.input {
+    padding-left: 10px;
+    padding-right: 10px;
+    font-size: 15px;
+  }
   /* 去掉金额类输入的原生上下微调控件：票价/实付/其他花费/时长(分钟) 都完全由用户输入，
      点一下 ±1(分/分钟) 没有意义。隐藏后既消除箭头，又释放箭头原本占据的约 17px 宽度让给数字。 */
   .money input.input[type='number']::-webkit-outer-spin-button,
@@ -2282,7 +2966,10 @@
     appearance: none;
     margin: 0;
   }
-  .money input.input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
+  .money input.input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
 
   /* 坐标：场馆的子字段（缩进 + 左侧竖线表示从属） */
   .sub-field {
@@ -2292,13 +2979,38 @@
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     background: var(--surface-2);
   }
-  .sub-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
-  .sub-title { font-size: 13px; font-weight: 500; color: var(--text-2); }
-  .geo-line { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); font-size: 13.5px; }
-  .geo-manual { margin-top: 8px; }
-  .geo-manual summary { cursor: pointer; color: var(--accent); }
+  .sub-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .sub-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-2);
+  }
+  .geo-line {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    font-size: 13.5px;
+  }
+  .geo-manual {
+    margin-top: 8px;
+  }
+  .geo-manual summary {
+    cursor: pointer;
+    color: var(--accent);
+  }
 
-  .star-row { display: flex; align-items: center; gap: 2px; min-height: 40px; }
+  .star-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-height: 40px;
+  }
   .star {
     border: none;
     background: none;
@@ -2306,16 +3018,34 @@
     color: var(--border-strong);
     cursor: pointer;
     padding: 0 2px;
-    transition: transform var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+    transition:
+      transform var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease);
   }
-  .star:hover { transform: scale(1.2); }
-  .star.on { color: var(--gold); }
-  .rate-text { margin-left: 8px; }
+  .star:hover {
+    transform: scale(1.2);
+  }
+  .star.on {
+    color: var(--gold);
+  }
+  .rate-text {
+    margin-left: 8px;
+  }
 
   /* 场馆地址行：输入框 + 内联定位图标 */
-  .addr-row { display: flex; align-items: stretch; gap: 8px; }
-  .addr-row .input { flex: 1; min-width: 0; }
-  .addr-combo { flex: 1; min-width: 0; }
+  .addr-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .addr-row .input {
+    flex: 1;
+    min-width: 0;
+  }
+  .addr-combo {
+    flex: 1;
+    min-width: 0;
+  }
   .loc-btn {
     flex: 0 0 auto;
     width: 40px;
@@ -2328,12 +3058,29 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+    transition:
+      border-color var(--t-fast) var(--ease),
+      background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease);
   }
-  .loc-btn:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
-  .loc-btn.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
-  .loc-btn.open { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
-  .geo-pin { vertical-align: -2px; }
+  .loc-btn:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .loc-btn.active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .loc-btn.open {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .geo-pin {
+    vertical-align: -2px;
+  }
 
   /* 演员胶囊 tag 输入 */
   .tagbox {
@@ -2347,10 +3094,14 @@
     border-radius: var(--radius-sm);
     background: var(--surface-2);
     cursor: text;
-    transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease),
+    transition:
+      border-color var(--t-fast) var(--ease),
+      box-shadow var(--t-fast) var(--ease),
       background var(--t-fast) var(--ease);
   }
-  .tagbox:hover { border-color: var(--border-strong); }
+  .tagbox:hover {
+    border-color: var(--border-strong);
+  }
   .tagbox:focus-within {
     border-color: var(--accent);
     background: var(--surface);
@@ -2368,7 +3119,9 @@
     font-family: inherit;
     color: var(--text);
   }
-  .tagbox input::placeholder { color: var(--text-3); }
+  .tagbox input::placeholder {
+    color: var(--text-3);
+  }
   .capsule {
     position: relative;
     display: inline-flex;
@@ -2385,11 +3138,28 @@
     animation: fadeIn var(--t-fast) var(--ease);
     cursor: grab;
   }
-  .capsule:active { cursor: grabbing; }
-  .cap-grip { flex: 0 0 auto; color: currentColor; opacity: 0.45; font-size: 11px; line-height: 1; user-select: none; cursor: grab; }
+  .capsule:active {
+    cursor: grabbing;
+  }
+  .cap-grip {
+    flex: 0 0 auto;
+    color: currentColor;
+    opacity: 0.45;
+    font-size: 11px;
+    line-height: 1;
+    user-select: none;
+    cursor: grab;
+  }
   /* 超长名称：文本省略号收束，手柄与删除按钮保持可见，胶囊不再撑破容器 */
-  .cap-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .capsule.cap-dragging { opacity: 0.35; }
+  .cap-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .capsule.cap-dragging {
+    opacity: 0.35;
+  }
   /* 拖拽插入指示：目标左/右侧显示竖线光标，表示松手后的插入位置 */
   .capsule.drop-before::before,
   .capsule.drop-after::after {
@@ -2402,11 +3172,22 @@
     background: var(--accent);
     pointer-events: none;
   }
-  .capsule.drop-before::before { left: -5px; }
-  .capsule.drop-after::after { right: -5px; }
+  .capsule.drop-before::before {
+    left: -5px;
+  }
+  .capsule.drop-after::after {
+    right: -5px;
+  }
   /* 统一配色口径（演员 / 剧团胶囊）：known＝库里已有该写法，new＝库里还没有 */
-  .capsule.known { background: var(--accent-soft); color: var(--accent); }
-  .capsule.new { background: var(--surface-3); color: var(--text-2); border-color: var(--border); }
+  .capsule.known {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .capsule.new {
+    background: var(--surface-3);
+    color: var(--text-2);
+    border-color: var(--border);
+  }
   .cap-x {
     flex: 0 0 auto;
     border: none;
@@ -2424,11 +3205,30 @@
     justify-content: center;
     padding: 0;
   }
-  .cap-x:hover { opacity: 1; background: rgba(0, 0, 0, 0.12); }
+  .cap-x:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.12);
+  }
 
-  .cover-layout { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
-  .cover-main { display: flex; flex-direction: column; gap: 14px; flex: 1; min-width: 220px; }
-  .upload-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+  .cover-layout {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .cover-main {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    flex: 1;
+    min-width: 220px;
+  }
+  .upload-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
   .preview {
     width: 180px;
     aspect-ratio: 3 / 4;
@@ -2437,17 +3237,43 @@
     border: 1px solid var(--border);
     flex-shrink: 0;
   }
-  .preview.zoomable { cursor: zoom-in; transition: box-shadow var(--t-fast) var(--ease); }
-  .preview.zoomable:hover { box-shadow: 0 0 0 2px var(--accent-soft); }
+  .preview.zoomable {
+    cursor: zoom-in;
+    transition: box-shadow var(--t-fast) var(--ease);
+  }
+  .preview.zoomable:hover {
+    box-shadow: 0 0 0 2px var(--accent-soft);
+  }
 
-  .actions { display: flex; gap: 10px; margin-top: 4px; }
+  .actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+  }
 
   /* 剧目 / 折子 picker */
-  .ply { display: flex; flex-direction: column; gap: 10px; }
-  .ply-empty { padding: 8px 2px; }
-  .ply-item { position: relative; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; background: var(--surface); cursor: grab; }
-  .ply-item:active { cursor: grabbing; }
-  .ply-item.dragging { opacity: 0.4; }
+  .ply {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ply-empty {
+    padding: 8px 2px;
+  }
+  .ply-item {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    background: var(--surface);
+    cursor: grab;
+  }
+  .ply-item:active {
+    cursor: grabbing;
+  }
+  .ply-item.dragging {
+    opacity: 0.4;
+  }
   /* 拖拽插入指示 */
   .ply-item.drop-before::before,
   .ply-item.drop-after::after {
@@ -2461,32 +3287,111 @@
     pointer-events: none;
     z-index: 1;
   }
-  .ply-item.drop-before::before { top: -6px; }
-  .ply-item.drop-after::after { bottom: -6px; }
-  .ply-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .ply-name { font-weight: 600; font-size: 14.5px; }
-  .ply-ops { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; }
-  .ply-edit-btn {
-    border: none; background: none; color: var(--text-3); width: 24px; height: 24px;
-    border-radius: 50%; cursor: pointer; font-size: 13px;
+  .ply-item.drop-before::before {
+    top: -6px;
   }
-  .ply-edit-btn:hover { background: var(--surface-3); color: var(--accent); }
-  .ply-edit { display: flex; flex-direction: column; gap: 10px; }
-  .ply-edit-actions { display: flex; gap: 8px; }
-  .ply-cat { font-style: normal; font-size: 12px; color: var(--text-muted); background: var(--surface-3); border-radius: 999px; padding: 2px 9px; margin-left: 8px; }
-  .ply-x { border: none; background: none; color: var(--text-3); width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 12px; }
-  .ply-x:hover { background: var(--danger-soft); color: var(--danger); }
-  .ply-zhezis { margin-top: 10px; }
-  .ply-zhezis .small { display: block; margin-bottom: 6px; }
-  .zhezi-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ply-item.drop-after::after {
+    bottom: -6px;
+  }
+  .ply-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .ply-name {
+    font-weight: 600;
+    font-size: 14.5px;
+  }
+  .ply-ops {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    flex: 0 0 auto;
+  }
+  .ply-edit-btn {
+    border: none;
+    background: none;
+    color: var(--text-3);
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .ply-edit-btn:hover {
+    background: var(--surface-3);
+    color: var(--accent);
+  }
+  .ply-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ply-edit-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .ply-cat {
+    font-style: normal;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--surface-3);
+    border-radius: 999px;
+    padding: 2px 9px;
+    margin-left: 8px;
+  }
+  .ply-x {
+    border: none;
+    background: none;
+    color: var(--text-3);
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .ply-x:hover {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+  .ply-zhezis {
+    margin-top: 10px;
+  }
+  .ply-zhezis .small {
+    display: block;
+    margin-bottom: 6px;
+  }
+  .zhezi-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
   .zhezi {
-    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-    border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px;
-    font-size: 13px; color: var(--text-2); transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 13px;
+    color: var(--text-2);
+    transition:
+      background var(--t-fast) var(--ease),
+      border-color var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease);
     user-select: none;
   }
-  .zhezi:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
-  .zhezi input { accent-color: var(--accent); }
+  .zhezi:has(input:checked) {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .zhezi input {
+    accent-color: var(--accent);
+  }
   .zhezi-add {
     display: flex;
     gap: 6px;
@@ -2494,7 +3399,10 @@
     margin-top: 10px;
     flex-wrap: wrap;
   }
-  .zhezi-add .input { flex: 1 1 160px; min-width: 140px; }
+  .zhezi-add .input {
+    flex: 1 1 160px;
+    min-width: 140px;
+  }
   .zhezi-add-btn {
     margin-top: 10px;
     border: 1px dashed var(--border-strong);
@@ -2504,14 +3412,31 @@
     padding: 4px 12px;
     font-size: 12.5px;
     cursor: pointer;
-    transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+    transition:
+      background var(--t-fast) var(--ease),
+      border-color var(--t-fast) var(--ease);
   }
-  .zhezi-add-btn:hover { background: var(--accent-soft); border-color: var(--accent); }
-  .ply-add { display: flex; gap: 10px; align-items: stretch; margin-top: 4px; flex-wrap: wrap; }
-  .ply-add .input { flex: 1; }
+  .zhezi-add-btn:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+  }
+  .ply-add {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+    margin-top: 4px;
+    flex-wrap: wrap;
+  }
+  .ply-add .input {
+    flex: 1;
+  }
 
   /* 可搜索下拉（演员 / 剧目共用） */
-  .combo { position: relative; flex: 2; min-width: 200px; }
+  .combo {
+    position: relative;
+    flex: 2;
+    min-width: 200px;
+  }
   .combo-list {
     position: absolute;
     top: calc(100% + 4px);
@@ -2541,16 +3466,58 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .combo-item:hover { background: var(--accent-soft); color: var(--accent); }
-  .combo-item.create { color: var(--accent); font-weight: 500; }
-  .combo-empty { padding: 10px 12px; color: var(--text-3); font-size: 13px; }
+  .combo-item:hover {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .combo-item.create {
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .combo-empty {
+    padding: 10px 12px;
+    color: var(--text-3);
+    font-size: 13px;
+  }
   /* 录入端查重提示：写法相近但不完全相等的既有实体 */
-  .combo-note { padding: 9px 12px; color: var(--text-2); font-size: 12.5px; background: var(--surface-2); border-top: 1px solid var(--border); }
-  .dup-list { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
-  .dup-title { font-size: 12.5px; color: var(--text-muted); }
-  .dup-item { border: 1px solid var(--border); background: var(--surface); color: var(--text-2); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-  .dup-item:hover { border-color: var(--accent); color: var(--accent); }
-  .dup-cnt { color: var(--text-3); font-size: 11.5px; }
+  .combo-note {
+    padding: 9px 12px;
+    color: var(--text-2);
+    font-size: 12.5px;
+    background: var(--surface-2);
+    border-top: 1px solid var(--border);
+  }
+  .dup-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .dup-title {
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+  .dup-item {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-2);
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 12.5px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dup-item:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .dup-cnt {
+    color: var(--text-3);
+    font-size: 11.5px;
+  }
   /* 收起时收缩到「＋ 新建剧目」文字宽度（此前固定占 1/3 宽，文字右侧
      全是空白边框）；展开后独占整行，新建表单有足够空间。 */
   .ply-new {
@@ -2563,13 +3530,32 @@
     flex-direction: column;
     justify-content: center;
   }
-  .ply-new[open] { flex: 1 1 100%; }
-  .ply-new summary { cursor: pointer; color: var(--accent); }
-  .ply-new-body { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+  .ply-new[open] {
+    flex: 1 1 100%;
+  }
+  .ply-new summary {
+    cursor: pointer;
+    color: var(--accent);
+  }
+  .ply-new-body {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
 
   /* ---------- AI 填写 ---------- */
-  .ai-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .ai-hint { margin: 0 0 10px; font-size: 12.5px; color: var(--text-3); }
+  .ai-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .ai-hint {
+    margin: 0 0 10px;
+    font-size: 12.5px;
+    color: var(--text-3);
+  }
   .ai-text {
     width: 100%;
     resize: vertical;
@@ -2579,11 +3565,20 @@
     padding: 10px 12px;
     margin-bottom: 10px;
   }
-  .ai-actions { display: flex; gap: 8px; align-items: center; }
+  .ai-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
 
   /* ---------- 从既往演出复制 ---------- */
-  .copy-hint { padding: 6px 2px 0; font-size: 13px; }
-  .copy-hint.warn { color: #e5484d; }
+  .copy-hint {
+    padding: 6px 2px 0;
+    font-size: 13px;
+  }
+  .copy-hint.warn {
+    color: #e5484d;
+  }
   .copy-results {
     margin-top: 8px;
     border: 1px solid var(--border);
@@ -2606,26 +3601,84 @@
     font: inherit;
     color: inherit;
   }
-  .copy-item:last-child { border-bottom: none; }
-  .copy-more { margin-top: 8px; width: 100%; }
-  .copy-item:hover { background: var(--accent-softer); }
-  .copy-name { font-weight: 600; }
-  .copy-meta { font-size: 12px; color: var(--text-3); }
-  .copy-source { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .copy-src-info { display: flex; flex-direction: column; gap: 2px; }
+  .copy-item:last-child {
+    border-bottom: none;
+  }
+  .copy-more {
+    margin-top: 8px;
+    width: 100%;
+  }
+  .copy-item:hover {
+    background: var(--accent-softer);
+  }
+  .copy-name {
+    font-weight: 600;
+  }
+  .copy-meta {
+    font-size: 12px;
+    color: var(--text-3);
+  }
+  .copy-source {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .copy-src-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
   .copy-fields {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
     gap: 8px 14px;
     margin: 14px 0;
   }
-  .copy-field { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; cursor: pointer; min-width: 0; }
-  .copy-field-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-  .copy-field-label { font-weight: 500; }
-  .copy-field-val { color: var(--text-3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px; display: flex; align-items: center; gap: 4px; }
-  .copy-cover-thumb { width: 22px; height: 30px; object-fit: cover; border-radius: 3px; flex: none; }
-  .copy-actions { display: flex; align-items: center; gap: 12px; }
-  .copy-ok { color: var(--success); font-size: 13px; }
+  .copy-field {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    min-width: 0;
+  }
+  .copy-field-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+  .copy-field-label {
+    font-weight: 500;
+  }
+  .copy-field-val {
+    color: var(--text-3);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 190px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .copy-cover-thumb {
+    width: 22px;
+    height: 30px;
+    object-fit: cover;
+    border-radius: 3px;
+    flex: none;
+  }
+  .copy-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .copy-ok {
+    color: var(--success);
+    font-size: 13px;
+  }
 
   /* 封面灯箱 */
   .lightbox {

@@ -6,7 +6,10 @@
 
 const PI = Math.PI;
 const A = 6378245.0;
-const EE = 0.00669342162296594323;
+// 与 eviltransform 参考实现及 backend/internal/geo 保持一致的字面量；
+// 原写法 0.00669342162296594323 超出 double 精度，运行时会截断为下值，
+// 此处直接写成截断后的等价形式（两者 === 为 true）。
+const EE = 0.006693421622965943;
 
 function outOfChina(lat, lng) {
   return !(lng > 73.66 && lng < 135.05 && lat > 3.86 && lat < 53.55);

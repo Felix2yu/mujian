@@ -21,7 +21,9 @@ function authHeaders() {
 function markUnauthorized() {
   try {
     window.dispatchEvent(new CustomEvent('mujian:unauthorized'));
-  } catch (e) { /* ignore */ }
+  } catch (e) {
+    /* ignore */
+  }
 }
 
 // 供令牌门校验输入：用给定令牌探测一个需要鉴权的轻量接口。
@@ -132,7 +134,11 @@ export const api = {
     if (Array.isArray(data)) {
       return { records: data, total: data.length, searchTruncated: false };
     }
-    return { records: data.records ?? [], total: data.total ?? 0, searchTruncated: !!data.search_truncated };
+    return {
+      records: data.records ?? [],
+      total: data.total ?? 0,
+      searchTruncated: !!data.search_truncated
+    };
   },
   // 地图专用精简投影：仅含带坐标的记录与地图渲染所需字段，
   // 体积约为 /api/records 全量响应的 1/12。
@@ -142,10 +148,13 @@ export const api = {
   },
   getRecord: (id) => request(`/api/records/${id}`),
   createRecord: (data) => request('/api/records', { method: 'POST', body: JSON.stringify(data) }),
-  updateRecord: (id, data) => request(`/api/records/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateRecord: (id, data) =>
+    request(`/api/records/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteRecord: (id) => request(`/api/records/${id}`, { method: 'DELETE' }),
-  batchUpdate: (ids, data) => request('/api/records/batch', { method: 'POST', body: JSON.stringify({ ids, ...data }) }),
-  batchDelete: (ids) => request('/api/records/batch/delete', { method: 'POST', body: JSON.stringify({ ids }) }),
+  batchUpdate: (ids, data) =>
+    request('/api/records/batch', { method: 'POST', body: JSON.stringify({ ids, ...data }) }),
+  batchDelete: (ids) =>
+    request('/api/records/batch/delete', { method: 'POST', body: JSON.stringify({ ids }) }),
   alignVenues: () => request('/api/records/align-venues', { method: 'POST' }),
 
   // 费用补全：列出仍待确认（未填写 / 值为 0）的费用条目 + 全量概览计数。
@@ -160,11 +169,13 @@ export const api = {
   //   { ids: [...], field, action: 'zero'|'skip'|'amount', amount? }
   //   { items: [{ id, field, action, amount? }] }
   // dry_run: true 只回报将影响的规模，不落库。
-  costReview: (payload) => request('/api/costs/review', { method: 'POST', body: JSON.stringify(payload) }),
+  costReview: (payload) =>
+    request('/api/costs/review', { method: 'POST', body: JSON.stringify(payload) }),
   // 撤销确认，使条目回到待确认清单。
   //   { ids: [...], field? }   撤销指定记录（field 省略 = 三个字段全撤）
   //   { all: true, field? }    撤销该字段（或全部）的所有标记
-  costUnreview: (payload) => request('/api/costs/unreview', { method: 'POST', body: JSON.stringify(payload) }),
+  costUnreview: (payload) =>
+    request('/api/costs/unreview', { method: 'POST', body: JSON.stringify(payload) }),
 
   // 导入/恢复：dryRun 时不落库，只返回 { new_records, updated_records, skipped, issues, warnings }
   importRecords: async (file, { dryRun = false } = {}) => {
@@ -185,42 +196,64 @@ export const api = {
   },
 
   listCategories: () => request('/api/categories'),
-  createCategory: (data) => request('/api/categories', { method: 'POST', body: JSON.stringify(data) }),
-  updateCategory: (id, data) => request(`/api/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  createCategory: (data) =>
+    request('/api/categories', { method: 'POST', body: JSON.stringify(data) }),
+  updateCategory: (id, data) =>
+    request(`/api/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCategory: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
-  reorderCategories: (ids) => request('/api/categories/reorder', { method: 'POST', body: JSON.stringify({ ids }) }),
+  reorderCategories: (ids) =>
+    request('/api/categories/reorder', { method: 'POST', body: JSON.stringify({ ids }) }),
 
   listDramas: () => request('/api/dramas'),
   getDramaTree: () => request('/api/dramas/tree'),
   createDrama: (data) => request('/api/dramas', { method: 'POST', body: JSON.stringify(data) }),
   getDrama: (id) => request(`/api/dramas/${id}`),
-  updateDrama: (id, data) => request(`/api/dramas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateDrama: (id, data) =>
+    request(`/api/dramas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteDrama: (id) => request(`/api/dramas/${id}`, { method: 'DELETE' }),
-  reorderDramas: (ids) => request('/api/dramas/reorder', { method: 'POST', body: JSON.stringify({ ids }) }),
+  reorderDramas: (ids) =>
+    request('/api/dramas/reorder', { method: 'POST', body: JSON.stringify({ ids }) }),
   // 合并重复剧目：dryRun 时只返回影响面预览（source/target 场次、需改挂/去重的条数）。
   mergeDramas: (sourceID, targetID, { dryRun = true } = {}) =>
-    request('/api/dramas/merge', { method: 'POST', body: JSON.stringify({ source_id: sourceID, target_id: targetID, dry_run: dryRun }) }),
-  createZhezi: (dramaId, data) => request(`/api/dramas/${dramaId}/zhezis`, { method: 'POST', body: JSON.stringify(data) }),
-  updateZhezi: (id, data) => request(`/api/zhezis/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    request('/api/dramas/merge', {
+      method: 'POST',
+      body: JSON.stringify({ source_id: sourceID, target_id: targetID, dry_run: dryRun })
+    }),
+  createZhezi: (dramaId, data) =>
+    request(`/api/dramas/${dramaId}/zhezis`, { method: 'POST', body: JSON.stringify(data) }),
+  updateZhezi: (id, data) =>
+    request(`/api/zhezis/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteZhezi: (id) => request(`/api/zhezis/${id}`, { method: 'DELETE' }),
-  reorderZhezis: (dramaId, ids) => request(`/api/dramas/${dramaId}/zhezis/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
+  reorderZhezis: (dramaId, ids) =>
+    request(`/api/dramas/${dramaId}/zhezis/reorder`, {
+      method: 'POST',
+      body: JSON.stringify({ ids })
+    }),
 
   listArtists: () => request('/api/artists'),
   getArtist: (id) => request(`/api/artists/${id}`),
   createArtist: (data) => request('/api/artists', { method: 'POST', body: JSON.stringify(data) }),
-  updateArtist: (id, data) => request(`/api/artists/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateArtist: (id, data) =>
+    request(`/api/artists/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteArtist: (id) => request(`/api/artists/${id}`, { method: 'DELETE' }),
-  reorderArtists: (ids) => request('/api/artists/reorder', { method: 'POST', body: JSON.stringify({ ids }) }),
+  reorderArtists: (ids) =>
+    request('/api/artists/reorder', { method: 'POST', body: JSON.stringify({ ids }) }),
   // 合并重复演员：dryRun 时只返回影响面预览。
   mergeArtists: (sourceID, targetID, { dryRun = true } = {}) =>
-    request('/api/artists/merge', { method: 'POST', body: JSON.stringify({ source_id: sourceID, target_id: targetID, dry_run: dryRun }) }),
+    request('/api/artists/merge', {
+      method: 'POST',
+      body: JSON.stringify({ source_id: sourceID, target_id: targetID, dry_run: dryRun })
+    }),
 
   // 场馆层：以 records.address 为唯一真源的去重实体。
   listVenues: () => request('/api/venues'),
   // 同址合并：把 sourceIDs 对应的场馆并入 targetID，改写对应记录 address。
   // dryRun 时只返回影响面预览（records_repoint / aliases_added）。
   mergeVenues: (targetID, sourceIDs, { dryRun = true } = {}) =>
-    request('/api/venues/merge', { method: 'POST', body: JSON.stringify({ target_id: targetID, source_ids: sourceIDs, dry_run: dryRun }) }),
+    request('/api/venues/merge', {
+      method: 'POST',
+      body: JSON.stringify({ target_id: targetID, source_ids: sourceIDs, dry_run: dryRun })
+    }),
   // 重新同步场馆层与当前记录（新增未代表的地址、删除零记录行）。
   rescanVenues: () => request('/api/venues/rescan', { method: 'POST' }),
   // 破坏性删除的影响面预览（?dry_run=1）：返回受影响数量，不执行删除。
@@ -261,22 +294,27 @@ export const api = {
 
   getSettings: () => request('/api/settings'),
   updateSettings: (data) => request('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
-  testS3Connection: (data) => request('/api/settings/test-s3', { method: 'POST', body: JSON.stringify(data) }),
+  testS3Connection: (data) =>
+    request('/api/settings/test-s3', { method: 'POST', body: JSON.stringify(data) }),
   // 货殖：测试连接（未落库，仅用表单值 + 已保存值合并后探测）
-  testHuozhiConnection: (data) => request('/api/settings/test-huozhi', { method: 'POST', body: JSON.stringify(data) }),
+  testHuozhiConnection: (data) =>
+    request('/api/settings/test-huozhi', { method: 'POST', body: JSON.stringify(data) }),
   // 货殖：演出详情页解析关联账单（含内建费用与最终采用值）
   getRecordBills: (id) => request(`/api/records/${id}/bills`),
   // 货殖：表单里按 ID 预览账单
-  lookupHuozhiBills: (ids) => request('/api/huozhi/bills', { method: 'POST', body: JSON.stringify({ ids }) }),
+  lookupHuozhiBills: (ids) =>
+    request('/api/huozhi/bills', { method: 'POST', body: JSON.stringify({ ids }) }),
 
   // AI 填写：把粘贴的演出信息文本发给后端，由配置的模型提取结构化字段。
   aiParse: (text) => request('/api/ai/parse', { method: 'POST', body: JSON.stringify({ text }) }),
 
   backupRun: () => request('/api/backup/run', { method: 'POST' }),
   listRecordPhotos: (id) => request(`/api/records/${id}/photos`),
-  addRecordPhoto: (id, key) => request(`/api/records/${id}/photos`, { method: 'POST', body: JSON.stringify({ key }) }),
+  addRecordPhoto: (id, key) =>
+    request(`/api/records/${id}/photos`, { method: 'POST', body: JSON.stringify({ key }) }),
   deleteRecordPhoto: (id, pid) => request(`/api/records/${id}/photos/${pid}`, { method: 'DELETE' }),
-  reorderRecordPhotos: (id, ids) => request(`/api/records/${id}/photos/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
+  reorderRecordPhotos: (id, ids) =>
+    request(`/api/records/${id}/photos/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
   listDeletedRecords: () => request('/api/records/deleted'),
   restoreRecord: (id) => request(`/api/records/${id}/restore`, { method: 'POST' }),
   purgeRecord: (id) => request(`/api/records/${id}/purge`, { method: 'DELETE' }),
@@ -291,10 +329,13 @@ export const api = {
     if (t) q.set('token', t);
     return `${API_BASE}/api/backup/download?${q.toString()}`;
   },
-  backupRestoreFrom: (file) => request('/api/backup/restore-from', { method: 'POST', body: JSON.stringify({ file }) }),
-  backupDelete: (file) => request(`/api/backup?file=${encodeURIComponent(file)}`, { method: 'DELETE' }),
+  backupRestoreFrom: (file) =>
+    request('/api/backup/restore-from', { method: 'POST', body: JSON.stringify({ file }) }),
+  backupDelete: (file) =>
+    request(`/api/backup?file=${encodeURIComponent(file)}`, { method: 'DELETE' }),
   // 批量清理：裁剪到最新 keep 份 / 清空全部（历史快照堆积上千份时的收口手段）
-  backupPrune: (keep) => request('/api/backup/prune', { method: 'POST', body: JSON.stringify({ keep }) }),
+  backupPrune: (keep) =>
+    request('/api/backup/prune', { method: 'POST', body: JSON.stringify({ keep }) }),
   backupDeleteAll: () => request('/api/backup/all', { method: 'DELETE' }),
 
   uploadFile: async (file) => {
@@ -334,17 +375,24 @@ export const api = {
     return request(`/api/covers?${qs.toString()}`, signal ? { signal } : {});
   },
   getCoverDuplicates: () => request('/api/covers/duplicates'),
-  mergeCovers: (hashes) => request('/api/covers/merge', { method: 'POST', body: JSON.stringify({ hashes }) }),
+  mergeCovers: (hashes) =>
+    request('/api/covers/merge', { method: 'POST', body: JSON.stringify({ hashes }) }),
   getCoverOrphans: () => request('/api/covers/orphans'),
-  cleanupCovers: (payload) => request('/api/covers/cleanup', { method: 'POST', body: JSON.stringify(payload) }),
+  cleanupCovers: (payload) =>
+    request('/api/covers/cleanup', { method: 'POST', body: JSON.stringify(payload) }),
   purgeTrash: () => request('/api/covers/trash/purge', { method: 'POST' }),
   regenerateThumbs: (onProgress) =>
     streamRequest('/api/covers/thumbs', { method: 'POST' }, onProgress),
-  convertCover: (key, format) => request('/api/covers/convert', { method: 'POST', body: JSON.stringify({ key, format }) }),
+  convertCover: (key, format) =>
+    request('/api/covers/convert', { method: 'POST', body: JSON.stringify({ key, format }) }),
   migrateCoversToS3: (onProgress) =>
     streamRequest('/api/storage/migrate-to-s3', { method: 'POST' }, onProgress),
   convertBatchCovers: (format, onProgress) =>
-    streamRequest('/api/covers/convert-batch', { method: 'POST', body: JSON.stringify({ format }) }, onProgress)
+    streamRequest(
+      '/api/covers/convert-batch',
+      { method: 'POST', body: JSON.stringify({ format }) },
+      onProgress
+    )
 };
 
 // ---- S3-aware cover URL resolution ----
@@ -356,7 +404,9 @@ async function ensureStorageInfo() {
   try {
     const s = await request('/api/settings');
     storageInfo = s || storageInfo;
-  } catch (e) { /* keep local defaults */ }
+  } catch (e) {
+    /* keep local defaults */
+  }
   storageLoaded = true;
 }
 

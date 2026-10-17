@@ -1,4 +1,5 @@
 <script>
+  import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import { api } from '#lib/api.js';
   import { askConfirm } from '#lib/confirm.js';
@@ -31,7 +32,9 @@
       const res = await api.listDeletedRecords();
       trash = res.records || [];
       trashTotal = res.total || 0;
-    } catch (e) { /* 页面其他功能不受影响 */ }
+    } catch (e) {
+      /* 页面其他功能不受影响 */
+    }
   }
   async function restoreTrashed(id) {
     trashBusy = id;
@@ -145,8 +148,8 @@
 
   onMount(loadTrash);
 </script>
-<svelte:head><title>数据 - 幕间</title></svelte:head>
 
+<svelte:head><title>数据 - 幕间</title></svelte:head>
 
 <div class="fade-up">
   <div class="page-head">
@@ -160,13 +163,19 @@
   <section class="data-sec">
     <div class="data-sec-head">
       <h2>导入 / 导出 / 自动备份</h2>
-      <p class="tiny muted">从「记录现场」备份包或单独的 data.json 还原数据（按 id 覆盖更新）；也可把当前数据导出为文件带走；或设置自动备份定时留存。</p>
+      <p class="tiny muted">
+        从「记录现场」备份包或单独的 data.json 还原数据（按 id
+        覆盖更新）；也可把当前数据导出为文件带走；或设置自动备份定时留存。
+      </p>
     </div>
 
     <div
       class="card dropzone"
       class:dragover
-      ondragover={(e) => { e.preventDefault(); dragover = true; }}
+      ondragover={(e) => {
+        e.preventDefault();
+        dragover = true;
+      }}
       ondragleave={() => (dragover = false)}
       ondrop={onDrop}
       role="button"
@@ -192,12 +201,22 @@
         {previewBusy ? '检查中…' : '预览导入'}
       </button>
       {#if file && !busy && !previewBusy}
-        <button class="btn" onclick={() => { file = null; resetImportState(); }}>清除</button>
+        <button
+          class="btn"
+          onclick={() => {
+            file = null;
+            resetImportState();
+          }}>清除</button
+        >
       {/if}
     </div>
 
-    {#if previewBusy}<p class="tiny warn-hint">正在解析并试运行校验（不写入数据库）；大备份（含封面）可能需要数分钟。</p>{/if}
-    {#if busy}<p class="tiny warn-hint">导入进行中，请勿刷新或关闭页面、不要重复点击；大备份（含封面）可能需要数分钟。</p>{/if}
+    {#if previewBusy}<p class="tiny warn-hint">
+        正在解析并试运行校验（不写入数据库）；大备份（含封面）可能需要数分钟。
+      </p>{/if}
+    {#if busy}<p class="tiny warn-hint">
+        导入进行中，请勿刷新或关闭页面、不要重复点击；大备份（含封面）可能需要数分钟。
+      </p>{/if}
 
     {#if error}<div class="banner error">⚠ {error}</div>{/if}
 
@@ -207,20 +226,28 @@
         <div class="pstats">
           <span class="pstat"><b>{preview.new_records ?? 0}</b> 新增</span>
           <span class="pstat"><b>{preview.updated_records ?? 0}</b> 覆盖</span>
-          <span class="pstat" class:warn={preview.skipped > 0}><b>{preview.skipped ?? 0}</b> 跳过</span>
+          <span class="pstat" class:warn={preview.skipped > 0}
+            ><b>{preview.skipped ?? 0}</b> 跳过</span
+          >
           <span class="pstat"><b>{preview.records ?? 0}</b> 记录</span>
           <span class="pstat"><b>{preview.categories ?? 0}</b> 分类</span>
-          {#if preview.covers_imported}<span class="pstat"><b>{preview.covers_imported}</b> 封面</span>{/if}
-          {#if preview.covers_missing}<span class="pstat warn"><b>{preview.covers_missing}</b> 封面缺失</span>{/if}
+          {#if preview.covers_imported}<span class="pstat"
+              ><b>{preview.covers_imported}</b> 封面</span
+            >{/if}
+          {#if preview.covers_missing}<span class="pstat warn"
+              ><b>{preview.covers_missing}</b> 封面缺失</span
+            >{/if}
         </div>
         {#if preview.warnings?.length}
           <ul class="plist">
-            {#each preview.warnings as w}<li>提示：{w.reason}（{w.count} 条）</li>{/each}
+            {#each preview.warnings as w (w.reason)}<li>提示：{w.reason}（{w.count} 条）</li>{/each}
           </ul>
         {/if}
         {#if preview.issues?.length}
           <ul class="plist">
-            {#each preview.issues as it}<li>跳过第 {it.index + 1} 条{#if it.id}（id {it.id}）{/if}：{it.reason}</li>{/each}
+            {#each preview.issues as it (it.index)}<li>
+                跳过第 {it.index + 1} 条{#if it.id}（id {it.id}）{/if}：{it.reason}
+              </li>{/each}
           </ul>
         {/if}
         <div class="btn-row">
@@ -236,7 +263,7 @@
         ✓ 导入完成：记录 {result.records} 条，分类 {result.categories} 个
         {#if result.covers_imported != null}，封面关联 {result.covers_imported} 张{/if}
         {#if result.covers_missing}（缺失 {result.covers_missing} 张）{/if}。
-        <a class="flink" href="/">查看记录 →</a>
+        <a class="flink" href={resolve('/')}>查看记录 →</a>
       </div>
     {/if}
 
@@ -246,7 +273,12 @@
       <div class="card sec">
         <h3>支持的文件</h3>
         <ul class="tips">
-          <li><b>记录现场备份（推荐）</b>：上传 <code>JI_LU_XIAN_CHANG.android.zip</code>，包内包含数据文件 <code>JI_LU_XIAN_CHANG.android</code> 与封面目录 <code>covers/</code>，一键还原数据与封面关联</li>
+          <li>
+            <b>记录现场备份（推荐）</b>：上传
+            <code>JI_LU_XIAN_CHANG.android.zip</code>，包内包含数据文件
+            <code>JI_LU_XIAN_CHANG.android</code>
+            与封面目录 <code>covers/</code>，一键还原数据与封面关联
+          </li>
           <li><b>纯数据</b>：单独的 <code>data.json</code>（不含封面）</li>
           <li><b>数据 + 封面</b>：含 <code>data.json</code> 与 <code>covers/</code> 的压缩包</li>
         </ul>
@@ -255,9 +287,17 @@
       <div class="card sec">
         <h3>关于去重</h3>
         <ul class="tips">
-          <li><b>演出记录</b>：按 <code>id</code> 覆盖更新。导入自己导出的备份是幂等的——重复导入不会新增重复记录；但来自「记录现场」等外部源、且每条不含 <code>id</code> 的文件，重复导入会产生重复。</li>
-          <li><b>封面</b>：按图片内容哈希自动去重，字节完全相同的封面只保存一份，不重复占用空间。</li>
-          <li><b>注意</b>：导入是按 <code>id</code> 更新，会覆盖同 <code>id</code> 的已有数据；导入本质是“恢复”而非“追加”。</li>
+          <li>
+            <b>演出记录</b>：按 <code>id</code>
+            覆盖更新。导入自己导出的备份是幂等的——重复导入不会新增重复记录；但来自「记录现场」等外部源、且每条不含
+            <code>id</code> 的文件，重复导入会产生重复。
+          </li>
+          <li>
+            <b>封面</b>：按图片内容哈希自动去重，字节完全相同的封面只保存一份，不重复占用空间。
+          </li>
+          <li>
+            <b>注意</b>：导入是按 <code>id</code> 更新，会覆盖同 <code>id</code> 的已有数据；导入本质是“恢复”而非“追加”。
+          </li>
         </ul>
       </div>
     </div>
@@ -266,7 +306,9 @@
       <h3>手动导出</h3>
       <p class="tiny">导出全量数据与封面，打包为 zip（导入时可直接还原）；也可单独导出 JSON。</p>
       <div class="btn-row">
+        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
         <a class="btn primary" href={api.getExportUrl('zip')}>⇩ 导出 ZIP（数据 + 封面）</a>
+        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
         <a class="btn" href={api.getExportUrl()}>⇩ 导出 JSON</a>
       </div>
     </div>
@@ -288,12 +330,26 @@
           {#each trash as t (t.id)}
             <div class="trash-row">
               <span class="trash-name">{t.name}</span>
-              <span class="trash-meta">{t.dateText ? t.dateText.slice(0, 10) : ''}{t.city ? ' · ' + t.city : ''} · 剩 {daysLeft(t.deleted_at)} 天</span>
+              <span class="trash-meta"
+                >{t.dateText ? t.dateText.slice(0, 10) : ''}{t.city ? ' · ' + t.city : ''} · 剩 {daysLeft(
+                  t.deleted_at
+                )} 天</span
+              >
               <span class="trash-ops">
-                <button type="button" class="btn sm" disabled={trashBusy === t.id} onclick={() => restoreTrashed(t.id)}>
+                <button
+                  type="button"
+                  class="btn sm"
+                  disabled={trashBusy === t.id}
+                  onclick={() => restoreTrashed(t.id)}
+                >
                   {trashBusy === t.id ? '…' : '恢复'}
                 </button>
-                <button type="button" class="btn sm danger" disabled={trashBusy === t.id} onclick={() => purgeTrashed(t.id)}>
+                <button
+                  type="button"
+                  class="btn sm danger"
+                  disabled={trashBusy === t.id}
+                  onclick={() => purgeTrashed(t.id)}
+                >
                   {trashBusy === t.id ? '…' : '彻底删除'}
                 </button>
               </span>
@@ -301,7 +357,12 @@
           {/each}
         </div>
         <div class="btn-row" style="margin-top: 10px;">
-          <button type="button" class="btn sm danger" disabled={trashBusy === 'all' || trash.length === 0} onclick={emptyTrash}>
+          <button
+            type="button"
+            class="btn sm danger"
+            disabled={trashBusy === 'all' || trash.length === 0}
+            onclick={emptyTrash}
+          >
             {trashBusy === 'all' ? '清空中…' : `清空回收站（${trashTotal} 条）`}
           </button>
         </div>
@@ -333,14 +394,18 @@
     padding-top: 0;
     border-top: none;
   }
-  .data-sec-head { margin-bottom: 14px; }
+  .data-sec-head {
+    margin-bottom: 14px;
+  }
   .data-sec-head h2 {
     margin: 0 0 4px;
     font-size: 16px;
     font-weight: 600;
     color: var(--text);
   }
-  .data-sec-head p { margin: 0; }
+  .data-sec-head p {
+    margin: 0;
+  }
 
   .dropzone {
     position: relative;
@@ -353,20 +418,44 @@
     border: 2px dashed var(--border-strong);
     border-radius: var(--radius-lg);
     cursor: pointer;
-    transition: border-color var(--t-med) var(--ease), background var(--t-med) var(--ease);
+    transition:
+      border-color var(--t-med) var(--ease),
+      background var(--t-med) var(--ease);
     box-shadow: none;
     background: var(--surface-2);
   }
-  .dropzone:hover, .dropzone.dragover {
+  .dropzone:hover,
+  .dropzone.dragover {
     border-color: var(--accent);
     background: var(--accent-softer);
   }
-  .dz-ico { font-size: 34px; color: var(--accent); opacity: 0.8; }
-  .dz-text { text-align: center; }
-  .dz-text .t { font-weight: 600; font-size: 15px; }
-  .dz-text .h { font-size: 13px; color: var(--text-muted); }
-  .dz-file { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-  .fname { font-weight: 600; word-break: break-all; text-align: center; }
+  .dz-ico {
+    font-size: 34px;
+    color: var(--accent);
+    opacity: 0.8;
+  }
+  .dz-text {
+    text-align: center;
+  }
+  .dz-text .t {
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .dz-text .h {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .dz-file {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .fname {
+    font-weight: 600;
+    word-break: break-all;
+    text-align: center;
+  }
   .dz-input {
     position: absolute;
     inset: 0;
@@ -375,17 +464,51 @@
   }
 
   /* 允许换行：导出按钮文案较长，窄屏下不换行会把整页顶出视口 */
-  .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
-  .warn-hint { color: var(--text-muted); margin-top: 8px; }
+  .btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .warn-hint {
+    color: var(--text-muted);
+    margin-top: 8px;
+  }
 
-  .sec { padding: 18px 20px; margin-top: 16px; }
-  .sec h3 { margin: 0 0 10px; font-size: 15.5px; }
-  .tips { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--text-2); }
+  .sec {
+    padding: 18px 20px;
+    margin-top: 16px;
+  }
+  .sec h3 {
+    margin: 0 0 10px;
+    font-size: 15.5px;
+  }
+  .tips {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13.5px;
+    color: var(--text-2);
+  }
 
   /* 导入预览：试运行统计条 + 提示/拒收明细 */
-  .preview { margin-top: 16px; }
-  .preview h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
-  .pstats { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0; }
+  .preview {
+    margin-top: 16px;
+  }
+  .preview h3 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .pstats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 2px 0;
+  }
   .pstat {
     display: inline-flex;
     align-items: baseline;
@@ -396,9 +519,17 @@
     font-size: 13px;
     color: var(--text-2);
   }
-  .pstat b { font-size: 14px; color: var(--text); }
-  .pstat.warn { background: rgba(180, 83, 9, 0.12); color: var(--warn, #b45309); }
-  .pstat.warn b { color: inherit; }
+  .pstat b {
+    font-size: 14px;
+    color: var(--text);
+  }
+  .pstat.warn {
+    background: rgba(180, 83, 9, 0.12);
+    color: var(--warn, #b45309);
+  }
+  .pstat.warn b {
+    color: inherit;
+  }
   /* 明细可滚动：一次导入最多回报 50 条拒收，不撑爆页面 */
   .plist {
     margin: 10px 0 0;
@@ -422,11 +553,26 @@
     margin-top: 16px;
   }
   /* 网格自己管间距，避免与 .sec 的 margin-top 叠加（不塌陷，会变成双倍）。 */
-  .refs-grid .sec { margin-top: 0; }
-  code { background: var(--surface-3); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
-  .flink { color: var(--accent); font-weight: 600; margin-left: 6px; }
+  .refs-grid .sec {
+    margin-top: 0;
+  }
+  code {
+    background: var(--surface-3);
+    padding: 1px 6px;
+    border-radius: 5px;
+    font-size: 12.5px;
+  }
+  .flink {
+    color: var(--accent);
+    font-weight: 600;
+    margin-left: 6px;
+  }
 
-  .trash-list { border: 1px solid var(--border); border-radius: var(--radius, 10px); overflow: hidden; }
+  .trash-list {
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 10px);
+    overflow: hidden;
+  }
   .trash-row {
     display: flex;
     align-items: center;
@@ -435,8 +581,26 @@
     border-bottom: 1px solid var(--border);
     background: var(--surface);
   }
-  .trash-row:last-child { border-bottom: none; }
-  .trash-name { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-  .trash-meta { color: var(--text-3); font-size: 12px; flex: none; }
-  .trash-ops { display: flex; gap: 6px; flex: none; }
+  .trash-row:last-child {
+    border-bottom: none;
+  }
+  .trash-name {
+    font-weight: 500;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+  .trash-meta {
+    color: var(--text-3);
+    font-size: 12px;
+    flex: none;
+  }
+  .trash-ops {
+    display: flex;
+    gap: 6px;
+    flex: none;
+  }
 </style>

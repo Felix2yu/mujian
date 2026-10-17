@@ -3,7 +3,7 @@
   import { api } from '#lib/api.js';
   import CategoryTags from '#lib/components/CategoryTags.svelte';
 
-  let { selectedIds, records, onClose, onSaved } = $props();
+  let { selectedIds, onClose, onSaved } = $props();
 
   let categories = $state([]);
   let dramaTree = $state([]);
@@ -36,21 +36,7 @@
     artist_names: { enabled: false, op: 'append', value: [] }
   });
 
-  let chosenDramas = $derived(
-    dramaTree.filter((d) => fields.drama_ids.value.includes(d.id))
-  );
-
-  let chosenZhezis = $derived.by(() => {
-    const zs = [];
-    for (const d of dramaTree) {
-      for (const z of d.zhezis || []) {
-        if (fields.zhezi_ids.value.includes(z.id)) {
-          zs.push({ ...z, dramaName: d.name });
-        }
-      }
-    }
-    return zs;
-  });
+  let chosenDramas = $derived(dramaTree.filter((d) => fields.drama_ids.value.includes(d.id)));
 
   function toggleField(key) {
     fields[key].enabled = !fields[key].enabled;
@@ -88,7 +74,9 @@
       ]);
       categories = cats;
       dramaTree = tree;
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   async function save() {
@@ -102,7 +90,8 @@
         payload.category_names = { op: 'set', value: [...fields.category.value] };
       }
       if (fields.rating.enabled) payload.rating = parseInt(fields.rating.value) || 0;
-      if (fields.activeStatus.enabled) payload.active_status = parseInt(fields.activeStatus.value) || 0;
+      if (fields.activeStatus.enabled)
+        payload.active_status = parseInt(fields.activeStatus.value) || 0;
       if (fields.city.enabled) payload.city = fields.city.value;
       if (fields.address.enabled) payload.address = fields.address.value;
       if (fields.channel.enabled) payload.channel = fields.channel.value;
@@ -111,12 +100,18 @@
       if (fields.remark.enabled) payload.remark = fields.remark.value;
       if (fields.seat.enabled) payload.seat = fields.seat.value;
       // 费用字段：空字符串表示未填写（null），0 表示免费，其他为具体金额
-      if (fields.price.enabled) payload.price = fields.price.value === '' ? null : parseFloat(fields.price.value);
+      if (fields.price.enabled)
+        payload.price = fields.price.value === '' ? null : parseFloat(fields.price.value);
       if (fields.priceCurrency.enabled) payload.price_currency = fields.priceCurrency.value;
-      if (fields.payPrice.enabled) payload.pay_price = fields.payPrice.value === '' ? null : parseFloat(fields.payPrice.value);
-      if (fields.payPriceCurrency.enabled) payload.pay_price_currency = fields.payPriceCurrency.value;
-      if (fields.otherCost.enabled) payload.other_cost = fields.otherCost.value === '' ? null : parseFloat(fields.otherCost.value);
-      if (fields.otherCostCurrency.enabled) payload.other_cost_currency = fields.otherCostCurrency.value;
+      if (fields.payPrice.enabled)
+        payload.pay_price = fields.payPrice.value === '' ? null : parseFloat(fields.payPrice.value);
+      if (fields.payPriceCurrency.enabled)
+        payload.pay_price_currency = fields.payPriceCurrency.value;
+      if (fields.otherCost.enabled)
+        payload.other_cost =
+          fields.otherCost.value === '' ? null : parseFloat(fields.otherCost.value);
+      if (fields.otherCostCurrency.enabled)
+        payload.other_cost_currency = fields.otherCostCurrency.value;
 
       // 数组字段
       if (fields.drama_ids.enabled && fields.drama_ids.value.length > 0) {
@@ -147,7 +142,9 @@
   onMount(async () => {
     try {
       settings = await api.getSettings();
-    } catch (e) { /* 读取失败则用默认（多币种开） */ }
+    } catch (e) {
+      /* 读取失败则用默认（多币种开） */
+    }
   });
 </script>
 
@@ -165,17 +162,29 @@
         <div class="section-title">分类与评分</div>
         <label class="field col">
           <span class="cat-head">
-            <input type="checkbox" checked={fields.category.enabled} onchange={() => toggleField('category')} />
+            <input
+              type="checkbox"
+              checked={fields.category.enabled}
+              onchange={() => toggleField('category')}
+            />
             <span>剧种（可多个，覆盖设置）</span>
           </span>
           {#if fields.category.enabled}
-            <CategoryTags bind:values={fields.category.value} {categories} placeholder="添加剧种，回车确认" />
+            <CategoryTags
+              bind:values={fields.category.value}
+              {categories}
+              placeholder="添加剧种，回车确认"
+            />
           {:else}
             <span class="muted small">勾选后设置剧种</span>
           {/if}
         </label>
         <label class="field">
-          <input type="checkbox" checked={fields.rating.enabled} onchange={() => toggleField('rating')} />
+          <input
+            type="checkbox"
+            checked={fields.rating.enabled}
+            onchange={() => toggleField('rating')}
+          />
           <span>评分</span>
           <select bind:value={fields.rating.value} disabled={!fields.rating.enabled}>
             <option value="0">未评</option>
@@ -187,7 +196,11 @@
           </select>
         </label>
         <label class="field">
-          <input type="checkbox" checked={fields.activeStatus.enabled} onchange={() => toggleField('activeStatus')} />
+          <input
+            type="checkbox"
+            checked={fields.activeStatus.enabled}
+            onchange={() => toggleField('activeStatus')}
+          />
           <span>状态</span>
           <select bind:value={fields.activeStatus.value} disabled={!fields.activeStatus.enabled}>
             <option value="0">正常</option>
@@ -199,39 +212,96 @@
       <div class="section">
         <div class="section-title">场地与渠道</div>
         <label class="field">
-          <input type="checkbox" checked={fields.city.enabled} onchange={() => toggleField('city')} />
+          <input
+            type="checkbox"
+            checked={fields.city.enabled}
+            onchange={() => toggleField('city')}
+          />
           <span>城市</span>
-          <input class="input" bind:value={fields.city.value} placeholder="如：上海" disabled={!fields.city.enabled} />
+          <input
+            class="input"
+            bind:value={fields.city.value}
+            placeholder="如：上海"
+            disabled={!fields.city.enabled}
+          />
         </label>
         <label class="field">
-          <input type="checkbox" checked={fields.address.enabled} onchange={() => toggleField('address')} />
+          <input
+            type="checkbox"
+            checked={fields.address.enabled}
+            onchange={() => toggleField('address')}
+          />
           <span>地址</span>
-          <input class="input" bind:value={fields.address.value} placeholder="剧院地址" disabled={!fields.address.enabled} />
+          <input
+            class="input"
+            bind:value={fields.address.value}
+            placeholder="剧院地址"
+            disabled={!fields.address.enabled}
+          />
         </label>
         <label class="field">
-          <input type="checkbox" checked={fields.channel.enabled} onchange={() => toggleField('channel')} />
+          <input
+            type="checkbox"
+            checked={fields.channel.enabled}
+            onchange={() => toggleField('channel')}
+          />
           <span>购票渠道</span>
-          <input class="input" bind:value={fields.channel.value} placeholder="如：大麦、猫眼" disabled={!fields.channel.enabled} />
+          <input
+            class="input"
+            bind:value={fields.channel.value}
+            placeholder="如：大麦、猫眼"
+            disabled={!fields.channel.enabled}
+          />
         </label>
         <label class="field">
-          <input type="checkbox" checked={fields.company.enabled} onchange={() => toggleField('company')} />
+          <input
+            type="checkbox"
+            checked={fields.company.enabled}
+            onchange={() => toggleField('company')}
+          />
           <span>剧团/主办方</span>
-          <input class="input" bind:value={fields.company.value} placeholder="逗号分隔" disabled={!fields.company.enabled} />
+          <input
+            class="input"
+            bind:value={fields.company.value}
+            placeholder="逗号分隔"
+            disabled={!fields.company.enabled}
+          />
         </label>
         <label class="field">
-          <input type="checkbox" checked={fields.seat.enabled} onchange={() => toggleField('seat')} />
+          <input
+            type="checkbox"
+            checked={fields.seat.enabled}
+            onchange={() => toggleField('seat')}
+          />
           <span>座位</span>
           <input class="input" bind:value={fields.seat.value} disabled={!fields.seat.enabled} />
         </label>
         <label class="field">
-          <input type="checkbox" checked={fields.friends.enabled} onchange={() => toggleField('friends')} />
+          <input
+            type="checkbox"
+            checked={fields.friends.enabled}
+            onchange={() => toggleField('friends')}
+          />
           <span>同行好友</span>
-          <input class="input" bind:value={fields.friends.value} placeholder="逗号分隔" disabled={!fields.friends.enabled} />
+          <input
+            class="input"
+            bind:value={fields.friends.value}
+            placeholder="逗号分隔"
+            disabled={!fields.friends.enabled}
+          />
         </label>
         <label class="field full">
-          <input type="checkbox" checked={fields.remark.enabled} onchange={() => toggleField('remark')} />
+          <input
+            type="checkbox"
+            checked={fields.remark.enabled}
+            onchange={() => toggleField('remark')}
+          />
           <span>备注</span>
-          <textarea class="input" bind:value={fields.remark.value} rows="2" disabled={!fields.remark.enabled}></textarea>
+          <textarea
+            class="input"
+            bind:value={fields.remark.value}
+            rows="2"
+            disabled={!fields.remark.enabled}></textarea>
         </label>
       </div>
 
@@ -239,53 +309,104 @@
         <div class="section-title">费用</div>
         <div class="cost-row">
           <label class="field">
-            <input type="checkbox" checked={fields.price.enabled} onchange={() => toggleField('price')} />
+            <input
+              type="checkbox"
+              checked={fields.price.enabled}
+              onchange={() => toggleField('price')}
+            />
             <span>票价</span>
-            <input class="input" type="number" bind:value={fields.price.value} placeholder="金额" disabled={!fields.price.enabled} />
+            <input
+              class="input"
+              type="number"
+              bind:value={fields.price.value}
+              placeholder="金额"
+              disabled={!fields.price.enabled}
+            />
           </label>
           {#if settings.multi_currency}
-          <label class="field">
-            <input type="checkbox" checked={fields.priceCurrency.enabled} onchange={() => toggleField('priceCurrency')} />
-            <span>币种</span>
-            <select bind:value={fields.priceCurrency.value} disabled={!fields.priceCurrency.enabled}>
-              <option value="CNY">¥ CNY</option>
-              <option value="USD">$ USD</option>
-            </select>
-          </label>
+            <label class="field">
+              <input
+                type="checkbox"
+                checked={fields.priceCurrency.enabled}
+                onchange={() => toggleField('priceCurrency')}
+              />
+              <span>币种</span>
+              <select
+                bind:value={fields.priceCurrency.value}
+                disabled={!fields.priceCurrency.enabled}
+              >
+                <option value="CNY">¥ CNY</option>
+                <option value="USD">$ USD</option>
+              </select>
+            </label>
           {/if}
         </div>
         <div class="cost-row">
           <label class="field">
-            <input type="checkbox" checked={fields.payPrice.enabled} onchange={() => toggleField('payPrice')} />
+            <input
+              type="checkbox"
+              checked={fields.payPrice.enabled}
+              onchange={() => toggleField('payPrice')}
+            />
             <span>实付</span>
-            <input class="input" type="number" bind:value={fields.payPrice.value} placeholder="金额" disabled={!fields.payPrice.enabled} />
+            <input
+              class="input"
+              type="number"
+              bind:value={fields.payPrice.value}
+              placeholder="金额"
+              disabled={!fields.payPrice.enabled}
+            />
           </label>
           {#if settings.multi_currency}
-          <label class="field">
-            <input type="checkbox" checked={fields.payPriceCurrency.enabled} onchange={() => toggleField('payPriceCurrency')} />
-            <span>币种</span>
-            <select bind:value={fields.payPriceCurrency.value} disabled={!fields.payPriceCurrency.enabled}>
-              <option value="CNY">¥ CNY</option>
-              <option value="USD">$ USD</option>
-            </select>
-          </label>
+            <label class="field">
+              <input
+                type="checkbox"
+                checked={fields.payPriceCurrency.enabled}
+                onchange={() => toggleField('payPriceCurrency')}
+              />
+              <span>币种</span>
+              <select
+                bind:value={fields.payPriceCurrency.value}
+                disabled={!fields.payPriceCurrency.enabled}
+              >
+                <option value="CNY">¥ CNY</option>
+                <option value="USD">$ USD</option>
+              </select>
+            </label>
           {/if}
         </div>
         <div class="cost-row">
           <label class="field">
-            <input type="checkbox" checked={fields.otherCost.enabled} onchange={() => toggleField('otherCost')} />
+            <input
+              type="checkbox"
+              checked={fields.otherCost.enabled}
+              onchange={() => toggleField('otherCost')}
+            />
             <span>其他费用</span>
-            <input class="input" type="number" bind:value={fields.otherCost.value} placeholder="金额" disabled={!fields.otherCost.enabled} />
+            <input
+              class="input"
+              type="number"
+              bind:value={fields.otherCost.value}
+              placeholder="金额"
+              disabled={!fields.otherCost.enabled}
+            />
           </label>
           {#if settings.multi_currency}
-          <label class="field">
-            <input type="checkbox" checked={fields.otherCostCurrency.enabled} onchange={() => toggleField('otherCostCurrency')} />
-            <span>币种</span>
-            <select bind:value={fields.otherCostCurrency.value} disabled={!fields.otherCostCurrency.enabled}>
-              <option value="CNY">¥ CNY</option>
-              <option value="USD">$ USD</option>
-            </select>
-          </label>
+            <label class="field">
+              <input
+                type="checkbox"
+                checked={fields.otherCostCurrency.enabled}
+                onchange={() => toggleField('otherCostCurrency')}
+              />
+              <span>币种</span>
+              <select
+                bind:value={fields.otherCostCurrency.value}
+                disabled={!fields.otherCostCurrency.enabled}
+              >
+                <option value="CNY">¥ CNY</option>
+                <option value="USD">$ USD</option>
+              </select>
+            </label>
           {/if}
         </div>
       </div>
@@ -293,10 +414,18 @@
       <div class="section">
         <div class="section-title">
           <label class="inline-check">
-            <input type="checkbox" checked={fields.drama_ids.enabled} onchange={() => toggleField('drama_ids')} />
+            <input
+              type="checkbox"
+              checked={fields.drama_ids.enabled}
+              onchange={() => toggleField('drama_ids')}
+            />
             <span>剧目</span>
           </label>
-          <select class="op-select" bind:value={fields.drama_ids.op} disabled={!fields.drama_ids.enabled}>
+          <select
+            class="op-select"
+            bind:value={fields.drama_ids.op}
+            disabled={!fields.drama_ids.enabled}
+          >
             <option value="append">追加</option>
             <option value="set">替换为</option>
             <option value="remove">移除</option>
@@ -309,8 +438,15 @@
             <div class="chip-grid">
               {#each dramaTree as d (d.id)}
                 <label class="chip">
-                  <input type="checkbox" checked={fields.drama_ids.value.includes(d.id)} onchange={() => toggleDrama(d.id)} />
-                  <span>{d.name}{#if d.categoryNames?.length} <em class="cat">{d.categoryNames.join('/')}</em>{/if}</span>
+                  <input
+                    type="checkbox"
+                    checked={fields.drama_ids.value.includes(d.id)}
+                    onchange={() => toggleDrama(d.id)}
+                  />
+                  <span
+                    >{d.name}{#if d.categoryNames?.length}
+                      <em class="cat">{d.categoryNames.join('/')}</em>{/if}</span
+                  >
                 </label>
               {/each}
             </div>
@@ -321,10 +457,18 @@
       <div class="section">
         <div class="section-title">
           <label class="inline-check">
-            <input type="checkbox" checked={fields.zhezi_ids.enabled} onchange={() => toggleField('zhezi_ids')} />
+            <input
+              type="checkbox"
+              checked={fields.zhezi_ids.enabled}
+              onchange={() => toggleField('zhezi_ids')}
+            />
             <span>折子</span>
           </label>
-          <select class="op-select" bind:value={fields.zhezi_ids.op} disabled={!fields.zhezi_ids.enabled}>
+          <select
+            class="op-select"
+            bind:value={fields.zhezi_ids.op}
+            disabled={!fields.zhezi_ids.enabled}
+          >
             <option value="append">追加</option>
             <option value="set">替换为</option>
             <option value="remove">移除</option>
@@ -340,7 +484,11 @@
                 <div class="chip-grid">
                   {#each d.zhezis || [] as z (z.id)}
                     <label class="chip small">
-                      <input type="checkbox" checked={fields.zhezi_ids.value.includes(z.id)} onchange={() => toggleZhezi(z.id)} />
+                      <input
+                        type="checkbox"
+                        checked={fields.zhezi_ids.value.includes(z.id)}
+                        onchange={() => toggleZhezi(z.id)}
+                      />
                       <span>{z.name}</span>
                       {#if z.aliases && z.aliases.length}
                         <em class="alias">{z.aliases.join(' / ')}</em>
@@ -357,7 +505,11 @@
       <div class="section">
         <div class="section-title">
           <label class="inline-check">
-            <input type="checkbox" checked={fields.play.enabled} onchange={() => toggleField('play')} />
+            <input
+              type="checkbox"
+              checked={fields.play.enabled}
+              onchange={() => toggleField('play')}
+            />
             <span>剧名（逗号分隔输入，回车添加）</span>
           </label>
           <select class="op-select" bind:value={fields.play.op} disabled={!fields.play.enabled}>
@@ -379,8 +531,10 @@
           />
           {#if fields.play.value.length}
             <div class="chip-grid">
-              {#each fields.play.value as p}
-                <span class="chip selected">{p} <button onclick={() => togglePlay(p)}>✕</button></span>
+              {#each fields.play.value as p (p)}
+                <span class="chip selected"
+                  >{p} <button onclick={() => togglePlay(p)}>✕</button></span
+                >
               {/each}
             </div>
           {/if}
@@ -390,10 +544,18 @@
       <div class="section">
         <div class="section-title">
           <label class="inline-check">
-            <input type="checkbox" checked={fields.artist_names.enabled} onchange={() => toggleField('artist_names')} />
+            <input
+              type="checkbox"
+              checked={fields.artist_names.enabled}
+              onchange={() => toggleField('artist_names')}
+            />
             <span>演员</span>
           </label>
-          <select class="op-select" bind:value={fields.artist_names.op} disabled={!fields.artist_names.enabled}>
+          <select
+            class="op-select"
+            bind:value={fields.artist_names.op}
+            disabled={!fields.artist_names.enabled}
+          >
             <option value="append">追加</option>
             <option value="set">替换为</option>
             <option value="remove">移除</option>
@@ -412,8 +574,10 @@
           />
           {#if fields.artist_names.value.length}
             <div class="chip-grid">
-              {#each fields.artist_names.value as a}
-                <span class="chip selected">{a} <button onclick={() => toggleArtist(a)}>✕</button></span>
+              {#each fields.artist_names.value as a, i (i)}
+                <span class="chip selected"
+                  >{a} <button onclick={() => toggleArtist(a)}>✕</button></span
+                >
               {/each}
             </div>
           {/if}
@@ -434,7 +598,7 @@
   .modal-mask {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -477,7 +641,9 @@
     height: 32px;
     border-radius: 50%;
   }
-  .close:hover { background: var(--surface-3); }
+  .close:hover {
+    background: var(--surface-3);
+  }
 
   .modal-body {
     flex: 1;
@@ -515,19 +681,37 @@
     margin-bottom: 8px;
     flex-wrap: wrap;
   }
-  .field:last-child { margin-bottom: 0; }
-  .field input[type="checkbox"] { flex-shrink: 0; }
+  .field:last-child {
+    margin-bottom: 0;
+  }
+  .field input[type='checkbox'] {
+    flex-shrink: 0;
+  }
   .field span {
     min-width: 70px;
     font-size: 13px;
     color: var(--text-2);
   }
-  .field.full { flex-direction: column; align-items: stretch; }
-  .field.full span { margin-bottom: 4px; }
-  .field.col { flex-direction: column; align-items: stretch; }
-  .field.col .cat-head { display: flex; align-items: center; gap: 8px; }
-  .field.col .cat-head span { min-width: 0; }
-  .field:has(input[type="checkbox"]:not(:checked)) span {
+  .field.full {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .field.full span {
+    margin-bottom: 4px;
+  }
+  .field.col {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .field.col .cat-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .field.col .cat-head span {
+    min-width: 0;
+  }
+  .field:has(input[type='checkbox']:not(:checked)) span {
     color: var(--text-3);
     text-decoration: line-through;
   }
@@ -557,8 +741,12 @@
     gap: 8px;
     margin-bottom: 8px;
   }
-  .cost-row:last-child { margin-bottom: 0; }
-  .cost-row .field { flex: 1; }
+  .cost-row:last-child {
+    margin-bottom: 0;
+  }
+  .cost-row .field {
+    flex: 1;
+  }
 
   .op-select {
     margin-left: auto;
@@ -584,7 +772,9 @@
     cursor: pointer;
     user-select: none;
   }
-  .chip input { display: none; }
+  .chip input {
+    display: none;
+  }
   .chip:has(input:checked) {
     border-color: var(--accent);
     background: var(--accent-softer);
@@ -607,15 +797,23 @@
     color: var(--text-3);
     font-style: normal;
   }
-  .chip:has(input:checked) .cat { color: var(--accent); opacity: 0.7; }
-  .chip.small { font-size: 11px; padding: 3px 8px; }
+  .chip:has(input:checked) .cat {
+    color: var(--accent);
+    opacity: 0.7;
+  }
+  .chip.small {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
   .chip .alias {
     font-size: 10px;
     color: var(--text-3);
     font-style: normal;
   }
 
-  .zhezi-group { margin-top: 8px; }
+  .zhezi-group {
+    margin-top: 8px;
+  }
   .zhezi-title {
     font-size: 13px;
     font-weight: 500;

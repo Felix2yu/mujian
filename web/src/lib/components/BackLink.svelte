@@ -1,5 +1,6 @@
 <script>
   import { goto } from '$app/navigation';
+  import { resolve } from '$app/paths';
 
   // 返回导航策略：
   // - 浏览器历史栈存在上一页（history.length > 1）→ history.back() 回到
@@ -16,15 +17,15 @@
       // 如果 history.back() 后 URL 没变化（历史栈中有重复条目），
       // 用 goto 导航到 fallback 页面
       setTimeout(() => {
-        if (location.href === before) goto(fallback);
+        if (location.href === before) goto(resolve(fallback));
       }, 80);
     } else {
-      goto(fallback);
+      goto(resolve(fallback));
     }
   }
 </script>
 
-<a class="back" href={fallback} onclick={onClick} aria-label="返回">{label}</a>
+<a class="back" href={resolve(fallback)} onclick={onClick} aria-label="返回">{label}</a>
 
 <style>
   .back {
@@ -36,5 +37,7 @@
     cursor: pointer;
     transition: color var(--t-fast, 0.15s) ease;
   }
-  .back:hover { color: var(--accent); }
+  .back:hover {
+    color: var(--accent);
+  }
 </style>

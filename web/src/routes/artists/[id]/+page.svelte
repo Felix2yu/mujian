@@ -21,7 +21,11 @@
   let saving = $state(false);
   let deleting = $state(false);
 
-  const splitList = (s) => (s || '').split(/[,，、]/).map((x) => x.trim()).filter(Boolean);
+  const splitList = (s) =>
+    (s || '')
+      .split(/[,，、]/)
+      .map((x) => x.trim())
+      .filter(Boolean);
 
   async function load() {
     loading = true;
@@ -83,7 +87,9 @@
     try {
       const p = await api.previewDelete('artist', id);
       linked = p?.recordsAffected ?? 0;
-    } catch (e) { /* 预览失败不影响删除本身 */ }
+    } catch (e) {
+      /* 预览失败不影响删除本身 */
+    }
     const ok = await askConfirm({
       title: '删除演员',
       message: `删除「${artist.name}」后，其名下所有演出记录的演员关联将被移除，演出记录本身不会被删除。`,
@@ -121,10 +127,12 @@
     }
   }
 
-  $effect(() => { if (id) load(); });
+  $effect(() => {
+    if (id) load();
+  });
 </script>
-<svelte:head><title>{artist ? `${artist.name} - 幕间` : "演员 - 幕间"}</title></svelte:head>
 
+<svelte:head><title>{artist ? `${artist.name} - 幕间` : '演员 - 幕间'}</title></svelte:head>
 
 <div class="fade-up">
   <BackLink fallback="/artists" label="← 演员" />
@@ -152,18 +160,39 @@
             <div class="edit-fields">
               <input class="input" placeholder="演员姓名" bind:value={form.name} />
               <input class="input" placeholder="别名（逗号分隔）" bind:value={form.aliases} />
-              <textarea class="input" rows="3" placeholder="简介（艺术简介 / 生平）" bind:value={form.bio}></textarea>
-              <textarea class="input" rows="2" placeholder="备注" bind:value={form.remark}></textarea>
+              <textarea
+                class="input"
+                rows="3"
+                placeholder="简介（艺术简介 / 生平）"
+                bind:value={form.bio}></textarea>
+              <textarea class="input" rows="2" placeholder="备注" bind:value={form.remark}
+              ></textarea>
               <div>
-                <button class="btn sm" onclick={triggerUpload} disabled={uploading}>{uploading ? '上传中…' : '⇪ 头像'}</button>
-                <input type="file" accept="image/*" onchange={handleUpload} disabled={uploading} hidden bind:this={fileInput} />
+                <button class="btn sm" onclick={triggerUpload} disabled={uploading}
+                  >{uploading ? '上传中…' : '⇪ 头像'}</button
+                >
+                <input
+                  type="file"
+                  accept="image/*"
+                  onchange={handleUpload}
+                  disabled={uploading}
+                  hidden
+                  bind:this={fileInput}
+                />
               </div>
             </div>
           </div>
         </div>
         <div class="actions">
-          <button class="btn primary sm" onclick={save} disabled={saving || !form.name.trim()}>{saving ? '保存中…' : '保存'}</button>
-          <button class="btn ghost sm" onclick={() => { editing = false; }}>取消</button>
+          <button class="btn primary sm" onclick={save} disabled={saving || !form.name.trim()}
+            >{saving ? '保存中…' : '保存'}</button
+          >
+          <button
+            class="btn ghost sm"
+            onclick={() => {
+              editing = false;
+            }}>取消</button
+          >
         </div>
       {:else}
         <div class="head-main">
@@ -187,7 +216,9 @@
           </div>
           <div class="head-actions">
             <button class="btn sm" onclick={startEdit}>编辑</button>
-            <button class="btn danger sm" onclick={remove} disabled={deleting}>{deleting ? '删除中…' : '删除'}</button>
+            <button class="btn danger sm" onclick={remove} disabled={deleting}
+              >{deleting ? '删除中…' : '删除'}</button
+            >
           </div>
         </div>
         <MergePanel kind="artist" selfId={id} selfName={artist.name} />
@@ -210,36 +241,141 @@
 </div>
 
 <style>
-  .back { display: inline-flex; color: var(--text-muted); font-size: 13.5px; margin-bottom: 12px; }
-  .back:hover { color: var(--accent); }
-  .loading { display: flex; flex-direction: column; gap: 12px; }
+  .back {
+    display: inline-flex;
+    color: var(--text-muted);
+    font-size: 13.5px;
+    margin-bottom: 12px;
+  }
+  .back:hover {
+    color: var(--accent);
+  }
+  .loading {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
 
-  .head-card { padding: 18px 20px; margin-bottom: 14px; }
-  .head-main { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
-  .head-left { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: start; min-width: 0; flex: 1; }
-  .avatar { width: 160px; aspect-ratio: 1 / 1; border-radius: 50%; object-fit: cover; background: var(--surface-3); }
-  .avatar.placeholder { display: flex; align-items: center; justify-content: center; font-size: 56px; }
-  h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.25; }
-  .sub { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .aliases { font-size: 12.5px; color: var(--text-muted); }
-  .muted { color: var(--text-muted); font-size: 13px; white-space: nowrap; }
-  .remark { margin: 10px 0 0; color: var(--text-2); white-space: pre-wrap; line-height: 1.6; }
-  .remark.note { margin-top: 6px; color: var(--text-muted); font-size: 13.5px; }
-  .head-actions { display: flex; gap: 8px; flex: 0 0 auto; }
-  .edit-fields { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .edit-fields .input { width: 100%; }
+  .head-card {
+    padding: 18px 20px;
+    margin-bottom: 14px;
+  }
+  .head-main {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .head-left {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 16px;
+    align-items: start;
+    min-width: 0;
+    flex: 1;
+  }
+  .avatar {
+    width: 160px;
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--surface-3);
+  }
+  .avatar.placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 56px;
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-size: 26px;
+    line-height: 1.25;
+  }
+  .sub {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .aliases {
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+  .muted {
+    color: var(--text-muted);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .remark {
+    margin: 10px 0 0;
+    color: var(--text-2);
+    white-space: pre-wrap;
+    line-height: 1.6;
+  }
+  .remark.note {
+    margin-top: 6px;
+    color: var(--text-muted);
+    font-size: 13.5px;
+  }
+  .head-actions {
+    display: flex;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+  .edit-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  .edit-fields .input {
+    width: 100%;
+  }
 
-  .actions { display: flex; gap: 8px; margin-top: 10px; }
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
 
-  .section { padding: 18px 20px; margin-top: 14px; }
-  .section h3 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
-  .num { color: var(--accent); font-family: var(--font-sans); font-weight: 700; font-size: 15px; }
-  .sec-head { margin-bottom: 14px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 14px; margin-top: 4px; }
+  .section {
+    padding: 18px 20px;
+    margin-top: 14px;
+  }
+  .section h3 {
+    margin: 0;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .num {
+    color: var(--accent);
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .sec-head {
+    margin-bottom: 14px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+    gap: 14px;
+    margin-top: 4px;
+  }
 
   @media (max-width: 640px) {
-    h1 { font-size: 22px; }
-    .head-main { flex-direction: column; }
-    .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+    h1 {
+      font-size: 22px;
+    }
+    .head-main {
+      flex-direction: column;
+    }
+    .grid {
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
   }
 </style>

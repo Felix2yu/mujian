@@ -1,5 +1,6 @@
 <script>
   import { goto } from '$app/navigation';
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api, initStorageInfo, getAuthToken, verifyAuthToken } from '#lib/api.js';
   import { initTheme } from '#lib/stores.js';
@@ -27,7 +28,7 @@
   ];
 
   // 移动端侧栏不列「日历」：日历改为悬浮快捷入口，避免与侧栏菜单重复。
-  const drawerNav = nav.filter(item => item.href !== '/calendar');
+  const drawerNav = nav.filter((item) => item.href !== '/calendar');
 
   let drawerOpen = $state(false);
 
@@ -51,19 +52,25 @@
         new PerformanceObserver((l) => {
           for (const e of l.getEntries()) if (!e.hadRecentInput) cls += e.value;
         }).observe({ type: 'layout-shift', buffered: true });
-      } catch {}
+      } catch {
+        /* 浏览器不支持 PerformanceObserver 时静默跳过 */
+      }
       try {
         new PerformanceObserver((l) => {
           const es = l.getEntries();
           if (es.length) v.lcp_ms = Math.round(es[es.length - 1].startTime);
         }).observe({ type: 'largest-contentful-paint', buffered: true });
-      } catch {}
+      } catch {
+        /* 浏览器不支持 PerformanceObserver 时静默跳过 */
+      }
       let longTask = 0;
       try {
         new PerformanceObserver((l) => {
           for (const e of l.getEntries()) longTask += e.duration;
         }).observe({ type: 'longtask', buffered: true });
-      } catch {}
+      } catch {
+        /* 浏览器不支持 PerformanceObserver 时静默跳过 */
+      }
 
       // 给 LCP/CLS/长任务 一点完成时间，再随页面卸货前发出。
       setTimeout(() => {
@@ -71,7 +78,9 @@
         v.longtask_ms = Math.round(longTask);
         navigator.sendBeacon('/api/metrics/client', JSON.stringify(v));
       }, 1500);
-    } catch {}
+    } catch {
+      /* 性能观测整体失败（旧浏览器 / 隐私模式）时不上报，不影响主流程 */
+    }
   }
 
   // ---------- 全站访问令牌门 ----------
@@ -116,7 +125,9 @@
     if (await verifyAuthToken(t)) {
       try {
         localStorage.setItem('mujian:auth_token', t);
-      } catch (err) { /* ignore */ }
+      } catch (err) {
+        /* ignore */
+      }
       tokenInput = '';
       authState = 'ok';
     } else {
@@ -139,7 +150,10 @@
     initStorageInfo();
     reportWebVitals();
 
-    if ('serviceWorker' in navigator && !/^localhost$|^127\.0\.0\.1$|^\[::1\]$/.test(location.hostname)) {
+    if (
+      'serviceWorker' in navigator &&
+      !/^localhost$|^127\.0\.0\.1$|^\[::1\]$/.test(location.hostname)
+    ) {
       navigator.serviceWorker.register('/sw.js').then((reg) => {
         swReg = reg;
         reg.addEventListener('updatefound', () => {
@@ -184,7 +198,9 @@
   $effect(() => {
     if (!drawerOpen) return;
     document.body.style.overflow = 'hidden';
-    const onKey = (e) => { if (e.key === 'Escape') drawerOpen = false; };
+    const onKey = (e) => {
+      if (e.key === 'Escape') drawerOpen = false;
+    };
     window.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = '';
@@ -196,12 +212,14 @@
   $effect(() => {
     if (!drawerOpen) return;
     const trapSelector = 'button, a, [tabindex]:not([tabindex="-1"])';
-    const focusable = () => Array.from(document.querySelectorAll(`.drawer ${trapSelector}`)).filter(
-      (el) => !el.hasAttribute('disabled') && el.offsetParent !== null
-    );
+    const focusable = () =>
+      Array.from(document.querySelectorAll(`.drawer ${trapSelector}`)).filter(
+        (el) => !el.hasAttribute('disabled') && el.offsetParent !== null
+      );
     const nodes = focusable();
     if (nodes.length === 0) return;
-    const first = nodes[0], last = nodes[nodes.length - 1];
+    const first = nodes[0],
+      last = nodes[nodes.length - 1];
     // 打开时先聚焦第一个可交互元素（关闭按钮）
     // first.focus({ preventScroll: true });  // 让按钮/链接通过过渡接管
     const onKey = (e) => {
@@ -209,11 +227,13 @@
       const active = document.activeElement;
       if (e.shiftKey) {
         if (active === first || !nodes.includes(active)) {
-          e.preventDefault(); last.focus({ preventScroll: true });
+          e.preventDefault();
+          last.focus({ preventScroll: true });
         }
       } else {
         if (active === last) {
-          e.preventDefault(); first.focus({ preventScroll: true });
+          e.preventDefault();
+          first.focus({ preventScroll: true });
         }
       }
     };
@@ -240,10 +260,19 @@
       if (!el) return;
       e.preventDefault();
       e.stopPropagation();
-      const full = el.dataset.full || (el.tagName === 'IMG' ? el.src : el.querySelector('img')?.src) || '';
-      if (full) { globalLightboxSrc = full; globalLightbox = true; }
+      const full =
+        el.dataset.full || (el.tagName === 'IMG' ? el.src : el.querySelector('img')?.src) || '';
+      if (full) {
+        globalLightboxSrc = full;
+        globalLightbox = true;
+      }
     };
-    const onKey = (e) => { if (e.key === 'Escape') { globalLightbox = false; globalLightboxSrc = ''; } };
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        globalLightbox = false;
+        globalLightboxSrc = '';
+      }
+    };
     document.addEventListener('click', onClick, true); // 捕获阶段，绕过 popup 等内部 stopPropagation
     window.addEventListener('keydown', onKey);
     return () => {
@@ -258,7 +287,7 @@
 <div class="app">
   <header class="topbar">
     <div class="bar-inner">
-      <a class="brand" href="/">
+      <a class="brand" href={resolve('/')}>
         <img class="seal" src="/favicon.svg" alt="幕间" />
         <span class="brand-name">幕间</span>
       </a>
@@ -267,7 +296,7 @@
           {#if i > 0 && item.group !== nav[i - 1].group}
             <span class="nav-sep" aria-hidden="true"></span>
           {/if}
-          <a href={item.href} class="nav-link" class:active={isActive(item.href)}>
+          <a href={resolve(item.href)} class="nav-link" class:active={isActive(item.href)}>
             {item.label}
           </a>
         {/each}
@@ -280,9 +309,19 @@
         class:active={isActive('/calendar')}
         aria-label={isActive('/calendar') ? '退出日历，返回首页' : '打开日历'}
         aria-pressed={isActive('/calendar')}
-        onclick={() => goto(isActive('/calendar') ? '/' : '/calendar')}
+        onclick={() => goto(resolve(isActive('/calendar') ? '/' : '/calendar'))}
       >
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          width="20"
+          height="20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
           <rect x="3" y="4" width="18" height="18" rx="2" />
           <path d="M3 9h18M8 2v4M16 2v4M8 14h2M14 14h2M8 18h2M14 18h2" />
         </svg>
@@ -294,7 +333,16 @@
         aria-label="打开菜单"
         aria-expanded={drawerOpen}
       >
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          width="20"
+          height="20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
           <path d="M4 7h16M4 12h16M4 17h16" />
         </svg>
       </button>
@@ -309,12 +357,32 @@
       aria-label="关闭菜单"
       transition:fade={{ duration: 140 }}
     ></button>
-    <aside class="drawer" transition:fly={{ x: 300, duration: 220, easing: cubicOut }} aria-label="站点导航" role="dialog" aria-modal="true">
+    <aside
+      class="drawer"
+      transition:fly={{ x: 300, duration: 220, easing: cubicOut }}
+      aria-label="站点导航"
+      role="dialog"
+      aria-modal="true"
+    >
       <div class="drawer-head">
         <img class="seal" src="/favicon.svg" alt="幕间" />
         <span class="drawer-title">幕间</span>
-        <button type="button" class="drawer-close" onclick={() => (drawerOpen = false)} aria-label="关闭菜单">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <button
+          type="button"
+          class="drawer-close"
+          onclick={() => (drawerOpen = false)}
+          aria-label="关闭菜单"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
             <path d="M6 6l12 12M18 6L6 18" />
           </svg>
         </button>
@@ -324,7 +392,7 @@
           {#if i > 0 && item.group !== drawerNav[i - 1].group}
             <span class="drawer-sep" aria-hidden="true"></span>
           {/if}
-          <a href={item.href} class="drawer-link" class:active={isActive(item.href)}>
+          <a href={resolve(item.href)} class="drawer-link" class:active={isActive(item.href)}>
             {item.label}
             {#if isActive(item.href)}<span class="dot" aria-hidden="true"></span>{/if}
           </a>
@@ -368,14 +436,29 @@
   {/if}
 
   {#if updateReady}
-    <button type="button" class="update-banner" onclick={applyUpdate} transition:fly={{ y: 60, duration: 220 }} role="status" aria-live="polite">
+    <button
+      type="button"
+      class="update-banner"
+      onclick={applyUpdate}
+      transition:fly={{ y: 60, duration: 220 }}
+      role="status"
+      aria-live="polite"
+    >
       发现新版本，点击刷新
     </button>
   {/if}
 </div>
 
 {#if globalLightbox && globalLightboxSrc}
-  <button type="button" class="global-lightbox" onclick={() => { globalLightbox = false; globalLightboxSrc = ''; }} aria-label="关闭大图">
+  <button
+    type="button"
+    class="global-lightbox"
+    onclick={() => {
+      globalLightbox = false;
+      globalLightboxSrc = '';
+    }}
+    aria-label="关闭大图"
+  >
     <img src={globalLightboxSrc} alt="" />
   </button>
 {/if}
@@ -383,7 +466,11 @@
 <ConfirmModal />
 
 <style>
-  .app { min-height: 100vh; display: flex; flex-direction: column; }
+  .app {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
 
   .topbar {
     position: sticky;
@@ -404,7 +491,12 @@
     gap: 18px;
   }
 
-  .brand { display: flex; align-items: center; gap: 9px; flex: 0 0 auto; }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex: 0 0 auto;
+  }
   .seal {
     width: 30px;
     height: 30px;
@@ -414,7 +506,9 @@
     flex-shrink: 0;
     transition: transform var(--t-med) var(--ease);
   }
-  .brand:hover .seal { transform: rotate(-6deg) scale(1.05); }
+  .brand:hover .seal {
+    transform: rotate(-6deg) scale(1.05);
+  }
   .brand-name {
     font-family: var(--font-serif);
     font-size: 19px;
@@ -436,9 +530,13 @@
     /* 为 hover 药丸背景与焦点环留出竖向余量（顶栏 58px 有富余） */
     padding-block: 6px;
   }
-  .nav::-webkit-scrollbar { display: none; }
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
   /* 有富余空间时整组靠右；一旦溢出，auto 归零 → 首项可完整滚动到 */
-  .nav > .nav-link:first-child { margin-left: auto; }
+  .nav > .nav-link:first-child {
+    margin-left: auto;
+  }
   .nav-link {
     display: inline-flex;
     align-items: center;
@@ -448,9 +546,16 @@
     font-size: 14px;
     color: var(--text-muted);
     white-space: nowrap;
-    transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+    transition:
+      color var(--t-fast) var(--ease),
+      background var(--t-fast) var(--ease),
+      border-color var(--t-fast) var(--ease),
+      transform var(--t-fast) var(--ease);
   }
-  .nav-link:hover { color: var(--text); background: var(--surface-3); }
+  .nav-link:hover {
+    color: var(--text);
+    background: var(--surface-3);
+  }
   .nav-link.active {
     color: var(--accent);
     background: var(--accent-soft);
@@ -480,10 +585,18 @@
     color: var(--text);
     cursor: pointer;
     box-shadow: var(--shadow-xs);
-    transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+    transition:
+      color var(--t-fast) var(--ease),
+      background var(--t-fast) var(--ease),
+      border-color var(--t-fast) var(--ease),
+      transform var(--t-fast) var(--ease);
   }
-  .menu-btn:active { transform: scale(0.95); }
-  .menu-btn svg { display: block; }
+  .menu-btn:active {
+    transform: scale(0.95);
+  }
+  .menu-btn svg {
+    display: block;
+  }
 
   /* ============ 移动端侧栏 ============ */
   .drawer-backdrop {
@@ -536,9 +649,16 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+    transition:
+      color var(--t-fast) var(--ease),
+      background var(--t-fast) var(--ease),
+      border-color var(--t-fast) var(--ease),
+      transform var(--t-fast) var(--ease);
   }
-  .drawer-close:hover { background: var(--surface-3); color: var(--text); }
+  .drawer-close:hover {
+    background: var(--surface-3);
+    color: var(--text);
+  }
 
   .drawer-nav {
     flex: 1;
@@ -557,9 +677,16 @@
     border-radius: var(--radius-sm);
     font-size: 15px;
     color: var(--text-2);
-    transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+    transition:
+      color var(--t-fast) var(--ease),
+      background var(--t-fast) var(--ease),
+      border-color var(--t-fast) var(--ease),
+      transform var(--t-fast) var(--ease);
   }
-  .drawer-link:hover { background: var(--surface-3); color: var(--text); }
+  .drawer-link:hover {
+    background: var(--surface-3);
+    color: var(--text);
+  }
   .drawer-link.active {
     background: var(--accent-soft);
     color: var(--accent);
@@ -579,7 +706,10 @@
     background: var(--border);
     border-radius: 1px;
   }
-  .drawer-foot { padding: 10px 18px 0; text-align: center; }
+  .drawer-foot {
+    padding: 10px 18px 0;
+    text-align: center;
+  }
 
   .content {
     flex: 1;
@@ -612,7 +742,9 @@
     box-shadow: var(--shadow-lg);
     transition: filter var(--t-fast) var(--ease);
   }
-  .update-banner:hover { filter: brightness(1.08); }
+  .update-banner:hover {
+    filter: brightness(1.08);
+  }
 
   /* 移动端日历快捷入口：顶栏按钮，位于汉堡左侧 */
   .topbar-cal {
@@ -628,10 +760,18 @@
     color: var(--text);
     cursor: pointer;
     box-shadow: var(--shadow-xs);
-    transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+    transition:
+      color var(--t-fast) var(--ease),
+      background var(--t-fast) var(--ease),
+      border-color var(--t-fast) var(--ease),
+      transform var(--t-fast) var(--ease);
   }
-  .topbar-cal:active { transform: scale(0.95); }
-  .topbar-cal svg { display: block; }
+  .topbar-cal:active {
+    transform: scale(0.95);
+  }
+  .topbar-cal svg {
+    display: block;
+  }
   .topbar-cal.active {
     color: var(--accent);
     border-color: var(--accent);
@@ -642,23 +782,45 @@
      收紧内边距/字号使 10 项能完整放下；上方 overflow-x 仅作兜底。
      分隔线左右外边距同步收紧，抵消 3 条分隔线带来的额外宽度。 */
   @media (max-width: 700px) {
-    .nav { gap: 1px; }
-    .nav-link { padding: 6px 10px; font-size: 13.5px; }
-    .nav-sep { margin: 0 2px; }
+    .nav {
+      gap: 1px;
+    }
+    .nav-link {
+      padding: 6px 10px;
+      font-size: 13.5px;
+    }
+    .nav-sep {
+      margin: 0 2px;
+    }
   }
 
   @media (max-width: 640px) {
-    .bar-inner { padding: 0 14px; gap: 10px; height: 54px; }
-    .content { padding: 16px 14px 36px; }
+    .bar-inner {
+      padding: 0 14px;
+      gap: 10px;
+      height: 54px;
+    }
+    .content {
+      padding: 16px 14px 36px;
+    }
     /* 顶栏只留品牌 + 日历 + 汉堡，全部入口进侧栏 */
-    .nav { display: none; }
-    .menu-btn { display: inline-flex; }
+    .nav {
+      display: none;
+    }
+    .menu-btn {
+      display: inline-flex;
+    }
     /* 移动端显示顶栏日历入口（在汉堡左侧） */
-    .topbar-cal { display: inline-flex; }
+    .topbar-cal {
+      display: inline-flex;
+    }
   }
 
   /* ---------- 全站访问令牌门 ---------- */
-  .auth-loading { padding: 48px 0; text-align: center; }
+  .auth-loading {
+    padding: 48px 0;
+    text-align: center;
+  }
 
   .auth-gate {
     position: fixed;
@@ -684,11 +846,28 @@
     box-shadow: 0 16px 48px rgb(0 0 0 / 0.14);
   }
 
-  .auth-seal { width: 44px; height: 44px; margin: 0 auto; }
-  .auth-title { margin: 0; font-size: 22px; letter-spacing: 0.08em; }
-  .auth-sub { margin: 0 0 6px; color: var(--text-2); font-size: 13px; }
-  .auth-card .input { text-align: center; }
-  .auth-error { color: var(--danger); font-size: 13px; }
+  .auth-seal {
+    width: 44px;
+    height: 44px;
+    margin: 0 auto;
+  }
+  .auth-title {
+    margin: 0;
+    font-size: 22px;
+    letter-spacing: 0.08em;
+  }
+  .auth-sub {
+    margin: 0 0 6px;
+    color: var(--text-2);
+    font-size: 13px;
+  }
+  .auth-card .input {
+    text-align: center;
+  }
+  .auth-error {
+    color: var(--danger);
+    font-size: 13px;
+  }
 
   /* 全局灯箱：被 .coverable 类元素点击触发 */
   .global-lightbox {
@@ -718,6 +897,10 @@
   }
   /* .coverable 出现在多个页面/组件里，作用域规则匹配不到（编译器会标 Unused），
      功能是事件委托提供的，但手势提示必须全局生效。 */
-  :global(.coverable) { cursor: zoom-in; }
-  :global(.coverable img) { cursor: zoom-in; }
+  :global(.coverable) {
+    cursor: zoom-in;
+  }
+  :global(.coverable img) {
+    cursor: zoom-in;
+  }
 </style>

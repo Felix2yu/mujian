@@ -1,4 +1,5 @@
 <script>
+  import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import { api, formatCurrency } from '#lib/api.js';
   import KpiCard from '#lib/components/analytics/KpiCard.svelte';
@@ -42,7 +43,11 @@
     }))
   );
   let costSeries = $derived([
-    { name: '月度花费', color: 'var(--gold)', values: (data?.trends ?? []).map((t) => Math.round(t.cost)) }
+    {
+      name: '月度花费',
+      color: 'var(--gold)',
+      values: (data?.trends ?? []).map((t) => Math.round(t.cost))
+    }
   ]);
   let ratingSeries = $derived([
     { name: '平均评分', color: '#0e7490', values: (data?.trends ?? []).map((t) => t.avg_rating) }
@@ -63,7 +68,9 @@
     return { cs: Math.round(cs), ps: Math.round(ps), pct: Math.round(pct * 10) / 10 };
   });
 
-  let ratingBars = $derived((data?.rating_dist ?? []).map((d) => ({ label: d.name, value: d.count })));
+  let ratingBars = $derived(
+    (data?.rating_dist ?? []).map((d) => ({ label: d.name, value: d.count }))
+  );
   let yearBars = $derived((data?.year_dist ?? []).map((d) => ({ label: d.name, value: d.count })));
 
   function corrStrength(r) {
@@ -89,11 +96,11 @@
     return (v > 0 ? '+' : '−') + Math.abs(v).toFixed(1);
   }
 
-  let venueHref = (it) => `/?address=${encodeURIComponent(it.name)}`;
-  let artistHref = (it) => `/artists/${it.id}`;
-  let dramaHref = (it) => `/dramas/${it.id}`;
+  let venueHref = (it) => resolve(`/?address=${encodeURIComponent(it.name)}`);
+  let artistHref = (it) => resolve(`/artists/${it.id}`);
+  let dramaHref = (it) => resolve(`/dramas/${it.id}`);
   // 折子没有独立详情页，退回到「首页按折子筛选」这一入口（此前未传 hrefFn，是死末端）
-  let zheziHref = (it) => `/?zhezi=${encodeURIComponent(it.id)}`;
+  let zheziHref = (it) => resolve(`/?zhezi=${encodeURIComponent(it.id)}`);
 
   // ---- new dimensions derived ----
   // 合并票价 / 其他花费 到统一分桶（后端已保证桶序一致，前端再按固定顺序对齐并补零）
@@ -103,21 +110,39 @@
     const om = Object.fromEntries((data?.other_cost_buckets ?? []).map((d) => [d.name, d.count]));
     return expenseBucketOrder.map((b) => ({ label: b, current: pm[b] ?? 0, previous: om[b] ?? 0 }));
   });
-  let weekdayBars = $derived((data?.weekday_dist ?? []).map((w) => ({ label: w.name, value: w.count })));
-  let intervalBars = $derived((data?.intervals?.buckets ?? []).map((d) => ({ label: d.name, value: d.count })));
+  let weekdayBars = $derived(
+    (data?.weekday_dist ?? []).map((w) => ({ label: w.name, value: w.count }))
+  );
+  let intervalBars = $derived(
+    (data?.intervals?.buckets ?? []).map((d) => ({ label: d.name, value: d.count }))
+  );
   let discoveryLabels = $derived((data?.discovery ?? []).map((d) => d.period.slice(2)));
   let discoverySeries = $derived([
-    { name: '新演员', color: 'var(--accent)', values: (data?.discovery ?? []).map((d) => d.new_artists) },
-    { name: '新剧目', color: 'var(--gold)', values: (data?.discovery ?? []).map((d) => d.new_dramas) }
+    {
+      name: '新演员',
+      color: 'var(--accent)',
+      values: (data?.discovery ?? []).map((d) => d.new_artists)
+    },
+    {
+      name: '新剧目',
+      color: 'var(--gold)',
+      values: (data?.discovery ?? []).map((d) => d.new_dramas)
+    }
   ]);
   let rewatch = $derived(data?.rewatch);
   let diversity = $derived(data?.diversity);
   let intervals = $derived(data?.intervals);
-  function pct1(v) { return Math.round(v * 1000) / 10; }
+  function pct1(v) {
+    return Math.round(v * 1000) / 10;
+  }
 
   // ---- extra dimensions derived ----
-  let durationBars = $derived((data?.duration?.buckets ?? []).map((d) => ({ label: d.name, value: d.count })));
-  let awayCityBars = $derived((data?.geo?.away_cities ?? []).map((d) => ({ label: d.name, value: d.count })));
+  let durationBars = $derived(
+    (data?.duration?.buckets ?? []).map((d) => ({ label: d.name, value: d.count }))
+  );
+  let awayCityBars = $derived(
+    (data?.geo?.away_cities ?? []).map((d) => ({ label: d.name, value: d.count }))
+  );
 </script>
 
 <svelte:head><title>分析 - 幕间</title></svelte:head>
@@ -128,12 +153,12 @@
       <h1>分析</h1>
       <p class="sub">从趋势、占比、对比、异常、相关性多个视角解读你的观演数据</p>
     </div>
-    <a class="yearly-link" href="/analytics/{new Date().getFullYear()}">📄 年度报告 →</a>
+    <a class="yearly-link" href={resolve('/analytics/{new Date().getFullYear()}')}>📄 年度报告 →</a>
   </div>
 
   {#if loading}
     <div class="kpis">
-      {#each Array(6) as _}<div class="skeleton" style="height: 120px;"></div>{/each}
+      {#each Array(6) as _, i (i)}<div class="skeleton" style="height: 120px;"></div>{/each}
     </div>
     <div class="skeleton" style="height: 280px; margin-top: 14px;"></div>
   {:else if error}
@@ -141,9 +166,28 @@
   {:else if data}
     <!-- ============ KPIs ============ -->
     <div class="kpis stagger">
-      <KpiCard icon="🎫" label="总记录" value={data.overview.total_records} deltaText={fmtPct(data.overview.records_delta_pct)} deltaTone={data.overview.records_delta_pct >= 0 ? 'pos' : 'neg'} />
-      <KpiCard icon="💰" label="总花费" value={formatCurrency(data.overview.total_cost, 'CNY')} sub="近一年" deltaText={fmtPct(data.overview.cost_delta_pct)} deltaTone="flat" />
-      <KpiCard icon="★" label="平均评分" value={data.overview.avg_rating ? data.overview.avg_rating.toFixed(1) : '—'} deltaText={fmtDelta(data.overview.rating_delta)} deltaTone={data.overview.rating_delta >= 0 ? 'pos' : 'neg'} />
+      <KpiCard
+        icon="🎫"
+        label="总记录"
+        value={data.overview.total_records}
+        deltaText={fmtPct(data.overview.records_delta_pct)}
+        deltaTone={data.overview.records_delta_pct >= 0 ? 'pos' : 'neg'}
+      />
+      <KpiCard
+        icon="💰"
+        label="总花费"
+        value={formatCurrency(data.overview.total_cost, 'CNY')}
+        sub="近一年"
+        deltaText={fmtPct(data.overview.cost_delta_pct)}
+        deltaTone="flat"
+      />
+      <KpiCard
+        icon="★"
+        label="平均评分"
+        value={data.overview.avg_rating ? data.overview.avg_rating.toFixed(1) : '—'}
+        deltaText={fmtDelta(data.overview.rating_delta)}
+        deltaTone={data.overview.rating_delta >= 0 ? 'pos' : 'neg'}
+      />
       <KpiCard icon="📍" label="走过城市" value={data.overview.total_cities} />
       <KpiCard icon="🎭" label="演员" value={data.overview.total_artists} sub="已建档" />
       <KpiCard icon="📚" label="剧目" value={data.overview.total_dramas} sub="已建档" />
@@ -159,11 +203,26 @@
       <div class="grid-2">
         <div class="card sec">
           <h3>月度花费</h3>
-          <LineChart labels={monthLabels} series={costSeries} height={190} yMin={0} labelEvery={2} unit="元" />
+          <LineChart
+            labels={monthLabels}
+            series={costSeries}
+            height={190}
+            yMin={0}
+            labelEvery={2}
+            unit="元"
+          />
         </div>
         <div class="card sec">
           <h3>月度平均评分</h3>
-          <LineChart labels={monthLabels} series={ratingSeries} height={190} yMin={0} yMax={5} labelEvery={2} unit="★" />
+          <LineChart
+            labels={monthLabels}
+            series={ratingSeries}
+            height={190}
+            yMin={0}
+            yMax={5}
+            labelEvery={2}
+            unit="★"
+          />
         </div>
       </div>
     </section>
@@ -172,11 +231,13 @@
     <section class="block">
       <h2 class="sec-title">⚡ 异常波动</h2>
       {#if data.anomalies.length === 0}
-        <div class="card sec"><p class="tiny">近 24 个月场次分布平稳，未检测到显著异常（z-score &gt; 1.5）。</p></div>
+        <div class="card sec">
+          <p class="tiny">近 24 个月场次分布平稳，未检测到显著异常（z-score &gt; 1.5）。</p>
+        </div>
       {:else}
         <div class="card sec">
           <div class="anomaly-grid">
-            {#each data.anomalies as a}
+            {#each data.anomalies as a (a.period)}
               <div class="anom {a.type}">
                 <span class="badge">{a.type === 'spike' ? '尖峰' : '骤降'}</span>
                 <span class="ap">{a.period}</span>
@@ -185,7 +246,10 @@
               </div>
             {/each}
           </div>
-          <p class="note">基于 24 个月场次序列的 z-score 检测（均值 ± 1.5 标准差）。尖峰/骤降可能对应巡演、戏剧节等集中观演时段。</p>
+          <p class="note">
+            基于 24 个月场次序列的 z-score 检测（均值 ± 1.5
+            标准差）。尖峰/骤降可能对应巡演、戏剧节等集中观演时段。
+          </p>
         </div>
       {/if}
     </section>
@@ -228,7 +292,10 @@
       <h2 class="sec-title">🔍 对比差异 <span class="hint">近 12 个月 vs 去年同期</span></h2>
       <div class="card sec">
         <div class="compare-head">
-          <span>今年同期累计 <b>{yoy.cs}</b> 场，去年同期 <b>{yoy.ps}</b> 场，同比 <b class="delta {yoy.pct >= 0 ? 'pos' : 'neg'}">{fmtPct(yoy.pct)}</b></span>
+          <span
+            >今年同期累计 <b>{yoy.cs}</b> 场，去年同期 <b>{yoy.ps}</b> 场，同比
+            <b class="delta {yoy.pct >= 0 ? 'pos' : 'neg'}">{fmtPct(yoy.pct)}</b></span
+          >
         </div>
         <CompareBars data={compareData} height={210} labelEvery={2} unit=" 场" />
         <div class="legend-compare">
@@ -244,18 +311,27 @@
       <div class="grid-2">
         <div class="card sec">
           <h3>票价 × 评分 散点</h3>
-          <ScatterChart points={data.scatter} xLabel="实付票价（元）" yLabel="评分 ★" yMax={5} height={260} />
+          <ScatterChart
+            points={data.scatter}
+            xLabel="实付票价（元）"
+            yLabel="评分 ★"
+            yMax={5}
+            height={260}
+          />
         </div>
         <div class="card sec">
           <h3>数值字段相关性</h3>
           <ul class="corr">
-            {#each data.corr_pairs as p}
+            {#each data.corr_pairs as p (p.x + p.y)}
               <li>
                 <span class="cp-name">{p.x} × {p.y}</span>
                 {#if p.n < 3}
                   <span class="cp-na">样本不足（{p.n}）</span>
                 {:else}
-                  <span class="cp-bar"><span class="cp-fill {corrTone(p.r)}" style="width:{Math.abs(p.r) * 100}%"></span></span>
+                  <span class="cp-bar"
+                    ><span class="cp-fill {corrTone(p.r)}" style="width:{Math.abs(p.r) * 100}%"
+                    ></span></span
+                  >
                   <span class="cp-r {corrTone(p.r)}">r={p.r} <em>{corrStrength(p.r)}</em></span>
                 {/if}
               </li>
@@ -299,8 +375,14 @@
           <h3>复看率 <span class="hint">看 ≥2 次的比例</span></h3>
           {#if rewatch}
             <div class="stat-row">
-              <div class="stat"><div class="v">{rewatch.drama_rate}%</div><div class="l">剧目 {rewatch.rewatched_dramas}/{rewatch.total_dramas}</div></div>
-              <div class="stat"><div class="v">{rewatch.artist_rate}%</div><div class="l">演员 {rewatch.rewatched_artists}/{rewatch.total_artists}</div></div>
+              <div class="stat">
+                <div class="v">{rewatch.drama_rate}%</div>
+                <div class="l">剧目 {rewatch.rewatched_dramas}/{rewatch.total_dramas}</div>
+              </div>
+              <div class="stat">
+                <div class="v">{rewatch.artist_rate}%</div>
+                <div class="l">演员 {rewatch.rewatched_artists}/{rewatch.total_artists}</div>
+              </div>
             </div>
           {/if}
         </div>
@@ -308,9 +390,18 @@
           <h3>多样性指数 <span class="hint">0–100，越高越均衡</span></h3>
           {#if diversity}
             <div class="stat-row">
-              <div class="stat"><div class="v">{pct1(diversity.category_evenness)}%</div><div class="l">剧种</div></div>
-              <div class="stat"><div class="v">{pct1(diversity.artist_evenness)}%</div><div class="l">演员</div></div>
-              <div class="stat"><div class="v">{pct1(diversity.drama_evenness)}%</div><div class="l">剧目</div></div>
+              <div class="stat">
+                <div class="v">{pct1(diversity.category_evenness)}%</div>
+                <div class="l">剧种</div>
+              </div>
+              <div class="stat">
+                <div class="v">{pct1(diversity.artist_evenness)}%</div>
+                <div class="l">演员</div>
+              </div>
+              <div class="stat">
+                <div class="v">{pct1(diversity.drama_evenness)}%</div>
+                <div class="l">剧目</div>
+              </div>
             </div>
           {/if}
         </div>
@@ -320,18 +411,35 @@
         <h3>观演间隔 <span class="hint">相邻两场之间天数</span></h3>
         {#if intervals}
           <div class="stat-row">
-            <div class="stat"><div class="v">{intervals.avg} 天</div><div class="l">平均</div></div>
-            <div class="stat"><div class="v">{intervals.median} 天</div><div class="l">中位</div></div>
-            <div class="stat"><div class="v">{intervals.max} 天</div><div class="l">最长</div></div>
+            <div class="stat">
+              <div class="v">{intervals.avg} 天</div>
+              <div class="l">平均</div>
+            </div>
+            <div class="stat">
+              <div class="v">{intervals.median} 天</div>
+              <div class="l">中位</div>
+            </div>
+            <div class="stat">
+              <div class="v">{intervals.max} 天</div>
+              <div class="l">最长</div>
+            </div>
           </div>
-          <VBarChart data={intervalBars} height={170} labelEvery={1} unit=" 次" color="var(--gold)" />
+          <VBarChart
+            data={intervalBars}
+            height={170}
+            labelEvery={1}
+            unit=" 次"
+            color="var(--gold)"
+          />
         {/if}
       </div>
     </section>
 
     <!-- ============ 票价与剧目结构 ============ -->
     <section class="block">
-      <h2 class="sec-title">💸 票价与剧目结构 <span class="hint">实付票价 / 其他花费 合并分桶分布</span></h2>
+      <h2 class="sec-title">
+        💸 票价与剧目结构 <span class="hint">实付票价 / 其他花费 合并分桶分布</span>
+      </h2>
       <div class="grid-2">
         <div class="card sec">
           <h3>开支分布</h3>
@@ -363,7 +471,14 @@
         {#if data.discovery.length === 0}
           <p class="tiny">暂无足够数据计算发现率</p>
         {:else}
-          <LineChart labels={discoveryLabels} series={discoverySeries} height={220} yMin={0} labelEvery={3} unit=" 个" />
+          <LineChart
+            labels={discoveryLabels}
+            series={discoverySeries}
+            height={220}
+            yMin={0}
+            labelEvery={3}
+            unit=" 个"
+          />
           <div class="legend-compare">
             <span><i class="sw" style="background:var(--accent)"></i>新演员</span>
             <span><i class="sw" style="background:var(--gold)"></i>新剧目</span>
@@ -374,17 +489,31 @@
 
     <!-- ============ 更多维度 ============ -->
     <section class="block">
-      <h2 class="sec-title">🧩 更多维度 <span class="hint">状态 · 地理 · 同伴 · 时长与折子</span></h2>
+      <h2 class="sec-title">
+        🧩 更多维度 <span class="hint">状态 · 地理 · 同伴 · 时长与折子</span>
+      </h2>
       <div class="grid-2">
         <div class="card sec">
           <h3>状态漏斗 <span class="hint">想看 / 赴约 / 错过</span></h3>
           {#if data.status_funnel && data.status_funnel.total > 0}
             <div class="stat-row">
-              <div class="stat"><div class="v">{data.status_funnel.watched}</div><div class="l">已观看（{data.status_funnel.watched_pct}%）</div></div>
-              <div class="stat"><div class="v">{data.status_funnel.want_pending}</div><div class="l">想看池中</div></div>
-              <div class="stat"><div class="v">{data.status_funnel.canceled + data.status_funnel.no_show}</div><div class="l">取消 / 未赴约</div></div>
+              <div class="stat">
+                <div class="v">{data.status_funnel.watched}</div>
+                <div class="l">已观看（{data.status_funnel.watched_pct}%）</div>
+              </div>
+              <div class="stat">
+                <div class="v">{data.status_funnel.want_pending}</div>
+                <div class="l">想看池中</div>
+              </div>
+              <div class="stat">
+                <div class="v">{data.status_funnel.canceled + data.status_funnel.no_show}</div>
+                <div class="l">取消 / 未赴约</div>
+              </div>
               {#if data.status_funnel.canceled + data.status_funnel.no_show + data.status_funnel.watched > 0}
-                <div class="stat"><div class="v">{data.status_funnel.attended_pct}%</div><div class="l">排期兑现率</div></div>
+                <div class="stat">
+                  <div class="v">{data.status_funnel.attended_pct}%</div>
+                  <div class="l">排期兑现率</div>
+                </div>
               {/if}
             </div>
             <Donut items={data.status_funnel.dist} max={4} />
@@ -396,12 +525,27 @@
           <h3>地理足迹 <span class="hint">常驻城市与异地观演</span></h3>
           {#if data.geo && data.geo.home_city}
             <div class="stat-row">
-              <div class="stat"><div class="v">{data.geo.home_city}</div><div class="l">常驻城市（场次最多）</div></div>
-              <div class="stat"><div class="v">{data.geo.away_count} 场</div><div class="l">异地观演 {data.geo.away_pct}%</div></div>
-              <div class="stat"><div class="v">{data.geo.away_city_count}</div><div class="l">走过的异地城市</div></div>
+              <div class="stat">
+                <div class="v">{data.geo.home_city}</div>
+                <div class="l">常驻城市（场次最多）</div>
+              </div>
+              <div class="stat">
+                <div class="v">{data.geo.away_count} 场</div>
+                <div class="l">异地观演 {data.geo.away_pct}%</div>
+              </div>
+              <div class="stat">
+                <div class="v">{data.geo.away_city_count}</div>
+                <div class="l">走过的异地城市</div>
+              </div>
             </div>
             {#if awayCityBars.length > 0}
-              <VBarChart data={awayCityBars} height={170} labelEvery={1} unit=" 场" color="var(--accent)" />
+              <VBarChart
+                data={awayCityBars}
+                height={170}
+                labelEvery={1}
+                unit=" 场"
+                color="var(--accent)"
+              />
             {:else}
               <p class="tiny">还没有异地观演记录</p>
             {/if}
@@ -413,8 +557,14 @@
           <h3>观演同伴 <span class="hint">独自 vs 结伴</span></h3>
           {#if data.companions && data.companions.total > 0}
             <div class="stat-row">
-              <div class="stat"><div class="v">{data.companions.solo_pct}%</div><div class="l">独自 {data.companions.solo} 场</div></div>
-              <div class="stat"><div class="v">{data.companions.with_pct}%</div><div class="l">结伴 {data.companions.with_friends} 场</div></div>
+              <div class="stat">
+                <div class="v">{data.companions.solo_pct}%</div>
+                <div class="l">独自 {data.companions.solo} 场</div>
+              </div>
+              <div class="stat">
+                <div class="v">{data.companions.with_pct}%</div>
+                <div class="l">结伴 {data.companions.with_friends} 场</div>
+              </div>
             </div>
             {#if data.companions.top_companions.length > 0}
               <RankList items={data.companions.top_companions} unit="次" />
@@ -429,13 +579,31 @@
           <h3>观演时长 <span class="hint">总时长与单日密度</span></h3>
           {#if data.duration}
             <div class="stat-row">
-              <div class="stat"><div class="v">{data.duration.total_hours || '—'} h</div><div class="l">剧场总时长</div></div>
-              <div class="stat"><div class="v">{data.duration.avg_minutes || '—'} 分钟</div><div class="l">平均单场</div></div>
-              <div class="stat"><div class="v">{data.duration.multi_show_days} 天</div><div class="l">单日多场</div></div>
-              <div class="stat"><div class="v">{data.duration.max_shows_per_day} 场</div><div class="l">单日最多</div></div>
+              <div class="stat">
+                <div class="v">{data.duration.total_hours || '—'} h</div>
+                <div class="l">剧场总时长</div>
+              </div>
+              <div class="stat">
+                <div class="v">{data.duration.avg_minutes || '—'} 分钟</div>
+                <div class="l">平均单场</div>
+              </div>
+              <div class="stat">
+                <div class="v">{data.duration.multi_show_days} 天</div>
+                <div class="l">单日多场</div>
+              </div>
+              <div class="stat">
+                <div class="v">{data.duration.max_shows_per_day} 场</div>
+                <div class="l">单日最多</div>
+              </div>
             </div>
             {#if durationBars.length > 0}
-              <VBarChart data={durationBars} height={170} labelEvery={1} unit=" 场" color="var(--gold)" />
+              <VBarChart
+                data={durationBars}
+                height={170}
+                labelEvery={1}
+                unit=" 场"
+                color="var(--gold)"
+              />
             {:else}
               <p class="tiny">补充「时长」字段后可查看分布</p>
             {/if}
@@ -446,13 +614,20 @@
         <h3>折子覆盖率 <span class="hint">已看折子 / 剧目档案折子总数</span></h3>
         {#if data.zhezi_coverage && data.zhezi_coverage.total_zhezis > 0}
           <div class="stat-row">
-            <div class="stat"><div class="v">{data.zhezi_coverage.overall_pct}%</div><div class="l">整体 {data.zhezi_coverage.covered_zhezis}/{data.zhezi_coverage.total_zhezis} 折</div></div>
+            <div class="stat">
+              <div class="v">{data.zhezi_coverage.overall_pct}%</div>
+              <div class="l">
+                整体 {data.zhezi_coverage.covered_zhezis}/{data.zhezi_coverage.total_zhezis} 折
+              </div>
+            </div>
           </div>
           {#if data.zhezi_coverage.dramas.length > 0}
             <ul class="cov">
-              {#each data.zhezi_coverage.dramas as c}
+              {#each data.zhezi_coverage.dramas as c (c.drama_id)}
                 <li>
-                  <a class="cn" href="/dramas/{c.drama_id}" title={c.drama_name}>{c.drama_name}</a>
+                  <a class="cn" href={resolve('/dramas/{c.drama_id}')} title={c.drama_name}
+                    >{c.drama_name}</a
+                  >
                   <span class="track"><span class="fill" style="width:{c.pct}%"></span></span>
                   <span class="cv">{c.seen}/{c.total} 折 · {c.pct}%</span>
                 </li>
@@ -467,89 +642,351 @@
       </div>
     </section>
 
-    <p class="footer-note">分析维度：趋势（24 个月序列）· 占比（计数归一化）· 对比（同比栏状）· 异常（z-score &gt; 1.5）· 相关性（Pearson r）· 行为（周几 / 复看率 / 多样性 / 间隔）· 经济（票价分布）· 探索（每月新发现的演员与剧目）· 状态漏斗 / 地理 / 同伴 / 时长与折子覆盖。所有数据均来自本地演出记录。想看某个自然年的完整回顾？点右上角的「年度报告」。</p>
+    <p class="footer-note">
+      分析维度：趋势（24 个月序列）· 占比（计数归一化）· 对比（同比栏状）· 异常（z-score &gt; 1.5）·
+      相关性（Pearson r）· 行为（周几 / 复看率 / 多样性 / 间隔）· 经济（票价分布）·
+      探索（每月新发现的演员与剧目）· 状态漏斗 / 地理 / 同伴 /
+      时长与折子覆盖。所有数据均来自本地演出记录。想看某个自然年的完整回顾？点右上角的「年度报告」。
+    </p>
   {/if}
 </div>
 
 <style>
-  .page-head { margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
-  .page-head h1 { margin: 0; font-size: 26px; }
-  .sub { color: var(--text-muted); font-size: 13.5px; margin: 4px 0 0; }
-  .yearly-link { font-size: 13.5px; color: var(--accent); text-decoration: none; white-space: nowrap; }
+  .page-head {
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;
+  }
+  .page-head h1 {
+    margin: 0;
+    font-size: 26px;
+  }
+  .sub {
+    color: var(--text-muted);
+    font-size: 13.5px;
+    margin: 4px 0 0;
+  }
+  .yearly-link {
+    font-size: 13.5px;
+    color: var(--accent);
+    text-decoration: none;
+    white-space: nowrap;
+  }
 
-  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
-  .kpi { padding: 16px; }
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+  }
+  .kpi {
+    padding: 16px;
+  }
 
-  .block { margin-top: 22px; }
-  .sec-title { font-size: 17px; margin: 0 0 12px; display: flex; align-items: baseline; gap: 10px; }
-  .sec-title .hint { font-size: 12px; font-weight: 400; color: var(--text-muted); font-family: var(--font-sans, system-ui, sans-serif); }
-  .card.sec { padding: 18px 20px; transition: box-shadow 0.2s ease, transform 0.2s ease; }
-  .card.sec:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
-  .card.sec h3 { margin: 0 0 14px; font-size: 15px; }
+  .block {
+    margin-top: 22px;
+  }
+  .sec-title {
+    font-size: 17px;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .sec-title .hint {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-muted);
+    font-family: var(--font-sans, system-ui, sans-serif);
+  }
+  .card.sec {
+    padding: 18px 20px;
+    transition:
+      box-shadow 0.2s ease,
+      transform 0.2s ease;
+  }
+  .card.sec:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+  }
+  .card.sec h3 {
+    margin: 0 0 14px;
+    font-size: 15px;
+  }
 
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
-  .grid-2:first-of-type { margin-top: 0; }
-  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .grid-2:first-of-type {
+    margin-top: 0;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
 
-  .tiny { color: var(--text-muted); font-size: 13px; margin: 0; }
+  .tiny {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin: 0;
+  }
 
   /* anomalies */
-  .anomaly-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-  .anom { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); }
-  .anom.spike { border-color: rgba(220,38,38,0.4); }
-  .anom.drop { border-color: rgba(37,99,235,0.4); }
-  .anom .badge { font-size: 11px; font-weight: 700; align-self: flex-start; padding: 1px 8px; border-radius: 99px; }
-  .anom.spike .badge { background: rgba(220,38,38,0.12); color: #dc2626; }
-  .anom.drop .badge { background: rgba(37,99,235,0.12); color: #2563eb; }
-  .anom .ap { font-weight: 600; font-variant-numeric: tabular-nums; }
-  .anom .ac { font-size: 13px; }
-  .anom .aexp { font-size: 11.5px; color: var(--text-muted); }
+  .anomaly-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  .anom {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .anom.spike {
+    border-color: rgba(220, 38, 38, 0.4);
+  }
+  .anom.drop {
+    border-color: rgba(37, 99, 235, 0.4);
+  }
+  .anom .badge {
+    font-size: 11px;
+    font-weight: 700;
+    align-self: flex-start;
+    padding: 1px 8px;
+    border-radius: 99px;
+  }
+  .anom.spike .badge {
+    background: rgba(220, 38, 38, 0.12);
+    color: #dc2626;
+  }
+  .anom.drop .badge {
+    background: rgba(37, 99, 235, 0.12);
+    color: #2563eb;
+  }
+  .anom .ap {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .anom .ac {
+    font-size: 13px;
+  }
+  .anom .aexp {
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
 
   /* compare */
-  .compare-head { font-size: 13.5px; color: var(--text-2); margin-bottom: 10px; }
-  .compare-head b { color: var(--text); }
-  .delta.pos { color: #16a34a; } .delta.neg { color: #dc2626; }
-  :global(.dark) .delta.pos { color: #4ade80; } :global(.dark) .delta.neg { color: #f87171; }
-  .legend-compare { display: flex; gap: 16px; margin-top: 8px; font-size: 12px; color: var(--text-2); }
-  .legend-compare .sw { width: 12px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 5px; vertical-align: middle; }
-  .legend-compare .sw.cur { background: var(--accent); }
-  .legend-compare .sw.prev { background: var(--text-3); opacity: 0.55; }
+  .compare-head {
+    font-size: 13.5px;
+    color: var(--text-2);
+    margin-bottom: 10px;
+  }
+  .compare-head b {
+    color: var(--text);
+  }
+  .delta.pos {
+    color: #16a34a;
+  }
+  .delta.neg {
+    color: #dc2626;
+  }
+  :global(.dark) .delta.pos {
+    color: #4ade80;
+  }
+  :global(.dark) .delta.neg {
+    color: #f87171;
+  }
+  .legend-compare {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-2);
+  }
+  .legend-compare .sw {
+    width: 12px;
+    height: 8px;
+    border-radius: 2px;
+    display: inline-block;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+  .legend-compare .sw.cur {
+    background: var(--accent);
+  }
+  .legend-compare .sw.prev {
+    background: var(--text-3);
+    opacity: 0.55;
+  }
 
   /* correlation */
-  .corr { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-  .corr li { display: grid; grid-template-columns: 1fr 90px 110px; align-items: center; gap: 10px; font-size: 13px; }
-  .cp-name { color: var(--text-2); }
-  .cp-bar { height: 8px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
-  .cp-fill { display: block; height: 100%; border-radius: 99px; }
-  .cp-fill.pos { background: linear-gradient(90deg, #16a34a, #15803d); }
-  .cp-fill.neg { background: linear-gradient(90deg, #dc2626, #b91c1c); }
-  .cp-fill.flat { background: var(--text-3); }
-  .cp-r { font-variant-numeric: tabular-nums; font-weight: 600; }
-  .cp-r.pos { color: #16a34a; } .cp-r.neg { color: #dc2626; } .cp-r.flat { color: var(--text-muted); }
-  :global(.dark) .cp-r.pos { color: #4ade80; } :global(.dark) .cp-r.neg { color: #f87171; }
-  .cp-r em { font-style: normal; font-weight: 500; color: var(--text-muted); font-size: 11.5px; margin-left: 3px; }
-  .cp-na { color: var(--text-muted); font-size: 12px; }
+  .corr {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .corr li {
+    display: grid;
+    grid-template-columns: 1fr 90px 110px;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+  }
+  .cp-name {
+    color: var(--text-2);
+  }
+  .cp-bar {
+    height: 8px;
+    border-radius: 99px;
+    background: var(--surface-3);
+    overflow: hidden;
+  }
+  .cp-fill {
+    display: block;
+    height: 100%;
+    border-radius: 99px;
+  }
+  .cp-fill.pos {
+    background: linear-gradient(90deg, #16a34a, #15803d);
+  }
+  .cp-fill.neg {
+    background: linear-gradient(90deg, #dc2626, #b91c1c);
+  }
+  .cp-fill.flat {
+    background: var(--text-3);
+  }
+  .cp-r {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .cp-r.pos {
+    color: #16a34a;
+  }
+  .cp-r.neg {
+    color: #dc2626;
+  }
+  .cp-r.flat {
+    color: var(--text-muted);
+  }
+  :global(.dark) .cp-r.pos {
+    color: #4ade80;
+  }
+  :global(.dark) .cp-r.neg {
+    color: #f87171;
+  }
+  .cp-r em {
+    font-style: normal;
+    font-weight: 500;
+    color: var(--text-muted);
+    font-size: 11.5px;
+    margin-left: 3px;
+  }
+  .cp-na {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
 
-  .note { font-size: 11.5px; color: var(--text-muted); margin: 12px 0 0; }
+  .note {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin: 12px 0 0;
+  }
 
   /* 折子覆盖率列表 */
-  .cov { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; font-size: 13.5px; }
-  .cov li { display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .cov .cn { color: var(--text); text-decoration: none; flex: 0 0 auto; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cov .cn:hover { color: var(--accent); }
-  .cov .track { flex: 1; height: 8px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
-  .cov .fill { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
-  .cov .cv { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+  .cov {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    font-size: 13.5px;
+  }
+  .cov li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .cov .cn {
+    color: var(--text);
+    text-decoration: none;
+    flex: 0 0 auto;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cov .cn:hover {
+    color: var(--accent);
+  }
+  .cov .track {
+    flex: 1;
+    height: 8px;
+    border-radius: 99px;
+    background: var(--surface-3);
+    overflow: hidden;
+  }
+  .cov .fill {
+    display: block;
+    height: 100%;
+    border-radius: 99px;
+    background: var(--accent);
+  }
+  .cov .cv {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    flex: 0 0 auto;
+  }
 
   /* behavioural stat cards */
-  .stat-row { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 8px; }
-  .stat { min-width: 88px; }
-  .stat .v { font-size: 22px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
-  .stat .l { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .stat-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 8px;
+  }
+  .stat {
+    min-width: 88px;
+  }
+  .stat .v {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .l {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
 
-  .footer-note { margin-top: 28px; font-size: 11.5px; color: var(--text-3); line-height: 1.7; border-top: 1px dashed var(--border); padding-top: 14px; }
+  .footer-note {
+    margin-top: 28px;
+    font-size: 11.5px;
+    color: var(--text-3);
+    line-height: 1.7;
+    border-top: 1px dashed var(--border);
+    padding-top: 14px;
+  }
 
   @media (max-width: 860px) {
-    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .grid-2,
+    .grid-3 {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

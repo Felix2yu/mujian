@@ -25,15 +25,20 @@
       <h3 class="cm-title" class:danger={$confirmState.danger}>{$confirmState.title}</h3>
       {#if $confirmState.message}<p class="cm-msg">{$confirmState.message}</p>{/if}
       {#if $confirmState.impact != null}
-        <div class="cm-impact">影响面：<b>{$confirmState.impact}</b> {$confirmState.impactLabel}</div>
+        <div class="cm-impact">
+          影响面：<b>{$confirmState.impact}</b>
+          {$confirmState.impactLabel}
+        </div>
       {/if}
       <div class="cm-actions">
-        <button class="btn" type="button" onclick={() => resolveConfirm(false)}>{$confirmState.cancelLabel}</button>
+        <button class="btn" type="button" onclick={() => resolveConfirm(false)}
+          >{$confirmState.cancelLabel}</button
+        >
         <button
           class="btn {$confirmState.danger ? 'danger' : 'primary'}"
           type="button"
-          onclick={() => resolveConfirm(true)}
-        >{$confirmState.confirmLabel}</button>
+          onclick={() => resolveConfirm(true)}>{$confirmState.confirmLabel}</button
+        >
       </div>
     </div>
   </div>
@@ -58,8 +63,13 @@
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.16);
     padding: 22px 22px 18px;
   }
-  .cm-title { margin: 0 0 10px; font-size: 17px; }
-  .cm-title.danger { color: var(--danger); }
+  .cm-title {
+    margin: 0 0 10px;
+    font-size: 17px;
+  }
+  .cm-title.danger {
+    color: var(--danger);
+  }
   .cm-msg {
     margin: 0 0 6px;
     color: var(--text-2);
@@ -74,6 +84,14 @@
     background: var(--surface-3);
     font-size: 14px;
   }
-  .cm-impact b { color: var(--danger); font-size: 16px; }
-  .cm-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+  .cm-impact b {
+    color: var(--danger);
+    font-size: 16px;
+  }
+  .cm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px;
+  }
 </style>

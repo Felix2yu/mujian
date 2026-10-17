@@ -1,4 +1,5 @@
 <script>
+  import { resolve } from '$app/paths';
   import { onMount, tick, untrack } from 'svelte';
   import { fade, scale } from 'svelte/transition';
   import { api, coverUrl } from '#lib/api.js';
@@ -108,8 +109,14 @@
   function shift(dm) {
     let y = year;
     let m = month + dm;
-    while (m < 1) { m += 12; y -= 1; }
-    while (m > 12) { m -= 12; y += 1; }
+    while (m < 1) {
+      m += 12;
+      y -= 1;
+    }
+    while (m > 12) {
+      m -= 12;
+      y += 1;
+    }
     year = y;
     month = m;
     load(true);
@@ -209,7 +216,11 @@
   // （Svelte 5 的 effect 依赖是在首个 await 之前同步读到的所有 $state）。
   function recalcFocus() {
     if (focusDay !== null && cells.includes(focusDay)) return;
-    if (month === now.getMonth() + 1 && year === now.getFullYear() && cells.includes(now.getDate())) {
+    if (
+      month === now.getMonth() + 1 &&
+      year === now.getFullYear() &&
+      cells.includes(now.getDate())
+    ) {
       focusDay = now.getDate();
       return;
     }
@@ -235,11 +246,18 @@
     const days = cells.filter((d) => d !== null);
     if (days.length === 0) return;
     e.preventDefault();
-    if (e.key === 'Home') { goToday(); return; }
+    if (e.key === 'Home') {
+      goToday();
+      return;
+    }
     const cur = focusDay ?? days[0];
     const idx = days.indexOf(cur);
-    if (idx === -1) { focusDayCell(days[0]); return; }
-    const step = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' ? -7 : 7;
+    if (idx === -1) {
+      focusDayCell(days[0]);
+      return;
+    }
+    const step =
+      e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' ? -7 : 7;
     const next = idx + step;
     if (next >= 0 && next < days.length) {
       focusDayCell(days[next]);
@@ -316,7 +334,7 @@
     if (!name) return 'cat-default';
     let h = 0;
     for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-    return `cat-${(h % 12)}`;
+    return `cat-${h % 12}`;
   }
 
   // 演出显示名（「剧种《剧名》」）的规则下沉到 #lib/eventTitle.js：
@@ -327,7 +345,9 @@
     // 「今天」跟随系统时间推进：分钟级轮询 + 页面重新可见时立即校正，
     // 保证长期停留的后台标签页跨天后高亮不会错。
     const timer = setInterval(() => (now = new Date()), 60_000);
-    const onVisible = () => { if (!document.hidden) now = new Date(); };
+    const onVisible = () => {
+      if (!document.hidden) now = new Date();
+    };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('popstate', onPopState);
     return () => {
@@ -348,7 +368,17 @@
     <!-- 工具栏：← 今天  YYYY 年 M 月  →   场次 -->
     <header class="cal-header">
       <button class="nav-btn" onclick={() => shift(-1)} aria-label="上个月" type="button">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
           <path d="M15 18l-6-6 6-6" />
         </svg>
       </button>
@@ -364,12 +394,33 @@
         <span class="sep">年</span>
         <span class="m">{month}</span>
         <span class="sep2">月</span>
-        <svg class="ym-caret" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg
+          class="ym-caret"
+          viewBox="0 0 24 24"
+          width="14"
+          height="14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
           <path d="M6 9l6 6 6-6" />
         </svg>
       </button>
       <button class="nav-btn" onclick={() => shift(1)} aria-label="下个月" type="button">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
           <path d="M9 18l6-6-6-6" />
         </svg>
       </button>
@@ -397,7 +448,7 @@
            星期行同样保留，切月前后高度完全一致。 -->
       <div class="grid-wrap">
         <div class="dow" aria-hidden="true">
-          {#each DOW as w, i}
+          {#each DOW as w, i (i)}
             <div class="dow-cell" class:weekend={i >= 5}>{w}</div>
           {/each}
         </div>
@@ -411,10 +462,24 @@
       </div>
     {:else}
       <!-- 合法的 grid → row → gridcell 三层结构 + roving tabindex -->
-      <div class="grid-wrap" bind:this={gridEl} role="grid" tabindex="-1" aria-label={`${year}年${month}月`} onkeydown={onGridKey}>
+      <div
+        class="grid-wrap"
+        bind:this={gridEl}
+        role="grid"
+        tabindex="-1"
+        aria-label={`${year}年${month}月`}
+        onkeydown={onGridKey}
+      >
         <div class="dow" role="row">
-          {#each DOW as w, i}
-            <div class="dow-cell" class:weekend={i >= 5} role="columnheader" aria-label={`星期${w}`}>{w}</div>
+          {#each DOW as w, i (i)}
+            <div
+              class="dow-cell"
+              class:weekend={i >= 5}
+              role="columnheader"
+              aria-label={`星期${w}`}
+            >
+              {w}
+            </div>
           {/each}
         </div>
         {#each weeks as week, wi (wi)}
@@ -472,14 +537,20 @@
                     {/if}
 
                     <!-- 日期徽章：始终覆盖在格子左上角 -->
-                    <span class="d-badge" class:today-badge={hasToday} class:weekend-badge={isWeekend && !evs.length}>
+                    <span
+                      class="d-badge"
+                      class:today-badge={hasToday}
+                      class:weekend-badge={isWeekend && !evs.length}
+                    >
                       {d}
                       {#if hasToday && !evs.length}<span class="today-dot"></span>{/if}
                     </span>
                     <!-- 节假日 休/班 角标：独立放在格子右上角，实底白字，
                          海报与暗色背景上都清晰，也不与左上日期徽章挤在一起 -->
                     {#if hd}
-                      <span class="h-badge" class:h-off={hd.off} class:h-work={!hd.off}>{hd.off ? '休' : '班'}</span>
+                      <span class="h-badge" class:h-off={hd.off} class:h-work={!hd.off}
+                        >{hd.off ? '休' : '班'}</span
+                      >
                     {/if}
                     <!-- 节日名：仅无海报的格子有空间展示，避免与演出海报抢位 -->
                     {#if hd?.name && !evs.length}
@@ -499,8 +570,11 @@
   </section>
 
   <p class="hint">
-    点击日期查看当天演出 · 点击空白日期可新增 · PageUp / PageDown 随时翻月 · 点开日期关闭后可用方向键移动<br />
-    <span class="hint-holiday"><i class="hb-off">休</i> 法定节假日 · <i class="hb-work">班</i> 调休补班日</span>
+    点击日期查看当天演出 · 点击空白日期可新增 · PageUp / PageDown 随时翻月 ·
+    点开日期关闭后可用方向键移动<br />
+    <span class="hint-holiday"
+      ><i class="hb-off">休</i> 法定节假日 · <i class="hb-work">班</i> 调休补班日</span
+    >
   </p>
 </div>
 
@@ -541,7 +615,7 @@
         <ul class="day-list" role="list">
           {#each evs as e (e.id)}
             <li class="day-item" role="listitem">
-              <a class="day-link" href={`/records/${e.id}`}>
+              <a class="day-link" href={resolve(`/records/${e.id}`)}>
                 {#if posterSrc(e)}
                   <!-- 不带 .coverable：layout 中全局灯箱是捕获阶段监听，会 preventDefault
                        把「点海报进详情」改写成看大图，且 Esc 会同时关掉灯箱和当日弹窗。
@@ -552,9 +626,13 @@
                 {/if}
                 <div class="di-body">
                   <div class="di-top">
-                    <span class="di-name">{formatEventTitle(e.name, e.categoryName, e.categoryNames)}</span>
+                    <span class="di-name"
+                      >{formatEventTitle(e.name, e.categoryName, e.categoryNames)}</span
+                    >
                     {#if statusLabel(e.active_status)}
-                      <span class="di-status {statusClass(e.active_status)}">{statusLabel(e.active_status)}</span>
+                      <span class="di-status {statusClass(e.active_status)}"
+                        >{statusLabel(e.active_status)}</span
+                      >
                     {/if}
                   </div>
                   <div class="di-meta">
@@ -572,7 +650,17 @@
         </ul>
       {:else}
         <div class="empty-state">
-          <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            width="40"
+            height="40"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <rect x="3" y="4" width="18" height="18" rx="2" />
             <path d="M3 9h18M8 2v4M16 2v4" />
           </svg>
@@ -582,7 +670,9 @@
 
       <footer class="modal-foot">
         <button class="btn ghost sm" onclick={closeDayModal} type="button">关闭</button>
-        <button class="btn primary sm" onclick={() => openNew(modalDay)} type="button">+ 新增演出</button>
+        <button class="btn primary sm" onclick={() => openNew(modalDay)} type="button"
+          >+ 新增演出</button
+        >
       </footer>
     </div>
   </div>
@@ -590,7 +680,8 @@
 
 {#if showYearPicker}
   <div class="mask" transition:fade={{ duration: 180 }}>
-    <button class="mask-bg" type="button" aria-label="关闭" onclick={() => (showYearPicker = false)}></button>
+    <button class="mask-bg" type="button" aria-label="关闭" onclick={() => (showYearPicker = false)}
+    ></button>
     <div
       class="year-modal card"
       role="dialog"
@@ -607,7 +698,17 @@
           aria-label="上一年"
           disabled={pickerYear <= MIN_YEAR}
         >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
@@ -619,7 +720,17 @@
           aria-label="下一年"
           disabled={pickerYear >= maxYear()}
         >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <path d="M9 18l6-6-6-6" />
           </svg>
         </button>
@@ -633,7 +744,8 @@
             onclick={() => selectMonth(i + 1)}
             aria-label={`${pickerYear} 年 ${i + 1} 月`}
             aria-current={pickerYear === year && i + 1 === month ? 'true' : undefined}
-          >{i + 1} 月</button>
+            >{i + 1} 月</button
+          >
         {/each}
       </div>
     </div>
@@ -671,7 +783,8 @@
     color: var(--text-3);
     cursor: pointer;
     flex-shrink: 0;
-    transition: background var(--t-fast) var(--ease),
+    transition:
+      background var(--t-fast) var(--ease),
       color var(--t-fast) var(--ease),
       transform var(--t-fast) var(--ease);
   }
@@ -679,9 +792,17 @@
     background: var(--accent-soft);
     color: var(--accent);
   }
-  .nav-btn:active { transform: scale(0.94); }
-  .nav-btn:disabled { opacity: 0.3; cursor: default; }
-  .nav-btn:disabled:hover { background: transparent; color: var(--text-3); }
+  .nav-btn:active {
+    transform: scale(0.94);
+  }
+  .nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+  .nav-btn:disabled:hover {
+    background: transparent;
+    color: var(--text-3);
+  }
 
   .today-btn {
     height: 28px;
@@ -694,7 +815,8 @@
     font-weight: 500;
     cursor: pointer;
     flex-shrink: 0;
-    transition: background var(--t-fast) var(--ease),
+    transition:
+      background var(--t-fast) var(--ease),
       color var(--t-fast) var(--ease),
       border-color var(--t-fast) var(--ease);
   }
@@ -716,19 +838,24 @@
     color: inherit;
     font-family: inherit;
     cursor: pointer;
-    transition: background var(--t-fast) var(--ease),
+    transition:
+      background var(--t-fast) var(--ease),
       box-shadow var(--t-fast) var(--ease);
     white-space: nowrap;
   }
   .ym-display:hover {
     background: var(--accent-soft);
   }
-  .ym-display:active { transform: scale(0.97); }
+  .ym-display:active {
+    transform: scale(0.97);
+  }
   .ym-caret {
     align-self: center;
     margin-left: 2px;
     color: var(--text-3);
-    transition: transform var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+    transition:
+      transform var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease);
   }
   .ym-display:hover .ym-caret {
     color: var(--accent);
@@ -817,7 +944,8 @@
     font-weight: 600;
     line-height: 1;
     cursor: pointer;
-    transition: background var(--t-fast) var(--ease),
+    transition:
+      background var(--t-fast) var(--ease),
       color var(--t-fast) var(--ease),
       border-color var(--t-fast) var(--ease),
       transform var(--t-fast) var(--ease),
@@ -830,7 +958,9 @@
     box-shadow: 0 2px 8px -2px var(--accent-soft);
     transform: translateY(-1px);
   }
-  .month-cell:active { transform: translateY(0) scale(0.97); }
+  .month-cell:active {
+    transform: translateY(0) scale(0.97);
+  }
   .month-cell.current {
     background: var(--accent);
     color: #fff;
@@ -859,7 +989,9 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
   }
-  .dow-cell.weekend { color: var(--gold); }
+  .dow-cell.weekend {
+    color: var(--gold);
+  }
 
   /* ============ 日期网格 ============ */
   /* grid-wrap → week(row) → cell-slot(gridcell) → button(cell) */
@@ -874,7 +1006,9 @@
     grid-template-columns: repeat(7, 1fr);
     gap: 5px;
   }
-  .cell-slot { min-width: 0; }
+  .cell-slot {
+    min-width: 0;
+  }
 
   .cell {
     aspect-ratio: 1 / 1;
@@ -889,7 +1023,8 @@
     overflow: hidden;
     font: inherit;
     padding: 0;
-    transition: border-color var(--t-fast) var(--ease),
+    transition:
+      border-color var(--t-fast) var(--ease),
       box-shadow var(--t-fast) var(--ease),
       transform var(--t-fast) var(--ease);
   }
@@ -898,7 +1033,9 @@
     box-shadow: 0 2px 10px -2px var(--accent-soft);
     transform: translateY(-1px);
   }
-  .cell:active:not(.empty) { transform: translateY(0) scale(0.98); }
+  .cell:active:not(.empty) {
+    transform: translateY(0) scale(0.98);
+  }
 
   .cell.empty {
     background: transparent;
@@ -910,7 +1047,12 @@
     aspect-ratio: 1 / 1;
     border: none;
     border-radius: var(--radius);
-    background-image: linear-gradient(90deg, var(--surface-3) 25%, var(--surface-2) 50%, var(--surface-3) 75%);
+    background-image: linear-gradient(
+      90deg,
+      var(--surface-3) 25%,
+      var(--surface-2) 50%,
+      var(--surface-3) 75%
+    );
     background-size: 800px 100%;
     animation: shimmer 1.4s ease infinite;
   }
@@ -970,7 +1112,7 @@
   .p-slot + .p-slot {
     box-shadow: inset 1px 0 0 var(--surface);
   }
-  .poster-grid[style*="grid-template-rows"] .p-slot {
+  .poster-grid[style*='grid-template-rows'] .p-slot {
     box-shadow: none;
   }
 
@@ -1172,14 +1314,17 @@
     user-select: none;
     white-space: nowrap;
   }
-  .sub-toggle input[type="checkbox"] {
+  .sub-toggle input[type='checkbox'] {
     width: 14px;
     height: 14px;
     margin: 0;
     accent-color: var(--accent);
     flex-shrink: 0;
   }
-  .sub-note { font-size: 12px; color: var(--text-3); }
+  .sub-note {
+    font-size: 12px;
+    color: var(--text-3);
+  }
 
   .month-empty {
     padding: 6px 14px 18px;
@@ -1270,7 +1415,10 @@
     overscroll-behavior: contain;
   }
 
-  .day-item { margin: 0; padding: 0; }
+  .day-item {
+    margin: 0;
+    padding: 0;
+  }
   .day-link {
     display: flex;
     align-items: stretch;
@@ -1278,7 +1426,8 @@
     padding: 10px;
     border-radius: var(--radius);
     background: var(--surface-2);
-    transition: background var(--t-fast) var(--ease),
+    transition:
+      background var(--t-fast) var(--ease),
       transform var(--t-fast) var(--ease),
       border-color var(--t-fast) var(--ease);
     border: 1px solid transparent;
@@ -1288,7 +1437,8 @@
     border-color: var(--accent-soft);
     transform: translateX(3px);
   }
-  .day-link img, .diph {
+  .day-link img,
+  .diph {
     width: 44px;
     aspect-ratio: 3 / 4;
     object-fit: cover;
@@ -1374,19 +1524,58 @@
   }
 
   /* 分类颜色变体（柔和色调） */
-  .cat-default { background: var(--surface-3); color: var(--text-muted); }
-  .cat-0  { background: rgba(180, 35, 24, 0.08); color: var(--accent); }
-  .cat-1  { background: rgba(217, 119, 6, 0.10); color: var(--gold); }
-  .cat-2  { background: rgba(21, 128, 61, 0.08); color: #15803d; }
-  .cat-3  { background: rgba(59, 130, 246, 0.10); color: #3b82f6; }
-  .cat-4  { background: rgba(147, 51, 234, 0.08); color: #9333ea; }
-  .cat-5  { background: rgba(236, 72, 153, 0.10); color: #ec4899; }
-  .cat-6  { background: rgba(249, 115, 22, 0.10); color: #f97316; }
-  .cat-7  { background: rgba(14, 165, 233, 0.10); color: #0ea5e9; }
-  .cat-8  { background: rgba(168, 85, 247, 0.10); color: #a855f7; }
-  .cat-9  { background: rgba(34, 197, 94, 0.10); color: #22c55e; }
-  .cat-10 { background: rgba(244, 63, 94, 0.10); color: #f43f5e; }
-  .cat-11 { background: rgba(20, 184, 166, 0.10); color: #14b8a6; }
+  .cat-default {
+    background: var(--surface-3);
+    color: var(--text-muted);
+  }
+  .cat-0 {
+    background: rgba(180, 35, 24, 0.08);
+    color: var(--accent);
+  }
+  .cat-1 {
+    background: rgba(217, 119, 6, 0.1);
+    color: var(--gold);
+  }
+  .cat-2 {
+    background: rgba(21, 128, 61, 0.08);
+    color: #15803d;
+  }
+  .cat-3 {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+  }
+  .cat-4 {
+    background: rgba(147, 51, 234, 0.08);
+    color: #9333ea;
+  }
+  .cat-5 {
+    background: rgba(236, 72, 153, 0.1);
+    color: #ec4899;
+  }
+  .cat-6 {
+    background: rgba(249, 115, 22, 0.1);
+    color: #f97316;
+  }
+  .cat-7 {
+    background: rgba(14, 165, 233, 0.1);
+    color: #0ea5e9;
+  }
+  .cat-8 {
+    background: rgba(168, 85, 247, 0.1);
+    color: #a855f7;
+  }
+  .cat-9 {
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+  }
+  .cat-10 {
+    background: rgba(244, 63, 94, 0.1);
+    color: #f43f5e;
+  }
+  .cat-11 {
+    background: rgba(20, 184, 166, 0.1);
+    color: #14b8a6;
+  }
 
   .empty-state {
     padding: 32px 24px;
@@ -1397,7 +1586,10 @@
     align-items: center;
     gap: 8px;
   }
-  .empty-state svg { opacity: 0.5; color: var(--text-3); }
+  .empty-state svg {
+    opacity: 0.5;
+    color: var(--text-3);
+  }
   .empty-state p {
     margin: 0;
     font-size: 14px;
@@ -1419,52 +1611,136 @@
       padding: 10px 10px;
       gap: 4px;
     }
-    .nav-btn { width: 30px; height: 30px; }
-    .today-btn { height: 26px; padding: 0 8px; font-size: 11px; border-radius: 5px; }
-    .ym-display { gap: 0; padding: 3px 6px; }
-    .ym-display .y { font-size: 12px; letter-spacing: 0.04em; }
-    .ym-display .sep, .ym-display .sep2 { font-size: 11px; }
-    .ym-display .m { font-size: 15px; }
-    .ym-caret { width: 12px; height: 12px; }
-    .stat-num { font-size: 16px; }
-    .stat-label { font-size: 10px; }
-
-    .dow { padding: 2px 0 0; gap: 3px; }
-    .dow-cell { font-size: 11px; letter-spacing: 0.08em; }
-
-    .grid-wrap { gap: 3px; padding: 4px 8px 12px; }
-    .week { gap: 3px; }
-    .cell { border-radius: 8px; }
-    .d-badge {
-      top: 3px; left: 3px;
+    .nav-btn {
+      width: 30px;
+      height: 30px;
+    }
+    .today-btn {
+      height: 26px;
+      padding: 0 8px;
       font-size: 11px;
-      min-width: 15px; height: 15px;
+      border-radius: 5px;
+    }
+    .ym-display {
+      gap: 0;
+      padding: 3px 6px;
+    }
+    .ym-display .y {
+      font-size: 12px;
+      letter-spacing: 0.04em;
+    }
+    .ym-display .sep,
+    .ym-display .sep2 {
+      font-size: 11px;
+    }
+    .ym-display .m {
+      font-size: 15px;
+    }
+    .ym-caret {
+      width: 12px;
+      height: 12px;
+    }
+    .stat-num {
+      font-size: 16px;
+    }
+    .stat-label {
+      font-size: 10px;
+    }
+
+    .dow {
+      padding: 2px 0 0;
+      gap: 3px;
+    }
+    .dow-cell {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+    }
+
+    .grid-wrap {
+      gap: 3px;
+      padding: 4px 8px 12px;
+    }
+    .week {
+      gap: 3px;
+    }
+    .cell {
+      border-radius: 8px;
+    }
+    .d-badge {
+      top: 3px;
+      left: 3px;
+      font-size: 11px;
+      min-width: 15px;
+      height: 15px;
       padding: 0 3px;
       gap: 2px;
     }
-    .h-badge { top: 3px; right: 3px; font-size: 9.5px; padding: 2px 4px; border-radius: 4px; }
-    .h-name { top: 22px; left: 4px; font-size: 9.5px; }
+    .h-badge {
+      top: 3px;
+      right: 3px;
+      font-size: 9.5px;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+    .h-name {
+      top: 22px;
+      left: 4px;
+      font-size: 9.5px;
+    }
     .has-event .d-badge {
       font-size: 10px;
-      min-width: 13px; height: 13px;
+      min-width: 13px;
+      height: 13px;
       padding: 0 2px;
     }
-    .more-badge { font-size: 9px; padding: 1px 5px; bottom: 3px; right: 3px; }
+    .more-badge {
+      font-size: 9px;
+      padding: 1px 5px;
+      bottom: 3px;
+      right: 3px;
+    }
 
-    .modal-head { padding: 18px 18px 14px; }
-    .modal-day { font-size: 30px; }
-    .day-list { padding: 10px 12px; }
-    .day-link img, .diph { width: 38px; }
-    .di-name { font-size: 14px; }
-    .modal-foot { padding: 12px 14px; }
+    .modal-head {
+      padding: 18px 18px 14px;
+    }
+    .modal-day {
+      font-size: 30px;
+    }
+    .day-list {
+      padding: 10px 12px;
+    }
+    .day-link img,
+    .diph {
+      width: 38px;
+    }
+    .di-name {
+      font-size: 14px;
+    }
+    .modal-foot {
+      padding: 12px 14px;
+    }
   }
 
   @media (max-width: 420px) {
-    .ym-display .y { display: none; }
-    .ym-display .sep { display: none; }
-    .ym-display .sep2 { display: none; }
-    .ym-display .m { font-size: 18px; }
-    .month-grid { gap: 6px; padding: 14px; }
-    .month-cell { padding: 13px 0; font-size: 14px; }
+    .ym-display .y {
+      display: none;
+    }
+    .ym-display .sep {
+      display: none;
+    }
+    .ym-display .sep2 {
+      display: none;
+    }
+    .ym-display .m {
+      font-size: 18px;
+    }
+    .month-grid {
+      gap: 6px;
+      padding: 14px;
+    }
+    .month-cell {
+      padding: 13px 0;
+      font-size: 14px;
+    }
   }
 </style>

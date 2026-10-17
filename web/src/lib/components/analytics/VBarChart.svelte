@@ -28,9 +28,7 @@
     return () => ro.disconnect();
   });
 
-  let max = $derived(
-    Math.max(maxValue ?? 1, ...data.map((d) => d.value || 0), 1)
-  );
+  let max = $derived(Math.max(maxValue ?? 1, ...data.map((d) => d.value || 0), 1));
   let W = $derived(Math.max(containerW, padLeft + data.length * 60 + padX));
   let plotH = $derived(height - padTop - padBottom);
   let plotW = $derived(W - padLeft - padX);
@@ -53,47 +51,101 @@
   }
 </script>
 
-<div bind:this={wrap} class="chart-wrap"><svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="none" aria-label="柱状图表">
-  <!-- y gridlines + labels -->
-  {#each yTicks as t}
-    <line x1={padLeft} y1={y(t)} x2={W - padX} y2={y(t)} stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3" opacity="0.5" />
-    <text x={padLeft - 6} y={y(t) + 4} text-anchor="end" class="y-label">{t}{unit}</text>
-  {/each}
-  <!-- baseline -->
-  <line x1={padLeft} y1={padTop + plotH} x2={W - padX} y2={padTop + plotH} stroke="var(--border)" stroke-width="1" />
-  {#each data as d, i}
-    {@const bx = padLeft + slot * i + (slot - barW) / 2}
-    {@const top = y(d.value || 0)}
-    {@const h = padTop + plotH - top}
-    <!-- transparent full-column hit area for reliable hover -->
-    <rect
-      x={bx} y={padTop} width={barW} height={plotH}
-      fill="transparent" style="pointer-events:all;cursor:pointer"
-      role="img" aria-label={`${d.label}: ${d.value}${unit}`}
-      onmouseenter={(e) => showTip(e, d.label, [`${d.value}${unit}`])}
-      onmousemove={(e) => showTip(e, d.label, [`${d.value}${unit}`])}
-      onmouseleave={hideTip}
+<div bind:this={wrap} class="chart-wrap">
+  <svg viewBox="0 0 {W} {height}" width="100%" preserveAspectRatio="none" aria-label="柱状图表">
+    <!-- y gridlines + labels -->
+    {#each yTicks as t (t)}
+      <line
+        x1={padLeft}
+        y1={y(t)}
+        x2={W - padX}
+        y2={y(t)}
+        stroke="var(--border)"
+        stroke-width="1"
+        stroke-dasharray="3 3"
+        opacity="0.5"
+      />
+      <text x={padLeft - 6} y={y(t) + 4} text-anchor="end" class="y-label">{t}{unit}</text>
+    {/each}
+    <!-- baseline -->
+    <line
+      x1={padLeft}
+      y1={padTop + plotH}
+      x2={W - padX}
+      y2={padTop + plotH}
+      stroke="var(--border)"
+      stroke-width="1"
     />
-    <rect x={bx} y={top} width={barW} height={Math.max(h, 0.5)} rx="3" fill={color} opacity={d.highlight ? 1 : 0.92} pointer-events="none" />
-    {#if d.highlight}
-      <polygon
-        points="{bx + barW / 2},{top - 11} {bx + barW / 2 - 5},{top - 2} {bx + barW / 2 + 5},{top - 2}"
-        fill={d.highlight === 'drop' ? '#2563eb' : '#dc2626'}
+    {#each data as d, i (i)}
+      {@const bx = padLeft + slot * i + (slot - barW) / 2}
+      {@const top = y(d.value || 0)}
+      {@const h = padTop + plotH - top}
+      <!-- transparent full-column hit area for reliable hover -->
+      <rect
+        x={bx}
+        y={padTop}
+        width={barW}
+        height={plotH}
+        fill="transparent"
+        style="pointer-events:all;cursor:pointer"
+        role="img"
+        aria-label={`${d.label}: ${d.value}${unit}`}
+        onmouseenter={(e) => showTip(e, d.label, [`${d.value}${unit}`])}
+        onmousemove={(e) => showTip(e, d.label, [`${d.value}${unit}`])}
+        onmouseleave={hideTip}
+      />
+      <rect
+        x={bx}
+        y={top}
+        width={barW}
+        height={Math.max(h, 0.5)}
+        rx="3"
+        fill={color}
+        opacity={d.highlight ? 1 : 0.92}
         pointer-events="none"
       />
-    {/if}
-    {#if i % labelEvery === 0}
-      <text x={bx + barW / 2} y={height - 10} text-anchor="middle" class="x-label">{d.label}</text>
-    {/if}
-  {/each}
-</svg></div>
+      {#if d.highlight}
+        <polygon
+          points="{bx + barW / 2},{top - 11} {bx + barW / 2 - 5},{top - 2} {bx +
+            barW / 2 +
+            5},{top - 2}"
+          fill={d.highlight === 'drop' ? '#2563eb' : '#dc2626'}
+          pointer-events="none"
+        />
+      {/if}
+      {#if i % labelEvery === 0}
+        <text x={bx + barW / 2} y={height - 10} text-anchor="middle" class="x-label">{d.label}</text
+        >
+      {/if}
+    {/each}
+  </svg>
+</div>
 
 <ChartTip {tip} />
 
 <style>
-  .chart-wrap { width: 100%; overflow-x: auto; }
-  svg { display: block; width: 100%; height: auto; }
-  .y-label { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
-  .x-label { font-size: 12px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
-  svg rect[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 2px; }
+  .chart-wrap {
+    width: 100%;
+    overflow-x: auto;
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .y-label {
+    font-size: 11px;
+    fill: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .x-label {
+    font-size: 12px;
+    fill: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  svg rect[tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+    border-radius: 2px;
+  }
 </style>

@@ -1,4 +1,5 @@
 <script>
+  import { resolve } from '$app/paths';
   import { coverUrl, formatCurrency } from '#lib/api.js';
   import { STATUS_LABELS } from '#lib/statusPrefs.js';
   import { formatEventTitle } from '#lib/eventTitle.js';
@@ -7,7 +8,9 @@
 
   // 封面角标：一场演出涉及多个剧种时显示为「拼盘」
   const catBadge = $derived(
-    record.categoryNames?.length > 1 ? '拼盘' : record.categoryNames?.[0] || record.categoryName || ''
+    record.categoryNames?.length > 1
+      ? '拼盘'
+      : record.categoryNames?.[0] || record.categoryName || ''
   );
   const statusText = $derived(STATUS_LABELS[record.active_status] ?? record.active_status);
   // 与日历页共用同一套「剧种 + 剧名」拼法（详见 lib/eventTitle.js），
@@ -17,7 +20,10 @@
   // 剧团：按容器实际宽度计算最多能放下几个标签（限 2 行），
   // 放不下的以 +N 收尾且 +N 必须落在第二行内，避免卡片被撑高。
   const troupeTags = $derived(
-    (record.company || '').split(/[,，]/).map((s) => s.trim()).filter(Boolean)
+    (record.company || '')
+      .split(/[,，]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
   );
   let troupeEl = $state(null);
   let troupeW = $state(0);
@@ -45,11 +51,15 @@
     const widthOf = (text) => Math.ceil(ctx.measureText(text).width) + PADDING;
     const avail = troupeW - 2; // 留少量余量防误判
     const linesNeeded = (widths) => {
-      let lines = 1, x = 0;
+      let lines = 1,
+        x = 0;
       for (const w of widths) {
         if (x === 0) x = w;
         else if (x + GAP + w <= avail) x += GAP + w;
-        else { lines++; x = w; }
+        else {
+          lines++;
+          x = w;
+        }
       }
       return lines;
     };
@@ -61,10 +71,6 @@
     }
     return { shown: tags.slice(0, 1), extra: tags.length - 1 };
   });
-
-  function stars(n) {
-    return '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
-  }
 </script>
 
 <!-- 卡容器改为 article：此前整卡是 <a>，演员名又是嵌套的 <a>，属非法 HTML
@@ -74,9 +80,19 @@
 <article class="card card-hover rec" class:select-mode={selectionMode}>
   <div class="cover">
     {#if record.coverThumb && !coverFailed}
-      <img src={coverUrl(record.coverThumb)} alt={record.name} loading="lazy" onerror={() => (coverFailed = true)} />
+      <img
+        src={coverUrl(record.coverThumb)}
+        alt={record.name}
+        loading="lazy"
+        onerror={() => (coverFailed = true)}
+      />
     {:else if record.coverFile && !coverFailed}
-      <img src={coverUrl(record.coverFile)} alt={record.name} loading="lazy" onerror={() => (coverFailed = true)} />
+      <img
+        src={coverUrl(record.coverFile)}
+        alt={record.name}
+        loading="lazy"
+        onerror={() => (coverFailed = true)}
+      />
     {:else}
       <div class="no-cover"><span>{(record.name || '?').slice(0, 1)}</span></div>
     {/if}
@@ -96,7 +112,7 @@
       <div class="title" title={record.name}>{title}</div>
     {:else}
       <div class="title" title={record.name}>
-        <a class="title-link" href={`/records/${record.id}`}>{title}</a>
+        <a class="title-link" href={resolve(`/records/${record.id}`)}>{title}</a>
       </div>
     {/if}
     <div class="meta">
@@ -105,32 +121,45 @@
     </div>
     <div class="artists">
       {#if record.artist_names && record.artist_names.length}
-        {#each record.artist_names.slice(0, 3) as name, i}
+        {#each record.artist_names.slice(0, 3) as name, i (i)}
           {#if selectionMode || !record.artist_ids?.[i]}
             <span class="artist-link">{name}</span>
           {:else}
-            <a class="artist-link" href={`/artists/${record.artist_ids[i]}`}>{name}</a>
+            <a class="artist-link" href={resolve(`/artists/${record.artist_ids[i]}`)}>{name}</a>
           {/if}{i < Math.min(record.artist_names.length, 3) - 1 ? ' / ' : ''}
         {/each}{record.artist_names.length > 3 ? ' 等' : ''}
       {/if}
     </div>
-    <div class="troupes" bind:this={troupeEl} bind:clientWidth={troupeW} title={troupeTags.join('、')}>
-      {#each troupeLayout.shown as t}
+    <div
+      class="troupes"
+      bind:this={troupeEl}
+      bind:clientWidth={troupeW}
+      title={troupeTags.join('、')}
+    >
+      {#each troupeLayout.shown as t, i (i)}
         <span class="troupe-tag">{t}</span>
       {/each}
       {#if troupeLayout.extra > 0}<span class="troupe-tag more">+{troupeLayout.extra}</span>{/if}
     </div>
     <div class="bottom">
-      {#if record.address}<span class="tag venue" title={record.address}>{record.address}</span>{/if}
+      {#if record.address}<span class="tag venue" title={record.address}>{record.address}</span
+        >{/if}
       {#if record.price !== null && record.price !== undefined}
-        <span class="price">{record.price === 0 ? '免费' : formatCurrency(record.price, record.price_currency)}</span>
+        <span class="price"
+          >{record.price === 0 ? '免费' : formatCurrency(record.price, record.price_currency)}</span
+        >
       {/if}
     </div>
   </div>
 </article>
 
 <style>
-  .rec { display: flex; flex-direction: column; overflow: hidden; position: relative; }
+  .rec {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
   .cover {
     position: relative;
     aspect-ratio: 3 / 4;
@@ -149,11 +178,17 @@
     display: block;
     transition: transform 0.5s var(--ease);
   }
-  .rec:hover .cover img { transform: scale(1.05); }
+  .rec:hover .cover img {
+    transform: scale(1.05);
+  }
   /* 批量挑选整卡即选中态：此处抑制海报放大，避免与「点击选中」的手感冲突。
      规则必须落在组件内（.cover 属组件作用域），写在页面级样式里是死规则。 */
-  .rec.select-mode:hover .cover img { transform: none; }
-  .rec.select-mode { cursor: pointer; }
+  .rec.select-mode:hover .cover img {
+    transform: none;
+  }
+  .rec.select-mode {
+    cursor: pointer;
+  }
   .no-cover {
     position: absolute;
     inset: 0;
@@ -199,9 +234,16 @@
     -webkit-backdrop-filter: blur(6px);
     backdrop-filter: blur(6px);
   }
-  .status-badge.s1 { background: rgba(146, 106, 24, 0.82); }
-  .status-badge.s2 { background: rgba(90, 90, 96, 0.82); text-decoration: line-through; }
-  .status-badge.s3 { background: rgba(93, 62, 110, 0.82); }
+  .status-badge.s1 {
+    background: rgba(146, 106, 24, 0.82);
+  }
+  .status-badge.s2 {
+    background: rgba(90, 90, 96, 0.82);
+    text-decoration: line-through;
+  }
+  .status-badge.s3 {
+    background: rgba(93, 62, 110, 0.82);
+  }
   .rate-badge {
     position: absolute;
     top: 8px;
@@ -234,13 +276,21 @@
     font-size: 13px;
     font-weight: 700;
     line-height: 1;
-    transition: background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+    transition:
+      background var(--t-fast) var(--ease),
+      transform var(--t-fast) var(--ease);
   }
   .record-check.checked {
     background: var(--accent);
     border-color: var(--accent);
   }
-  .info { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 5px; flex: 1; }
+  .info {
+    padding: 12px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+  }
   .title {
     font-family: var(--font-serif);
     font-weight: 600;
@@ -269,8 +319,17 @@
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
-  .meta { font-size: 12.5px; color: var(--text-muted); display: flex; gap: 5px; align-items: center; min-height: 1.45em; }
-  .dot { opacity: 0.5; }
+  .meta {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    min-height: 1.45em;
+  }
+  .dot {
+    opacity: 0.5;
+  }
   .artists {
     font-size: 12.5px;
     color: var(--text-2);
@@ -280,9 +339,22 @@
     min-height: 1.45em;
   }
   /* 抬到 stretched link 之上，否则整卡热区会吃掉演员跳转 */
-  .artist-link { color: var(--text-2); text-decoration: none; position: relative; z-index: 2; }
-  .artist-link:hover { color: var(--accent); text-decoration: underline; }
-  .troupes { display: flex; flex-wrap: wrap; gap: 4px; min-height: 1.45em; }
+  .artist-link {
+    color: var(--text-2);
+    text-decoration: none;
+    position: relative;
+    z-index: 2;
+  }
+  .artist-link:hover {
+    color: var(--accent);
+    text-decoration: underline;
+  }
+  .troupes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-height: 1.45em;
+  }
   .troupe-tag {
     font-size: 11px;
     color: var(--text-2);
@@ -302,7 +374,14 @@
     border-style: dashed;
     cursor: default;
   }
-  .bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 6px; }
+  .bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 6px;
+  }
   .bottom .venue {
     flex: 1;
     min-width: 0;
@@ -310,5 +389,9 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .price { color: var(--accent); font-weight: 700; font-size: 14px; }
+  .price {
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 14px;
+  }
 </style>

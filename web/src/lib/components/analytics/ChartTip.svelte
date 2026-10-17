@@ -14,7 +14,11 @@
 
   function portal(node) {
     document.body.appendChild(node);
-    return { destroy() { node.remove(); } };
+    return {
+      destroy() {
+        node.remove();
+      }
+    };
   }
 
   const vw = () => (typeof window !== 'undefined' ? window.innerWidth : 1200);
@@ -42,18 +46,33 @@
 {#if tip}
   <div class="chart-tip" bind:this={el} use:portal style={pos}>
     <div class="t-title">{tip.title}</div>
-    {#each tip.lines as l}<div class="t-line">{l}</div>{/each}
+    {#each tip.lines as l, i (i)}<div class="t-line">{l}</div>{/each}
   </div>
 {/if}
 
 <style>
   .chart-tip {
-    position: fixed; z-index: 9999; pointer-events: none;
-    background: var(--surface-2); border: 1px solid var(--border);
-    border-radius: 8px; padding: 7px 11px; font-size: 12px; line-height: 1.5;
-    color: var(--text); box-shadow: var(--shadow-md);
-    white-space: nowrap; min-width: 70px; max-width: 260px;
+    position: fixed;
+    z-index: 9999;
+    pointer-events: none;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 11px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text);
+    box-shadow: var(--shadow-md);
+    white-space: nowrap;
+    min-width: 70px;
+    max-width: 260px;
   }
-  .chart-tip .t-title { font-weight: 700; margin-bottom: 3px; }
-  .chart-tip .t-line { color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .chart-tip .t-title {
+    font-weight: 700;
+    margin-bottom: 3px;
+  }
+  .chart-tip .t-line {
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+  }
 </style>

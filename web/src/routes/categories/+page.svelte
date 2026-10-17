@@ -1,4 +1,5 @@
 <script>
+  import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import { api } from '#lib/api.js';
 
@@ -62,25 +63,34 @@
 
   onMount(load);
 </script>
-<svelte:head><title>剧种 - 幕间</title></svelte:head>
 
+<svelte:head><title>剧种 - 幕间</title></svelte:head>
 
 <div class="fade-up">
   <div class="page-head">
     <h1>剧种</h1>
-    <p class="sub">管理演出剧种；点击剧种名可查看该剧种下的剧目，点击右侧条数可查看演出记录。列表按演出数从高到低排列</p>
+    <p class="sub">
+      管理演出剧种；点击剧种名可查看该剧种下的剧目，点击右侧条数可查看演出记录。列表按演出数从高到低排列
+    </p>
   </div>
 
   <div class="card add-bar">
-    <input class="input" placeholder="新建剧种名称，回车快速添加" bind:value={newName} onkeydown={(e) => e.key === 'Enter' && add()} />
-    <button class="btn primary" onclick={add} disabled={adding || !newName.trim()}>{adding ? '添加中…' : '＋ 添加'}</button>
+    <input
+      class="input"
+      placeholder="新建剧种名称，回车快速添加"
+      bind:value={newName}
+      onkeydown={(e) => e.key === 'Enter' && add()}
+    />
+    <button class="btn primary" onclick={add} disabled={adding || !newName.trim()}
+      >{adding ? '添加中…' : '＋ 添加'}</button
+    >
   </div>
 
   {#if error}<div class="banner error">⚠ {error}</div>{/if}
 
   {#if loading}
     <div class="grid">
-      {#each Array(6) as _}<div class="skeleton" style="height: 84px;"></div>{/each}
+      {#each Array(6) as _, i (i)}<div class="skeleton" style="height: 84px;"></div>{/each}
     </div>
   {:else if categories.length === 0}
     <div class="empty card">
@@ -89,11 +99,19 @@
       <div class="h">在上方输入名称添加第一个剧种</div>
     </div>
   {:else}
-    <div class="grid stagger">
+    <div class="stagger grid">
       {#each categories as c (c.id)}
         <div class="card cat">
-          <a class="cat-name" href={`/dramas?cat=${encodeURIComponent(c.name)}`} title="查看该剧种下的剧目">{c.name}</a>
-          <a class="cnt" href={`/?category=${encodeURIComponent(c.name)}`} title="查看该剧种下的演出记录">{c.recordCount ?? 0} 条</a>
+          <a
+            class="cat-name"
+            href={resolve(`/dramas?cat=${encodeURIComponent(c.name)}`)}
+            title="查看该剧种下的剧目">{c.name}</a
+          >
+          <a
+            class="cnt"
+            href={resolve(`/?category=${encodeURIComponent(c.name)}`)}
+            title="查看该剧种下的演出记录">{c.recordCount ?? 0} 条</a
+          >
           <button class="del" title="删除剧种" onclick={() => askRemove(c)}>✕</button>
         </div>
       {/each}
@@ -107,7 +125,8 @@
       <h3 class="modal-title">删除剧种「{pendingDelete.name}」</h3>
       {#if pendingDelete.count > 0}
         <p class="modal-text">
-          该剧种下有 <b>{pendingDelete.count}</b> 条演出。删除后这些演出仍会保留「{pendingDelete.name}」标签
+          该剧种下有 <b>{pendingDelete.count}</b>
+          条演出。删除后这些演出仍会保留「{pendingDelete.name}」标签
           （成为无主引用，不再出现在剧种列表中），演出记录本身不会被删除。
         </p>
       {:else}
@@ -122,8 +141,17 @@
 {/if}
 
 <style>
-  .add-bar { display: flex; gap: 10px; padding: 12px; margin-bottom: 16px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .add-bar {
+    display: flex;
+    gap: 10px;
+    padding: 12px;
+    margin-bottom: 16px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+  }
   .cat {
     display: flex;
     align-items: center;
@@ -140,11 +168,22 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .cat-name:hover { color: var(--accent); }
-  .cnt { font-size: 12px; color: var(--text-muted); flex: 0 0 auto; }
+  .cat-name:hover {
+    color: var(--accent);
+  }
+  .cnt {
+    font-size: 12px;
+    color: var(--text-muted);
+    flex: 0 0 auto;
+  }
   /* 条数可点：跳转到该剧种下的演出记录 */
-  a.cnt { transition: color var(--t-fast) var(--ease); }
-  a.cnt:hover { color: var(--accent); text-decoration: underline; }
+  a.cnt {
+    transition: color var(--t-fast) var(--ease);
+  }
+  a.cnt:hover {
+    color: var(--accent);
+    text-decoration: underline;
+  }
   .del {
     border: none;
     background: none;
@@ -157,11 +196,18 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+    transition:
+      background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease);
     flex: 0 0 auto;
   }
-  .del:hover { background: var(--danger-soft); color: var(--danger); }
-  .cat { position: relative; }
+  .del:hover {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+  .cat {
+    position: relative;
+  }
 
   /* 页内删除确认弹窗（替代被预览浏览器屏蔽的原生 confirm） */
   .modal-mask {
@@ -182,9 +228,28 @@
     width: 100%;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
   }
-  .modal-title { margin: 0 0 10px; font-size: 16px; font-family: var(--font-serif); }
-  .modal-text { margin: 0 0 18px; font-size: 14px; line-height: 1.6; color: var(--text-2, #555); }
-  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
-  .btn.danger { background: var(--danger, #d33); color: #fff; border: none; }
-  .btn.danger:hover { background: var(--danger-dark, #b22); }
+  .modal-title {
+    margin: 0 0 10px;
+    font-size: 16px;
+    font-family: var(--font-serif);
+  }
+  .modal-text {
+    margin: 0 0 18px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-2, #555);
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+  .btn.danger {
+    background: var(--danger, #d33);
+    color: #fff;
+    border: none;
+  }
+  .btn.danger:hover {
+    background: var(--danger-dark, #b22);
+  }
 </style>

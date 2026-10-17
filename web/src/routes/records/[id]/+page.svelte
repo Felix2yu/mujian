@@ -1,4 +1,5 @@
 <script>
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { fade, scale } from 'svelte/transition';
   import { api, coverUrl, formatCurrency, formatDate } from '#lib/api.js';
@@ -38,28 +39,30 @@
   let statusSaved = $state(false);
   let statusError = $state('');
 
-  // 封面灯箱：点击放大查看
-  // 列表/详情显示缩略图优先，灯箱使用原图
-  const thumbSrc = $derived(rec?.coverThumb || rec?.coverFile || '');
+  // 封面灯箱：点击放大查看（灯箱使用原图）
   const fullSrc = $derived(rec?.coverFile || rec?.coverThumb || '');
 
   // 灯箱打开时锁定背景滚动，Esc 关闭
   $effect(() => {
     if (!lightbox && !lightboxSrc) return;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    return () => {
+      document.body.style.overflow = '';
+    };
   });
 
   function onWindowKeydown(e) {
-    if (e.key === 'Escape') { lightbox = false; lightboxSrc = ''; }
+    if (e.key === 'Escape') {
+      lightbox = false;
+      lightboxSrc = '';
+    }
   }
 
   function openLightbox() {
-    if (fullSrc) { lightbox = true; lightboxSrc = fullSrc; }
-  }
-
-  function dramaName(id) {
-    return dramaMap.get(id)?.name || '';
+    if (fullSrc) {
+      lightbox = true;
+      lightboxSrc = fullSrc;
+    }
   }
 
   // 按剧名分组折子：[{ dramaName, dramaId, zhezis: [{id, name}] }]
@@ -118,11 +121,18 @@
   }
 
   function billTitle(b) {
-    return [b.description || b.remark || '（无描述）', b.account ? `账户：${b.account}` : '', b.merchant ? `商家：${b.merchant}` : ''].filter(Boolean).join(' · ');
+    return [
+      b.description || b.remark || '（无描述）',
+      b.account ? `账户：${b.account}` : '',
+      b.merchant ? `商家：${b.merchant}` : ''
+    ]
+      .filter(Boolean)
+      .join(' · ');
   }
 
   // 票根/现场照
-  let photos = $state([]);  let photoBusy = $state('');
+  let photos = $state([]);
+  let photoBusy = $state('');
   let photoFile = $state(null);
   let photoFileList = $state(null);
   let lightboxSrc = $state(''); // 空字符串 = 关闭；支持封面与多张照片
@@ -132,7 +142,9 @@
     try {
       const res = await api.listRecordPhotos(id);
       photos = res.photos || [];
-    } catch (e) { photos = []; }
+    } catch (e) {
+      photos = [];
+    }
   }
   async function addPhoto() {
     if (!photoFile) return;
@@ -153,7 +165,10 @@
     photoBusy = p.id;
     try {
       await api.deleteRecordPhoto(id, p.id);
-      if (lightboxSrc === coverUrl(p.file_name)) { lightbox = false; lightboxSrc = ''; }
+      if (lightboxSrc === coverUrl(p.file_name)) {
+        lightbox = false;
+        lightboxSrc = '';
+      }
       await loadPhotos();
     } finally {
       photoBusy = '';
@@ -181,7 +196,8 @@
       dramaMap = new Map(tree.map((d) => [d.id, d]));
       zheziMap = new Map();
       for (const d of tree) {
-        for (const z of d.zhezis || []) zheziMap.set(z.id, { ...z, dramaId: d.id, dramaName: d.name });
+        for (const z of d.zhezis || [])
+          zheziMap.set(z.id, { ...z, dramaId: d.id, dramaName: d.name });
       }
       loadRelated(r);
       loadPhotos();
@@ -214,15 +230,32 @@
     const tasks = [];
     // 同剧目：该演出关联的全部剧目（权重最高）
     for (const did of r.drama_ids || []) {
-      if (did) tasks.push(api.listRecords({ drama: did, limit: 50 }).then((res) => rollup(res?.records, '同剧目', REL_WEIGHTS.drama)).catch(() => {}));
+      if (did)
+        tasks.push(
+          api
+            .listRecords({ drama: did, limit: 50 })
+            .then((res) => rollup(res?.records, '同剧目', REL_WEIGHTS.drama))
+            .catch(() => {})
+        );
     }
     // 同演员：该演出关联的前若干位演员（权重次之；封顶避免一条记录演员过多时请求爆炸）
     for (const aid of (r.artist_ids || []).slice(0, 6)) {
-      if (aid) tasks.push(api.listRecords({ artist: aid, limit: 50 }).then((res) => rollup(res?.records, '同演员', REL_WEIGHTS.artist)).catch(() => {}));
+      if (aid)
+        tasks.push(
+          api
+            .listRecords({ artist: aid, limit: 50 })
+            .then((res) => rollup(res?.records, '同演员', REL_WEIGHTS.artist))
+            .catch(() => {})
+        );
     }
     // 同场馆：地址模糊匹配（权重最低）
     if (r.address) {
-      tasks.push(api.getByField('address', r.address).then((res) => rollup(res, '同场馆', REL_WEIGHTS.venue)).catch(() => {}));
+      tasks.push(
+        api
+          .getByField('address', r.address)
+          .then((res) => rollup(res, '同场馆', REL_WEIGHTS.venue))
+          .catch(() => {})
+      );
     }
     await Promise.all(tasks);
     related = [...byId.values()]
@@ -248,20 +281,22 @@
     if (!rec) return;
     const prev = rec.rating;
     const next = prev === n ? 0 : n; // 再次点击同一星 → 清除评分
-    rec.rating = next;               // 乐观更新：星标与文字即时反映
+    rec.rating = next; // 乐观更新：星标与文字即时反映
     hoverRating = 0;
     ratingBusy = true;
     ratingSaved = false;
     ratingError = '';
     try {
       const updated = await api.updateRecord(id, { ...rec, rating: next });
-      rec = updated;                 // 以服务端返回为准
+      rec = updated; // 以服务端返回为准
       if (next > 0) {
         ratingSaved = true;
-        setTimeout(() => { ratingSaved = false; }, 1600);
+        setTimeout(() => {
+          ratingSaved = false;
+        }, 1600);
       }
     } catch (e) {
-      rec.rating = prev;             // 失败回滚
+      rec.rating = prev; // 失败回滚
       ratingError = e.message || '评分保存失败';
     } finally {
       ratingBusy = false;
@@ -273,17 +308,19 @@
   async function setStatus(s) {
     if (!rec || rec.active_status === s) return; // 已是该状态则跳过
     const prev = rec.active_status;
-    rec.active_status = s;          // 乐观更新：状态药丸即时切换
+    rec.active_status = s; // 乐观更新：状态药丸即时切换
     statusBusy = true;
     statusSaved = false;
     statusError = '';
     try {
       const updated = await api.updateRecord(id, { ...rec, active_status: s });
-      rec = updated;                // 以服务端返回为准
+      rec = updated; // 以服务端返回为准
       statusSaved = true;
-      setTimeout(() => { statusSaved = false; }, 1600);
+      setTimeout(() => {
+        statusSaved = false;
+      }, 1600);
     } catch (e) {
-      rec.active_status = prev;     // 失败回滚
+      rec.active_status = prev; // 失败回滚
       statusError = e.message || '状态保存失败';
     } finally {
       statusBusy = false;
@@ -307,9 +344,9 @@
     load();
   });
 </script>
-<svelte:head><title>{rec ? `${rec.name} - 幕间` : "演出 - 幕间"}</title></svelte:head>
-<svelte:window onkeydown={onWindowKeydown} />
 
+<svelte:head><title>{rec ? `${rec.name} - 幕间` : '演出 - 幕间'}</title></svelte:head>
+<svelte:window onkeydown={onWindowKeydown} />
 
 {#if loading}
   <div class="detail-loading">
@@ -335,7 +372,12 @@
         tabindex={fullSrc ? 0 : undefined}
         aria-label={fullSrc ? '放大查看封面' : undefined}
         onclick={openLightbox}
-        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLightbox(); } }}
+        onkeydown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openLightbox();
+          }
+        }}
       >
         {#if rec.coverThumb}
           <img src={coverUrl(rec.coverThumb)} alt={rec.name} />
@@ -347,11 +389,14 @@
       </div>
       <div class="head">
         <div class="badges">
-          {#each rec.categoryNames && rec.categoryNames.length ? rec.categoryNames : (rec.categoryName ? [rec.categoryName] : []) as catName (catName)}
-            <a class="pill" href={`/?category=${encodeURIComponent(catName)}`}>{catName}</a>
+          {#each rec.categoryNames && rec.categoryNames.length ? rec.categoryNames : rec.categoryName ? [rec.categoryName] : [] as catName (catName)}
+            <a class="pill" href={resolve(`/?category=${encodeURIComponent(catName)}`)}>{catName}</a
+            >
           {/each}
           {#if rec.channel}
-            <a class="pill" href={`/?q=${encodeURIComponent(rec.channel)}`}>{rec.channel}</a>
+            <a class="pill" href={resolve(`/?q=${encodeURIComponent(rec.channel)}`)}
+              >{rec.channel}</a
+            >
           {/if}
         </div>
         <h1>{rec.name}</h1>
@@ -360,7 +405,7 @@
         </div>
         <div class="sub">
           {#if rec.city}
-            <a class="loc" href={`/?city=${encodeURIComponent(rec.city)}`}>{rec.city}</a>
+            <a class="loc" href={resolve(`/?city=${encodeURIComponent(rec.city)}`)}>{rec.city}</a>
           {/if}
           {#if rec.city && rec.address}<span class="dot">·</span>{/if}
           {#if rec.address}<span class="addr">{rec.address}</span>{/if}
@@ -371,7 +416,7 @@
         <div class="rate-inline" aria-busy={ratingBusy}>
           <span class="rate-label">我的评分</span>
           <div class="star-row" role="radiogroup" aria-label="为这场演出评分">
-            {#each [1, 2, 3, 4, 5] as n}
+            {#each [1, 2, 3, 4, 5] as n (n)}
               <button
                 type="button"
                 class="star"
@@ -383,8 +428,8 @@
                 onblur={() => (hoverRating = 0)}
                 aria-label={`评 ${n} 星`}
                 aria-pressed={rec.rating >= n}
-                disabled={ratingBusy}
-              >★</button>
+                disabled={ratingBusy}>★</button
+              >
             {/each}
             <span class="rate-text tiny">{rec.rating ? `${rec.rating} 分` : '未评分'}</span>
             {#if ratingSaved}<span class="rate-saved tiny">✓ 已保存</span>{/if}
@@ -394,7 +439,7 @@
         <div class="status-inline" aria-busy={statusBusy}>
           <span class="status-label">演出状态</span>
           <div class="status-row" role="radiogroup" aria-label="切换演出状态">
-            {#each ALL_STATUSES as s}
+            {#each ALL_STATUSES as s (s)}
               <button
                 type="button"
                 class="status-chip s{s}"
@@ -402,16 +447,18 @@
                 onclick={() => setStatus(s)}
                 disabled={statusBusy}
                 title={statusLabel[s]}
-                aria-pressed={rec.active_status === s}
-              >{statusLabel[s]}</button>
+                aria-pressed={rec.active_status === s}>{statusLabel[s]}</button
+              >
             {/each}
             {#if statusSaved}<span class="status-saved tiny">✓ 已保存</span>{/if}
             {#if statusError}<span class="status-err tiny">⚠ {statusError}</span>{/if}
           </div>
         </div>
         <div class="actions">
-          <a class="btn primary sm" href={`/records/${rec.id}/edit`}>编辑</a>
-          <button class="btn danger sm" onclick={remove} disabled={deleting}>{deleting ? '删除中…' : '删除'}</button>
+          <a class="btn primary sm" href={resolve(`/records/${rec.id}/edit`)}>编辑</a>
+          <button class="btn danger sm" onclick={remove} disabled={deleting}
+            >{deleting ? '删除中…' : '删除'}</button
+          >
         </div>
       </div>
     </div>
@@ -421,10 +468,10 @@
         {#if rec.artist_names?.length}
           <h3>演员阵容</h3>
           <div class="tags">
-            {#each rec.artist_names as a, i}
+            {#each rec.artist_names as a, i (i)}
               {@const aid = rec.artist_ids?.[i]}
               {#if aid}
-                <a class="tag" href={`/artists/${aid}`}>{a}</a>
+                <a class="tag" href={resolve(`/artists/${aid}`)}>{a}</a>
               {:else}
                 <span class="tag">{a}</span>
               {/if}
@@ -446,8 +493,8 @@
         {:else if rec.play?.length}
           <h3>剧目</h3>
           <div class="tags">
-            {#each rec.play as p}
-              <a class="tag" href={`/?q=${encodeURIComponent(p)}`}>{p}</a>
+            {#each rec.play as p, i (i)}
+              <a class="tag" href={resolve(`/?q=${encodeURIComponent(p)}`)}>{p}</a>
             {/each}
           </div>
         {/if}
@@ -457,14 +504,24 @@
     {#snippet zheziCluster(g, cls)}
       <div class={cls}>
         {#if g.dramaId}
-          <a class="cluster-drama" href={`/dramas/${g.dramaId}`} title={`查看《${g.dramaName}》详情`}>《{g.dramaName}》</a>
+          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+          <a
+            class="cluster-drama"
+            href={resolve(`/dramas/${g.dramaId}`)}
+            title={`查看《${g.dramaName}》详情`}>《{g.dramaName}》</a
+          >
         {:else}
           <span class="cluster-drama">《{g.dramaName}》</span>
         {/if}
         {#if g.zhezis.length}
           <div class="cluster-zhezis">
             {#each g.zhezis as z (z.id)}
-              <a class="ztag" href={`/?zhezi=${encodeURIComponent(z.id)}`} title={`「${z.name}」演出列表`}>{z.name}</a>
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+              <a
+                class="ztag"
+                href={resolve(`/?zhezi=${encodeURIComponent(z.id)}`)}
+                title={`「${z.name}」演出列表`}>{z.name}</a
+              >
             {/each}
           </div>
         {:else}
@@ -478,27 +535,86 @@
         <h3>演出信息</h3>
         <dl class="kv">
           {#if rec.categoryNames && rec.categoryNames.length}
-            <div class="kv-row"><dt>分类</dt><dd>{#each rec.categoryNames as cn, i}{i > 0 ? '、' : ''}<a class="flink" href={`/?category=${encodeURIComponent(cn)}`}>{cn}</a>{/each}</dd></div>
+            <div class="kv-row">
+              <dt>分类</dt>
+              <dd>
+                {#each rec.categoryNames as cn, i (cn)}{i > 0 ? '、' : ''}<a
+                    class="flink"
+                    href={resolve(`/?category=${encodeURIComponent(cn)}`)}>{cn}</a
+                  >{/each}
+              </dd>
+            </div>
           {:else if rec.categoryName}
-            <div class="kv-row"><dt>分类</dt><dd><a class="flink" href={`/?category=${encodeURIComponent(rec.categoryName)}`}>{rec.categoryName}</a></dd></div>
+            <div class="kv-row">
+              <dt>分类</dt>
+              <dd>
+                <a
+                  class="flink"
+                  href={resolve(`/?category=${encodeURIComponent(rec.categoryName)}`)}
+                  >{rec.categoryName}</a
+                >
+              </dd>
+            </div>
           {/if}
           {#if rec.company}
-            <div class="kv-row"><dt>剧团</dt><dd>{#each rec.company.split(/[,，]/).map((s) => s.trim()).filter(Boolean) as t, i}{i > 0 ? '、' : ''}<a class="flink" href={`/?q=${encodeURIComponent(t)}`}>{t}</a>{/each}</dd></div>
+            <div class="kv-row">
+              <dt>剧团</dt>
+              <dd>
+                {#each rec.company
+                  .split(/[,，]/)
+                  .map((s) => s.trim())
+                  .filter(Boolean) as t, i (i)}{i > 0 ? '、' : ''}<a
+                    class="flink"
+                    href={resolve(`/?q=${encodeURIComponent(t)}`)}>{t}</a
+                  >{/each}
+              </dd>
+            </div>
           {/if}
           {#if rec.city}
-            <div class="kv-row"><dt>城市</dt><dd><a class="flink" href={`/?city=${encodeURIComponent(rec.city)}`}>{rec.city}</a></dd></div>
+            <div class="kv-row">
+              <dt>城市</dt>
+              <dd>
+                <a class="flink" href={resolve(`/?city=${encodeURIComponent(rec.city)}`)}
+                  >{rec.city}</a
+                >
+              </dd>
+            </div>
           {/if}
           {#if rec.address}
-            <div class="kv-row"><dt>场馆</dt><dd><a class="flink" href={`/?q=${encodeURIComponent(rec.address)}`}>{rec.address}</a></dd></div>
+            <div class="kv-row">
+              <dt>场馆</dt>
+              <dd>
+                <a class="flink" href={resolve(`/?q=${encodeURIComponent(rec.address)}`)}
+                  >{rec.address}</a
+                >
+              </dd>
+            </div>
           {/if}
           {#if rec.friends}
-            <div class="kv-row"><dt>同行</dt><dd>{#each rec.friends.split(/[,，]/).map((s) => s.trim()).filter(Boolean) as t, i}{i > 0 ? '、' : ''}<a class="flink" href={`/?q=${encodeURIComponent(t)}`}>{t}</a>{/each}</dd></div>
+            <div class="kv-row">
+              <dt>同行</dt>
+              <dd>
+                {#each rec.friends
+                  .split(/[,，]/)
+                  .map((s) => s.trim())
+                  .filter(Boolean) as t, i (i)}{i > 0 ? '、' : ''}<a
+                    class="flink"
+                    href={resolve(`/?q=${encodeURIComponent(t)}`)}>{t}</a
+                  >{/each}
+              </dd>
+            </div>
           {/if}
           {#if rec.seat}
-            <div class="kv-row"><dt>座位</dt><dd>{rec.seat}</dd></div>
+            <div class="kv-row">
+              <dt>座位</dt>
+              <dd>{rec.seat}</dd>
+            </div>
           {/if}
           {#if rec.duration}
-            <div class="kv-row"><dt>时长</dt><dd>{durationText(rec.duration)}</dd></div>
+            <div class="kv-row">
+              <dt>时长</dt>
+              <dd>{durationText(rec.duration)}</dd>
+            </div>
           {/if}
         </dl>
       </div>
@@ -508,15 +624,38 @@
         <div class="fee-cards">
           <div class="fee-card">
             <span class="fee-label">票价</span>
-            <span class="fee-amount" class:is-empty={rec.price === null || rec.price === undefined}>{rec.price === null || rec.price === undefined ? '—' : rec.price === 0 ? '免费' : formatCurrency(rec.price, rec.price_currency)}</span>
+            <span class="fee-amount" class:is-empty={rec.price === null || rec.price === undefined}
+              >{rec.price === null || rec.price === undefined
+                ? '—'
+                : rec.price === 0
+                  ? '免费'
+                  : formatCurrency(rec.price, rec.price_currency)}</span
+            >
           </div>
           <div class="fee-card">
             <span class="fee-label">实付</span>
-            <span class="fee-amount" class:is-empty={rec.pay_price === null || rec.pay_price === undefined}>{rec.pay_price === null || rec.pay_price === undefined ? '—' : rec.pay_price === 0 ? '免费' : formatCurrency(rec.pay_price, rec.pay_price_currency)}</span>
+            <span
+              class="fee-amount"
+              class:is-empty={rec.pay_price === null || rec.pay_price === undefined}
+              >{rec.pay_price === null || rec.pay_price === undefined
+                ? '—'
+                : rec.pay_price === 0
+                  ? '免费'
+                  : formatCurrency(rec.pay_price, rec.pay_price_currency)}</span
+            >
           </div>
           <div class="fee-card">
             <span class="fee-label">其他花费</span>
-            <span class="fee-amount" class:is-empty={rec.other_cost === null || rec.other_cost === undefined} title={rec.other_cost === 0 ? '无额外开销' : undefined}>{rec.other_cost === null || rec.other_cost === undefined ? '—' : rec.other_cost === 0 ? '无' : formatCurrency(rec.other_cost, rec.other_cost_currency)}</span>
+            <span
+              class="fee-amount"
+              class:is-empty={rec.other_cost === null || rec.other_cost === undefined}
+              title={rec.other_cost === 0 ? '无额外开销' : undefined}
+              >{rec.other_cost === null || rec.other_cost === undefined
+                ? '—'
+                : rec.other_cost === 0
+                  ? '无'
+                  : formatCurrency(rec.other_cost, rec.other_cost_currency)}</span
+            >
           </div>
         </div>
         {#if billCount > 0}
@@ -526,32 +665,41 @@
             <span class="hz-badge" title="数据来自货殖">货殖</span>
             <span class="hz-wrap">
               {#if billCount === 1}
+                <!-- eslint-disable svelte/no-navigation-without-resolve -->
                 <a
                   class="fee-total-amount hz-link"
                   href={bills.bills[0].url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  title={billTitle(bills.bills[0])}
-                >{formatCurrency(billsTotal, billsCurrency)}</a>
+                  title={billTitle(bills.bills[0])}>{formatCurrency(billsTotal, billsCurrency)}</a
+                >
+                <!-- eslint-enable svelte/no-navigation-without-resolve -->
               {:else}
                 <button
                   type="button"
                   class="fee-total-amount hz-link"
                   onclick={() => (billsOpen = !billsOpen)}
                   aria-expanded={billsOpen}
-                >{formatCurrency(billsTotal, billsCurrency)} <span class="hz-count">（{billCount} 笔）</span></button>
+                  >{formatCurrency(billsTotal, billsCurrency)}
+                  <span class="hz-count">（{billCount} 笔）</span></button
+                >
               {/if}
               <span class="hz-pop" class:open={billsOpen}>
                 <span class="hz-pop-title">货殖账单明细</span>
                 {#each bills.bills as b (b.id)}
+                  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
                   <a class="hz-pop-row" href={b.url} target="_blank" rel="noopener noreferrer">
                     <span class="hz-pop-desc">{b.description || b.remark || '（无描述）'}</span>
                     {#if b.account}<span class="hz-pop-acct">账户：{b.account}</span>{/if}
                     {#if b.tx_date}<span class="hz-pop-date">{b.tx_date.slice(0, 10)}</span>{/if}
-                    <span class="hz-pop-amt">{formatCurrency(b.amount, b.currency || billsCurrency)}</span>
+                    <span class="hz-pop-amt"
+                      >{formatCurrency(b.amount, b.currency || billsCurrency)}</span
+                    >
                   </a>
                 {/each}
-                {#if bills.mixed_currency}<span class="hz-pop-note">⚠ 币种不一致，合计为直接相加</span>{/if}
+                {#if bills.mixed_currency}<span class="hz-pop-note"
+                    >⚠ 币种不一致，合计为直接相加</span
+                  >{/if}
                 <span class="hz-pop-note">点击任一条跳转货殖账单页</span>
               </span>
             </span>
@@ -561,7 +709,9 @@
               {#each bills.breakdown as g (g.role)}
                 <div class="hz-bd-row">
                   <span class="hz-bd-label">{g.label}</span>
-                  <span class="hz-bd-amt">{formatCurrency(g.total, g.currency || billsCurrency)}</span>
+                  <span class="hz-bd-amt"
+                    >{formatCurrency(g.total, g.currency || billsCurrency)}</span
+                  >
                 </div>
               {/each}
             </div>
@@ -575,18 +725,27 @@
         {:else if rec.total_cost > 0}
           <div class="fee-total">
             <span class="fee-total-label">合计</span>
-            <span class="fee-total-amount">{formatCurrency(rec.total_cost, rec.pay_price_currency || 'CNY')}</span>
+            <span class="fee-total-amount"
+              >{formatCurrency(rec.total_cost, rec.pay_price_currency || 'CNY')}</span
+            >
           </div>
         {/if}
         {#if billsLoading}
           <div class="tiny muted fee-hz-hint">正在读取货殖账单…</div>
         {:else if bills && bills.bill_ids && bills.bill_ids.length && billCount === 0}
           <div class="tiny fee-hz-hint fee-hz-err">
-            ⚠ 已关联 {bills.bill_ids.length} 个货殖账单但未取到数据{bills.error ? `：${bills.error}` : ''}（当前显示内建费用）
+            ⚠ 已关联 {bills.bill_ids.length} 个货殖账单但未取到数据{bills.error
+              ? `：${bills.error}`
+              : ''}（当前显示内建费用）
           </div>
         {/if}
         {#if rec.channel}
-          <div class="fee-channel"><span class="fee-channel-key">渠道</span><a class="flink" href={`/?q=${encodeURIComponent(rec.channel)}`}>{rec.channel}</a></div>
+          <div class="fee-channel">
+            <span class="fee-channel-key">渠道</span><a
+              class="flink"
+              href={resolve(`/?q=${encodeURIComponent(rec.channel)}`)}>{rec.channel}</a
+            >
+          </div>
         {/if}
       </div>
     </div>
@@ -600,28 +759,60 @@
 
     <div class="card section">
       <h3>照片（票根 / 现场照）</h3>
-        <div class="photo-actions">
-          <label class="btn sm" class:disabled={photoBusy === 'add'}>
-            {photoBusy === 'add' ? '上传中…' : '⇪ 添加照片'}
-            <input type="file" accept="image/*" hidden bind:files={photoFileList} onchange={(e) => { photoFile = e.target.files?.[0] || null; addPhoto(); e.target.value = ''; }} />
-          </label>
-          {#if !photos.length}<span class="hint">还没有照片。上传后点击可看大图。</span>{/if}
-        </div>
-        {#if photos.length}
-          <div class="photo-grid">
-            {#each photos as p, i (p.id)}
-              <div class="photo-cell">
-                <img src={coverUrl(p.file_name)} alt="照片 {i + 1}" loading="lazy" onclick={() => { lightbox = true; lightboxSrc = p.file_name; }} />
-                <div class="photo-ops">
-                  <button type="button" onclick={() => movePhoto(p, -1)} disabled={i === 0} aria-label="前移">◀</button>
-                  <button type="button" onclick={() => removePhoto(p)} disabled={photoBusy === p.id} aria-label="删除">✕</button>
-                  <button type="button" onclick={() => movePhoto(p, 1)} disabled={i === photos.length - 1} aria-label="后移">▶</button>
-                </div>
+      <div class="photo-actions">
+        <label class="btn sm" class:disabled={photoBusy === 'add'}>
+          {photoBusy === 'add' ? '上传中…' : '⇪ 添加照片'}
+          <input
+            type="file"
+            accept="image/*"
+            hidden
+            bind:files={photoFileList}
+            onchange={(e) => {
+              photoFile = e.target.files?.[0] || null;
+              addPhoto();
+              e.target.value = '';
+            }}
+          />
+        </label>
+        {#if !photos.length}<span class="hint">还没有照片。上传后点击可看大图。</span>{/if}
+      </div>
+      {#if photos.length}
+        <div class="photo-grid">
+          {#each photos as p, i (p.id)}
+            <div class="photo-cell">
+              <img
+                src={coverUrl(p.file_name)}
+                alt="照片 {i + 1}"
+                loading="lazy"
+                onclick={() => {
+                  lightbox = true;
+                  lightboxSrc = p.file_name;
+                }}
+              />
+              <div class="photo-ops">
+                <button
+                  type="button"
+                  onclick={() => movePhoto(p, -1)}
+                  disabled={i === 0}
+                  aria-label="前移">◀</button
+                >
+                <button
+                  type="button"
+                  onclick={() => removePhoto(p)}
+                  disabled={photoBusy === p.id}
+                  aria-label="删除">✕</button
+                >
+                <button
+                  type="button"
+                  onclick={() => movePhoto(p, 1)}
+                  disabled={i === photos.length - 1}
+                  aria-label="后移">▶</button
+                >
               </div>
-            {/each}
-          </div>
-        {/if}
-
+            </div>
+          {/each}
+        </div>
+      {/if}
     </div>
 
     {#if related.length}
@@ -630,7 +821,7 @@
         <p class="rel-hint muted tiny">按关联程度排序：同剧目 / 同演员 / 同场馆，命中越多越靠前</p>
         <div class="rel-grid">
           {#each related as x (x.id)}
-            <a class="rel-card" href={`/records/${x.id}`}>
+            <a class="rel-card" href={resolve(`/records/${x.id}`)}>
               <div class="rel-cover">
                 {#if x.coverThumb || x.coverFile}
                   <img src={coverUrl(x.coverThumb || x.coverFile)} alt={x.name} loading="lazy" />
@@ -640,9 +831,12 @@
               </div>
               <div class="rel-info">
                 <span class="rel-name">{x.name}</span>
-                <span class="rel-meta">{x.dateText ? x.dateText.slice(0, 10) : ''}{x.city ? ' · ' + x.city : ''}</span>
+                <span class="rel-meta"
+                  >{x.dateText ? x.dateText.slice(0, 10) : ''}{x.city ? ' · ' + x.city : ''}</span
+                >
                 <span class="rel-reasons">
-                  {#each x.reasons as reason (reason)}<span class="rel-reason">{reason}</span>{/each}
+                  {#each x.reasons as reason (reason)}<span class="rel-reason">{reason}</span
+                    >{/each}
                 </span>
               </div>
             </a>
@@ -654,8 +848,21 @@
 {/if}
 
 {#if lightbox && lightboxSrc}
-  <button type="button" class="lightbox" onclick={() => { lightbox = false; lightboxSrc = ''; }} aria-label="关闭大图" transition:fade={{ duration: 150 }}>
-    <img src={coverUrl(lightboxSrc)} alt={rec.name} transition:scale={{ start: 0.96, duration: 180 }} />
+  <button
+    type="button"
+    class="lightbox"
+    onclick={() => {
+      lightbox = false;
+      lightboxSrc = '';
+    }}
+    aria-label="关闭大图"
+    transition:fade={{ duration: 150 }}
+  >
+    <img
+      src={coverUrl(lightboxSrc)}
+      alt={rec.name}
+      transition:scale={{ start: 0.96, duration: 180 }}
+    />
   </button>
 {/if}
 
@@ -668,9 +875,15 @@
     margin-bottom: 12px;
     transition: color var(--t-fast) var(--ease);
   }
-  .back:hover { color: var(--accent); }
+  .back:hover {
+    color: var(--accent);
+  }
 
-  .hero { display: flex; gap: 24px; padding: 20px; }
+  .hero {
+    display: flex;
+    gap: 24px;
+    padding: 20px;
+  }
   .cover {
     width: 168px;
     aspect-ratio: 3 / 4;
@@ -680,9 +893,18 @@
     flex: 0 0 auto;
     box-shadow: var(--shadow-md);
   }
-  .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .cover.zoomable { cursor: zoom-in; }
-  .cover.zoomable:active { transform: scale(0.99); }
+  .cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .cover.zoomable {
+    cursor: zoom-in;
+  }
+  .cover.zoomable:active {
+    transform: scale(0.99);
+  }
 
   /* 封面灯箱 */
   .lightbox {
@@ -707,27 +929,92 @@
     box-shadow: var(--shadow-lg);
   }
   .no-cover {
-    width: 100%; height: 100%;
-    display: flex; align-items: center; justify-content: center;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: linear-gradient(160deg, var(--surface-3), var(--surface-2));
   }
-  .no-cover span { font-family: var(--font-serif); font-size: 64px; color: var(--text-3); opacity: 0.6; }
+  .no-cover span {
+    font-family: var(--font-serif);
+    font-size: 64px;
+    color: var(--text-3);
+    opacity: 0.6;
+  }
 
-  .head { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-  .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-  .pill.gold { background: var(--gold-soft); color: var(--gold); }
-  h1 { font-size: 26px; margin: 0 0 8px; line-height: 1.25; }
-  .sub { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; color: var(--text-2); margin-bottom: 4px; }
-  .sub .date { color: var(--text-muted); }
-  .dot { opacity: 0.4; }
-  .loc { color: var(--text-2); border-bottom: 1px dashed var(--border-strong); transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
-  .loc:hover { color: var(--accent); border-color: var(--accent); }
-  .actions { display: flex; gap: 8px; margin-top: auto; padding-top: 16px; }
+  .head {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .pill.gold {
+    background: var(--gold-soft);
+    color: var(--gold);
+  }
+  h1 {
+    font-size: 26px;
+    margin: 0 0 8px;
+    line-height: 1.25;
+  }
+  .sub {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: 14px;
+    color: var(--text-2);
+    margin-bottom: 4px;
+  }
+  .sub .date {
+    color: var(--text-muted);
+  }
+  .dot {
+    opacity: 0.4;
+  }
+  .loc {
+    color: var(--text-2);
+    border-bottom: 1px dashed var(--border-strong);
+    transition:
+      color var(--t-fast) var(--ease),
+      border-color var(--t-fast) var(--ease);
+  }
+  .loc:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 16px;
+  }
 
   /* 详情页快速打分：星标控件 + 即时保存反馈 */
-  .rate-inline { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
-  .rate-label { font-size: 13px; color: var(--text-muted); flex: 0 0 auto; }
-  .star-row { display: flex; align-items: center; gap: 2px; }
+  .rate-inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  .rate-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    flex: 0 0 auto;
+  }
+  .star-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
   .star {
     border: none;
     background: none;
@@ -736,19 +1023,55 @@
     color: var(--border-strong);
     cursor: pointer;
     padding: 0 1px;
-    transition: transform var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+    transition:
+      transform var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease);
   }
-  .star:hover { transform: scale(1.18); }
-  .star.on { color: var(--gold); }
-  .star:disabled { cursor: default; opacity: 0.7; }
-  .rate-text { margin-left: 6px; font-size: 12.5px; color: var(--text-muted); }
-  .rate-saved { margin-left: 4px; font-size: 12.5px; color: var(--accent); }
-  .rate-err { margin-left: 4px; font-size: 12.5px; color: var(--danger); }
+  .star:hover {
+    transform: scale(1.18);
+  }
+  .star.on {
+    color: var(--gold);
+  }
+  .star:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+  .rate-text {
+    margin-left: 6px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+  .rate-saved {
+    margin-left: 4px;
+    font-size: 12.5px;
+    color: var(--accent);
+  }
+  .rate-err {
+    margin-left: 4px;
+    font-size: 12.5px;
+    color: var(--danger);
+  }
 
   /* 详情页快捷切换演出状态：状态药丸一键切换，当前状态高亮 */
-  .status-inline { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
-  .status-label { font-size: 13px; color: var(--text-muted); flex: 0 0 auto; }
-  .status-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .status-inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  .status-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    flex: 0 0 auto;
+  }
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
   .status-chip {
     border: 1px solid var(--border);
     background: var(--surface-2);
@@ -758,25 +1081,73 @@
     font-size: 13px;
     line-height: 1.5;
     cursor: pointer;
-    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+    transition:
+      background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease),
+      border-color var(--t-fast) var(--ease),
+      transform var(--t-fast) var(--ease);
   }
-  .status-chip:hover { border-color: var(--border-strong); color: var(--text); }
-  .status-chip:active { transform: scale(0.97); }
-  .status-chip.active { color: #fff; border-color: transparent; font-weight: 600; }
-  .status-chip.s0.active { background: var(--accent); }
-  .status-chip.s1.active { background: #926a18; }
-  .status-chip.s2.active { background: #5a5a60; text-decoration: line-through; }
-  .status-chip.s3.active { background: #5d3e6e; }
-  .status-chip:disabled { cursor: default; opacity: 0.7; }
-  .status-saved { margin-left: 4px; font-size: 12.5px; color: var(--accent); }
-  .status-err { margin-left: 4px; font-size: 12.5px; color: var(--danger); }
+  .status-chip:hover {
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+  .status-chip:active {
+    transform: scale(0.97);
+  }
+  .status-chip.active {
+    color: #fff;
+    border-color: transparent;
+    font-weight: 600;
+  }
+  .status-chip.s0.active {
+    background: var(--accent);
+  }
+  .status-chip.s1.active {
+    background: #926a18;
+  }
+  .status-chip.s2.active {
+    background: #5a5a60;
+    text-decoration: line-through;
+  }
+  .status-chip.s3.active {
+    background: #5d3e6e;
+  }
+  .status-chip:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+  .status-saved {
+    margin-left: 4px;
+    font-size: 12.5px;
+    color: var(--accent);
+  }
+  .status-err {
+    margin-left: 4px;
+    font-size: 12.5px;
+    color: var(--danger);
+  }
 
-  .section { padding: 18px 20px; margin-top: 14px; }
-  .section h3 { margin: 0 0 12px; font-size: 16px; }
-  .section h3:not(:first-child) { margin-top: 18px; }
+  .section {
+    padding: 18px 20px;
+    margin-top: 14px;
+  }
+  .section h3 {
+    margin: 0 0 12px;
+    font-size: 16px;
+  }
+  .section h3:not(:first-child) {
+    margin-top: 18px;
+  }
 
-  .tags { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-  .section .tiny { margin: 14px 0 0; }
+  .tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .section .tiny {
+    margin: 14px 0 0;
+  }
 
   /* 折子按剧目聚合成簇：以卡片网格排列，充分利用横向空间，避免单列过长 */
   .zhezi-clusters {
@@ -805,8 +1176,12 @@
     border-radius: 0;
     padding: 0;
   }
-  .zhezi-cluster.single .cluster-drama { flex: 0 0 auto; }
-  .zhezi-cluster.single .cluster-zhezis { flex: 1 1 auto; }
+  .zhezi-cluster.single .cluster-drama {
+    flex: 0 0 auto;
+  }
+  .zhezi-cluster.single .cluster-zhezis {
+    flex: 1 1 auto;
+  }
   @media (max-width: 480px) {
     .zhezi-cluster.single {
       flex-direction: column;
@@ -824,8 +1199,16 @@
     width: fit-content;
     transition: color var(--t-fast) var(--ease);
   }
-  a.cluster-drama:hover { color: var(--accent-strong); text-decoration: underline; text-underline-offset: 3px; }
-  .cluster-zhezis { display: flex; gap: 6px; flex-wrap: wrap; }
+  a.cluster-drama:hover {
+    color: var(--accent-strong);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .cluster-zhezis {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
   .ztag {
     display: inline-flex;
     align-items: center;
@@ -836,7 +1219,10 @@
     padding: 4px 10px;
     font-size: 12.5px;
     text-decoration: none;
-    transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+    transition:
+      background var(--t-fast) var(--ease),
+      border-color var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease);
   }
   .ztag:hover {
     background: var(--accent-soft);
@@ -853,10 +1239,20 @@
     width: fit-content;
   }
 
-  .cards-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .cards-row .section { margin-top: 14px; }
+  .cards-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .cards-row .section {
+    margin-top: 14px;
+  }
 
-  .kv { margin: 0; display: flex; flex-direction: column; }
+  .kv {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+  }
   .kv-row {
     display: flex;
     justify-content: space-between;
@@ -865,12 +1261,31 @@
     border-bottom: 1px solid var(--border);
     font-size: 14px;
   }
-  .kv-row:last-child { border-bottom: none; }
-  dt { color: var(--text-muted); flex: 0 0 auto; }
-  dd { margin: 0; text-align: right; }
-  .flink { color: var(--text); border-bottom: 1px dashed var(--border-strong); transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
-  .flink:hover { color: var(--accent); border-color: var(--accent); }
-  .money { font-variant-numeric: tabular-nums; }
+  .kv-row:last-child {
+    border-bottom: none;
+  }
+  dt {
+    color: var(--text-muted);
+    flex: 0 0 auto;
+  }
+  dd {
+    margin: 0;
+    text-align: right;
+  }
+  .flink {
+    color: var(--text);
+    border-bottom: 1px dashed var(--border-strong);
+    transition:
+      color var(--t-fast) var(--ease),
+      border-color var(--t-fast) var(--ease);
+  }
+  .flink:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .money {
+    font-variant-numeric: tabular-nums;
+  }
 
   /* 费用分卡：票价/实付/其他花费各自成卡，合计加粗强调 */
   .fee-cards {
@@ -890,31 +1305,46 @@
     border-radius: var(--radius);
     padding: 12px 13px;
   }
-  .fee-label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+  .fee-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
   .fee-amount {
     font-size: 18px;
     font-weight: 600;
     color: var(--text);
     font-variant-numeric: tabular-nums;
     line-height: 1.1;
-    white-space: nowrap;          /* 3 列一行时数值永不折行 */
+    white-space: nowrap; /* 3 列一行时数值永不折行 */
     overflow: hidden;
-    text-overflow: ellipsis;       /* 极端窄屏兜底：裁切而非溢出 */
+    text-overflow: ellipsis; /* 极端窄屏兜底：裁切而非溢出 */
   }
-  .fee-amount.is-empty { color: var(--text-3); font-weight: 500; }
+  .fee-amount.is-empty {
+    color: var(--text-3);
+    font-weight: 500;
+  }
 
   /* 窄容器下不再整行堆叠（那样会把费用卡撑到 3 行、整体偏高）。
      改为：始终保持 3 列，数值 nowrap 永不合行；零值「其他花费」显示「无」
      （title 保留「无额外开销」完整提示）；并在极窄屏缩字号兜底，避免长金额溢出。
      注：全库金额最大值仅 ¥960（无 ≥1000 记录），3 列布局在所有真实宽度下均不溢出。 */
   @container (max-width: 380px) {
-    .fee-card { padding: 10px 11px; }
-    .fee-label { font-size: 11px; }
-    .fee-amount { font-size: 15px; }
+    .fee-card {
+      padding: 10px 11px;
+    }
+    .fee-label {
+      font-size: 11px;
+    }
+    .fee-amount {
+      font-size: 15px;
+    }
   }
   /* 极窄屏再降一档：足以容纳真实数据最大值 ¥960.00，消除任何裁切 */
   @container (max-width: 340px) {
-    .fee-amount { font-size: 13px; }
+    .fee-amount {
+      font-size: 13px;
+    }
   }
   .fee-total {
     display: flex;
@@ -925,7 +1355,9 @@
     padding: 14px 16px;
     background: var(--surface-2);
     border-radius: var(--radius);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 6px 16px rgba(0, 0, 0, 0.06);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.05),
+      0 6px 16px rgba(0, 0, 0, 0.06);
   }
   /* ---- 货殖账单合计 ---- */
   .hz-badge {
@@ -952,11 +1384,24 @@
     padding: 0;
     font-family: inherit;
   }
-  .hz-link:hover { color: var(--accent); }
-  .hz-count { font-size: 13px; font-weight: 500; color: var(--text-3); }
-  .fee-total-sub { margin-top: 6px; text-align: right; }
-  .fee-hz-hint { margin-top: 8px; }
-  .fee-hz-err { color: #e5484d; }
+  .hz-link:hover {
+    color: var(--accent);
+  }
+  .hz-count {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-3);
+  }
+  .fee-total-sub {
+    margin-top: 6px;
+    text-align: right;
+  }
+  .fee-hz-hint {
+    margin-top: 8px;
+  }
+  .fee-hz-err {
+    color: #e5484d;
+  }
   /* 货殖账单按角色拆分（门票实付 / 其他开销） */
   .hz-breakdown {
     margin-top: 8px;
@@ -965,9 +1410,20 @@
     gap: 2px;
     align-items: flex-end;
   }
-  .hz-bd-row { display: flex; align-items: baseline; gap: 10px; font-size: 13px; }
-  .hz-bd-label { color: var(--text-2); }
-  .hz-bd-amt { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+  .hz-bd-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 13px;
+  }
+  .hz-bd-label {
+    color: var(--text-2);
+  }
+  .hz-bd-amt {
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
 
   /* 悬停（或点击展开）显示账单明细气泡 */
   .hz-pop {
@@ -988,7 +1444,10 @@
     opacity: 0;
     visibility: hidden;
     transform: translateY(4px);
-    transition: opacity 0.14s ease, transform 0.14s ease, visibility 0.14s;
+    transition:
+      opacity 0.14s ease,
+      transform 0.14s ease,
+      visibility 0.14s;
     pointer-events: none;
   }
   .hz-wrap:hover .hz-pop,
@@ -999,7 +1458,11 @@
     transform: translateY(0);
     pointer-events: auto;
   }
-  .hz-pop-title { font-size: 12px; font-weight: 600; color: var(--text-2); }
+  .hz-pop-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-2);
+  }
   .hz-pop-row {
     display: grid;
     grid-template-columns: 1fr auto;
@@ -1009,20 +1472,45 @@
     color: var(--text);
     text-decoration: none;
   }
-  .hz-pop-row:hover .hz-pop-desc { color: var(--accent); }
-  .hz-pop-desc { font-size: 13px; grid-column: 1; }
-  .hz-pop-amt { font-size: 13px; font-weight: 600; grid-column: 2; font-variant-numeric: tabular-nums; }
-  .hz-pop-acct, .hz-pop-date { font-size: 11.5px; color: var(--text-3); grid-column: 1; }
-  .hz-pop-note { font-size: 11px; color: var(--text-3); }
+  .hz-pop-row:hover .hz-pop-desc {
+    color: var(--accent);
+  }
+  .hz-pop-desc {
+    font-size: 13px;
+    grid-column: 1;
+  }
+  .hz-pop-amt {
+    font-size: 13px;
+    font-weight: 600;
+    grid-column: 2;
+    font-variant-numeric: tabular-nums;
+  }
+  .hz-pop-acct,
+  .hz-pop-date {
+    font-size: 11.5px;
+    color: var(--text-3);
+    grid-column: 1;
+  }
+  .hz-pop-note {
+    font-size: 11px;
+    color: var(--text-3);
+  }
 
-  .fee-total-label { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: var(--text-2); }
+  .fee-total-label {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-2);
+  }
   .fee-total-amount {
     font-size: 22px;
     font-weight: 700;
     color: var(--text);
     font-variant-numeric: tabular-nums;
   }
-  .fee-total-amount:not(.hz-link) { color: var(--accent); }
+  .fee-total-amount:not(.hz-link) {
+    color: var(--accent);
+  }
   .fee-channel {
     display: flex;
     gap: 8px;
@@ -1033,69 +1521,205 @@
     font-size: 13px;
     color: var(--text-muted);
   }
-  .fee-channel-key { flex: 0 0 auto; }
+  .fee-channel-key {
+    flex: 0 0 auto;
+  }
 
-  .remark { margin: 0; white-space: pre-wrap; line-height: 1.75; color: var(--text-2); }
+  .remark {
+    margin: 0;
+    white-space: pre-wrap;
+    line-height: 1.75;
+    color: var(--text-2);
+  }
 
   /* loading skeleton */
-  .detail-loading { display: flex; gap: 24px; }
-  .skel-cover { width: 168px; aspect-ratio: 3/4; }
-  .skel-col { flex: 1; display: flex; flex-direction: column; gap: 12px; }
-  .skel-title { height: 30px; width: 50%; }
-  .skel-line { height: 14px; width: 80%; }
-  .skel-line.short { width: 40%; }
+  .detail-loading {
+    display: flex;
+    gap: 24px;
+  }
+  .skel-cover {
+    width: 168px;
+    aspect-ratio: 3/4;
+  }
+  .skel-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .skel-title {
+    height: 30px;
+    width: 50%;
+  }
+  .skel-line {
+    height: 14px;
+    width: 80%;
+  }
+  .skel-line.short {
+    width: 40%;
+  }
 
   @media (max-width: 640px) {
-    .hero { flex-direction: column; gap: 16px; }
-    .cover { width: 100%; max-width: 220px; margin: 0 auto; }
-    .cards-row { grid-template-columns: 1fr; }
-    h1 { font-size: 22px; }
+    .hero {
+      flex-direction: column;
+      gap: 16px;
+    }
+    .cover {
+      width: 100%;
+      max-width: 220px;
+      margin: 0 auto;
+    }
+    .cards-row {
+      grid-template-columns: 1fr;
+    }
+    h1 {
+      font-size: 22px;
+    }
   }
 
-  .rel-hint { margin: 0 0 12px; }
-  .rel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+  .rel-hint {
+    margin: 0 0 12px;
+  }
+  .rel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
   .rel-card {
-    display: flex; flex-direction: column; gap: 8px;
-    border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 8px; color: inherit; text-decoration: none;
-    transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px;
+    color: inherit;
+    text-decoration: none;
+    transition:
+      border-color var(--t-fast) var(--ease),
+      background var(--t-fast) var(--ease),
+      transform var(--t-fast) var(--ease);
   }
-  .rel-card:hover { border-color: var(--accent); background: var(--accent-softer); transform: translateY(-2px); }
+  .rel-card:hover {
+    border-color: var(--accent);
+    background: var(--accent-softer);
+    transform: translateY(-2px);
+  }
   .rel-cover {
-    width: 100%; aspect-ratio: 3 / 4; border-radius: var(--radius-sm);
-    overflow: hidden; background: var(--surface-3); flex: 0 0 auto;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--surface-3);
+    flex: 0 0 auto;
   }
-  .rel-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .rel-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
   .rel-no-cover {
-    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: linear-gradient(160deg, var(--surface-3), var(--surface-2));
   }
-  .rel-no-cover span { font-family: var(--font-serif); font-size: 36px; color: var(--text-3); opacity: 0.6; }
-  .rel-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .rel-name {
-    font-weight: 600; font-size: 13.5px; line-height: 1.3; color: var(--text);
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-    overflow: hidden; text-overflow: ellipsis;
+  .rel-no-cover span {
+    font-family: var(--font-serif);
+    font-size: 36px;
+    color: var(--text-3);
+    opacity: 0.6;
   }
-  .rel-meta { color: var(--text-3); font-size: 12px; }
-  .rel-reasons { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+  .rel-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+  .rel-name {
+    font-weight: 600;
+    font-size: 13.5px;
+    line-height: 1.3;
+    color: var(--text);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rel-meta {
+    color: var(--text-3);
+    font-size: 12px;
+  }
+  .rel-reasons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 2px;
+  }
   .rel-reason {
-    font-size: 11px; color: var(--accent); background: var(--accent-soft);
-    border-radius: 999px; padding: 1px 7px; white-space: nowrap;
+    font-size: 11px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 999px;
+    padding: 1px 7px;
+    white-space: nowrap;
   }
 
-  .photo-actions { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-  .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
-  .photo-cell { position: relative; border: 1px solid var(--border); border-radius: var(--radius-sm, 8px); overflow: hidden; background: var(--surface-3); }
-  .photo-cell img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block; cursor: zoom-in; }
+  .photo-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+  }
+  .photo-cell {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm, 8px);
+    overflow: hidden;
+    background: var(--surface-3);
+  }
+  .photo-cell img {
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    display: block;
+    cursor: zoom-in;
+  }
   .photo-ops {
-    position: absolute; inset: auto 0 0 0; display: flex; justify-content: center; gap: 6px;
-    padding: 4px; background: rgb(0 0 0 / 0.45); opacity: 0; transition: opacity 0.15s;
+    position: absolute;
+    inset: auto 0 0 0;
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    padding: 4px;
+    background: rgb(0 0 0 / 0.45);
+    opacity: 0;
+    transition: opacity 0.15s;
   }
-  .photo-cell:hover .photo-ops { opacity: 1; }
+  .photo-cell:hover .photo-ops {
+    opacity: 1;
+  }
   .photo-ops button {
-    border: none; background: rgb(255 255 255 / 0.85); color: #111; border-radius: 5px;
-    width: 24px; height: 22px; font-size: 11px; cursor: pointer; line-height: 1;
+    border: none;
+    background: rgb(255 255 255 / 0.85);
+    color: #111;
+    border-radius: 5px;
+    width: 24px;
+    height: 22px;
+    font-size: 11px;
+    cursor: pointer;
+    line-height: 1;
   }
-  .photo-ops button:disabled { opacity: 0.4; cursor: default; }
+  .photo-ops button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
 </style>
