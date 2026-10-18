@@ -3,51 +3,36 @@
 #   - `mujian-amd64`/`mujian-arm64` -> ./bin/mujian (Go binary built with CGO)
 #
 # The `build` job compiles everything; this Dockerfile only assembles the
-# runtime image. The binary is built on the ubuntu:24.04 runner but runs on
-# debian:13-slim here — that is safe because the only dynamic dependencies are
-# glibc's libc/libm (verified via ldd) and glibc is backward compatible.
+# runtime image. The binary is built on the ubuntu:24.04 runner but runs on the
+# debian-13 base image here — that is safe because the only dynamic dependencies
+# are glibc's libc/libm (verified via ldd) and glibc is backward compatible.
 #
-# No system image-codec packages are needed: avif-go and chai2010/webp bundle
-# their own headers and static libraries (AVIF/WebP codecs are linked into the
-# binary), and SQLite is pure Go (modernc.org/sqlite).
-#
-# debian:13-slim ships no pre-created uid-1000 account, so one is created
-# below — named `ubuntu` to keep the PUID/PGID=1000 semantics of previous
-# releases.
+# 基镜 ghcr.io/felix2yu/base:debian-13 提供 ca-certificates、tzdata、gosu 与
+# PUID/PGID 降权入口（本仓库是唯一需要 glibc 的 CGO 项目，故走 debian 版基镜）。
+# 原先用 `su -s /bin/sh ubuntu` 降权，改为基镜的 gosu + 数字 uid/gid。
+FROM ghcr.io/felix2yu/base:debian-13
 
-FROM debian:13-slim
-
-# Cache-buster for the package-refresh layer below: CI passes a unique value
-# per run so `apt-get upgrade` re-resolves against the live security pocket
-# instead of replaying a stale cached layer (base-image snapshots lag security
-# fixes — e.g. an openssl CVE published days after this layer was cached).
-# Only this layer and those after it rebuild; earlier layers stay cached.
-ARG CACHEBUST=0
-
-# Upgrade base-image packages before installing ours: the published image
-# digest can lag behind the security pocket, and scanners flag the stale
-# snapshot even when fixes already exist upstream.
+# curl 供 HEALTHCHECK 使用（基镜 debian 版不含 curl / wget）。
+# 安全补丁的新鲜度改由基镜保证：base-image.yml 每周重建基镜，其 digest 变化会让
+# 这一层缓存失效并重新解析，因此不再需要额外的 CACHEBUST 层。
 RUN apt-get update \
-    && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends \
-      ca-certificates tzdata curl \
+    && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --uid 1000 --user-group --create-home --shell /bin/sh ubuntu \
-    && mkdir -p /app/data/uploads \
-    && chown -R ubuntu:ubuntu /app
+    && mkdir -p /app/data/uploads
 
-ENV TZ=Asia/Shanghai PUID=1000 PGID=1000 ALLOW_LOCAL_STORAGE=true
+ENV TZ=Asia/Shanghai \
+    PUID=1000 \
+    PGID=1000 \
+    ALLOW_LOCAL_STORAGE=true \
+    APP_DATA_DIR=/app/data
 WORKDIR /app
 
-# --chown/--chmod fold what used to be a separate chmod/chown RUN layer into
-# the COPY itself: the binary and dist change on every push anyway, but the
-# fewer layers after the (weekly-busted) apt layer, the less BuildKit redoes.
-COPY --chown=ubuntu:ubuntu --chmod=755 bin/mujian ./mujian
-COPY --chown=ubuntu:ubuntu dist ./dist
+COPY --chown=1000:1000 --chmod=755 bin/mujian ./mujian
+COPY --chown=1000:1000 dist ./dist
 
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
 
-CMD ["sh", "-c", "exec su -s /bin/sh ubuntu -c './mujian'"]
+CMD ["./mujian"]
