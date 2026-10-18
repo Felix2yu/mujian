@@ -27,7 +27,10 @@ ENV TZ=Asia/Shanghai \
     APP_DATA_DIR=/app/data
 WORKDIR /app
 
-COPY --chown=1000:1000 --chmod=755 bin/mujian ./mujian
+# 二进制装进 /usr/local/bin（基镜契约），不再随数据放在 /app：装在 /app 时它不在 PATH 上，
+# `docker exec <c> mujian backup` 与「按镜像名推导导出命令」都解析不到。属主保持 root，
+# 应用运行身份不该能改写自己的可执行文件；dist/ 仍留在 /app（WORKDIR 没变，静态资源解析不受影响）。
+COPY --chmod=755 bin/mujian /usr/local/bin/mujian
 COPY --chown=1000:1000 dist ./dist
 
 EXPOSE 8080
@@ -35,4 +38,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
 
-CMD ["./mujian"]
+CMD ["mujian"]

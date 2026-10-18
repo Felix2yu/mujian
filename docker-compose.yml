@@ -11,13 +11,12 @@ services:
       - PGID=1000
       - ALLOW_LOCAL_STORAGE=true
       # 外部备份工具（docker-db-auto-backup）经 docker exec 触发的自导出命令：
-      # `/app/mujian backup` 用 VACUUM INTO 生成 SQLite 事务级一致快照，只写 stdout、
-      # 不跑迁移。基镜的镜像里没有 USER 指令，且二进制装在 /app（不在 PATH 上），
-      # 所以必须写绝对路径；导出身份与数据属主一致（基镜烘入 PUID/PGID），
-      # 无需 BACKUP_SQLITE_USER。
-      # 若要连封面一起备份，命令改为 `/app/mujian backup --format zip`，
+      # `mujian backup` 用 VACUUM INTO 生成 SQLite 事务级一致快照，只写 stdout、
+      # 不跑迁移。镜像里没有 USER 指令，但基镜烘入了 PUID/PGID，导出身份与数据属主
+      # 自动一致，无需 BACKUP_SQLITE_USER。
+      # 若要连封面一起备份，命令改为 `mujian backup --format zip`，
       # 并且必须同时设 BACKUP_SQLITE_EXT=zip（工具默认按 .db 魔数校验 zip 产物会丢弃）。
-      - "BACKUP_SQLITE_CMD=/app/mujian backup"
+      - "BACKUP_SQLITE_CMD=mujian backup"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
