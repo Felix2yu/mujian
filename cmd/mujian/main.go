@@ -1,3 +1,10 @@
+// 幕间（mujian）服务端入口。
+//
+// 用法：
+//
+//	mujian                       # HTTP 服务（API + MCP + CalDAV + 前端静态资源）
+//	mujian backup                # 向 stdout 导出 SQLite 一致性快照（供外部备份工具经 docker exec 调用）
+//	mujian backup --format zip   # 快照 + data.json + uploads 封面文件，打成 zip 写到 stdout
 package main
 
 import (
@@ -323,6 +330,19 @@ func caldavSiteDiscovery(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// 外部备份工具（docker-db-auto-backup）经 docker exec 调用 `mujian backup`，
+	// 把一致性快照写到 stdout。必须拦在最前面——早于服务路径的 flag 解析、存储初始化、
+	// 迁移、种子、后台任务与 HTTP 服务：导出进程只做导出这一件事（config.Load 只读
+	// 环境变量，没有副作用，导出与主进程因此共用同一套 DB_PATH / UPLOAD_DIR 解析）。
+	// stdout 只承载产物字节，日志一律走 stderr（slog 默认输出即 stderr）。
+	if len(os.Args) > 1 && os.Args[1] == "backup" {
+		if err := runBackup(os.Args[2:], os.Stdout); err != nil {
+			slog.Error("备份导出失败", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	cfg := config.Load()
 
 	database, err := db.New(cfg.DBPath)

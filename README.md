@@ -245,6 +245,37 @@ mujian/
 - **导入**：设置页「恢复备份」，或演出导入页上传 `data.json` / 「记录现场」导出的 `JI_LU_XIAN_CHANG.android.zip`（自动解码 base64 封面）。
 - **自动备份**：设置页可配置格式、间隔与保留份数。格式三选一：数据库快照（`.db`，SQLite `VACUUM INTO`，停机换回文件即可恢复）、纯数据（`data.json`）、数据 + 封面（`.zip`，即完整导出包）；后两种可从「数据」页导入恢复。间隔：每天 / 每 3 天 / 每周 / 每 2 周 / 每月 / 每季度，默认关闭。快照类备份只含数据库，封面文件在 `data/uploads/covers/`（S3 模式在桶里）。
 
+### 命令行导出（`mujian backup`）
+
+数据库在应用运行时被外部工具备份，靠的是应用自己产出的事务级一致快照：`mujian backup`
+用 SQLite `VACUUM INTO` 把快照写到 **stdout**，日志一律走 stderr，不跑迁移、不写种子、
+不建目录（库文件不存在直接报错，绝不产出空库）。[docker-db-auto-backup](https://github.com/Felix2yu/docker-db-auto-backup)
+经 `docker exec` 采集这条流，`docker-compose.yml` 里的 `BACKUP_SQLITE_CMD=/app/mujian backup` 就是它。
+手工备份是同一条命令：
+
+```bash
+# 只有数据库：快照小、几秒完事
+docker exec <容器名> /app/mujian backup > mujian-$(date +%F).db
+
+# 数据库 + data.json + 全部封面文件：唯一「完整」的形态
+docker exec <容器名> /app/mujian backup --format zip > mujian-$(date +%F).zip
+```
+
+两种形态谁算完整要说清楚：
+
+| 形态 | 含什么 | 不含什么 | 恢复方式 |
+|------|--------|----------|----------|
+| `db`（默认） | SQLite 一致性快照（含 WAL 里已提交的数据） | **封面文件**（`UPLOAD_DIR` 下的 `covers/`、`covers_trash/`） | 停机后把文件放回数据目录（`/app/data/mujian.db`，注意属主）再启动 |
+| `zip` | 上面的快照（包内 `mujian.db`）+ `data.json` + `UPLOAD_DIR` 下**每一个文件** | S3 存储模式下的远端封面（本地目录为空时包里没有图） | 冷备：放回 `mujian.db`；或在线：把整包经「恢复备份」导入（走 `data.json` + `covers/`） |
+
+**只有 `--format zip` 是完整备份**，代价是产物体积≈整个媒体库（封面全量，含缩略图与回收站里
+尚未清空的图），库大时一次几十上百 MB 起步、耗时也长。`db` 形态则必须自己补上 `data/uploads`
+目录（或直接备整个 `mujian-data` 卷）。
+
+接入外部备份工具时：默认扩展名是 `.db`，改成 zip 必须同时声明 `BACKUP_SQLITE_EXT=zip`——
+工具按魔数校验产物，用 `db` 的校验去吃一份 zip 会判为坏文件丢弃。工具侧约定见其
+[docs/sqlite-backup-design.md](https://github.com/Felix2yu/docker-db-auto-backup/blob/main/docs/sqlite-backup-design.md) §7.2。
+
 ## 测试覆盖率
 
 CI 每次推送/PR 自动运行测试并上传 Codecov（目标 ≥85%）。实时覆盖率见下方图表：
