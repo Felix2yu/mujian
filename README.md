@@ -250,15 +250,16 @@ mujian/
 数据库在应用运行时被外部工具备份，靠的是应用自己产出的事务级一致快照：`mujian backup`
 用 SQLite `VACUUM INTO` 把快照写到 **stdout**，日志一律走 stderr，不跑迁移、不写种子、
 不建目录（库文件不存在直接报错，绝不产出空库）。[docker-db-auto-backup](https://github.com/Felix2yu/docker-db-auto-backup)
-经 `docker exec` 采集这条流，`docker-compose.yml` 里的 `BACKUP_SQLITE_CMD=mujian backup` 就是它。
+经 `docker exec` 采集这条流，`docker-compose.yml` 里的 `BACKUP_SQLITE_CMD=/app/mujian backup` 就是它。
+（命令写绝对路径：镜像把二进制放在 `/app`，而 `/app` 不在容器 PATH 上。）
 手工备份是同一条命令：
 
 ```bash
 # 只有数据库：快照小、几秒完事
-docker exec <容器名> mujian backup > mujian-$(date +%F).db
+docker exec <容器名> /app/mujian backup > mujian-$(date +%F).db
 
 # 数据库 + data.json + 全部封面文件：唯一「完整」的形态
-docker exec <容器名> mujian backup --format zip > mujian-$(date +%F).zip
+docker exec <容器名> /app/mujian backup --format zip > mujian-$(date +%F).zip
 ```
 
 两种形态谁算完整要说清楚：
