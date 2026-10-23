@@ -37,6 +37,9 @@ jobs:
       test-packages: ./internal/...
       test-cgo: '1'
       web-dir: web
+      # lint 纳入 CI：本仓 lint = prettier --check . + eslint .，实测 exit=0（16 条 warning，不失败）。
+      # 只有构建侧被验证过是不够的 —— typescript-eslint 对 TS 7 是加载期硬失败。
+      web-lint-command: pnpm run lint
       frontend-stage-command: |
         # internal/web/dist 供 go:embed；根目录 dist/ 供 Dockerfile COPY
         rm -rf internal/web/dist dist
