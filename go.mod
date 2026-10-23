@@ -9,7 +9,7 @@ require (
 	github.com/chai2010/webp v1.4.0
 	github.com/emersion/go-ical v0.0.0-20240127095438-fc1c9d8fb2b6
 	github.com/emersion/go-webdav v0.7.0
-	github.com/go-chi/chi/v5 v5.4.0
+	github.com/go-chi/chi/v5 v5.5.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/vegidio/avif-go v0.0.0-20260607124839-cdea63f9e9f5
