@@ -1,6 +1,9 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
+  import Skeleton from '#lib/ui/Skeleton.svelte';
   import { page } from '$app/state';
   import { api, coverUrl } from '#lib/api.js';
+  import EmptyState from '#lib/ui/EmptyState.svelte';
   import BackLink from '#lib/components/BackLink.svelte';
   import RecordCard from '#lib/components/RecordCard.svelte';
   import OperaIcon from '#lib/components/OperaIcon.svelte';
@@ -139,14 +142,14 @@
 
   {#if loading}
     <div class="loading">
-      <div class="skeleton" style="height: 160px; width: 100%;"></div>
-      <div class="skeleton" style="height: 200px;"></div>
+      <Skeleton height="160px" />
+      <Skeleton height="200px" />
     </div>
   {:else if error}
-    <div class="banner error">⚠ {error}</div>
+    <Banner tone="error">{error}</Banner>
     <BackLink fallback="/artists" label="← 返回演员列表" />
   {:else if artist}
-    {#if error}<div class="banner error">⚠ {error}</div>{/if}
+    {#if error}<Banner tone="error">{error}</Banner>{/if}
 
     <div class="card head-card">
       {#if editing}
@@ -228,9 +231,9 @@
     <div class="card section">
       <div class="sec-head"><h3>参演演出 <span class="num">{records.length}</span></h3></div>
       {#if records.length === 0}
-        <div class="empty small card"><div class="h">还没有演出关联该演员</div></div>
+        <EmptyState small hint="还没有演出关联该演员" />
       {:else}
-        <div class="grid">
+        <div class="grid-cards">
           {#each records as r (r.id)}
             <RecordCard record={r} />
           {/each}
@@ -359,10 +362,8 @@
   .sec-head {
     margin-bottom: 14px;
   }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
-    gap: 14px;
+  /* 轨道与间距来自全局 .grid-cards，这里只补与上方区块的间距 */
+  .grid-cards {
     margin-top: 4px;
   }
 
@@ -373,7 +374,7 @@
     .head-main {
       flex-direction: column;
     }
-    .grid {
+    .grid-cards {
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 10px;
     }

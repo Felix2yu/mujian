@@ -1,5 +1,7 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
   import { api, coverUrl } from '#lib/api.js';
+  import { askConfirm } from '#lib/confirm.js';
 
   let groups = $state([]);
   let groupsLoading = $state(false);
@@ -67,7 +69,15 @@
   async function runMerge() {
     const hashes = [...selectedHashes];
     if (!hashes.length) return;
-    if (!confirm(`合并 ${hashes.length} 组重复封面？合并后这些演出将共享同一份封面文件。`)) return;
+    const ok = await askConfirm({
+      title: '合并重复封面',
+      message: `合并 ${hashes.length} 组重复封面？合并后这些演出将共享同一份封面文件。`,
+      confirmLabel: '合并',
+      danger: true,
+      impact: hashes.length,
+      impactLabel: '组重复封面'
+    });
+    if (!ok) return;
     merging = true;
     error = '';
     info = '';
@@ -109,7 +119,15 @@
 
   async function runCleanup() {
     if (!selectedOrphans.size) return;
-    if (!confirm(`将 ${selectedOrphans.size} 张未引用的封面移入回收站（可恢复）？`)) return;
+    const ok = await askConfirm({
+      title: '清理未引用封面',
+      message: `将 ${selectedOrphans.size} 张未引用的封面移入回收站（可恢复）？`,
+      confirmLabel: '移入回收站',
+      danger: false,
+      impact: selectedOrphans.size,
+      impactLabel: '张封面'
+    });
+    if (!ok) return;
     cleaning = true;
     error = '';
     info = '';
@@ -125,7 +143,13 @@
   }
 
   async function runPurge() {
-    if (!confirm('彻底清空封面回收站？此操作不可恢复。')) return;
+    const ok = await askConfirm({
+      title: '清空封面回收站',
+      message: '彻底清空封面回收站？此操作不可恢复。',
+      confirmLabel: '清空',
+      danger: true
+    });
+    if (!ok) return;
     purging = true;
     error = '';
     try {
@@ -174,8 +198,8 @@
     <p class="tiny muted">去重合并、清理未引用封面、统一缩略图。</p>
   </div>
 
-  {#if error}<div class="banner error">⚠ {error}</div>{/if}
-  {#if info}<div class="banner success">✓ {info}</div>{/if}
+  {#if error}<Banner tone="error">{error}</Banner>{/if}
+  {#if info}<Banner tone="success">{info}</Banner>{/if}
 
   <div class="card sec">
     <div class="sec-head">

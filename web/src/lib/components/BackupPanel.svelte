@@ -1,6 +1,8 @@
 <script>
   import { onMount } from 'svelte';
+  import Banner from '#lib/ui/Banner.svelte';
   import { api } from '#lib/api.js';
+  import { askConfirm } from '#lib/confirm.js';
 
   // 自动备份：从「设置」页迁到「数据」页（备份属于数据管理，与导入 / 导出同源）。
   //
@@ -121,7 +123,13 @@
   }
 
   async function restore(file) {
-    if (!confirm(`用 ${file} 恢复数据？现有同 ID 记录会被覆盖。`)) return;
+    const ok = await askConfirm({
+      title: '恢复数据',
+      message: `用 ${file} 恢复数据？现有同 ID 记录会被覆盖。`,
+      confirmLabel: '恢复',
+      danger: true
+    });
+    if (!ok) return;
     restoring = file;
     try {
       await api.backupRestoreFrom(file);
@@ -136,7 +144,13 @@
   }
 
   async function remove(file) {
-    if (!confirm(`删除备份 ${file}？此操作不可恢复。`)) return;
+    const ok = await askConfirm({
+      title: '删除备份',
+      message: `删除备份 ${file}？此操作不可恢复。`,
+      confirmLabel: '删除',
+      danger: true
+    });
+    if (!ok) return;
     await api.backupDelete(file).catch((e) => (msg = '删除失败：' + e.message));
     refreshBackups();
   }
@@ -145,12 +159,15 @@
   // 两者都不可恢复，因此都要二次确认并在提示里点明数量。
   async function pruneTo(keep) {
     const extra = remote ? `（${backups.length - keep} 份中的 S3 副本会一并删除）` : '';
-    if (
-      !confirm(
-        `只保留最新的 ${keep} 份备份，其余 ${backups.length - keep} 份将被删除${extra}。确认？`
-      )
-    )
-      return;
+    const ok = await askConfirm({
+      title: '清理旧备份',
+      message: `只保留最新的 ${keep} 份备份，其余 ${backups.length - keep} 份将被删除${extra}。`,
+      confirmLabel: '清理',
+      danger: true,
+      impact: Math.max(0, backups.length - keep),
+      impactLabel: '份备份'
+    });
+    if (!ok) return;
     cleaning = true;
     try {
       const res = await api.backupPrune(keep);
@@ -166,13 +183,23 @@
   }
 
   async function removeAll() {
-    if (
-      !confirm(
-        `删除全部 ${backups.length} 份备份？此操作不可恢复${remote ? '，并会同步删除 S3 上 backups/ 的同名副本' : ''}。`
-      )
-    )
-      return;
-    if (!confirm('再确认一次：清空本地全部备份？')) return;
+    const ok = await askConfirm({
+      title: '清空全部备份',
+      message: `删除全部 ${backups.length} 份备份？此操作不可恢复${remote ? '，并会同步删除 S3 上 backups/ 的同名副本' : ''}。`,
+      confirmLabel: '全部删除',
+      danger: true,
+      impact: backups.length,
+      impactLabel: '份备份'
+    });
+    if (!ok) return;
+    // 破坏性极强的操作：再确认一次（沿用原有的双确认语义）
+    const again = await askConfirm({
+      title: '再确认一次',
+      message: '再确认一次：清空本地全部备份？',
+      confirmLabel: '确认清空',
+      danger: true
+    });
+    if (!again) return;
     cleaning = true;
     try {
       const res = await api.backupDeleteAll();
@@ -219,7 +246,7 @@
     >
   </div>
 
-  {#if loadError}<div class="banner error">⚠ {loadError}</div>{/if}
+  {#if loadError}<Banner tone="error">{loadError}</Banner>{/if}
 
   <div class="s3-grid">
     <label class="field">

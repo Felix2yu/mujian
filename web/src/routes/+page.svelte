@@ -1,12 +1,17 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
   import { resolve } from '$app/paths';
   import { onMount, onDestroy, tick } from 'svelte';
-  import { fade, fly } from 'svelte/transition';
   import { page } from '$app/state';
   import { api } from '#lib/api.js';
   import { askConfirm } from '#lib/confirm.js';
   import { loadStatusFilter, ALL_STATUSES } from '#lib/statusPrefs.js';
   import { loadPref, savePref } from '#lib/prefs.js';
+  import Modal from '#lib/ui/Modal.svelte';
+  import Segmented from '#lib/ui/Segmented.svelte';
+  import EmptyState from '#lib/ui/EmptyState.svelte';
+  import ComboInput from '#lib/components/ComboInput.svelte';
+  import IconButton from '#lib/ui/IconButton.svelte';
   import RecordCard from '#lib/components/RecordCard.svelte';
   import OperaIcon from '#lib/components/OperaIcon.svelte';
   // BatchEditModal 改为按需动态加载（见 openBatchEdit），不进首页关键路径。
@@ -668,53 +673,8 @@
     clearTimeout(flashTimer);
   });
 
-  // 筛选面板声明了 aria-modal，此前却既没有 Esc 关闭、也没有初始焦点与焦点陷阱，
-  // 背景列表还能继续滚动。这里补齐对话框的基本契约。
-  let filterPanelEl = $state(null);
-  let filterToggleEl = $state(null);
-  const FOCUSABLE =
-    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-  $effect(() => {
-    if (!showFilter) return;
-    const panel = filterPanelEl;
-    if (!panel) return; // 面板挂载前的一次空转（模板尚未渲染）
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        showFilter = false;
-        return;
-      }
-      if (e.key !== 'Tab') return;
-      const nodes = [...panel.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null);
-      if (nodes.length === 0) return;
-      const first = nodes[0];
-      const last = nodes[nodes.length - 1];
-      const active = document.activeElement;
-      if (e.shiftKey) {
-        if (active === first || !nodes.includes(active)) {
-          e.preventDefault();
-          last.focus({ preventScroll: true });
-        }
-      } else if (active === last) {
-        e.preventDefault();
-        first.focus({ preventScroll: true });
-      }
-    };
-    document.addEventListener('keydown', onKey, true);
-    // 等 fly 过渡结束再送入焦点，否则会被 transform 动画带着滚动。
-    const t = setTimeout(() => {
-      panel.querySelector(FOCUSABLE)?.focus({ preventScroll: true });
-    }, 220);
-    return () => {
-      document.removeEventListener('keydown', onKey, true);
-      clearTimeout(t);
-      document.body.style.overflow = prevOverflow;
-      filterToggleEl?.focus({ preventScroll: true });
-    };
-  });
+  // 筛选面板的对话框契约（滚动锁 / Esc / 焦点陷阱 / 初始焦点 / 关闭还焦）
+  // 已内建于 ui/Modal.svelte，这里不再重复实现。
 </script>
 
 <svelte:head><title>演出 - 幕间</title></svelte:head>
@@ -734,7 +694,9 @@
         oncompositionstart={onSearchCompositionStart}
         oncompositionend={onSearchCompositionEnd}
       />
-      {#if filters.q}<button class="search-clear" onclick={() => clearChip('q')}>✕</button>{/if}
+      {#if filters.q}<IconButton label="清除搜索" size="sm" onclick={() => clearChip('q')}
+          >✕</IconButton
+        >{/if}
     </div>
     <div class="action-row">
       <button
@@ -747,7 +709,6 @@
         }}
         aria-expanded={showFilter}
         aria-haspopup="dialog"
-        bind:this={filterToggleEl}
       >
         <svg
           viewBox="0 0 24 24"
@@ -823,8 +784,8 @@
         {#each savedViews as v (v.name)}
           <span class="view-chip" title="点击应用视图">
             <button class="view-apply" onclick={() => applyView(v)}>{v.name}</button>
-            <button class="view-x" onclick={() => removeView(v)} aria-label={`删除视图 ${v.name}`}
-              >×</button
+            <IconButton label={`删除视图 ${v.name}`} size="sm" onclick={() => removeView(v)}
+              >×</IconButton
             >
           </span>
         {/each}
@@ -833,11 +794,11 @@
   </div>
 
   {#if batchError}
-    <div class="banner error">⚠ {batchError}</div>
+    <Banner tone="error">{batchError}</Banner>
   {/if}
 
   {#if loading}
-    <div class="grid">
+    <div class="grid-cards">
       {#each Array(8) as _, i (i)}
         <div class="skel-card">
           <div class="skeleton skel-cover"></div>
@@ -847,25 +808,24 @@
       {/each}
     </div>
   {:else if error}
-    <div class="empty card">
-      <div class="ico"><OperaIcon size={44} /></div>
-      <div class="t">加载失败</div>
-      <div class="h">{error}</div>
-      <button class="btn sm" onclick={() => load()}>重试</button>
-    </div>
+    <EmptyState title="加载失败" hint={error}>
+      {#snippet icon()}<OperaIcon size={44} />{/snippet}
+      {#snippet action()}<button class="btn sm" onclick={() => load()}>重试</button>{/snippet}
+    </EmptyState>
   {:else if records.length === 0}
-    <div class="empty card">
-      <div class="ico"><OperaIcon size={44} /></div>
-      <div class="t">{activeChips.length ? '没有符合条件的记录' : '还没有记录'}</div>
-      <div class="h">
-        {activeChips.length
-          ? '试试调整筛选条件，或清除全部筛选'
-          : '前往「数据」页导入 recordlive_export 的 data.json，或点击右上角新建第一条记录'}
-      </div>
-      {#if activeChips.length}<button class="btn sm" onclick={resetFilters}>清除筛选</button>{/if}
-    </div>
+    <EmptyState
+      title={activeChips.length ? '没有符合条件的记录' : '还没有记录'}
+      hint={activeChips.length
+        ? '试试调整筛选条件，或清除全部筛选'
+        : '前往「数据」页导入 recordlive_export 的 data.json，或点击右上角新建第一条记录'}
+    >
+      {#snippet icon()}<OperaIcon size={44} />{/snippet}
+      {#if activeChips.length}
+        <button class="btn sm" onclick={resetFilters}>清除筛选</button>
+      {/if}
+    </EmptyState>
   {:else}
-    <div class="stagger grid">
+    <div class="stagger grid-cards">
       {#each records as r (r.id)}
         <!-- role/tabindex 由 selectionMode 动态给出：静态分析看不到那个
                  role="button"，会报 noninteractive element with tabindex。
@@ -914,321 +874,272 @@
 </div>
 
 {#if showFilter}
-  <div
-    class="filter-mask"
-    onclick={() => (showFilter = false)}
-    transition:fade={{ duration: 140 }}
-    aria-hidden="true"
-  ></div>
-  <div
-    class="filter-panel card"
-    role="dialog"
-    aria-modal="true"
-    aria-label="筛选选项"
-    bind:this={filterPanelEl}
-    transition:fly={{ y: 40, duration: 200 }}
-  >
-    <div class="filter-panel-head">
-      <span class="filter-panel-title">筛选</span>
-      <button
-        type="button"
-        class="filter-close"
-        onclick={() => (showFilter = false)}
-        aria-label="关闭筛选"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          aria-hidden="true"
-        >
-          <path d="M6 6l12 12M18 6L6 18" />
-        </svg>
-      </button>
-    </div>
-    <div class="filter-fields">
-      <label class="filter-field">
-        <span class="filter-label">分类</span>
-        <select class="input" bind:value={filters.category} onchange={load}>
-          <option value="">全部分类</option>
-          {#each categories as c (c.name)}<option value={c.name}>{c.name}</option>{/each}
-        </select>
-      </label>
-      <label class="filter-field">
-        <span class="filter-label">城市</span>
-        <select class="input" bind:value={filters.city} onchange={load}>
-          <option value="">全部城市</option>
-          {#each cities as c (c)}<option value={c}>{c}</option>{/each}
-        </select>
-      </label>
-      <label class="filter-field">
-        <span class="filter-label">年份</span>
-        <input
-          class="input"
-          type="number"
-          placeholder="年份"
-          bind:value={filters.year}
-          onchange={load}
-        />
-      </label>
-      <label class="filter-field">
-        <span class="filter-label">月份</span>
-        <select class="input" bind:value={filters.month} onchange={load}>
-          <option value="">月份</option>
-          {#each Array(12) as _, i (i)}<option value={i + 1}>{i + 1} 月</option>{/each}
-        </select>
-      </label>
-    </div>
-    <div class="filter-section">
-      <button
-        type="button"
-        class="filter-section-title collapsible"
-        onclick={() => (showMissing = !showMissing)}
-        aria-expanded={showMissing}
-      >
-        <span>缺失字段（数据治理）</span>
-        {#if filters.missing.length}<span class="missing-count">{filters.missing.length}</span>{/if}
-        <svg
-          class="chev"
-          class:open={showMissing}
-          viewBox="0 0 24 24"
-          width="14"
-          height="14"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg
-        >
-      </button>
-      {#if showMissing}
-        <div class="missing-mode-row">
-          <div class="seg" role="group" aria-label="缺失字段组合方式">
-            <button
-              type="button"
-              class="seg-btn"
-              class:on={filters.missingMode !== 'all'}
-              aria-pressed={filters.missingMode !== 'all'}
-              onclick={() => {
-                filters = { ...filters, missingMode: 'any' };
-                if (filters.missing.length) load();
-              }}>任一为空</button
-            >
-            <button
-              type="button"
-              class="seg-btn"
-              class:on={filters.missingMode === 'all'}
-              aria-pressed={filters.missingMode === 'all'}
-              onclick={() => {
-                filters = { ...filters, missingMode: 'all' };
-                if (filters.missing.length) load();
-              }}>全部为空</button
-            >
-          </div>
-          <span class="missing-mode-hint">
-            {filters.missingMode === 'all'
-              ? '仅命中所有勾选字段都为空的记录'
-              : '命中任一勾选字段为空的记录'}
-          </span>
-        </div>
-        <div class="missing-grid">
-          {#each MISSING_FIELDS as f (f)}
-            <label class="missing-opt">
-              <input
-                type="checkbox"
-                checked={filters.missing.includes(f.value)}
-                onchange={() => toggleMissing(f.value)}
-              />
-              <span>{f.label}</span>
-            </label>
-          {/each}
-        </div>
-      {/if}
-    </div>
-
-    <div class="filter-section">
-      <span class="filter-section-title">剧目 / 折子 / 演员</span>
+  <!-- 底部抽屉式筛选面板：外壳（遮罩/滚动锁/Esc/焦点陷阱/焦点回位）由 ui/Modal 提供 -->
+  <Modal bind:open={showFilter} variant="sheet" title="筛选" maxHeight="82vh">
+    <div class="filter-body">
       <div class="filter-fields">
         <label class="filter-field">
-          <span class="filter-label">剧目</span>
-          <select class="input" bind:value={filters.drama} onchange={load}>
-            <option value="">全部剧目</option>
-            {#each dramaList as d (d.id)}<option value={d.id}>{d.name}</option>{/each}
+          <span class="filter-label">分类</span>
+          <select class="input" bind:value={filters.category} onchange={load}>
+            <option value="">全部分类</option>
+            {#each categories as c (c.name)}<option value={c.name}>{c.name}</option>{/each}
           </select>
         </label>
         <label class="filter-field">
-          <span class="filter-label">折子</span>
-          <select class="input" bind:value={filters.zhezi} onchange={load}>
-            <option value="">全部折子</option>
-            {#each zheziList as z (z.id)}<option value={z.id}>{z.dramaName} · {z.name}</option
-              >{/each}
+          <span class="filter-label">城市</span>
+          <select class="input" bind:value={filters.city} onchange={load}>
+            <option value="">全部城市</option>
+            {#each cities as c (c)}<option value={c}>{c}</option>{/each}
           </select>
         </label>
         <label class="filter-field">
-          <span class="filter-label">演员</span>
-          <select class="input" bind:value={filters.artist} onchange={load}>
-            <option value="">全部演员</option>
-            {#each artistList as a (a.id)}<option value={a.id}>{a.name}</option>{/each}
-          </select>
-        </label>
-      </div>
-    </div>
-
-    <div class="filter-section">
-      <span class="filter-section-title">时间区间（起 / 止）</span>
-      <div class="filter-hint">可只填其中一项：仅起始=该日及之后，仅结束=该日及之前。</div>
-      <div class="filter-fields">
-        <label class="filter-field">
-          <span class="filter-label">起始日期</span>
-          <input class="input" type="date" bind:value={filters.start} onchange={load} />
-        </label>
-        <label class="filter-field">
-          <span class="filter-label">结束日期</span>
-          <input class="input" type="date" bind:value={filters.end} onchange={load} />
-        </label>
-      </div>
-    </div>
-
-    <div class="filter-section">
-      <span class="filter-section-title">渠道 / 剧团</span>
-      <div class="filter-fields">
-        <label class="filter-field">
-          <span class="filter-label">渠道</span>
-          <input
-            class="input"
-            list="flt-channel"
-            placeholder="渠道"
-            bind:value={filters.channel}
-            onchange={load}
-          />
-          <datalist id="flt-channel"
-            >{#each channels as c (c)}<option value={c}>{c}</option>{/each}</datalist
-          >
-        </label>
-        <label class="filter-field">
-          <span class="filter-label">剧团</span>
-          <input
-            class="input"
-            list="flt-company"
-            placeholder="剧团"
-            bind:value={filters.company}
-            onchange={load}
-          />
-          <datalist id="flt-company"
-            >{#each companies as c (c)}<option value={c}>{c}</option>{/each}</datalist
-          >
-        </label>
-        <label class="filter-field">
-          <span class="filter-label">场馆</span>
-          <input
-            class="input"
-            list="flt-address"
-            placeholder="场馆 / 剧院"
-            bind:value={filters.address}
-            onchange={load}
-          />
-          <datalist id="flt-address"
-            >{#each addresses as a (a)}<option value={a}>{a}</option>{/each}</datalist
-          >
-        </label>
-      </div>
-    </div>
-
-    <div class="filter-section">
-      <span class="filter-section-title">评分 / 票价</span>
-      <div class="filter-fields">
-        <label class="filter-field">
-          <span class="filter-label">评分 ≥</span>
+          <span class="filter-label">年份</span>
           <input
             class="input"
             type="number"
-            min="0"
-            max="10"
-            step="1"
-            placeholder="评分下限"
-            bind:value={filters.rating_min}
+            placeholder="年份"
+            bind:value={filters.year}
             onchange={load}
           />
         </label>
-        <div class="filter-field">
-          <span class="filter-label">票价区间（¥）</span>
-          <div class="range-row">
+        <label class="filter-field">
+          <span class="filter-label">月份</span>
+          <select class="input" bind:value={filters.month} onchange={load}>
+            <option value="">月份</option>
+            {#each Array(12) as _, i (i)}<option value={i + 1}>{i + 1} 月</option>{/each}
+          </select>
+        </label>
+      </div>
+      <div class="filter-section">
+        <button
+          type="button"
+          class="filter-section-title collapsible"
+          onclick={() => (showMissing = !showMissing)}
+          aria-expanded={showMissing}
+        >
+          <span>缺失字段（数据治理）</span>
+          {#if filters.missing.length}<span class="missing-count">{filters.missing.length}</span
+            >{/if}
+          <svg
+            class="chev"
+            class:open={showMissing}
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg
+          >
+        </button>
+        {#if showMissing}
+          <div class="missing-mode-row">
+            <Segmented
+              options={[
+                { value: 'any', label: '任一为空' },
+                { value: 'all', label: '全部为空' }
+              ]}
+              value={filters.missingMode}
+              ariaLabel="缺失字段组合方式"
+              onchange={(v) => {
+                filters = { ...filters, missingMode: v };
+                if (filters.missing.length) load();
+              }}
+            />
+            <span class="missing-mode-hint">
+              {filters.missingMode === 'all'
+                ? '仅命中所有勾选字段都为空的记录'
+                : '命中任一勾选字段为空的记录'}
+            </span>
+          </div>
+          <div class="missing-grid">
+            {#each MISSING_FIELDS as f (f)}
+              <label class="missing-opt">
+                <input
+                  type="checkbox"
+                  checked={filters.missing.includes(f.value)}
+                  onchange={() => toggleMissing(f.value)}
+                />
+                <span>{f.label}</span>
+              </label>
+            {/each}
+          </div>
+        {/if}
+      </div>
+
+      <div class="filter-section">
+        <span class="filter-section-title">剧目 / 折子 / 演员</span>
+        <div class="filter-fields">
+          <label class="filter-field">
+            <span class="filter-label">剧目</span>
+            <select class="input" bind:value={filters.drama} onchange={load}>
+              <option value="">全部剧目</option>
+              {#each dramaList as d (d.id)}<option value={d.id}>{d.name}</option>{/each}
+            </select>
+          </label>
+          <label class="filter-field">
+            <span class="filter-label">折子</span>
+            <select class="input" bind:value={filters.zhezi} onchange={load}>
+              <option value="">全部折子</option>
+              {#each zheziList as z (z.id)}<option value={z.id}>{z.dramaName} · {z.name}</option
+                >{/each}
+            </select>
+          </label>
+          <label class="filter-field">
+            <span class="filter-label">演员</span>
+            <select class="input" bind:value={filters.artist} onchange={load}>
+              <option value="">全部演员</option>
+              {#each artistList as a (a.id)}<option value={a.id}>{a.name}</option>{/each}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <span class="filter-section-title">时间区间（起 / 止）</span>
+        <div class="filter-hint">可只填其中一项：仅起始=该日及之后，仅结束=该日及之前。</div>
+        <div class="filter-fields">
+          <label class="filter-field">
+            <span class="filter-label">起始日期</span>
+            <input class="input" type="date" bind:value={filters.start} onchange={load} />
+          </label>
+          <label class="filter-field">
+            <span class="filter-label">结束日期</span>
+            <input class="input" type="date" bind:value={filters.end} onchange={load} />
+          </label>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <span class="filter-section-title">渠道 / 剧团</span>
+        <div class="filter-fields">
+          <!-- 渠道 / 剧团 / 场馆：原生 datalist 在 Safari 与移动端基本不弹建议，
+             且筛选用的是 onchange（失焦即应用），这里统一换成 ComboInput：
+             onpick 处理点选、oncommit 处理自由输入后失焦。 -->
+          <label class="filter-field">
+            <span class="filter-label">渠道</span>
+            <ComboInput
+              bind:value={filters.channel}
+              suggestions={channels}
+              placeholder="渠道"
+              oncommit={load}
+            />
+          </label>
+          <label class="filter-field">
+            <span class="filter-label">剧团</span>
+            <ComboInput
+              bind:value={filters.company}
+              suggestions={companies}
+              placeholder="剧团"
+              oncommit={load}
+            />
+          </label>
+          <label class="filter-field">
+            <span class="filter-label">场馆</span>
+            <ComboInput
+              bind:value={filters.address}
+              suggestions={addresses}
+              placeholder="场馆 / 剧院"
+              oncommit={load}
+            />
+          </label>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <span class="filter-section-title">评分 / 票价</span>
+        <div class="filter-fields">
+          <label class="filter-field">
+            <span class="filter-label">评分 ≥</span>
             <input
               class="input"
               type="number"
               min="0"
+              max="10"
               step="1"
-              placeholder="最低"
-              bind:value={filters.price_min}
+              placeholder="评分下限"
+              bind:value={filters.rating_min}
               onchange={load}
             />
-            <span class="range-sep">~</span>
-            <input
-              class="input"
-              type="number"
-              min="0"
-              step="1"
-              placeholder="最高"
-              bind:value={filters.price_max}
-              onchange={load}
-            />
+          </label>
+          <div class="filter-field">
+            <span class="filter-label">票价区间（¥）</span>
+            <div class="range-row">
+              <input
+                class="input"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="最低"
+                bind:value={filters.price_min}
+                onchange={load}
+              />
+              <span class="range-sep">~</span>
+              <input
+                class="input"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="最高"
+                bind:value={filters.price_max}
+                onchange={load}
+              />
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="filter-section">
-      <span class="filter-section-title">状态 / 匹配方式</span>
-      <div class="filter-fields">
-        <label class="filter-field">
-          <span class="filter-label">状态</span>
-          <select class="input" bind:value={filters.status} onchange={load}>
-            <option value="">全部状态</option>
-            <option value="0">正常</option>
-            <option value="1">想看</option>
-            <option value="2">已取消</option>
-            <option value="3">未赴约</option>
-          </select>
-        </label>
-        <label class="missing-opt exact-opt">
-          <input type="checkbox" bind:checked={filters.exact} onchange={load} />
-          <span>关键词精确匹配（按名称全等，非模糊）</span>
-        </label>
+      <div class="filter-section">
+        <span class="filter-section-title">状态 / 匹配方式</span>
+        <div class="filter-fields">
+          <label class="filter-field">
+            <span class="filter-label">状态</span>
+            <select class="input" bind:value={filters.status} onchange={load}>
+              <option value="">全部状态</option>
+              <option value="0">正常</option>
+              <option value="1">想看</option>
+              <option value="2">已取消</option>
+              <option value="3">未赴约</option>
+            </select>
+          </label>
+          <label class="missing-opt exact-opt">
+            <input type="checkbox" bind:checked={filters.exact} onchange={load} />
+            <span>关键词精确匹配（按名称全等，非模糊）</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="filter-panel-actions">
+        {#if savingView}
+          <input
+            class="input"
+            style="max-width: 180px;"
+            placeholder="视图名称，如：今年的昆曲"
+            bind:value={viewName}
+            onkeydown={(e) => {
+              if (e.key === 'Enter') saveCurrentView();
+            }}
+          />
+          <button class="btn" onclick={saveCurrentView} disabled={!viewName.trim()}>存为视图</button
+          >
+          <button
+            class="btn ghost"
+            onclick={() => {
+              savingView = false;
+              viewName = '';
+            }}>取消</button
+          >
+        {:else}
+          <button class="btn ghost" onclick={() => (savingView = true)}>💾 保存当前筛选</button>
+        {/if}
+        <span style="flex: 1;"></span>
+        <button class="btn ghost" onclick={resetFilters}>清除全部</button>
+        <button class="btn primary" onclick={() => (showFilter = false)}>完成</button>
       </div>
     </div>
-
-    <div class="filter-panel-actions">
-      {#if savingView}
-        <input
-          class="input"
-          style="max-width: 180px;"
-          placeholder="视图名称，如：今年的昆曲"
-          bind:value={viewName}
-          onkeydown={(e) => {
-            if (e.key === 'Enter') saveCurrentView();
-          }}
-        />
-        <button class="btn" onclick={saveCurrentView} disabled={!viewName.trim()}>存为视图</button>
-        <button
-          class="btn ghost"
-          onclick={() => {
-            savingView = false;
-            viewName = '';
-          }}>取消</button
-        >
-      {:else}
-        <button class="btn ghost" onclick={() => (savingView = true)}>💾 保存当前筛选</button>
-      {/if}
-      <span style="flex: 1;"></span>
-      <button class="btn ghost" onclick={resetFilters}>清除全部</button>
-      <button class="btn primary" onclick={() => (showFilter = false)}>完成</button>
-    </div>
-  </div>
+  </Modal>
 {/if}
 
 {#if showJump && !loading && records.length && nowAnchorId}
@@ -1255,8 +1166,9 @@
   </button>
 {/if}
 
-{#if showBatchEdit && BatchEditModal}
+{#if BatchEditModal}
   <BatchEditModal
+    bind:open={showBatchEdit}
     selectedIds={[...selectedIds]}
     {records}
     onClose={() => (showBatchEdit = false)}
@@ -1324,28 +1236,6 @@
   .search::placeholder {
     color: var(--text-3);
   }
-  .search-clear {
-    position: absolute;
-    right: 12px;
-    border: none;
-    background: var(--surface-3);
-    color: var(--text-muted);
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    font-size: 11px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition:
-      background var(--t-fast) var(--ease),
-      color var(--t-fast) var(--ease);
-  }
-  .search-clear:hover {
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
 
   .filter-toggle {
     display: inline-flex;
@@ -1372,60 +1262,9 @@
     line-height: 1;
   }
 
-  /* 筛选弹出层（移动端/桌面端均为底部抽屉式） */
-  .filter-mask {
-    position: fixed;
-    inset: 0;
-    z-index: 60;
-    border: none;
-    padding: 0;
-    background: rgba(0, 0, 0, 0.42);
-    cursor: default;
-  }
-  .filter-panel {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    margin: 0 auto;
-    z-index: 61;
-    width: min(560px, 100%);
-    max-height: 80vh;
-    overflow-y: auto;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-    padding: 16px 16px calc(20px + env(safe-area-inset-bottom, 0px));
-    box-shadow: var(--shadow-lg);
-  }
-  .filter-panel-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12px;
-  }
-  .filter-panel-title {
-    font-family: var(--font-serif);
-    font-size: 17px;
-    font-weight: 600;
-  }
-  .filter-close {
-    border: none;
-    background: none;
-    color: var(--text-muted);
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition:
-      background var(--t-fast) var(--ease),
-      color var(--t-fast) var(--ease);
-  }
-  .filter-close:hover {
-    background: var(--surface-3);
-    color: var(--text);
+  /* 筛选面板：底部抽屉外壳由 ui/Modal 提供，这里只留内容排版 */
+  .filter-body {
+    padding: 4px 16px calc(20px + env(safe-area-inset-bottom, 0px));
   }
   .filter-fields {
     display: grid;
@@ -1479,32 +1318,6 @@
     color: var(--text-3);
   }
   /* 任一 / 全部 分段切换 */
-  .seg {
-    display: inline-flex;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    overflow: hidden;
-    background: var(--surface-2);
-    flex-shrink: 0;
-  }
-  .seg-btn {
-    border: none;
-    background: transparent;
-    color: var(--text-2);
-    font-size: 12.5px;
-    padding: 5px 14px;
-    cursor: pointer;
-    transition:
-      background var(--t-fast) var(--ease),
-      color var(--t-fast) var(--ease);
-  }
-  .seg-btn + .seg-btn {
-    border-left: 1px solid var(--border);
-  }
-  .seg-btn.on {
-    background: var(--accent);
-    color: #fff;
-  }
   .missing-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
@@ -1556,14 +1369,8 @@
     margin-top: 16px;
   }
 
-  /* 桌面端：加宽筛选面板并放宽网格列数，承载更多维度而不显拥挤 */
+  /* 桌面端：放宽筛选面板字段网格，承载更多维度而不显拥挤 */
   @media (min-width: 640px) {
-    .filter-panel {
-      width: min(860px, 94vw);
-      max-height: 88vh;
-      border-top-left-radius: 16px;
-      border-top-right-radius: 16px;
-    }
     .filter-fields {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -1780,12 +1587,6 @@
   }
   /* 选择框已移入 RecordCard 封面右下角（避开左上剧种角标/右上评分角标），样式见组件内部 */
 
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
-    gap: 14px;
-  }
-
   .skel-card {
     display: flex;
     flex-direction: column;
@@ -1803,7 +1604,7 @@
   }
 
   @media (max-width: 560px) {
-    .grid {
+    .grid-cards {
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 10px;
     }
@@ -1889,16 +1690,5 @@
   }
   .view-apply:hover {
     color: var(--accent);
-  }
-  .view-x {
-    border: none;
-    background: transparent;
-    color: var(--text-3);
-    font-size: 13px;
-    padding: 4px 8px 4px 2px;
-    cursor: pointer;
-  }
-  .view-x:hover {
-    color: var(--danger);
   }
 </style>

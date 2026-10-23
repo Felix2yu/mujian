@@ -1,7 +1,11 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
+  import Skeleton from '#lib/ui/Skeleton.svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api } from '#lib/api.js';
+  import EmptyState from '#lib/ui/EmptyState.svelte';
+  import IconButton from '#lib/ui/IconButton.svelte';
   import BackLink from '#lib/components/BackLink.svelte';
   import RecordCard from '#lib/components/RecordCard.svelte';
   import CategoryTags from '#lib/components/CategoryTags.svelte';
@@ -230,15 +234,15 @@
 
   {#if loading}
     <div class="loading">
-      <div class="skeleton" style="height: 22px; width: 40%;"></div>
-      <div class="skeleton" style="height: 14px; width: 60%;"></div>
-      <div class="skeleton" style="height: 200px;"></div>
+      <Skeleton height="22px" width="40%" />
+      <Skeleton height="14px" width="60%" />
+      <Skeleton height="200px" />
     </div>
   {:else if error}
-    <div class="banner error">⚠ {error}</div>
+    <Banner tone="error">{error}</Banner>
     <BackLink fallback="/dramas" label="← 返回剧目列表" />
   {:else if drama}
-    {#if error}<div class="banner error">⚠ {error}</div>{/if}
+    {#if error}<Banner tone="error">{error}</Banner>{/if}
 
     <div class="card head-card">
       {#if editingInfo}
@@ -372,8 +376,10 @@
                 {#if z.remark}<div class="z-remark">{z.remark}</div>{/if}
               </div>
               <div class="z-ops">
-                <button class="op" onclick={() => editZhezi(z)} title="编辑">✎</button>
-                <button class="op danger" onclick={() => removeZhezi(z)} title="删除">✕</button>
+                <IconButton label="编辑" size="sm" onclick={() => editZhezi(z)}>✎</IconButton>
+                <IconButton label="删除" tone="danger" size="sm" onclick={() => removeZhezi(z)}
+                  >✕</IconButton
+                >
               </div>
             {/if}
           </div>
@@ -381,7 +387,7 @@
       </div>
 
       {#if zhezis.length === 0}
-        <div class="empty small card"><div class="h">还没有折子，在下方添加第一个</div></div>
+        <EmptyState small hint="还没有折子，在下方添加第一个" />
       {/if}
 
       {#if editingId === null}
@@ -419,9 +425,9 @@
     <div class="card section">
       <div class="sec-head"><h3>演出记录 <span class="num">{records.length}</span></h3></div>
       {#if records.length === 0}
-        <div class="empty small card"><div class="h">还没有演出记录关联该剧目</div></div>
+        <EmptyState small hint="还没有演出记录关联该剧目" />
       {:else}
-        <div class="grid">
+        <div class="grid-cards">
           {#each records as r (r.id)}
             <RecordCard record={r} />
           {/each}
@@ -624,24 +630,6 @@
     gap: 4px;
     flex: 0 0 auto;
   }
-  .op {
-    border: none;
-    background: none;
-    color: var(--text-3);
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
-  }
-  .op:hover {
-    background: var(--surface-3);
-    color: var(--text);
-  }
-  .op.danger:hover {
-    background: var(--danger-soft);
-    color: var(--danger);
-  }
   .z-edit {
     display: flex;
     flex-direction: column;
@@ -658,17 +646,8 @@
     color: var(--text-2);
   }
 
-  .empty {
-    padding: 14px;
-    text-align: center;
-  }
-  .empty.small .h {
-    margin: 0;
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
-    gap: 14px;
+  /* 轨道与间距来自全局 .grid-cards，这里只补与上方区块的间距 */
+  .grid-cards {
     margin-top: 4px;
   }
 
@@ -679,7 +658,7 @@
     .head-main {
       flex-direction: column;
     }
-    .grid {
+    .grid-cards {
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 10px;
     }

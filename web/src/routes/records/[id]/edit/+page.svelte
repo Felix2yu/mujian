@@ -1,4 +1,6 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
+  import Skeleton from '#lib/ui/Skeleton.svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
@@ -48,9 +50,9 @@
     <h1>编辑记录</h1>
   </div>
   {#if loading}
-    <div class="skeleton" style="height: 320px; border-radius: var(--radius-lg);"></div>
+    <Skeleton height="320px" radius="var(--radius-lg)" />
   {:else if error}
-    <div class="banner error">⚠ {error}</div>
+    <Banner tone="error">{error}</Banner>
   {:else if record}
     <RecordForm
       {record}

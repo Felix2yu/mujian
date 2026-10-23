@@ -1,4 +1,5 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
   import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import { api } from '#lib/api.js';
@@ -218,7 +219,7 @@
         导入进行中，请勿刷新或关闭页面、不要重复点击；大备份（含封面）可能需要数分钟。
       </p>{/if}
 
-    {#if error}<div class="banner error">⚠ {error}</div>{/if}
+    {#if error}<Banner tone="error">{error}</Banner>{/if}
 
     {#if preview}
       <div class="card sec preview">

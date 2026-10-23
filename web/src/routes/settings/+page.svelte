@@ -1,7 +1,10 @@
 <script>
   import { onMount } from 'svelte';
+  import Banner from '#lib/ui/Banner.svelte';
+  import Skeleton from '#lib/ui/Skeleton.svelte';
   import { api, resetStorageInfo } from '#lib/api.js';
   import { theme } from '#lib/stores.js';
+  import Segmented from '#lib/ui/Segmented.svelte';
   import {
     STATUS_LABELS,
     ALL_STATUSES,
@@ -492,17 +495,66 @@
 <svelte:head><title>设置 - 幕间</title></svelte:head>
 
 <div class="fade-up">
+  <!-- 主题图标：以 snippet 形式传给 Segmented，避免把 SVG 塞进 options 数据 -->
+  {#snippet iconSun()}
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <line x1="12" y1="2" x2="12" y2="4.5" /><line x1="12" y1="19.5" x2="12" y2="22" />
+      <line x1="2" y1="12" x2="4.5" y2="12" /><line x1="19.5" y1="12" x2="22" y2="12" />
+      <line x1="4.6" y1="4.6" x2="6.3" y2="6.3" /><line x1="17.7" y1="17.7" x2="19.4" y2="19.4" />
+      <line x1="4.6" y1="19.4" x2="6.3" y2="17.7" /><line x1="17.7" y1="6.3" x2="19.4" y2="4.6" />
+    </svg>
+  {/snippet}
+  {#snippet iconMoon()}
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8z" />
+    </svg>
+  {/snippet}
+  {#snippet iconAuto()}
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
+    </svg>
+  {/snippet}
+
   <div class="page-head">
     <h1>设置</h1>
     <p class="sub">偏好、同步与外发设置</p>
   </div>
 
   {#if loading}
-    <div class="skeleton" style="height: 220px;"></div>
+    <Skeleton height="220px" />
   {:else if loadError}
     <div class="card sec">
       <h3>设置读取失败</h3>
-      <div class="banner error">⚠ {loadError}</div>
+      <Banner tone="error">{loadError}</Banner>
       <p class="hint" style="margin: 10px 0 14px;">
         未能读取服务端配置。为避免把空白默认值覆盖到服务端，表单已隐藏——请检查服务是否可访问后重试。
       </p>
@@ -513,84 +565,17 @@
       {#snippet themeCard()}
         <div class="card sec">
           <h3>主题</h3>
-          <div class="theme-row">
-            {#each themes as t (t.v)}
-              <button
-                class="theme-opt"
-                class:on={currentTheme === t.v}
-                onclick={() => setTheme(t.v)}
-              >
-                <span class="tico">
-                  {#if t.v === 'light'}
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="18"
-                      height="18"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                    >
-                      <circle cx="12" cy="12" r="4" />
-                      <line x1="12" y1="2" x2="12" y2="4.5" /><line
-                        x1="12"
-                        y1="19.5"
-                        x2="12"
-                        y2="22"
-                      />
-                      <line x1="2" y1="12" x2="4.5" y2="12" /><line
-                        x1="19.5"
-                        y1="12"
-                        x2="22"
-                        y2="12"
-                      />
-                      <line x1="4.6" y1="4.6" x2="6.3" y2="6.3" /><line
-                        x1="17.7"
-                        y1="17.7"
-                        x2="19.4"
-                        y2="19.4"
-                      />
-                      <line x1="4.6" y1="19.4" x2="6.3" y2="17.7" /><line
-                        x1="17.7"
-                        y1="6.3"
-                        x2="19.4"
-                        y2="4.6"
-                      />
-                    </svg>
-                  {:else if t.v === 'dark'}
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="18"
-                      height="18"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8z" />
-                    </svg>
-                  {:else}
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="18"
-                      height="18"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                      aria-hidden="true"
-                    >
-                      <circle cx="12" cy="12" r="9" />
-                      <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
-                    </svg>
-                  {/if}
-                </span>
-                <span>{t.label}</span>
-              </button>
-            {/each}
-          </div>
+          <Segmented
+            variant="card"
+            ariaLabel="主题"
+            value={currentTheme}
+            onchange={(v) => setTheme(v)}
+            options={themes.map((t) => ({
+              value: t.v,
+              label: t.label,
+              icon: t.v === 'light' ? iconSun : t.v === 'dark' ? iconMoon : iconAuto
+            }))}
+          />
         </div>
       {/snippet}
 
@@ -674,7 +659,7 @@
             </div>
           {/if}
           {#if convertError}
-            <div class="banner error">⚠ {convertError}</div>
+            <Banner tone="error">{convertError}</Banner>
           {/if}
         </div>
       {/snippet}
@@ -1025,7 +1010,7 @@
             </div>
           {/if}
           {#if alignError}
-            <div class="banner error">⚠ {alignError}</div>
+            <Banner tone="error">{alignError}</Banner>
           {/if}
         </div>
       {/snippet}
@@ -1175,7 +1160,7 @@
               </div>
             {/if}
             {#if migrateError}
-              <div class="banner error">⚠ {migrateError}</div>
+              <Banner tone="error">{migrateError}</Banner>
             {/if}
           {/if}
         </div>
@@ -1328,7 +1313,7 @@
             >
           </div>
           {#if huozhiTestOk}
-            <div class="banner success">✓ {huozhiTestMsg}</div>
+            <Banner tone="success">{huozhiTestMsg}</Banner>
           {/if}
           {#if huozhiTestError}
             <div class="banner error">⚠ 货殖连接失败：{huozhiTestError}</div>
@@ -1423,43 +1408,6 @@
     font-size: 15.5px;
   }
 
-  .theme-row {
-    display: flex;
-    gap: 8px;
-  }
-  .theme-opt {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    padding: 14px 8px;
-    border-radius: var(--radius);
-    border: 1.5px solid var(--border);
-    background: var(--surface-2);
-    cursor: pointer;
-    font-size: 13.5px;
-    color: var(--text-2);
-    transition:
-      border-color var(--t-fast) var(--ease),
-      background var(--t-fast) var(--ease),
-      color var(--t-fast) var(--ease);
-  }
-  .theme-opt:hover {
-    border-color: var(--border-strong);
-  }
-  .theme-opt.on {
-    border-color: var(--accent);
-    background: var(--accent-softer);
-    color: var(--accent);
-    font-weight: 600;
-  }
-  .tico {
-    font-size: 18px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
   .hint {
     font-weight: 400;
     color: var(--text-3);

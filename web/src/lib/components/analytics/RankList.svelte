@@ -8,7 +8,7 @@
 </script>
 
 <ol class="rank" role="list">
-  {#each items as it, i (it.id ?? i)}
+  {#each items as it, i (it.id || i)}
     <li>
       <span class="rk" class:top={i < 3}>{i + 1}</span>
       {#if hrefFn && it.id}

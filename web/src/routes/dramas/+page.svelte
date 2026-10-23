@@ -1,8 +1,13 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
+  import Skeleton from '#lib/ui/Skeleton.svelte';
   import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { api } from '#lib/api.js';
+  import { askConfirm } from '#lib/confirm.js';
+  import EmptyState from '#lib/ui/EmptyState.svelte';
+  import IconButton from '#lib/ui/IconButton.svelte';
   import CategoryTags from '#lib/components/CategoryTags.svelte';
 
   let dramas = $state([]);
@@ -89,7 +94,13 @@
   }
 
   async function remove(id, name) {
-    if (!confirm(`删除剧目「${name}」？其下所有折子也会一并删除，演出记录不受影响。`)) return;
+    const ok = await askConfirm({
+      title: '删除剧目',
+      message: `删除剧目「${name}」？其下所有折子也会一并删除，演出记录不受影响。`,
+      confirmLabel: '删除',
+      danger: true
+    });
+    if (!ok) return;
     error = '';
     try {
       await api.deleteDrama(id);
@@ -182,18 +193,16 @@
     >
   </div>
 
-  {#if error}<div class="banner error">⚠ {error}</div>{/if}
+  {#if error}<Banner tone="error">{error}</Banner>{/if}
 
   {#if loading}
     <div class="grid">
-      {#each Array(6) as _, i (i)}<div class="skeleton" style="height: 96px;"></div>{/each}
+      <Skeleton count={6} height="96px" />
     </div>
   {:else if dramas.length === 0}
-    <div class="empty card">
-      <div class="ico">戏</div>
-      <div class="t">还没有剧目</div>
-      <div class="h">在上方输入剧目名称创建第一个档案</div>
-    </div>
+    <EmptyState title="还没有剧目" hint="在上方输入剧目名称创建第一个档案">
+      {#snippet icon()}<span>戏</span>{/snippet}
+    </EmptyState>
   {:else}
     <div class="card filter-bar">
       <input class="input grow" placeholder="🔍 搜索剧目名称 / 备注…" bind:value={filterQuery} />
@@ -216,10 +225,7 @@
     </div>
 
     {#if visibleDramas.length === 0}
-      <div class="empty card">
-        <div class="t">无匹配剧目</div>
-        <div class="h">调整筛选条件试试</div>
-      </div>
+      <EmptyState title="无匹配剧目" hint="调整筛选条件试试" />
     {:else}
       <div class="stagger grid">
         {#each visibleDramas as d, i (d.id)}
@@ -259,7 +265,12 @@
               <span class="stat" title="折子数"><b>{d.zheziCount}</b> 折</span>
               <span class="stat" title="演出数"><b>{d.recordCount}</b> 场</span>
             </div>
-            <button class="del" title="删除剧目" onclick={() => remove(d.id, d.name)}>✕</button>
+            <IconButton
+              label="删除剧目"
+              tone="danger"
+              size="sm"
+              onclick={() => remove(d.id, d.name)}>✕</IconButton
+            >
           </div>
         {/each}
       </div>
@@ -373,28 +384,6 @@
   .stat b {
     color: var(--accent);
     font-size: 13px;
-  }
-  .del {
-    border: none;
-    background: none;
-    color: var(--text-3);
-    cursor: pointer;
-    font-size: 12px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition:
-      background var(--t-fast) var(--ease),
-      color var(--t-fast) var(--ease);
-    flex: 0 0 auto;
-    align-self: flex-start;
-  }
-  .del:hover {
-    background: var(--danger-soft);
-    color: var(--danger);
   }
   .drama.dragging {
     opacity: 0.4;

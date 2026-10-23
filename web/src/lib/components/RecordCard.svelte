@@ -3,6 +3,7 @@
   import { coverUrl, formatCurrency } from '#lib/api.js';
   import { STATUS_LABELS } from '#lib/statusPrefs.js';
   import { formatEventTitle } from '#lib/eventTitle.js';
+  import StatusBadge from '#lib/ui/StatusBadge.svelte';
   let { record, selectionMode = false, selected = false } = $props();
   let coverFailed = $state(false);
 
@@ -97,7 +98,7 @@
       <div class="no-cover"><span>{(record.name || '?').slice(0, 1)}</span></div>
     {/if}
     {#if catBadge}<span class="cat-badge">{catBadge}</span>{/if}
-    <span class="status-badge s{record.active_status}">{statusText}</span>
+    <StatusBadge status={record.active_status} label={statusText} floating />
     {#if record.rating}
       <span class="rate-badge">★ {record.rating}</span>
     {/if}
@@ -218,31 +219,6 @@
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.03em;
-  }
-  /* 海报左下角：演出状态（0 正常 / 1 想看 / 2 已取消 / 3 未赴约） */
-  .status-badge {
-    position: absolute;
-    left: 8px;
-    bottom: 8px;
-    padding: 2px 9px;
-    border-radius: 999px;
-    font-size: 10.5px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    color: #fff;
-    background: rgba(20, 17, 15, 0.62);
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
-  }
-  .status-badge.s1 {
-    background: rgba(146, 106, 24, 0.82);
-  }
-  .status-badge.s2 {
-    background: rgba(90, 90, 96, 0.82);
-    text-decoration: line-through;
-  }
-  .status-badge.s3 {
-    background: rgba(93, 62, 110, 0.82);
   }
   .rate-badge {
     position: absolute;

@@ -1,4 +1,5 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
   import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
@@ -37,7 +38,7 @@
     <h1>新建记录</h1>
     <p class="sub">记录一次现场演出</p>
   </div>
-  {#if error}<div class="banner error">⚠ {error}</div>{/if}
+  {#if error}<Banner tone="error">{error}</Banner>{/if}
   <RecordForm {categories} {initialDate} {onSubmit} onCancel={() => (location.href = '/')} />
 </div>
 

@@ -1,8 +1,11 @@
 <script>
   import { untrack, tick } from 'svelte';
+  import IconButton from '#lib/ui/IconButton.svelte';
   import { api, coverUrl } from '#lib/api.js';
+  import Modal from '#lib/ui/Modal.svelte';
+  import EmptyState from '#lib/ui/EmptyState.svelte';
 
-  let { open, onSelect, onClose } = $props();
+  let { open = $bindable(false), onSelect, onClose } = $props();
 
   const limit = 30;
   const debounceMs = 280;
@@ -35,36 +38,17 @@
   // open 是唯一依赖：组件内所有状态读写都走 untrack，避免 effect 被
   // q/page 的变化反复触发（把搜索框清空、页码归零）。这是之前搜索与翻页
   // 全部失效的根因。
+  // 滚动锁 / Esc / 焦点陷阱 / 焦点恢复已由 ui/Modal 负责，这里只管取数。
   $effect(() => {
     if (!open) return;
-    const restoreScroll = lockBodyScroll();
-    const active = document.activeElement;
     untrack(() => {
       resetState();
       load();
     });
-    tick().then(() => inputEl?.focus({ preventScroll: true }));
     return () => {
-      restoreScroll();
       cancelInFlight();
-      if (active instanceof HTMLElement && active.isConnected) {
-        try {
-          active.focus({ preventScroll: true });
-        } catch (e) {
-          /* ignore */
-        }
-      }
     };
   });
-
-  function lockBodyScroll() {
-    if (typeof document === 'undefined') return () => {};
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }
 
   function cancelInFlight() {
     clearTimeout(debounceTimer);
@@ -175,15 +159,12 @@
 
   function onWindowKeydown(e) {
     if (!open) return;
+    // Esc 由 ui/Modal 在 document 捕获阶段处理并 stopPropagation，
+    // 不会走到这里；这里只保留封面网格专用的左右翻页。
     const t = e.target;
     const typing =
       t instanceof HTMLElement &&
       (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      requestClose();
-      return;
-    }
     if (typing) return;
     if (e.key === 'ArrowLeft') {
       e.preventDefault();
@@ -194,18 +175,8 @@
     }
   }
 
-  // 浮层必须是 body 的直接子节点：本组件挂在 .fade-up 内，而 fadeUp 动画的
-  // fill-mode:both 会残留 transform，使 .fade-up 成为 fixed 元素的包含块，
-  // 定位基准不再是视口（页面滚动后弹窗会跑到可见区之外）。
-  function portal(node) {
-    if (typeof document !== 'undefined') document.body.appendChild(node);
-    return {
-      destroy() {
-        node.remove();
-      }
-    };
-  }
-
+  // 浮层挂载由 ui/Modal 内的 use:portal 负责（必须挂在 .fade-up 之外，
+  // 否则 fill-mode:both 残留的 transform 会让 fixed 按容器定位）。
   function reload() {
     load();
   }
@@ -214,18 +185,20 @@
 <svelte:window on:keydown={onWindowKeydown} />
 
 {#if open}
-  <div class="overlay" role="presentation" onclick={requestClose} use:portal>
-    <div
-      class="panel card"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="cover-picker-title"
-      aria-busy={loading}
-      onclick={(e) => e.stopPropagation()}
-    >
+  <Modal
+    bind:open
+    {onClose}
+    padded={false}
+    busy={loading}
+    labelledby="cover-picker-title"
+    label="从已有演出引用封面"
+    width="min(720px, 100%)"
+    maxHeight="82vh"
+  >
+    <div class="picker-body">
       <div class="head">
         <h3 id="cover-picker-title">从已有演出引用封面</h3>
-        <button type="button" class="x" onclick={requestClose} aria-label="关闭">✕</button>
+        <IconButton label="关闭" onclick={requestClose}>✕</IconButton>
       </div>
 
       <div class="search-row">
@@ -298,16 +271,18 @@
           {/each}
         </div>
       {:else}
-        <div class="empty">
-          <div class="ico">🖼</div>
-          <div class="t">{q ? '没有匹配的封面' : '还没有任何封面'}</div>
-          <div class="h">
-            {q ? '换个关键词试试，或清除搜索查看全部封面' : '先上传封面，或从「记录现场」导入数据'}
-          </div>
+        <EmptyState
+          bare
+          title={q ? '没有匹配的封面' : '还没有任何封面'}
+          hint={q
+            ? '换个关键词试试，或清除搜索查看全部封面'
+            : '先上传封面，或从「记录现场」导入数据'}
+        >
+          {#snippet icon()}<span>🖼</span>{/snippet}
           {#if q}
             <button type="button" class="btn sm" onclick={clearSearch}>清除搜索</button>
           {/if}
-        </div>
+        </EmptyState>
       {/if}
 
       {#if totalPages > 1}
@@ -342,31 +317,19 @@
         </div>
       {/if}
     </div>
-  </div>
+  </Modal>
 {/if}
 
 <style>
-  .overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 100;
-    background: rgba(0, 0, 0, 0.45);
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-    animation: fadeIn 0.2s var(--ease);
-  }
-  .panel {
-    width: min(720px, 100%);
-    max-height: 82vh;
+  /* 弹窗外壳（遮罩 / 标题栏 / 滚动锁 / Esc / 焦点陷阱）由 ui/Modal 提供。
+     .picker-body 承接原 .panel 的 flex 列与内边距，保证网格内部滚动、
+     分页条常驻的布局不变。 */
+  .picker-body {
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    min-height: 0;
     padding: 16px;
-    animation: fadeUp 0.25s var(--ease);
   }
   .head {
     display: flex;
@@ -377,23 +340,6 @@
   .head h3 {
     margin: 0;
     font-size: 16px;
-  }
-  .x {
-    border: none;
-    background: none;
-    font-size: 15px;
-    cursor: pointer;
-    color: var(--text-muted);
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    transition:
-      background var(--t-fast) var(--ease),
-      color var(--t-fast) var(--ease);
-  }
-  .x:hover {
-    background: var(--surface-3);
-    color: var(--text);
   }
 
   .search-row {
@@ -508,15 +454,7 @@
   }
 
   @media (max-width: 640px) {
-    .overlay {
-      padding: 0;
-    }
-    .panel {
-      width: 100%;
-      height: 100%;
-      max-height: 100vh;
-      border-radius: 0;
-    }
+    /* 窄屏全屏由 ui/Modal 统一处理，这里只调缩略图密度 */
     .grid {
       grid-template-columns: repeat(auto-fill, minmax(min(96px, 100%), 1fr));
     }

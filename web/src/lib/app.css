@@ -486,6 +486,25 @@ a.tag:hover {
   max-width: 320px;
 }
 
+/* 演出状态色（active_status 0/1/2/3）。全站唯一来源：
+   RecordCard 的海报角标、详情页的状态胶囊、日历当日弹窗都从这里取色，
+   避免同一个「想看」在不同页面出现两种色值。 */
+:root {
+  --status-ok: #b42318; /* 正常：沿用主色 */
+  --status-wish: #926a18; /* 想看：鎏金 */
+  --status-cancel: #5a5a60; /* 已取消：中灰 + 删除线 */
+  --status-miss: #5d3e6e; /* 未赴约：暗紫 */
+}
+
+/* 记录卡网格（海报密度）：首页 + 演员/剧目详情的「参演演出」共用同一套轨道。
+   其余列表（演员头像 160 / 剧目文字 200 / 封面缩略图 120）是有意的密度差异，
+   不要改这里——它们在各自页面本地定义。 */
+.grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+  gap: 14px;
+}
+
 .banner {
   display: flex;
   align-items: center;

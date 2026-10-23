@@ -1,7 +1,12 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
+  import Skeleton from '#lib/ui/Skeleton.svelte';
   import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import { api, coverUrl } from '#lib/api.js';
+  import { askConfirm } from '#lib/confirm.js';
+  import EmptyState from '#lib/ui/EmptyState.svelte';
+  import IconButton from '#lib/ui/IconButton.svelte';
   import OperaIcon from '#lib/components/OperaIcon.svelte';
 
   let artists = $state([]);
@@ -47,7 +52,13 @@
   }
 
   async function remove(id, name) {
-    if (!confirm(`删除演员「${name}」？关联的演出记录不受影响，仅移除演员档案与关联。`)) return;
+    const ok = await askConfirm({
+      title: '删除演员',
+      message: `删除演员「${name}」？关联的演出记录不受影响，仅移除演员档案与关联。`,
+      confirmLabel: '删除',
+      danger: true
+    });
+    if (!ok) return;
     error = '';
     try {
       await api.deleteArtist(id);
@@ -82,18 +93,16 @@
     >
   </div>
 
-  {#if error}<div class="banner error">⚠ {error}</div>{/if}
+  {#if error}<Banner tone="error">{error}</Banner>{/if}
 
   {#if loading}
     <div class="grid">
-      {#each Array(8) as _, i (i)}<div class="skeleton" style="height: 150px;"></div>{/each}
+      <Skeleton count={8} height="150px" />
     </div>
   {:else if artists.length === 0}
-    <div class="empty card">
-      <div class="ico"><OperaIcon size={44} /></div>
-      <div class="t">还没有演员</div>
-      <div class="h">在上方输入姓名添加第一个演员档案</div>
-    </div>
+    <EmptyState title="还没有演员" hint="在上方输入姓名添加第一个演员档案">
+      {#snippet icon()}<OperaIcon size={44} />{/snippet}
+    </EmptyState>
   {:else}
     <div class="stagger grid">
       {#each artists as a (a.id)}
@@ -109,7 +118,9 @@
               <div class="cnt">{a.recordCount ?? 0} 场演出</div>
             </div>
           </a>
-          <button class="del" title="删除演员" onclick={() => remove(a.id, a.name)}>✕</button>
+          <IconButton label="删除演员" tone="danger" size="sm" onclick={() => remove(a.id, a.name)}
+            >✕</IconButton
+          >
         </div>
       {/each}
     </div>
@@ -173,26 +184,5 @@
     font-size: 12px;
     color: var(--text-muted);
     white-space: nowrap;
-  }
-  .del {
-    border: none;
-    background: none;
-    color: var(--text-3);
-    cursor: pointer;
-    font-size: 12px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition:
-      background var(--t-fast) var(--ease),
-      color var(--t-fast) var(--ease);
-    flex-shrink: 0;
-  }
-  .del:hover {
-    background: var(--danger-soft);
-    color: var(--danger);
   }
 </style>

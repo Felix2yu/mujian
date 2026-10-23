@@ -1,8 +1,12 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
+  import Skeleton from '#lib/ui/Skeleton.svelte';
   import { resolve } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
   import { api, coverUrl } from '#lib/api.js';
   import { gcj02ToWgs84 } from '#lib/geo.js';
+  import Segmented from '#lib/ui/Segmented.svelte';
+  import EmptyState from '#lib/ui/EmptyState.svelte';
   import 'leaflet/dist/leaflet.css';
   import 'leaflet.markercluster/dist/MarkerCluster.css';
   import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
@@ -274,25 +278,28 @@
 
   <div class="map-toolbar" class:hidden={!loading && records.length === 0}>
     <span class="src-label">底图</span>
-    <div class="seg">
-      {#each Object.entries(SOURCES) as [key, s] (key)}
-        <button class="seg-btn {source === key ? 'active' : ''}" onclick={() => switchSource(key)}>
-          {s.name}
-        </button>
-      {/each}
-    </div>
+    <Segmented
+      variant="soft"
+      ariaLabel="底图"
+      options={Object.entries(SOURCES).map(([key, s]) => ({ value: key, label: s.name }))}
+      value={source}
+      onchange={(v) => switchSource(v)}
+    />
   </div>
 
   {#if error}
-    <div class="banner error">⚠ {error}</div>
+    <Banner tone="error">{error}</Banner>
   {/if}
 
   {#if loading}
-    <div class="skeleton" style="height: 60vh; border-radius: var(--radius-lg);"></div>
+    <Skeleton height="60vh" radius="var(--radius-lg)" />
   {:else if records.length === 0}
     <!-- 0 个坐标点时 Leaflet 不初始化，此前只剩一个空白容器（无提示、无引导） -->
-    <div class="empty card">
-      <div class="ico" aria-hidden="true">
+    <EmptyState
+      title="还没有可定位的演出"
+      hint="填了地址的演出会在保存时自动解析坐标，之后就会出现在这张地图上。"
+    >
+      {#snippet icon()}
         <svg
           width="44"
           height="44"
@@ -302,15 +309,16 @@
           stroke-width="1.6"
           stroke-linecap="round"
           stroke-linejoin="round"
+          aria-hidden="true"
         >
           <path d="M12 21s7-5.1 7-11a7 7 0 1 0-14 0c0 5.9 7 11 7 11z" />
           <circle cx="12" cy="10" r="2.6" />
         </svg>
-      </div>
-      <div class="t">还没有可定位的演出</div>
-      <div class="h">填了地址的演出会在保存时自动解析坐标，之后就会出现在这张地图上。</div>
-      <a class="btn sm" href={resolve('/?missing=coordinate')}>查看缺少坐标的演出</a>
-    </div>
+      {/snippet}
+      {#snippet action()}
+        <a class="btn sm" href={resolve('/?missing=coordinate')}>查看缺少坐标的演出</a>
+      {/snippet}
+    </EmptyState>
   {:else}
     <div
       class="map-shell"
@@ -339,36 +347,6 @@
     font-size: 13px;
     color: var(--text-muted);
   }
-  .seg {
-    display: inline-flex;
-    background: var(--surface-3);
-    border-radius: 999px;
-    padding: 3px;
-    gap: 2px;
-  }
-  .seg-btn {
-    border: none;
-    background: transparent;
-    color: var(--text-2);
-    padding: 5px 14px;
-    border-radius: 999px;
-    font-size: 13px;
-    cursor: pointer;
-    transition:
-      background var(--t-fast) var(--ease),
-      color var(--t-fast) var(--ease),
-      box-shadow var(--t-fast) var(--ease);
-  }
-  .seg-btn:hover {
-    color: var(--text);
-  }
-  .seg-btn.active {
-    background: var(--surface);
-    color: var(--accent);
-    font-weight: 600;
-    box-shadow: var(--shadow-sm);
-  }
-
   .map-shell {
     border-radius: var(--radius-lg);
     overflow: hidden;

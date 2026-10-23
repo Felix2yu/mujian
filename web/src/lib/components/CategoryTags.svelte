@@ -1,4 +1,5 @@
 <script>
+  import IconButton from '#lib/ui/IconButton.svelte';
   // 多剧种选择：chips 可拖拽排序；回车/逗号添加；categories 提供自定义下拉建议。
   // 不使用原生 datalist：在 Safari / 移动端基本不弹建议，补全不可靠（与 channel / company
   // / city 字段一致改自定义下拉）。自定义下拉在所有浏览器 / 设备下都能稳定补全。
@@ -173,7 +174,7 @@
     >
       <span class="grip" aria-hidden="true">⠿</span>
       {v}
-      <button type="button" class="x" onclick={() => values.splice(i, 1)} title="移除">×</button>
+      <IconButton label="移除" size="sm" onclick={() => values.splice(i, 1)}>×</IconButton>
     </span>
   {/each}
   <input
@@ -277,25 +278,6 @@
     line-height: 1;
     user-select: none;
     cursor: grab;
-  }
-  .x {
-    border: none;
-    background: none;
-    color: inherit;
-    opacity: 0.65;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .x:hover {
-    opacity: 1;
-    background: rgba(0, 0, 0, 0.12);
   }
   .ctag-input {
     flex: 1;

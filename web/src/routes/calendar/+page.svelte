@@ -1,10 +1,12 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
   import { resolve } from '$app/paths';
   import { onMount, tick, untrack } from 'svelte';
-  import { fade, scale } from 'svelte/transition';
   import { api, coverUrl } from '#lib/api.js';
   import { formatEventTitle } from '#lib/eventTitle.js';
   import { loadPref, savePref } from '#lib/prefs.js';
+  import Modal from '#lib/ui/Modal.svelte';
+  import EmptyState from '#lib/ui/EmptyState.svelte';
 
   // 「今天」必须随时间推进：此前是组件创建时冻结的 Date，页面长期停留跨天后
   // 今日高亮与「今天」按钮都会停在旧日期。
@@ -140,12 +142,9 @@
   // PageUp / PageDown 全局翻月：此前只绑在网格 keydown 上，焦点不在日期
   // 格时按了无反应（默认行为变成滚动页面）。方向键仍只在网格内生效，
   // 避免劫持页面滚动。
+  // Esc 由 ui/Modal 统一处理（document 捕获阶段 + stopPropagation，
+  // 不会和这里的 window 监听叠加成双重关闭）。
   function onWindowKey(e) {
-    if (e.key === 'Escape') {
-      if (modalDay !== null) closeDayModal();
-      else showYearPicker = false;
-      return;
-    }
     if (e.key !== 'PageUp' && e.key !== 'PageDown') return;
     if (showYearPicker || modalDay !== null) return; // 弹窗期间不翻月
     const t = e.target;
@@ -362,7 +361,7 @@
 <svelte:head><title>日历 - 幕间</title></svelte:head>
 
 <div class="fade-up">
-  {#if error}<div class="banner error">⚠ {error}</div>{/if}
+  {#if error}<Banner tone="error">{error}</Banner>{/if}
 
   <section class="calendar-card card" aria-label={`${year}年${month}月日历`}>
     <!-- 工具栏：← 今天  YYYY 年 M 月  →   场次 -->
@@ -580,76 +579,75 @@
 
 {#if modalDay !== null}
   {@const evs = byDay[modalDay] ?? []}
-  <!-- 遮罩本身不再是「带 onclick 的非交互 div」：改为内部的 <button> 承接点击，
-       弹窗主体是它的兄弟节点，避免把一堆链接塞进按钮里（button 不能包交互元素）。 -->
-  <div class="mask" transition:fade={{ duration: 180 }}>
-    <button class="mask-bg" type="button" aria-label="关闭" onclick={closeDayModal}></button>
-    <div
-      class="modal card"
-      role="dialog"
-      aria-modal="true"
-      tabindex="-1"
-      aria-label={`${month}月${modalDay}日`}
-      transition:scale={{ duration: 200, start: 0.94 }}
-    >
-      <header class="modal-head">
-        <div class="modal-date">
-          <span class="modal-month">{month}月</span>
-          <span class="modal-day">{modalDay}</span>
-        </div>
-        <div class="modal-sub">
-          {#if modalHoliday}
-            <span class="modal-holiday" class:mh-work={!modalHoliday.off} title={modalHoliday.name}>
-              {modalHoliday.name}{modalHoliday.off ? ' · 休' : ' · 班（调休）'}
-            </span>
-          {/if}
-          {#if evs.length}
-            <span class="modal-sub-text">共 {evs.length} 场演出</span>
-          {:else}
-            <span class="modal-sub-text">暂无演出</span>
-          {/if}
-        </div>
-      </header>
+  <!-- 弹窗外壳（遮罩/滚动锁/Esc/焦点陷阱/焦点回位）统一走 ui/Modal；
+       关闭时再由 closeDayModal 把焦点还给触发它的日期格。 -->
+  <Modal
+    open
+    onclose={closeDayModal}
+    padded={false}
+    width="min(440px, 100%)"
+    maxHeight="min(86vh, 720px)"
+    label={`${month}月${modalDay}日`}
+  >
+    <header class="modal-head">
+      <div class="modal-date">
+        <span class="modal-month">{month}月</span>
+        <span class="modal-day">{modalDay}</span>
+      </div>
+      <div class="modal-sub">
+        {#if modalHoliday}
+          <span class="modal-holiday" class:mh-work={!modalHoliday.off} title={modalHoliday.name}>
+            {modalHoliday.name}{modalHoliday.off ? ' · 休' : ' · 班（调休）'}
+          </span>
+        {/if}
+        {#if evs.length}
+          <span class="modal-sub-text">共 {evs.length} 场演出</span>
+        {:else}
+          <span class="modal-sub-text">暂无演出</span>
+        {/if}
+      </div>
+    </header>
 
-      {#if evs.length}
-        <ul class="day-list" role="list">
-          {#each evs as e (e.id)}
-            <li class="day-item" role="listitem">
-              <a class="day-link" href={resolve(`/records/${e.id}`)}>
-                {#if posterSrc(e)}
-                  <!-- 不带 .coverable：layout 中全局灯箱是捕获阶段监听，会 preventDefault
-                       把「点海报进详情」改写成看大图，且 Esc 会同时关掉灯箱和当日弹窗。
-                       整行已经是详情链接，这里保留纯展示语义。 -->
-                  <img src={posterSrc(e)} alt="" width="52" height="70" loading="lazy" />
-                {:else}
-                  <span class="diph">{e.name?.[0] ?? '?'}</span>
-                {/if}
-                <div class="di-body">
-                  <div class="di-top">
-                    <span class="di-name"
-                      >{formatEventTitle(e.name, e.categoryName, e.categoryNames)}</span
+    {#if evs.length}
+      <ul class="day-list" role="list">
+        {#each evs as e (e.id)}
+          <li class="day-item" role="listitem">
+            <a class="day-link" href={resolve(`/records/${e.id}`)}>
+              {#if posterSrc(e)}
+                <!-- 不带 .coverable：layout 中全局灯箱是捕获阶段监听，会 preventDefault
+                     把「点海报进详情」改写成看大图，且 Esc 会同时关掉灯箱和当日弹窗。
+                     整行已经是详情链接，这里保留纯展示语义。 -->
+                <img src={posterSrc(e)} alt="" width="52" height="70" loading="lazy" />
+              {:else}
+                <span class="diph">{e.name?.[0] ?? '?'}</span>
+              {/if}
+              <div class="di-body">
+                <div class="di-top">
+                  <span class="di-name"
+                    >{formatEventTitle(e.name, e.categoryName, e.categoryNames)}</span
+                  >
+                  {#if statusLabel(e.active_status)}
+                    <span class="di-status {statusClass(e.active_status)}"
+                      >{statusLabel(e.active_status)}</span
                     >
-                    {#if statusLabel(e.active_status)}
-                      <span class="di-status {statusClass(e.active_status)}"
-                        >{statusLabel(e.active_status)}</span
-                      >
-                    {/if}
-                  </div>
-                  <div class="di-meta">
-                    <span class="di-time">{timeStr(e.date)}</span>
-                    {#if e.categoryName}
-                      <span class="di-tag {categoryColor(e.categoryName)}">{e.categoryName}</span>
-                    {/if}
-                    {#if e.city}<span class="di-city">{e.city}</span>{/if}
-                  </div>
-                  {#if e.address}<div class="di-addr">{e.address}</div>{/if}
+                  {/if}
                 </div>
-              </a>
-            </li>
-          {/each}
-        </ul>
-      {:else}
-        <div class="empty-state">
+                <div class="di-meta">
+                  <span class="di-time">{timeStr(e.date)}</span>
+                  {#if e.categoryName}
+                    <span class="di-tag {categoryColor(e.categoryName)}">{e.categoryName}</span>
+                  {/if}
+                  {#if e.city}<span class="di-city">{e.city}</span>{/if}
+                </div>
+                {#if e.address}<div class="di-addr">{e.address}</div>{/if}
+              </div>
+            </a>
+          </li>
+        {/each}
+      </ul>
+    {:else}
+      <EmptyState bare title="这一天还没有演出记录">
+        {#snippet icon()}
           <svg
             viewBox="0 0 24 24"
             width="40"
@@ -664,92 +662,80 @@
             <rect x="3" y="4" width="18" height="18" rx="2" />
             <path d="M3 9h18M8 2v4M16 2v4" />
           </svg>
-          <p>这一天还没有演出记录</p>
-        </div>
-      {/if}
+        {/snippet}
+      </EmptyState>
+    {/if}
 
-      <footer class="modal-foot">
-        <button class="btn ghost sm" onclick={closeDayModal} type="button">关闭</button>
-        <button class="btn primary sm" onclick={() => openNew(modalDay)} type="button"
-          >+ 新增演出</button
-        >
-      </footer>
-    </div>
-  </div>
+    {#snippet footer()}
+      <button class="btn ghost sm" onclick={closeDayModal} type="button">关闭</button>
+      <button class="btn primary sm" onclick={() => openNew(modalDay)} type="button"
+        >+ 新增演出</button
+      >
+    {/snippet}
+  </Modal>
 {/if}
 
 {#if showYearPicker}
-  <div class="mask" transition:fade={{ duration: 180 }}>
-    <button class="mask-bg" type="button" aria-label="关闭" onclick={() => (showYearPicker = false)}
-    ></button>
-    <div
-      class="year-modal card"
-      role="dialog"
-      aria-modal="true"
-      tabindex="-1"
-      aria-label="选择年份与月份"
-      transition:scale={{ duration: 200, start: 0.94 }}
-    >
-      <header class="ym-head">
-        <button
-          class="nav-btn"
-          type="button"
-          onclick={() => shiftYear(-1)}
-          aria-label="上一年"
-          disabled={pickerYear <= MIN_YEAR}
+  <Modal bind:open={showYearPicker} padded={false} width="min(360px, 100%)" label="选择年份与月份">
+    <header class="ym-head">
+      <button
+        class="nav-btn"
+        type="button"
+        onclick={() => shiftYear(-1)}
+        aria-label="上一年"
+        disabled={pickerYear <= MIN_YEAR}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
         >
-          <svg
-            viewBox="0 0 24 24"
-            width="16"
-            height="16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-        <span class="ym-title">{pickerYear} 年</span>
-        <button
-          class="nav-btn"
-          type="button"
-          onclick={() => shiftYear(1)}
-          aria-label="下一年"
-          disabled={pickerYear >= maxYear()}
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+      </button>
+      <span class="ym-title">{pickerYear} 年</span>
+      <button
+        class="nav-btn"
+        type="button"
+        onclick={() => shiftYear(1)}
+        aria-label="下一年"
+        disabled={pickerYear >= maxYear()}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
         >
-          <svg
-            viewBox="0 0 24 24"
-            width="16"
-            height="16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M9 18l6-6-6-6" />
-          </svg>
-        </button>
-      </header>
-      <div class="month-grid">
-        {#each Array(12) as _, i (i)}
-          <button
-            class="month-cell"
-            class:current={pickerYear === year && i + 1 === month}
-            type="button"
-            onclick={() => selectMonth(i + 1)}
-            aria-label={`${pickerYear} 年 ${i + 1} 月`}
-            aria-current={pickerYear === year && i + 1 === month ? 'true' : undefined}
-            >{i + 1} 月</button
-          >
-        {/each}
-      </div>
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+      </button>
+    </header>
+    <div class="month-grid">
+      {#each Array(12) as _, i (i)}
+        <button
+          class="month-cell"
+          class:current={pickerYear === year && i + 1 === month}
+          type="button"
+          onclick={() => selectMonth(i + 1)}
+          aria-label={`${pickerYear} 年 ${i + 1} 月`}
+          aria-current={pickerYear === year && i + 1 === month ? 'true' : undefined}
+          >{i + 1} 月</button
+        >
+      {/each}
     </div>
-  </div>
+  </Modal>
 {/if}
 
 <style>
@@ -904,14 +890,6 @@
   }
 
   /* ============ 年历选择弹窗 ============ */
-  .year-modal {
-    width: min(360px, 100%);
-    padding: 0;
-    border-radius: var(--radius-xl);
-    overflow: hidden;
-    position: relative;
-    z-index: 1;
-  }
   .ym-head {
     display: flex;
     align-items: center;
@@ -1342,35 +1320,7 @@
   }
 
   /* ============ Modal ============ */
-  .mask {
-    position: fixed;
-    inset: 0;
-    background: rgba(20, 17, 15, 0.5);
-    backdrop-filter: blur(4px);
-    z-index: 60;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-  }
-  .modal {
-    width: min(440px, 100%);
-    padding: 0;
-    border-radius: var(--radius-xl);
-    overflow: hidden;
-    position: relative;
-    z-index: 1; /* 盖在 .mask-bg 之上 */
-  }
-  /* 点击遮罩关闭：独立的按钮层，弹窗本体是它的兄弟节点 */
-  .mask-bg {
-    position: absolute;
-    inset: 0;
-    border: none;
-    background: transparent;
-    cursor: default;
-    padding: 0;
-  }
-
+  /* 遮罩 / 面板外壳 / 底部操作条已由 ui/Modal 提供，这里只留内容样式 */
   .modal-head {
     padding: 22px 24px 16px;
     border-bottom: 1px solid var(--border);
@@ -1577,33 +1527,7 @@
     color: #14b8a6;
   }
 
-  .empty-state {
-    padding: 32px 24px;
-    text-align: center;
-    color: var(--text-3);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-  }
-  .empty-state svg {
-    opacity: 0.5;
-    color: var(--text-3);
-  }
-  .empty-state p {
-    margin: 0;
-    font-size: 14px;
-    color: var(--text-2);
-  }
-
-  .modal-foot {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    padding: 14px 20px;
-    border-top: 1px solid var(--border);
-    background: var(--surface-2);
-  }
+  /* 当日弹窗空态已改用 ui/EmptyState（bare），此处不再自带样式 */
 
   /* ============ 响应式 ============ */
   @media (max-width: 640px) {
@@ -1715,9 +1639,6 @@
     }
     .di-name {
       font-size: 14px;
-    }
-    .modal-foot {
-      padding: 12px 14px;
     }
   }
 

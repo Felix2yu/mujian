@@ -1,9 +1,12 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { fade, scale } from 'svelte/transition';
   import { api, coverUrl, formatCurrency, formatDate } from '#lib/api.js';
   import { STATUS_LABELS, ALL_STATUSES } from '#lib/statusPrefs.js';
+  import { askConfirm } from '#lib/confirm.js';
+  import StatusBadge from '#lib/ui/StatusBadge.svelte';
   import BackLink from '#lib/components/BackLink.svelte';
 
   // 响应式：id 变化时重新加载
@@ -161,7 +164,13 @@
     }
   }
   async function removePhoto(p) {
-    if (!confirm('移除这张照片？图片文件保留在服务器，可由封面清理统一回收。')) return;
+    const ok = await askConfirm({
+      title: '移除照片',
+      message: '移除这张照片？图片文件保留在服务器，可由封面清理统一回收。',
+      confirmLabel: '移除',
+      danger: false
+    });
+    if (!ok) return;
     photoBusy = p.id;
     try {
       await api.deleteRecordPhoto(id, p.id);
@@ -264,7 +273,13 @@
   }
 
   async function remove() {
-    if (!confirm('确定删除这条演出？删除后进入回收站，30 天内可在「数据」页恢复。')) return;
+    const ok = await askConfirm({
+      title: '删除演出',
+      message: '确定删除这条演出？删除后进入回收站，30 天内可在「数据」页恢复。',
+      confirmLabel: '删除',
+      danger: true
+    });
+    if (!ok) return;
     deleting = true;
     try {
       await api.deleteRecord(id);
@@ -358,7 +373,7 @@
     </div>
   </div>
 {:else if error}
-  <div class="banner error">⚠ {error}</div>
+  <Banner tone="error">{error}</Banner>
   <BackLink fallback="/" label="← 返回列表" />
 {:else if rec}
   <div class="detail fade-up">
@@ -440,15 +455,14 @@
           <span class="status-label">演出状态</span>
           <div class="status-row" role="radiogroup" aria-label="切换演出状态">
             {#each ALL_STATUSES as s (s)}
-              <button
-                type="button"
-                class="status-chip s{s}"
-                class:active={rec.active_status === s}
-                onclick={() => setStatus(s)}
+              <StatusBadge
+                variant="chip"
+                status={s}
+                label={statusLabel[s]}
+                active={rec.active_status === s}
                 disabled={statusBusy}
-                title={statusLabel[s]}
-                aria-pressed={rec.active_status === s}>{statusLabel[s]}</button
-              >
+                onclick={() => setStatus(s)}
+              />
             {/each}
             {#if statusSaved}<span class="status-saved tiny">✓ 已保存</span>{/if}
             {#if statusError}<span class="status-err tiny">⚠ {statusError}</span>{/if}
@@ -1071,50 +1085,6 @@
     align-items: center;
     gap: 6px;
     flex-wrap: wrap;
-  }
-  .status-chip {
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--text-2);
-    border-radius: 999px;
-    padding: 4px 13px;
-    font-size: 13px;
-    line-height: 1.5;
-    cursor: pointer;
-    transition:
-      background var(--t-fast) var(--ease),
-      color var(--t-fast) var(--ease),
-      border-color var(--t-fast) var(--ease),
-      transform var(--t-fast) var(--ease);
-  }
-  .status-chip:hover {
-    border-color: var(--border-strong);
-    color: var(--text);
-  }
-  .status-chip:active {
-    transform: scale(0.97);
-  }
-  .status-chip.active {
-    color: #fff;
-    border-color: transparent;
-    font-weight: 600;
-  }
-  .status-chip.s0.active {
-    background: var(--accent);
-  }
-  .status-chip.s1.active {
-    background: #926a18;
-  }
-  .status-chip.s2.active {
-    background: #5a5a60;
-    text-decoration: line-through;
-  }
-  .status-chip.s3.active {
-    background: #5d3e6e;
-  }
-  .status-chip:disabled {
-    cursor: default;
-    opacity: 0.7;
   }
   .status-saved {
     margin-left: 4px;

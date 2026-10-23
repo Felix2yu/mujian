@@ -1,7 +1,12 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
+  import Skeleton from '#lib/ui/Skeleton.svelte';
   import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import { api } from '#lib/api.js';
+  import { askConfirm } from '#lib/confirm.js';
+  import EmptyState from '#lib/ui/EmptyState.svelte';
+  import IconButton from '#lib/ui/IconButton.svelte';
 
   let categories = $state([]);
   let loading = $state(true);
@@ -37,24 +42,21 @@
     }
   }
 
-  // 页内删除确认状态：{ id, name, count }；原生 confirm 在预览浏览器中被屏蔽，故用页内弹窗。
-  let pendingDelete = $state(null);
-
-  function askRemove(c) {
-    pendingDelete = { id: c.id, name: c.name, count: c.recordCount ?? 0 };
-  }
-
-  function cancelRemove() {
-    pendingDelete = null;
-  }
-
-  async function confirmRemove() {
-    if (!pendingDelete) return;
-    const { id } = pendingDelete;
-    pendingDelete = null;
+  // 删除确认统一走 askConfirm（ConfirmModal 挂在 +layout，自带 Esc/焦点/滚动锁）。
+  async function askRemove(c) {
+    const ok = await askConfirm({
+      title: `删除剧种「${c.name}」`,
+      message:
+        (c.recordCount ?? 0) > 0
+          ? `该剧种下有 ${c.recordCount} 条演出。删除后这些演出仍会保留「${c.name}」标签（成为无主引用，不再出现在剧种列表中），演出记录本身不会被删除。`
+          : '确定删除该剧种吗？演出记录不会被删除。',
+      confirmLabel: '删除',
+      impact: (c.recordCount ?? 0) > 0 ? c.recordCount : null
+    });
+    if (!ok) return;
     error = '';
     try {
-      await api.deleteCategory(id);
+      await api.deleteCategory(c.id);
       await load();
     } catch (e) {
       error = e.message;
@@ -86,18 +88,16 @@
     >
   </div>
 
-  {#if error}<div class="banner error">⚠ {error}</div>{/if}
+  {#if error}<Banner tone="error">{error}</Banner>{/if}
 
   {#if loading}
     <div class="grid">
-      {#each Array(6) as _, i (i)}<div class="skeleton" style="height: 84px;"></div>{/each}
+      <Skeleton count={6} height="84px" />
     </div>
   {:else if categories.length === 0}
-    <div class="empty card">
-      <div class="ico">❏</div>
-      <div class="t">还没有剧种</div>
-      <div class="h">在上方输入名称添加第一个剧种</div>
-    </div>
+    <EmptyState title="还没有剧种" hint="在上方输入名称添加第一个剧种">
+      {#snippet icon()}<span>❏</span>{/snippet}
+    </EmptyState>
   {:else}
     <div class="stagger grid">
       {#each categories as c (c.id)}
@@ -112,33 +112,14 @@
             href={resolve(`/?category=${encodeURIComponent(c.name)}`)}
             title="查看该剧种下的演出记录">{c.recordCount ?? 0} 条</a
           >
-          <button class="del" title="删除剧种" onclick={() => askRemove(c)}>✕</button>
+          <IconButton label="删除剧种" tone="danger" size="sm" onclick={() => askRemove(c)}
+            >✕</IconButton
+          >
         </div>
       {/each}
     </div>
   {/if}
 </div>
-
-{#if pendingDelete}
-  <div class="modal-mask" onclick={cancelRemove} role="presentation">
-    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-      <h3 class="modal-title">删除剧种「{pendingDelete.name}」</h3>
-      {#if pendingDelete.count > 0}
-        <p class="modal-text">
-          该剧种下有 <b>{pendingDelete.count}</b>
-          条演出。删除后这些演出仍会保留「{pendingDelete.name}」标签
-          （成为无主引用，不再出现在剧种列表中），演出记录本身不会被删除。
-        </p>
-      {:else}
-        <p class="modal-text">确定删除该剧种吗？演出记录不会被删除。</p>
-      {/if}
-      <div class="modal-actions">
-        <button class="btn" onclick={cancelRemove}>取消</button>
-        <button class="btn danger" onclick={confirmRemove}>删除</button>
-      </div>
-    </div>
-  </div>
-{/if}
 
 <style>
   .add-bar {
@@ -184,72 +165,9 @@
     color: var(--accent);
     text-decoration: underline;
   }
-  .del {
-    border: none;
-    background: none;
-    color: var(--text-3);
-    cursor: pointer;
-    font-size: 12px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition:
-      background var(--t-fast) var(--ease),
-      color var(--t-fast) var(--ease);
-    flex: 0 0 auto;
-  }
-  .del:hover {
-    background: var(--danger-soft);
-    color: var(--danger);
-  }
   .cat {
     position: relative;
   }
 
-  /* 页内删除确认弹窗（替代被预览浏览器屏蔽的原生 confirm） */
-  .modal-mask {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 50;
-    padding: 16px;
-  }
-  .modal {
-    background: var(--bg, #fff);
-    border-radius: 12px;
-    padding: 22px 22px 18px;
-    max-width: 380px;
-    width: 100%;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
-  }
-  .modal-title {
-    margin: 0 0 10px;
-    font-size: 16px;
-    font-family: var(--font-serif);
-  }
-  .modal-text {
-    margin: 0 0 18px;
-    font-size: 14px;
-    line-height: 1.6;
-    color: var(--text-2, #555);
-  }
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-  }
-  .btn.danger {
-    background: var(--danger, #d33);
-    color: #fff;
-    border: none;
-  }
-  .btn.danger:hover {
-    background: var(--danger-dark, #b22);
-  }
+  /* 删除确认弹窗已统一走 askConfirm / ConfirmModal，本页不再自带外壳 */
 </style>

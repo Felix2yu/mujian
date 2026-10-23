@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import Banner from '#lib/ui/Banner.svelte';
   import { api } from '#lib/api.js';
   import { askConfirm } from '#lib/confirm.js';
 
@@ -135,7 +136,7 @@
     >
   </div>
 
-  {#if error}<div class="banner error">⚠ {error}</div>{/if}
+  {#if error}<Banner tone="error">{error}</Banner>{/if}
 
   <div class="card sec">
     {#if venues.length === 0}
@@ -254,14 +255,6 @@
   .sec {
     padding: 18px 20px;
     margin-top: 16px;
-  }
-  .banner.error {
-    margin-top: 12px;
-    padding: 10px 14px;
-    border-radius: var(--radius, 10px);
-    background: rgba(220, 38, 38, 0.08);
-    color: #b91c1c;
-    font-size: 13px;
   }
 
   .vlist {

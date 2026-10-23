@@ -9,7 +9,7 @@ export const confirmState = writable({
   message: '',
   confirmLabel: '确认',
   cancelLabel: '取消',
-  danger: true,
+  danger: false,
   impact: null, // 可选影响面数字（如将删除的条数）
   impactLabel: '条'
 });
@@ -17,6 +17,7 @@ export const confirmState = writable({
 let resolver = null;
 
 // 返回 Promise<boolean>：用户点确认 => true，取消/Esc/点遮罩 => false。
+// danger 默认 false：只有破坏性操作才显式传 true，避免「什么都像要删库」。
 export function askConfirm(opts = {}) {
   return new Promise((resolve) => {
     resolver = resolve;

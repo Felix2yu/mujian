@@ -1,11 +1,13 @@
 <script>
   import { onMount, onDestroy, tick } from 'svelte';
+  import Banner from '#lib/ui/Banner.svelte';
   import { api, coverUrl } from '#lib/api.js';
   import { formatEventTitle } from '#lib/eventTitle.js';
   import { geocodeAddress } from '#lib/geocode.js';
   import { STATUS_LABELS } from '#lib/statusPrefs.js';
   import CoverPicker from '#lib/components/CoverPicker.svelte';
   import CategoryTags from '#lib/components/CategoryTags.svelte';
+  import ComboInput from '#lib/components/ComboInput.svelte';
 
   // 批量分隔符：英文逗号 / 全角逗号 / 顿号；分隔符后的空格经 trim 忽略（非强制）。
   const SEP = /[,，、]/;
@@ -620,11 +622,8 @@
     if (/[,，、]/.test(companyQuery)) commitCompanyInput();
   }
 
-  // 剧团 / 渠道输入建议：子串匹配历史值，点击即补充（替代原生 datalist 的不可控匹配）
+  // 剧团输入建议：子串匹配历史值，点击即补充（替代原生 datalist 的不可控匹配）
   let showCompanyList = $state(false);
-  let showChannelList = $state(false);
-  let channelActive = $state(-1);
-  let channelBlurTimer = null;
   let companyActive = $state(-1);
   let companyBlurTimer = null;
   const filteredCompanies = $derived.by(() => {
@@ -632,11 +631,6 @@
     const base = ac.company.filter((v) => !companyTags.includes(v));
     if (!q) return base;
     return base.filter((v) => v.toLowerCase().includes(q));
-  });
-  const filteredChannels = $derived.by(() => {
-    const q = (form.channel || '').trim().toLowerCase();
-    if (!q) return ac.channel;
-    return ac.channel.filter((v) => v.toLowerCase().includes(q));
   });
   function pickCompany(v) {
     addCompany(v);
@@ -693,162 +687,11 @@
       close: () => (showCompanyList = false)
     });
   }
-  function pickChannel(v) {
-    form.channel = v;
-    showChannelList = false;
-  }
-  function openChannelList() {
-    if (channelBlurTimer) {
-      clearTimeout(channelBlurTimer);
-      channelBlurTimer = null;
-    }
-    showChannelList = true;
-    channelActive = -1;
-  }
-  function closeChannelListSoon() {
-    if (channelBlurTimer) clearTimeout(channelBlurTimer);
-    channelBlurTimer = setTimeout(() => {
-      channelBlurTimer = null;
-      showChannelList = false;
-      channelActive = -1;
-    }, 120);
-  }
-  function onChannelKeydown(e) {
-    comboNav(e, {
-      open: () => showChannelList,
-      items: () => filteredChannels,
-      active: () => channelActive,
-      setActive: (v) => (channelActive = v),
-      pick: pickChannel,
-      close: () => (showChannelList = false)
-    });
-  }
+  // 城市 / 场馆的补全下拉已由 components/ComboInput.svelte 承担
+  // （iOS Safari 对原生 datalist 支持差，故统一用自定义下拉）。
+  // 注意：场馆选中后 bind:value 变化会触发上方既有的自动地理定位 effect。
 
-  // 城市 / 场馆输入建议：子串匹配历史值，点击即补充
-  // （iOS Safari 对原生 datalist 支持差，基本不弹建议，故与渠道一致用自定义下拉）
-  let showCityList = $state(false);
-  let showAddrList = $state(false);
-  let cityActive = $state(-1);
-  let addrActive = $state(-1);
-  let cityBlurTimer = null;
-  let addrBlurTimer = null;
-  const filteredCities = $derived.by(() => {
-    const q = form.city.trim().toLowerCase();
-    if (!q) return ac.city.slice(0, 30);
-    return ac.city.filter((v) => v.toLowerCase().includes(q)).slice(0, 30);
-  });
-  const filteredAddresses = $derived.by(() => {
-    const q = form.address.trim().toLowerCase();
-    if (!q) return ac.address.slice(0, 30);
-    return ac.address.filter((v) => v.toLowerCase().includes(q)).slice(0, 30);
-  });
-  function pickCity(v) {
-    form.city = v;
-    showCityList = false;
-  }
-  function pickAddress(v) {
-    form.address = v; // 触发既有 effect 自动地理定位
-    showAddrList = false;
-  }
-
-  function openCityList() {
-    if (cityBlurTimer) {
-      clearTimeout(cityBlurTimer);
-      cityBlurTimer = null;
-    }
-    showCityList = true;
-    cityActive = -1;
-  }
-  function closeCityListSoon() {
-    if (cityBlurTimer) clearTimeout(cityBlurTimer);
-    cityBlurTimer = setTimeout(() => {
-      cityBlurTimer = null;
-      showCityList = false;
-      cityActive = -1;
-    }, 120);
-  }
-  function onCityKeydown(e) {
-    comboNav(e, {
-      open: () => showCityList,
-      items: () => filteredCities,
-      active: () => cityActive,
-      setActive: (v) => (cityActive = v),
-      pick: pickCity,
-      close: () => (showCityList = false)
-    });
-  }
-  function openAddrList() {
-    if (addrBlurTimer) {
-      clearTimeout(addrBlurTimer);
-      addrBlurTimer = null;
-    }
-    showAddrList = true;
-    addrActive = -1;
-  }
-  function closeAddrListSoon() {
-    if (addrBlurTimer) clearTimeout(addrBlurTimer);
-    addrBlurTimer = setTimeout(() => {
-      addrBlurTimer = null;
-      showAddrList = false;
-      addrActive = -1;
-    }, 120);
-  }
-  function onAddrKeydown(e) {
-    comboNav(e, {
-      open: () => showAddrList,
-      items: () => filteredAddresses,
-      active: () => addrActive,
-      setActive: (v) => (addrActive = v),
-      pick: pickAddress,
-      close: () => (showAddrList = false)
-    });
-  }
-
-  // 同行：与城市/地址一致用自定义下拉（原生 datalist 在 Safari/移动端不弹）；
-  // 支持多值逗号分隔，点击 / 键盘选中的建议追加到现有文本而非整体替换。
-  let showFriendsList = $state(false);
-  let friendsActive = $state(-1);
-  let friendsBlurTimer = null;
-  const filteredFriends = $derived.by(() => {
-    const q = (form.friends || '').trim().toLowerCase();
-    if (!q) return ac.friends.slice(0, 30);
-    return ac.friends.filter((v) => v.toLowerCase().includes(q)).slice(0, 30);
-  });
-  function openFriendsList() {
-    if (friendsBlurTimer) {
-      clearTimeout(friendsBlurTimer);
-      friendsBlurTimer = null;
-    }
-    showFriendsList = true;
-    friendsActive = -1;
-  }
-  function closeFriendsListSoon() {
-    if (friendsBlurTimer) clearTimeout(friendsBlurTimer);
-    friendsBlurTimer = setTimeout(() => {
-      friendsBlurTimer = null;
-      showFriendsList = false;
-      friendsActive = -1;
-    }, 120);
-  }
-  function pickFriends(v) {
-    const cur = (form.friends || '')
-      .split(SEP)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (!cur.includes(v)) cur.push(v);
-    form.friends = cur.join(', ');
-    friendsActive = -1;
-  }
-  function onFriendsKeydown(e) {
-    comboNav(e, {
-      open: () => showFriendsList,
-      items: () => filteredFriends,
-      active: () => friendsActive,
-      setActive: (v) => (friendsActive = v),
-      pick: (v) => pickFriends(v),
-      close: () => (showFriendsList = false)
-    });
-  }
+  // 同行补全已由 components/ComboInput.svelte（multi）承担。
 
   // 自定义下拉的键盘可达性：↑↓ 移动高亮、Enter 选中、Esc 关闭。
   // 在输入框的 onkeydown 里调用，并用 e.stopPropagation() 阻止事件冒泡到表单层——
@@ -1633,8 +1476,8 @@
                   >收起</button
                 >
               </div>
-              {#if aiErr}<div class="banner error">⚠ {aiErr}</div>{/if}
-              {#if aiDone}<div class="banner success">✓ {aiDone}</div>{/if}
+              {#if aiErr}<Banner tone="error">{aiErr}</Banner>{/if}
+              {#if aiDone}<Banner tone="success">{aiDone}</Banner>{/if}
             {/if}
           </div>
         {/if}
@@ -1758,56 +1601,24 @@
           <div>
             <label>城市</label>
             <div class="combo">
-              <input
-                class="input"
-                spellcheck="false"
+              <ComboInput
                 bind:value={form.city}
+                suggestions={ac.city}
                 placeholder="如：上海"
-                onfocus={openCityList}
-                onblur={closeCityListSoon}
-                onkeydown={onCityKeydown}
+                label="城市"
               />
-              {#if showCityList && filteredCities.length}
-                <div class="combo-list">
-                  {#each filteredCities as v, ci (v)}
-                    <button
-                      type="button"
-                      class="combo-item"
-                      class:active={ci === cityActive}
-                      onmousedown={(e) => e.preventDefault()}
-                      onclick={() => pickCity(v)}>{v}</button
-                    >
-                  {/each}
-                </div>
-              {/if}
             </div>
           </div>
           <div>
             <label>场馆 / 地址</label>
             <div class="addr-row">
               <div class="combo addr-combo">
-                <input
-                  class="input"
-                  spellcheck="false"
+                <ComboInput
                   bind:value={form.address}
+                  suggestions={ac.address}
                   placeholder="如：上海大剧院"
-                  onfocus={openAddrList}
-                  onblur={closeAddrListSoon}
-                  onkeydown={onAddrKeydown}
+                  label="场馆 / 地址"
                 />
-                {#if showAddrList && filteredAddresses.length}
-                  <div class="combo-list">
-                    {#each filteredAddresses as v, ai (v)}
-                      <button
-                        type="button"
-                        class="combo-item"
-                        class:active={ai === addrActive}
-                        onmousedown={(e) => e.preventDefault()}
-                        onclick={() => pickAddress(v)}>{v}</button
-                      >
-                    {/each}
-                  </div>
-                {/if}
               </div>
               <button
                 type="button"
@@ -2008,28 +1819,13 @@
             <div>
               <label>同行</label>
               <div class="combo">
-                <input
-                  class="input"
-                  spellcheck="false"
+                <ComboInput
                   bind:value={form.friends}
+                  suggestions={ac.friends}
+                  multi
                   placeholder="同行人，多个用逗号分隔"
-                  onfocus={openFriendsList}
-                  onblur={closeFriendsListSoon}
-                  onkeydown={onFriendsKeydown}
+                  label="同行"
                 />
-                {#if showFriendsList && filteredFriends.length}
-                  <div class="combo-list">
-                    {#each filteredFriends as v, fi (v)}
-                      <button
-                        type="button"
-                        class="combo-item"
-                        class:active={fi === friendsActive}
-                        onmousedown={(e) => e.preventDefault()}
-                        onclick={() => pickFriends(v)}>{v}</button
-                      >
-                    {/each}
-                  </div>
-                {/if}
               </div>
             </div>
           {/if}
@@ -2435,28 +2231,12 @@
           <div>
             <label>购买渠道</label>
             <div class="combo">
-              <input
-                class="input"
-                spellcheck="false"
+              <ComboInput
                 bind:value={form.channel}
+                suggestions={ac.channel}
                 placeholder="如：大麦"
-                onfocus={openChannelList}
-                onblur={closeChannelListSoon}
-                onkeydown={onChannelKeydown}
+                label="购买渠道"
               />
-              {#if showChannelList && filteredChannels.length}
-                <div class="combo-list">
-                  {#each filteredChannels as v, chi (v)}
-                    <button
-                      type="button"
-                      class="combo-item"
-                      class:active={chi === channelActive}
-                      onmousedown={(e) => e.preventDefault()}
-                      onclick={() => pickChannel(v)}>{v}</button
-                    >
-                  {/each}
-                </div>
-              {/if}
             </div>
           </div>
           <div>
@@ -2653,7 +2433,7 @@
   </div>
   <!-- .two-col -->
 
-  {#if error}<div class="banner error">⚠ {error}</div>{/if}
+  {#if error}<Banner tone="error">{error}</Banner>{/if}
 
   <div class="actions">
     <button type="submit" class="btn primary lg" disabled={saving}
@@ -2663,7 +2443,7 @@
   </div>
 </form>
 
-<CoverPicker open={pickerOpen} onSelect={pickCover} onClose={() => (pickerOpen = false)} />
+<CoverPicker bind:open={pickerOpen} onSelect={pickCover} />
 
 {#if lightbox && lightboxSrc}
   <button type="button" class="lightbox" onclick={closeLightbox} aria-label="关闭大图" use:portal>

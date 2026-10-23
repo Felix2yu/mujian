@@ -1,7 +1,9 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
   import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import { api, coverUrl } from '#lib/api.js';
+  import Segmented from '#lib/ui/Segmented.svelte';
 
   // ===== 费用补全 =====
   //
@@ -391,8 +393,8 @@
       的字段，不会改写已有金额。确认后可撤销。
     </p>
 
-    {#if costError}<div class="banner error">⚠ {costError}</div>{/if}
-    {#if costNotice}<div class="banner success">✓ {costNotice}</div>{/if}
+    {#if costError}<Banner tone="error">{costError}</Banner>{/if}
+    {#if costNotice}<Banner tone="success">{costNotice}</Banner>{/if}
 
     <!-- 概览：服务端全量计数，不受本地筛选与列表截断影响 -->
     <div class="cost-overview">
@@ -421,44 +423,31 @@
 
     <!-- 筛选：「未填写」(NULL) 与「值为 0」(疑似历史脏数据) 分开看，是查漏补缺的关键 -->
     <div class="cost-filters">
-      <div class="cost-seg" role="group" aria-label="字段筛选">
-        <button
-          class="cost-seg-btn"
-          class:on={costFieldFilter === 'all'}
-          onclick={() => (costFieldFilter = 'all')}>全部字段</button
-        >
-        {#each COST_FIELDS as f (f.key)}
-          <button
-            class="cost-seg-btn"
-            class:on={costFieldFilter === f.key}
-            onclick={() => (costFieldFilter = f.key)}>{f.label}</button
-          >
-        {/each}
-      </div>
-      <div
-        class="cost-seg"
-        role="group"
-        aria-label="取值筛选"
-        title="区分「确实是 0 元」与「历史默认写成了 0」"
-      >
-        <button
-          class="cost-seg-btn"
-          class:on={costValueFilter === 'pending'}
-          onclick={() => (costValueFilter = 'pending')}>全部</button
-        >
-        <button
-          class="cost-seg-btn"
-          class:on={costValueFilter === 'empty'}
-          onclick={() => (costValueFilter = 'empty')}
-          title="列为 NULL，确定未填写">未填写</button
-        >
-        <button
-          class="cost-seg-btn"
-          class:on={costValueFilter === 'zero'}
-          onclick={() => (costValueFilter = 'zero')}
-          title="值为 0：可能是真实免费，也可能是历史遗留的脏数据">值为 0</button
-        >
-      </div>
+      <Segmented
+        variant="line"
+        ariaLabel="字段筛选"
+        options={[
+          { value: 'all', label: '全部字段' },
+          ...COST_FIELDS.map((f) => ({ value: f.key, label: f.label }))
+        ]}
+        value={costFieldFilter}
+        onchange={(v) => (costFieldFilter = v)}
+      />
+      <Segmented
+        variant="line"
+        ariaLabel="取值筛选"
+        options={[
+          { value: 'pending', label: '全部' },
+          { value: 'empty', label: '未填写', title: '列为 NULL，确定未填写' },
+          {
+            value: 'zero',
+            label: '值为 0',
+            title: '值为 0：可能是真实免费，也可能是历史遗留的脏数据'
+          }
+        ]}
+        value={costValueFilter}
+        onchange={(v) => (costValueFilter = v)}
+      />
       <select
         class="input cost-venue-select"
         bind:value={costVenue}
@@ -844,35 +833,6 @@
     align-items: center;
     gap: 6px 10px;
     margin-bottom: 10px;
-  }
-  .cost-seg {
-    display: inline-flex;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow: hidden;
-  }
-  .cost-seg-btn {
-    padding: 4px 9px;
-    font-size: 12px;
-    background: var(--surface);
-    color: var(--text-3);
-    border: none;
-    border-right: 1px solid var(--border);
-    cursor: pointer;
-    transition:
-      background var(--t-fast) var(--ease),
-      color var(--t-fast) var(--ease);
-  }
-  .cost-seg-btn:last-child {
-    border-right: none;
-  }
-  .cost-seg-btn:hover {
-    color: var(--accent);
-  }
-  .cost-seg-btn.on {
-    background: var(--accent-softer);
-    color: var(--accent);
-    font-weight: 600;
   }
   .cost-venue-select {
     flex: 0 1 200px;

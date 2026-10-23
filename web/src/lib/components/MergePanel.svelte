@@ -1,4 +1,5 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
   import { api } from '#lib/api.js';
 
   // kind: 'drama' | 'artist'；selfId/selfName 为「保留方」（target）。
@@ -107,7 +108,7 @@
       {#if loading}
         <p class="tiny">载入{labelFor(kind)}列表…</p>
       {:else if error}
-        <div class="banner error">⚠ {error}</div>
+        <Banner tone="error">{error}</Banner>
       {:else}
         <div class="row">
           <select class="input" bind:value={selectedId} onchange={() => (preview = null)}>

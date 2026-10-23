@@ -1,4 +1,6 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
+  import Skeleton from '#lib/ui/Skeleton.svelte';
   import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import { api, formatCurrency } from '#lib/api.js';
@@ -158,11 +160,11 @@
 
   {#if loading}
     <div class="kpis">
-      {#each Array(6) as _, i (i)}<div class="skeleton" style="height: 120px;"></div>{/each}
+      <Skeleton count={6} height="120px" />
     </div>
-    <div class="skeleton" style="height: 280px; margin-top: 14px;"></div>
+    <Skeleton height="280px" />
   {:else if error}
-    <div class="banner error">⚠ {error}</div>
+    <Banner tone="error">{error}</Banner>
   {:else if data}
     <!-- ============ KPIs ============ -->
     <div class="kpis stagger">

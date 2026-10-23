@@ -1,4 +1,6 @@
 <script>
+  import Banner from '#lib/ui/Banner.svelte';
+  import Skeleton from '#lib/ui/Skeleton.svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api, formatCurrency } from '#lib/api.js';
@@ -108,10 +110,10 @@
   </div>
 
   {#if loading}
-    <div class="skeleton" style="height: 120px;"></div>
-    <div class="skeleton" style="height: 300px; margin-top: 14px;"></div>
+    <Skeleton height="120px" />
+    <Skeleton height="300px" />
   {:else if error}
-    <div class="banner error">⚠ {error}</div>
+    <Banner tone="error">{error}</Banner>
   {:else if report}
     {#if report.available_years.length > 1}
       <div class="years">
