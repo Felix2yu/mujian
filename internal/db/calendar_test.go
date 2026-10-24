@@ -48,6 +48,10 @@ func TestGetCalendarEvents(t *testing.T) {
 	if evs[1].CoverThumb != "" {
 		t.Errorf("empty thumb should stay empty, got %q", evs[1].CoverThumb)
 	}
+	// 费用口径：sampleRecord 为 实付 180 + 其他 20 = 200，币种跟随实付。
+	if evs[0].TotalCost != 200 || evs[0].CostCurrency != "CNY" {
+		t.Errorf("cost not mapped: %v %q", evs[0].TotalCost, evs[0].CostCurrency)
+	}
 
 	// 跨年隔离：12 月不含次年数据；次年 1 月不含上年数据。
 	if evs, _ = g.GetCalendarEvents(2026, 12); len(evs) != 1 || evs[0].ID != "cal-dec" {
@@ -64,6 +68,83 @@ func TestGetCalendarEvents(t *testing.T) {
 	}
 	if evs == nil || len(evs) != 0 {
 		t.Errorf("want empty non-nil slice, got %#v", evs)
+	}
+}
+
+// 日历页的月度开销依赖每条事件的 total_cost 与对应币种：实付优先，
+// 没有实付时回落到票价；两者都未填时金额为 0、币种仍取票价币种。
+func TestGetCalendarEventsCost(t *testing.T) {
+	g := newTestDB(t)
+	g.SetLocation(time.UTC)
+	day := func(d int) int64 { return time.Date(2026, 8, d, 19, 30, 0, 0, time.UTC).Unix() }
+
+	pay := 80.0
+	other := 20.0
+	paid := sampleRecord("cal-paid", day(1))
+	paid.PayPrice, paid.PayPriceCurrency = &pay, "USD"
+	paid.Price, paid.PriceCurrency = fltPtr(100), "CNY"
+	paid.OtherCost, paid.OtherCostCurrency = &other, "USD"
+	paid.HuozhiBillIDs = []int64{11, 11, 12} // 重复项由 handler 归一化，DB 原样保留
+	if err := g.UpsertRecord(paid); err != nil {
+		t.Fatalf("UpsertRecord paid: %v", err)
+	}
+
+	priced := sampleRecord("cal-priced", day(2))
+	priced.PayPrice = nil
+	priced.Price, priced.PriceCurrency = fltPtr(50), "JPY"
+	priced.OtherCost = nil
+	if err := g.UpsertRecord(priced); err != nil {
+		t.Fatalf("UpsertRecord priced: %v", err)
+	}
+
+	unpriced := sampleRecord("cal-unpriced", day(3))
+	unpriced.PayPrice, unpriced.Price, unpriced.OtherCost = nil, nil, nil
+	unpriced.PriceCurrency = "HKD"
+	if err := g.UpsertRecord(unpriced); err != nil {
+		t.Fatalf("UpsertRecord unpriced: %v", err)
+	}
+
+	evs, err := g.GetCalendarEvents(2026, 8)
+	if err != nil {
+		t.Fatalf("GetCalendarEvents: %v", err)
+	}
+	byID := map[string]struct {
+		cost float64
+		cur  string
+	}{}
+	for _, e := range evs {
+		byID[e.ID] = struct {
+			cost float64
+			cur  string
+		}{e.TotalCost, e.CostCurrency}
+	}
+	want := map[string]struct {
+		cost float64
+		cur  string
+	}{
+		"cal-paid":     {100, "USD"},
+		"cal-priced":   {50, "JPY"},
+		"cal-unpriced": {0, "HKD"},
+	}
+	for id, w := range want {
+		got, ok := byID[id]
+		if !ok {
+			t.Errorf("%s missing from calendar", id)
+			continue
+		}
+		if got != w {
+			t.Errorf("%s cost = %v %q, want %v %q", id, got.cost, got.cur, w.cost, w.cur)
+		}
+	}
+	// 货殖账单 ID 必须随事件返回给 handler 解析（JSON 不下发）。
+	for _, e := range evs {
+		if e.ID != "cal-paid" {
+			continue
+		}
+		if len(e.HuozhiBillIDs) != 3 || e.HuozhiBillIDs[0] != 11 ||
+			e.HuozhiBillIDs[1] != 11 || e.HuozhiBillIDs[2] != 12 {
+			t.Errorf("huozhi bill ids not mapped: %v", e.HuozhiBillIDs)
+		}
 	}
 }
 

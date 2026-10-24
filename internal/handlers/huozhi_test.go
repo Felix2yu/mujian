@@ -197,6 +197,82 @@ func TestHuozhiRecordBills(t *testing.T) {
 	})
 }
 
+// ---------- GET /api/calendar 月度开销 ----------
+
+// 日历需要把货殖账单挂到事件上，供前端按账单 ID 跨演出去重；同一记录里
+// 重复填写的账单 ID 也必须在接口层先归一化。未启用货殖时这些字段保持为空，
+// 前端自然回退到记录内费用。
+func TestCalendarHuozhiBills(t *testing.T) {
+	bills := map[int64]map[string]interface{}{
+		101: {"id": 101, "amount": 280, "currency": "cny", "category": "演出"},
+		102: {"id": 102, "amount": 300, "currency": "CNY", "category": "酒店"},
+	}
+	date := func(day int) int64 {
+		return time.Date(2026, 8, day, 12, 0, 0, 0, time.UTC).Unix()
+	}
+
+	t.Run("configured", func(t *testing.T) {
+		mock := huozhiMock(t, "k", bills, 0)
+		ts, _, db, _ := newTestServer(t, huozhiMutate(mock.URL, "k", true))
+		_ = db.UpsertRecord(models.Record{ID: "ch1", Name: "A", Date: date(10),
+			Price: costFieldPtr(500), HuozhiBillIDs: []int64{101, 101}})
+		_ = db.UpsertRecord(models.Record{ID: "ch2", Name: "B", Date: date(11),
+			Price: costFieldPtr(500), HuozhiBillIDs: []int64{101, 102}})
+		_ = db.UpsertRecord(models.Record{ID: "ch3", Name: "C", Date: date(12),
+			Price: costFieldPtr(90)})
+
+		res, b := doJSON(t, "GET", ts.URL+"/api/calendar?year=2026&month=8", nil)
+		expectStatus(t, res, 200, "calendar with huozhi")
+		var evs []models.CalendarEvent
+		decodeResp(t, b, &evs)
+		byID := map[string]models.CalendarEvent{}
+		for _, e := range evs {
+			byID[e.ID] = e
+		}
+		if got := byID["ch1"]; got.HuozhiLinked != 1 || len(got.HuozhiBills) != 1 ||
+			got.HuozhiBills[0].ID != 101 || got.HuozhiBills[0].Amount != 280 ||
+			got.HuozhiBills[0].Currency != "CNY" {
+			t.Errorf("ch1 huozhi = linked %d bills %+v", got.HuozhiLinked, got.HuozhiBills)
+		}
+		if got := byID["ch2"]; got.HuozhiLinked != 2 || len(got.HuozhiBills) != 2 {
+			t.Errorf("ch2 huozhi = linked %d bills %+v", got.HuozhiLinked, got.HuozhiBills)
+		}
+		if got := byID["ch3"]; got.HuozhiLinked != 0 || len(got.HuozhiBills) != 0 {
+			t.Errorf("ch3 should have no huozhi data: linked %d bills %+v",
+				got.HuozhiLinked, got.HuozhiBills)
+		}
+	})
+
+	t.Run("disabled", func(t *testing.T) {
+		mock := huozhiMock(t, "k", bills, 0)
+		ts, _, db, _ := newTestServer(t, huozhiMutate(mock.URL, "k", false))
+		_ = db.UpsertRecord(models.Record{ID: "ch4", Name: "D", Date: date(10),
+			Price: costFieldPtr(500), HuozhiBillIDs: []int64{101}})
+		res, b := doJSON(t, "GET", ts.URL+"/api/calendar?year=2026&month=8", nil)
+		expectStatus(t, res, 200, "calendar with huozhi disabled")
+		var evs []models.CalendarEvent
+		decodeResp(t, b, &evs)
+		if len(evs) != 1 || evs[0].HuozhiLinked != 0 || len(evs[0].HuozhiBills) != 0 {
+			t.Errorf("disabled integration should not attach bills: %+v", evs)
+		}
+	})
+
+	t.Run("fetch error keeps links, no bills", func(t *testing.T) {
+		mock := huozhiMock(t, "k", nil, http.StatusUnauthorized)
+		ts, _, db, _ := newTestServer(t, huozhiMutate(mock.URL, "k", true))
+		_ = db.UpsertRecord(models.Record{ID: "ch5", Name: "E", Date: date(10),
+			Price: costFieldPtr(500), HuozhiBillIDs: []int64{101}})
+		res, b := doJSON(t, "GET", ts.URL+"/api/calendar?year=2026&month=8", nil)
+		expectStatus(t, res, 200, "calendar with huozhi fetch error")
+		var evs []models.CalendarEvent
+		decodeResp(t, b, &evs)
+		// 关联数保留，前端才能提示「货殖未全」并回退记录内费用。
+		if len(evs) != 1 || evs[0].HuozhiLinked != 1 || len(evs[0].HuozhiBills) != 0 {
+			t.Errorf("fetch error should keep link count only: %+v", evs)
+		}
+	})
+}
+
 // ---------- POST /api/huozhi/bills ----------
 
 func TestHuozhiLookupBills(t *testing.T) {
