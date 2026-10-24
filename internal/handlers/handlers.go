@@ -1370,6 +1370,9 @@ func (h *Handler) getCalendar(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 500, err.Error())
 		return
 	}
+	// 月度小结按「货殖账单优先、否则记录内费用」计算；账单在此解析并挂到
+	// 事件上，前端再做跨事件去重（见 fillCalendarHuozhi）。
+	h.fillCalendarHuozhi(r.Context(), events)
 	jsonResp(w, 200, events)
 }
 

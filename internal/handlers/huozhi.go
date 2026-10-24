@@ -1,18 +1,89 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"mujian/internal/config"
 	"mujian/internal/huozhi"
+	"mujian/internal/models"
 
 	"github.com/go-chi/chi/v5"
 )
+
+// ---------- 日历月度开销 ----------
+
+// calendarHuozhiTimeout 限制日历等待货殖账单的时间。日历本身不该被外部
+// 记账站点拖住：超时后相应演出回退到记录内填写的费用。
+const calendarHuozhiTimeout = 3 * time.Second
+
+// fillCalendarHuozhi 为当月演出解析货殖账单，并把精简后的账单挂到事件上。
+// 先对全月账单 ID 去重再拉取，避免同一张账单被多场演出重复请求；跨事件的
+// 「同一账单只计一次」由前端在应用状态过滤后完成（否则被过滤掉的那场会
+// 把共享账单一起带走）。未启用 / 配置不全 / 拉取失败时保持记录内费用。
+func (h *Handler) fillCalendarHuozhi(ctx context.Context, events []models.CalendarEvent) {
+	s := h.cfg.GetHuozhiSettings()
+	if !s.Configured() {
+		return
+	}
+
+	allIDs := make([]int64, 0)
+	fetched := map[int64]bool{}
+	for i := range events {
+		linked := events[i].HuozhiBillIDs
+		uniq := make([]int64, 0, len(linked))
+		seen := map[int64]bool{}
+		for _, id := range linked {
+			if id <= 0 || seen[id] {
+				continue
+			}
+			seen[id] = true
+			uniq = append(uniq, id)
+			if !fetched[id] {
+				fetched[id] = true
+				allIDs = append(allIDs, id)
+			}
+		}
+		events[i].HuozhiBillIDs = uniq
+		events[i].HuozhiLinked = len(uniq)
+	}
+	if len(allIDs) == 0 {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, calendarHuozhiTimeout)
+	defer cancel()
+	bills, _ := huozhi.New(s).GetBills(ctx, allIDs)
+	byID := make(map[int64]*huozhi.Bill, len(bills))
+	for _, b := range bills {
+		if b != nil {
+			byID[b.ID] = b
+		}
+	}
+	for i := range events {
+		for _, id := range events[i].HuozhiBillIDs {
+			b := byID[id]
+			if b == nil {
+				continue
+			}
+			currency := strings.ToUpper(strings.TrimSpace(b.Currency))
+			if currency == "" {
+				currency = "CNY"
+			}
+			events[i].HuozhiBills = append(events[i].HuozhiBills, models.CalendarCostBill{
+				ID:       b.ID,
+				Amount:   b.Amount,
+				Currency: currency,
+			})
+		}
+	}
+}
 
 // ---------- GET /api/records/{id}/bills ----------
 

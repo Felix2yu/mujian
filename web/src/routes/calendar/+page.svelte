@@ -102,7 +102,12 @@
       events = ev;
       writeURL(push);
     } catch (e) {
-      if (seq === calReqSeq) error = e.message;
+      if (seq === calReqSeq) {
+        error = e.message;
+        // 月份标题已经切换，保留上个月的 events 会让旧数据顶着新月份展示
+        //（计数、统计条也随之失真）；失败时清空，让错误横幅单独说明。
+        events = [];
+      }
     } finally {
       if (seq === calReqSeq) loading = false;
     }
@@ -183,6 +188,109 @@
   // visibleEvents 是「只看订阅范围」开关过滤后的结果，UI 计数与按日分组一律用它。
   const visibleEvents = $derived(onlySubscribed ? events.filter(isSubscribed) : events);
   const hiddenCount = $derived(events.length - visibleEvents.length);
+
+  // 月度小结里的金额：整数不带小数，非整数保留两位；符号规则与 formatCurrency 一致。
+  function moneyText(amount, currency) {
+    const n = Math.round((Number(amount) || 0) * 100) / 100;
+    const s = n.toLocaleString('zh-CN', {
+      minimumFractionDigits: Number.isInteger(n) ? 0 : 2,
+      maximumFractionDigits: 2
+    });
+    return (currency || 'CNY') === 'CNY' ? `¥${s}` : `${currency} ${s}`;
+  }
+
+  // 月度统计：跟随「只看订阅范围」后的可见集合，与下方日历逐项对应。
+  // 费用口径：已关联货殖账单的演出取货殖金额（优先于记录内费用），其余
+  // 取记录内 TotalCost；同一张账单可能关联多场，按账单 ID 只计一次。
+  // 多币种时不做汇率换算，展示金额最大的币种并在提示里列全。
+  const monthStats = $derived.by(() => {
+    const costs = {}; // currency -> { total, count }
+    const cities = {};
+    const venues = {};
+    const status = { 0: 0, 1: 0, 2: 0, 3: 0 };
+    const seenBills = {};
+    let rated = 0;
+    let ratingSum = 0;
+    let huozhiUsed = false;
+    let huozhiIncomplete = 0;
+
+    const addCost = (amount, currency) => {
+      const n = Number(amount) || 0;
+      if (n <= 0) return false;
+      const cur = currency || 'CNY';
+      (costs[cur] ??= { total: 0, count: 0 }).total += n;
+      return true;
+    };
+
+    for (const e of visibleEvents) {
+      // 本场实际计入的币种；均价按「有费用的场次」计数，而非按账单张数。
+      const contributed = {};
+      const bills = Array.isArray(e.huozhiBills) ? e.huozhiBills : [];
+      if (bills.length) {
+        huozhiUsed = true;
+        for (const b of bills) {
+          const key = String(b.id);
+          if (seenBills[key]) continue; // 跨演出共享的账单只计一次
+          seenBills[key] = true;
+          if (addCost(b.amount, b.currency)) contributed[b.currency || 'CNY'] = true;
+        }
+      } else if (addCost(e.totalCost, e.costCurrency)) {
+        contributed[e.costCurrency || 'CNY'] = true;
+      }
+      for (const cur of Object.keys(contributed)) costs[cur].count += 1;
+      // 关联了账单却只取到一部分（或全部没取到）：金额按已取到的计，并提示。
+      if ((e.huozhiLinked ?? 0) > bills.length) huozhiIncomplete += 1;
+
+      if (e.rating > 0) {
+        ratingSum += e.rating;
+        rated += 1;
+      }
+      if (e.city) cities[e.city] = true;
+      if (e.address) venues[e.address] = true;
+      const st = e.active_status ?? 0;
+      if (status[st] !== undefined) status[st] += 1;
+    }
+
+    const ranked = Object.entries(costs).sort((a, b) => b[1].total - a[1].total);
+    const primary = ranked[0] ?? null;
+    const statusBits = [
+      status[0] ? `已看 ${status[0]}` : '',
+      status[1] ? `想看 ${status[1]}` : '',
+      status[2] ? `已取消 ${status[2]}` : '',
+      status[3] ? `未赴约 ${status[3]}` : ''
+    ].filter(Boolean);
+    const costTitle = [
+      huozhiUsed
+        ? '已关联货殖的演出取货殖账单合计（同一账单只计一次），其余取记录内费用'
+        : '按记录内填写的实付/票价 + 其他费用合计'
+    ];
+    if (huozhiIncomplete) {
+      costTitle.push(`⚠ ${huozhiIncomplete} 场关联账单未完整取到，按已取到的金额计`);
+    }
+    costTitle.push(
+      ...(ranked.length
+        ? ranked.map(([cur, v]) => `${cur} ${v.total.toFixed(2)}`)
+        : ['本月记录尚未填写费用'])
+    );
+
+    return {
+      count: visibleEvents.length,
+      statusText: statusBits.join(' · '),
+      costText: primary ? moneyText(primary[1].total, primary[0]) : '—',
+      costSub: primary
+        ? `均价 ${moneyText(primary[1].total / primary[1].count, primary[0])}${
+            ranked.length > 1 ? ` · ${ranked.length} 种币种` : ''
+          }`
+        : '未填费用',
+      costTitle: costTitle.join('\n'),
+      huozhiUsed,
+      huozhiIncomplete,
+      cityCount: Object.keys(cities).length,
+      venueCount: Object.keys(venues).length,
+      avgRating: rated ? (ratingSum / rated).toFixed(1) : '—',
+      rated
+    };
+  });
 
   // 月历网格：周一起始，前后补空，行数固定为 7 的倍数
   const cells = $derived.by(() => {
@@ -423,13 +531,59 @@
           <path d="M9 18l6-6-6-6" />
         </svg>
       </button>
-      <div class="cal-stats">
-        {#if !loading}
-          <span class="stat-num">{visibleEvents.length}</span>
-          <span class="stat-label">场</span>
-        {/if}
-      </div>
     </header>
+
+    <!-- 月度小结：场次 / 开销 / 城市 / 评分。加载时用等高骨架占位，避免切月跳动 -->
+    {#if loading}
+      <div class="month-stats" aria-hidden="true">
+        {#each [0, 1, 2, 3] as i (i)}
+          <div class="ms-item">
+            <span class="skeleton ms-skel ms-skel-label"></span>
+            <span class="skeleton ms-skel ms-skel-value"></span>
+            <span class="skeleton ms-skel ms-skel-sub"></span>
+          </div>
+        {/each}
+      </div>
+    {:else if !error}
+      <div class="month-stats" role="group" aria-label="本月统计">
+        <div class="ms-item">
+          <span class="ms-label">场次</span>
+          <span class="ms-value">{monthStats.count}<span class="ms-unit">场</span></span>
+          <span class="ms-sub" title={monthStats.statusText}
+            >{monthStats.statusText || '暂无演出'}</span
+          >
+        </div>
+        <div class="ms-item ms-cost" title={monthStats.costTitle}>
+          <span class="ms-label"
+            >开销{#if monthStats.huozhiUsed || monthStats.huozhiIncomplete}<span
+                class="ms-src"
+                class:partial={monthStats.huozhiIncomplete}
+                >{monthStats.huozhiIncomplete ? '货殖未全' : '含货殖'}</span
+              >{/if}</span
+          >
+          <span class="ms-value">{monthStats.costText}</span>
+          <span class="ms-sub">{monthStats.costSub}</span>
+        </div>
+        <div class="ms-item">
+          <span class="ms-label">城市</span>
+          <span class="ms-value"
+            >{monthStats.cityCount || '—'}{#if monthStats.cityCount}<span class="ms-unit">城</span
+              >{/if}</span
+          >
+          <span class="ms-sub"
+            >{monthStats.venueCount ? `${monthStats.venueCount} 座场馆` : '暂无场地'}</span
+          >
+        </div>
+        <div class="ms-item">
+          <span class="ms-label">平均评分</span>
+          <span class="ms-value"
+            >{#if monthStats.rated}<span class="ms-star">★</span
+              >{monthStats.avgRating}{:else}—{/if}</span
+          >
+          <span class="ms-sub">{monthStats.rated ? `${monthStats.rated} 场已评` : '暂无评分'}</span>
+        </div>
+      </div>
+    {/if}
 
     <!-- ICS 订阅只包含 正常/想看，App 日历默认显示全部：默认给出的解释 + 一键对齐开关 -->
     <div class="cal-notice">
@@ -869,24 +1023,108 @@
     color: var(--text);
   }
 
-  .cal-stats {
+  /* ============ 月度小结 ============ */
+  /* 四栏等宽：场次 / 开销 / 城市 / 评分。加载骨架与真实内容同高，切月不跳动。 */
+  .month-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding: 10px 14px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .ms-item {
     display: flex;
-    align-items: baseline;
+    flex-direction: column;
     gap: 2px;
-    flex-shrink: 0;
-    margin-left: 16px;
+    min-width: 0;
+    padding: 0 14px;
   }
-  .stat-num {
-    font-family: var(--font-serif);
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--accent);
-    line-height: 1;
+  .ms-item:first-child {
+    padding-left: 2px;
   }
-  .stat-label {
+  .ms-item + .ms-item {
+    border-left: 1px solid var(--border);
+  }
+  .ms-label {
     font-size: 11px;
     color: var(--text-3);
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  /* 开销来源角标：有货殖账单参与时才出现，未取全时改为警示色 */
+  .ms-src {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: var(--success-soft);
+    color: var(--success);
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0;
+    vertical-align: 1px;
+  }
+  .ms-src.partial {
+    background: var(--gold-soft);
+    color: var(--gold);
+  }
+  .ms-value {
+    display: flex;
+    align-items: baseline;
+    gap: 1px;
+    font-family: var(--font-serif);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ms-item:first-child .ms-value {
+    color: var(--accent);
+  }
+  .ms-unit {
+    margin-left: 3px;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-3);
     letter-spacing: 0.04em;
+  }
+  .ms-sub {
+    font-size: 11px;
+    color: var(--text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ms-star {
+    margin-right: 2px;
+    font-size: 13px;
+    color: var(--gold);
+  }
+  .ms-cost {
+    cursor: help;
+  }
+
+  .ms-skel {
+    display: block;
+    border-radius: 4px;
+  }
+  .ms-skel-label {
+    width: 34px;
+    height: 10px;
+  }
+  .ms-skel-value {
+    width: 62%;
+    height: 20px;
+    margin: 2px 0;
+  }
+  .ms-skel-sub {
+    width: 78%;
+    height: 10px;
   }
 
   /* ============ 年历选择弹窗 ============ */
@@ -1564,11 +1802,23 @@
       width: 12px;
       height: 12px;
     }
-    .stat-num {
-      font-size: 16px;
+
+    /* 手机上四栏会挤成两行：2×2 网格，去掉中缝处的分隔线 */
+    .month-stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      row-gap: 10px;
+      padding: 10px 12px 12px;
     }
-    .stat-label {
-      font-size: 10px;
+    .ms-item {
+      padding: 0 10px;
+    }
+    .ms-item:first-child,
+    .month-stats .ms-item:nth-child(3) {
+      padding-left: 2px;
+      border-left: none;
+    }
+    .ms-value {
+      font-size: 17px;
     }
 
     .dow {

@@ -241,6 +241,14 @@ type RecordRequest struct {
 	Watched *bool `json:"watched"`
 }
 
+// CalendarCostBill 是货殖账单在日历接口里的精简投影：id 供前端跨演出
+// 去重（同一张账单可能关联多场），amount/currency 是它贡献的金额。
+type CalendarCostBill struct {
+	ID       int64   `json:"id"`
+	Amount   float64 `json:"amount"`
+	Currency string  `json:"currency"`
+}
+
 type CalendarEvent struct {
 	ID            string   `json:"id"`
 	Name          string   `json:"name"`
@@ -253,6 +261,17 @@ type CalendarEvent struct {
 	ActiveStatus  int      `json:"active_status"`
 	CategoryName  string   `json:"categoryName"`
 	CategoryNames []string `json:"categoryNames"`
+	// TotalCost / CostCurrency 供日历页的月度小结使用（开销与均价）。
+	// 口径与 Record.TotalCost 一致：实付优先，否则票价，再加其他费用；
+	// CostCurrency 取生效金额对应的币种，避免前端仅凭字段猜。
+	TotalCost    float64 `json:"totalCost"`
+	CostCurrency string  `json:"costCurrency"`
+	// 货殖关联：HuozhiBillIDs 只供 handler 解析账单，不下发给客户端；
+	// HuozhiBills 是成功取到的账单（前端按 id 去重后优先于 TotalCost），
+	// HuozhiLinked 是记录上关联的唯一条账单数，用于判断是否完整取到。
+	HuozhiBillIDs []int64            `json:"-"`
+	HuozhiLinked  int                `json:"huozhiLinked,omitempty"`
+	HuozhiBills   []CalendarCostBill `json:"huozhiBills,omitempty"`
 }
 
 // HolidayDay 是中国节假日安排中的一天：放假（休）或调休上班（班）。
