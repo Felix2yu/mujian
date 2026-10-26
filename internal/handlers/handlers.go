@@ -75,6 +75,8 @@ func (h *Handler) Routes() chi.Router {
 	r.Get("/records", h.listRecords)
 	r.Get("/records/all", h.listAllRecords)
 	r.Get("/records/search", h.searchRecords)
+	// 未来演出精简流：供众妙排提醒与灵动岛（只要未来的、升序、有上限）
+	r.Get("/records/upcoming", h.listUpcomingRecords)
 	// 时间冲突检测：新建/编辑表单实时查询时段重叠的既有演出（仅提示，不阻止保存）
 	r.Get("/records/conflicts", h.getTimeConflicts)
 	r.Post("/records", h.createRecord)
