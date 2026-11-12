@@ -7,3 +7,7 @@ overrides:
   # 只有 2.x 才有；继续钉在 0.7.x 会让 kit 3 在 prerender 阶段抛
   # "parseCookie is not a function"。
   cookie: ^2.0.1
+  # eslint 10.14 仍依赖 minimatch 10.x，而 10.2.6 有 glob 放大的 DoS 漏洞
+  # （GHSA-g3hv-75wg-m249，修复版 11.0.1）。11 仍导出 eslint 用到的
+  # Minimatch，lint/build 已验证；等 eslint 上游升级后可移除本条。
+  minimatch: ^11.0.1
