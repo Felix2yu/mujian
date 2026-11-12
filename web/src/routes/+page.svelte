@@ -1142,28 +1142,51 @@
   </Modal>
 {/if}
 
-{#if showJump && !loading && records.length && nowAnchorId}
-  <button
-    class="jump-now"
-    onclick={() => jumpToNow()}
-    title="定位到当前时间"
-    aria-label="定位到当前时间"
-  >
-    <svg
-      viewBox="0 0 24 24"
-      width="20"
-      height="20"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
+{#if showJump && !loading}
+  <div class="fab-stack">
+    {#if records.length && nowAnchorId}
+      <button
+        class="fab"
+        onclick={() => jumpToNow()}
+        title="定位到当前时间"
+        aria-label="定位到当前时间"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="20"
+          height="20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="7" />
+          <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+        </svg>
+      </button>
+    {/if}
+    <a
+      class="fab fab-primary"
+      href={resolve('/records/new')}
+      title="新增演出"
+      aria-label="新增演出"
     >
-      <circle cx="12" cy="12" r="7" />
-      <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
-    </svg>
-  </button>
+      <svg
+        viewBox="0 0 24 24"
+        width="20"
+        height="20"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        aria-hidden="true"
+      >
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+    </a>
+  </div>
 {/if}
 
 {#if BatchEditModal}
@@ -1535,10 +1558,17 @@
     }
   }
 
-  .jump-now {
+  .fab-stack {
     position: fixed;
     right: 18px;
     bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .fab {
     width: 44px;
     height: 44px;
     border-radius: 50%;
@@ -1549,19 +1579,32 @@
     line-height: 1;
     box-shadow: var(--shadow-md);
     cursor: pointer;
-    z-index: 40;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    text-decoration: none;
     transition:
       background var(--t-fast) var(--ease),
       color var(--t-fast) var(--ease),
-      border-color var(--t-fast) var(--ease);
+      border-color var(--t-fast) var(--ease),
+      filter var(--t-fast) var(--ease);
   }
-  .jump-now:hover {
+  .fab:hover {
     background: var(--accent);
     border-color: var(--accent);
     color: #fff;
+  }
+  .fab-primary {
+    background: linear-gradient(160deg, var(--accent) 0%, var(--accent-strong) 100%);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 3px 12px -2px var(--accent);
+  }
+  .fab-primary:hover {
+    background: linear-gradient(160deg, var(--accent) 0%, var(--accent-strong) 100%);
+    border-color: transparent;
+    color: #fff;
+    filter: brightness(1.08);
   }
   .record-card-wrapper.select-mode {
     cursor: pointer;
