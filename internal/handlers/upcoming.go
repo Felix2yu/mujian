@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"mujian/internal/db"
@@ -32,6 +34,57 @@ type upcomingRecord struct {
 	Seat         string   `json:"seat"`
 	CategoryName string   `json:"categoryName"`
 	ArtistNames  []string `json:"artist_names"`
+	// CoverURL 是封面缩略图的可访问地址（绝对，或以 / 开头的站内路径）。
+	// 众妙拿它做本地通知的缩略图；没有封面时为空。
+	CoverURL string `json:"coverUrl"`
+}
+
+// upcomingCoverURL 把记录里的封面 key 转成消费方可直接 GET 的地址。
+//
+// 封面 key 可能来自本地存储（covers/xxx.webp）或 S3；老数据还可能是外部
+// URL、data URI 或裸 base64。只返回能通过网络取到的形态：data URI / 裸 base64
+// 会撑大响应且无法被 URLSession 直接下载，一律跳过。
+func (h *Handler) upcomingCoverURL(rec models.Record) string {
+	key := rec.CoverThumb
+	if key == "" {
+		key = rec.CoverFile
+	}
+	if key == "" {
+		key = rec.Cover
+	}
+	if key == "" {
+		return ""
+	}
+	if strings.HasPrefix(key, "http://") || strings.HasPrefix(key, "https://") {
+		return key
+	}
+	if strings.HasPrefix(key, "/uploads/") {
+		return key
+	}
+	if strings.HasPrefix(key, "data:") || len(key) > 500 {
+		return ""
+	}
+	// 老数据里 cover 可能是无扩展名的 uuid（导入格式），拼成 /uploads/ 只会 404。
+	if !strings.Contains(key, ".") {
+		return ""
+	}
+	escaped := escapeURLPath(key)
+	if h.cfg != nil && h.cfg.StorageType == "s3" {
+		if h.cfg.S3PublicURL == "" {
+			return ""
+		}
+		return strings.TrimRight(h.cfg.S3PublicURL, "/") + "/" + escaped
+	}
+	return "/uploads/" + escaped
+}
+
+// escapeURLPath 逐段转义，保留路径分隔符，同时让中文/空格文件名可用。
+func escapeURLPath(p string) string {
+	segments := strings.Split(p, "/")
+	for i, segment := range segments {
+		segments[i] = url.PathEscape(segment)
+	}
+	return strings.Join(segments, "/")
 }
 
 // listUpcomingRecords 服务 GET /api/records/upcoming?days=14。
@@ -80,6 +133,7 @@ func (h *Handler) listUpcomingRecords(w http.ResponseWriter, r *http.Request) {
 			Seat:         rec.Seat,
 			CategoryName: rec.CategoryName,
 			ArtistNames:  rec.ArtistNames,
+			CoverURL:     h.upcomingCoverURL(rec),
 		})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Date < items[j].Date })
